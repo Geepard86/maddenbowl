@@ -540,10 +540,7 @@
 function renderGroupMatches() {
     let html = "";
     let currentTime = state.config.start;
-    let globalMatchIdx = 0; 
-
-    // Sicherstellen, dass slots existieren
-    if (!state.slots || state.slots.length === 0) return;
+    let globalMatchIdx = 0; // Dieser Zähler ist entscheidend!
 
     state.slots.forEach((slot, slotIdx) => {
         html += `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
@@ -551,7 +548,7 @@ function renderGroupMatches() {
         slot.forEach((m) => {
             const p1 = state.players[m.p1];
             const p2 = state.players[m.p2];
-            const currentIdx = globalMatchIdx; 
+            const currentIdx = globalMatchIdx; // Sicherer Index für setScore
 
             html += `
                 <div id="gmatch-${currentIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
@@ -571,6 +568,11 @@ function renderGroupMatches() {
         html += `</div>`;
     });
     document.getElementById('groupMatches').innerHTML = html;
+}
+        
+        currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
+        return html + `</div>`;
+    }).join('');
 }
 
     function setScore(type, idx, p, val) {
@@ -601,8 +603,7 @@ function renderGroupMatches() {
 }
 
 function initPlayoffs() {
-	// Wenn schon Matches mit IDs existieren, brich ab, um nichts zu überschreiben
-    if(state.playoffMatches && state.playoffMatches.length > 0) return;
+    if(state.playoffMatches.length > 0) return;
     let s = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
     const bye = { id: -1, name: "BYE", team: null };
     const dur = state.config.durG + state.config.durB; 
@@ -1051,37 +1052,31 @@ function renderAll() {
 }
 
  window.onload = async () => {
-    // 1. Cloud-Daten holen (Zuerst!)
-    const res = await fetch(API_URL);
-    const cloudData = await res.json();
+    // 1. Versuche IMMER erst die Cloud zu laden
+    await syncData(); 
 
-    if (cloudData && cloudData.players && cloudData.players.length > 0) {
-        state = cloudData;
-        state.currentView = 'running';
-    } else {
-        // 2. Fallback auf LocalStorage nur wenn Cloud leer
+    // 2. Falls Cloud leer (neues Turnier), schau in LocalStorage
+    if (!state.players || state.players.length === 0) {
         const saved = localStorage.getItem('madden_bowl_v2.7');
         if (saved) {
             state = JSON.parse(saved);
-            state.currentView = 'running';
-        } else {
-            state.currentView = 'setup';
         }
     }
 
-    renderAll(); 
-    // Wichtig: Nach dem Laden einmalig die Logik prüfen, ohne Scores zu killen
-    updatePlayoffLogic(); 
-    renderAll(); 
-
-    setInterval(() => syncData(false), 30000);
+    // 3. Wenn immer noch nichts da ist und wir Admin sind -> Setup
+    if (!state.players || state.players.length === 0) {
+        state.currentView = 'setup';
+    } else {
+        state.currentView = 'running';
+    }
+    
+    renderAll();
+    // Intervall etwas hochsetzen auf 45 Sek, um Traffic zu sparen
+    setInterval(() => syncData(false), 45000); 
 };
 </script>
 </body>
 </html>	
-
-
-
 
 
 
