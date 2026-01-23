@@ -526,15 +526,16 @@
 
 function renderGroupMatches() {
     let currentTime = state.config.start;
+    let matchCounter = 0; // Sicherer Zähler für den globalen Index
+    
     document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
-        let html = `<div class="time-slot" id="gslot-${i}"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
+        let html = `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
         
         slot.forEach((m, mIdx) => {
             const p1 = state.players[m.p1];
             const p2 = state.players[m.p2];
-            const gIdx = state.matches.indexOf(m);
+            const gIdx = matchCounter++; // Inkrementiert für jedes Match im Array
             
-            // Die ID gmatch-${gIdx} ist der Anker für den Klick im Header
             html += `
                 <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
                     <div class="stadium-tag">${mIdx === 0 ? state.config.s1 : state.config.s2}</div>
@@ -1023,28 +1024,28 @@ function renderAll() {
     function save() { localStorage.setItem('madden_bowl_v2.7', JSON.stringify(state)); }
     function resetTournament() { if(confirm("Full Reset? Alle Daten gehen verloren.")) { localStorage.clear(); location.reload(); } }
 
-    window.onload = async () => {
-    const saved = localStorage.getItem('madden_bowl_v2.7');
-    if (saved) {
-        state = JSON.parse(saved);
-        // WICHTIG: Sicherstellen, dass die View auf 'running' steht, wenn Spieler da sind
-        if (state.players && state.players.length > 0) {
-            state.currentView = 'running';
+ window.onload = async () => {
+    // 1. Zuerst versuchen, Cloud-Daten zu holen
+    await syncData(); 
+
+    // 2. Nur wenn Cloud leer ist/fehlschlägt, LocalStorage als Fallback
+    if (!state.players || state.players.length === 0) {
+        const saved = localStorage.getItem('madden_bowl_v2.7');
+        if (saved) {
+            state = JSON.parse(saved);
         }
     }
+
+    if (state.players && state.players.length > 0) {
+        state.currentView = 'running';
+    }
     
-    // Initialisierung der UI
     updateModeInfo();
-    
-    // Zuerst lokal rendern, damit die Seite sofort da ist
     renderAll();
-    
-    // Dann Cloud-Sync im Hintergrund
-    await syncData();
-    
     setInterval(syncData, 30000);
 };
 </script>
 </body>
 </html>	
+
 
