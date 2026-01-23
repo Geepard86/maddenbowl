@@ -446,16 +446,29 @@
     }
 
     async function syncData(isUpload = false) {
-        try {
-            if (isUpload) {
-                await fetch(API_URL, { method: 'POST', body: JSON.stringify(state), headers: {'Content-Type': 'application/json'} });
-            } else {
-                const res = await fetch(API_URL);
-                const data = await res.json();
-                if (data && data.players) { state = data; renderAll(); }
+    try {
+        if (isUpload) {
+            await fetch(API_URL, { 
+                method: 'POST', 
+                body: JSON.stringify(state), 
+                headers: {'Content-Type': 'application/json'} 
+            });
+            console.log("Cloud Sync: Upload erfolgreich");
+        } else {
+            const res = await fetch(API_URL);
+            const data = await res.json();
+            
+            // WICHTIG: Nur überschreiben, wenn wir nicht gerade selbst Admin-Änderungen machen
+            if (data && data.players) { 
+                // Wenn wir Admin sind, laden wir nur, wenn wir nicht gerade aktiv sind
+                if (!isAdmin || !document.activeElement.classList.contains('score-input')) {
+                    state = data; 
+                    renderAll(); 
+                }
             }
-        } catch (e) { console.error(e); }
-    }
+        }
+    } catch (e) { console.error("Sync Fehler:", e); }
+}
 
     function addMinutes(time, mins) {
         let [h, m] = time.split(':').map(Number);
@@ -562,24 +575,27 @@ function renderGroupMatches() {
 
     function setScore(type, idx, p, val) {
     let v = val === "" ? null : parseInt(val);
-    
-    // Validierung: Existiert das Ziel-Array und der Index?
     const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
     
-    if (!targetArray || !targetArray[idx]) {
-        console.error("Fehler: Match an Index " + idx + " nicht gefunden im Array " + type);
-        return;
-    }
+    if (!targetArray[idx]) return;
 
+    // 1. Lokal speichern
     if (p === 1) targetArray[idx].s1 = v; 
     else targetArray[idx].s2 = v;
     
+    // 2. LocalStorage sofort aktualisieren
     save(); 
-    updatePlayoffLogic();
-    renderAll(); 
     
+    // 3. Logik berechnen (wer kommt weiter?)
+    updatePlayoffLogic();
+    
+    // 4. NUR das Notwendigste neu rendern (nicht die ganze Seite, sonst verliert das Feld den Fokus)
+    renderTable();
+    renderPlayoffPicture();
+    renderNextGames();
+    
+    // 5. Cloud-Sync anstoßen
     if (isAdmin) {
-        // Hintergrund-Sync ohne await (verhindert Einfrieren bei CORS/500 Fehlern)
         syncData(true);
     }
 }
@@ -1047,5 +1063,6 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
