@@ -1050,31 +1050,35 @@ function renderAll() {
 }
 
  window.onload = async () => {
-    // 1. Versuche IMMER erst die Cloud zu laden
-    await syncData(); 
-
-    // 2. Falls Cloud leer (neues Turnier), schau in LocalStorage
+    // 1. Cloud-Daten laden
+    await syncData();
+    
+    // 2. Fallback auf LocalStorage
     if (!state.players || state.players.length === 0) {
-        const saved = localStorage.getItem('madden_bowl_v2.7');
-        if (saved) {
-            state = JSON.parse(saved);
-        }
+        const s = localStorage.getItem('madden_bowl_v2.7');
+        if (s) state = JSON.parse(s);
     }
 
-    // 3. Wenn immer noch nichts da ist und wir Admin sind -> Setup
-    if (!state.players || state.players.length === 0) {
-        state.currentView = 'setup';
-    } else {
-        state.currentView = 'running';
+    // 3. REFERENZ-FIX (WICHTIG!):
+    // Wir bauen state.matches neu auf Basis der geladenen slots auf.
+    // Das stellt sicher, dass Änderungen in matches auch in slots sichtbar sind.
+    if (state.slots && state.slots.length > 0) {
+        state.matches = state.slots.flat();
     }
+
+    state.currentView = (state.players && state.players.length > 0) ? 'running' : 'setup';
     
     renderAll();
-    // Intervall etwas hochsetzen auf 45 Sek, um Traffic zu sparen
-    setInterval(() => syncData(false), 45000); 
+    // Einmalig Playoffs prüfen, falls Ergebnisse geladen wurden
+    updatePlayoffLogic(); 
+    renderAll();
+
+    setInterval(() => syncData(false), 45000);
 };
 </script>
 </body>
 </html>	
+
 
 
 
