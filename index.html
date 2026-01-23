@@ -538,37 +538,35 @@
     }
 
 function renderGroupMatches() {
-    let html = "";
     let currentTime = state.config.start;
-    let globalMatchIdx = 0; // Dieser Zähler ist entscheidend!
-
-    state.slots.forEach((slot, slotIdx) => {
-        html += `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
+    let matchCounter = 0; // Sicherer Zähler für den globalen Index
+    
+    document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
+        let html = `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
         
-        slot.forEach((m) => {
+        slot.forEach((m, mIdx) => {
             const p1 = state.players[m.p1];
             const p2 = state.players[m.p2];
-            const currentIdx = globalMatchIdx; // Sicherer Index für setScore
-
+            const gIdx = matchCounter++; // Inkrementiert für jedes Match im Array
+            
             html += `
-                <div id="gmatch-${currentIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
-                    <div class="team-box right">${p2.name} ${getLogoHtml(p2.team)}</div>
+                <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
+                    <div class="stadium-tag">${mIdx === 0 ? state.config.s1 : state.config.s2}</div>
+                    <div class="team-box right">
+                        ${p2.name} ${getLogoHtml(p2.team)}
+                    </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}" 
-                               onchange="setScore('group',${currentIdx},2,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                               onchange="setScore('group',${gIdx},2,this.value)" ${!isAdmin ? 'disabled' : ''}>
                         <span style="color:var(--accent)">@</span>
                         <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}" 
-                               onchange="setScore('group',${currentIdx},1,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                               onchange="setScore('group',${gIdx},1,this.value)" ${!isAdmin ? 'disabled' : ''}>
                     </div>
-                    <div class="team-box">${getLogoHtml(p1.team)} ${p1.name}</div>
+                    <div class="team-box">
+                        ${getLogoHtml(p1.team)} ${p1.name}
+                    </div>
                 </div>`;
-            globalMatchIdx++;
         });
-        currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
-        html += `</div>`;
-    });
-    document.getElementById('groupMatches').innerHTML = html;
-}
         
         currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
         return html + `</div>`;
@@ -1077,7 +1075,6 @@ function renderAll() {
 </script>
 </body>
 </html>	
-
 
 
 
