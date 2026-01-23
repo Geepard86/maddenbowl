@@ -1138,8 +1138,13 @@ function renderAll() {
     if (!state.players || state.players.length === 0) {
         const s = localStorage.getItem('madden_bowl_v2.7');
         if (s) state = JSON.parse(s);
+	}
+	 // --- NEU: SETUP INITIALISIEREN ---
+    // Wenn wir im Setup-View sind, müssen wir die UI-Elemente einmal triggern
+    if (!state.players || state.players.length === 0) {
+        updateModeInfo(); 
     }
-
+	 
     // 3. REFERENZ-FIX (WICHTIG!):
     // Wir bauen state.matches neu auf Basis der geladenen slots auf.
     // Das stellt sicher, dass Änderungen in matches auch in slots sichtbar sind.
@@ -1159,6 +1164,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
