@@ -821,23 +821,28 @@ function renderPlayoffPicture() {
     };
 
     // Zentrale Hilfsfunktion für Namen, Seeds und Status-Effekte
-    const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left') => {
-        if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
-        if (player.id === -1) return "BYE";
-        
-        const seedColor = isWinner ? 'var(--accent)' : 'white';
-        const textColor = isWinner ? 'var(--accent)' : 'inherit';
-        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
-        const logo = getLogoHtml(player.team);
-        const name = player.name;
-        
-        const style = isLoser ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
-        const winnerClass = isWinner ? 'winner' : ''; // Nutzt den CSS-Glow für das Logo
+    const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left', matchId) => {
+    if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+    if (player.id === -1) return "BYE";
+    
+    const seedColor = isWinner ? 'var(--accent)' : 'white';
+    const textColor = isWinner ? 'var(--accent)' : 'inherit';
+    const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
+    const logo = getLogoHtml(player.team);
+    const name = player.name;
+    
+    // LOGIK FÜR DURCHSTREICHEN:
+    // Nur durchstreichen, wenn es ein Lower Bracket Match (lb...) oder das Grand Finale (gf) ist
+    // UND das Team der Verlierer dieses Matches ist.
+    const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+    const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
+    
+    const winnerClass = isWinner ? 'winner' : '';
 
-        return `<span class="${winnerClass}" style="${style} color:${textColor};">
-            ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
-        </span>`;
-    };
+    return `<span class="${winnerClass}" style="${style} color:${textColor};">
+        ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
+    </span>`;
+};
 
     const renderM = (match, idx, placeholderP1, placeholderP2) => {
         if (!match) return "";
@@ -1175,6 +1180,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
