@@ -560,11 +560,28 @@ function renderGroupMatches() {
 }
 
     function setScore(type, idx, p, val) {
-        let v = val==="" ? null : parseInt(val);
-        if(type==='group') { if(p===1) state.matches[idx].s1=v; else state.matches[idx].s2=v; } 
-        else { if(p===1) state.playoffMatches[idx].s1=v; else state.playoffMatches[idx].s2=v; }
-        renderAll(); save(); if(isAdmin) syncData(true);
+    let v = val === "" ? null : parseInt(val);
+    
+    // Validierung: Existiert das Ziel-Array und der Index?
+    const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
+    
+    if (!targetArray || !targetArray[idx]) {
+        console.error("Fehler: Match an Index " + idx + " nicht gefunden im Array " + type);
+        return;
     }
+
+    if (p === 1) targetArray[idx].s1 = v; 
+    else targetArray[idx].s2 = v;
+    
+    save(); 
+    updatePlayoffLogic();
+    renderAll(); 
+    
+    if (isAdmin) {
+        // Hintergrund-Sync ohne await (verhindert Einfrieren bei CORS/500 Fehlern)
+        syncData(true);
+    }
+}
 
 function initPlayoffs() {
     if(state.playoffMatches.length > 0) return;
@@ -1007,13 +1024,27 @@ function renderAll() {
     function resetTournament() { if(confirm("Full Reset? Alle Daten gehen verloren.")) { localStorage.clear(); location.reload(); } }
 
     window.onload = async () => {
-        const saved = localStorage.getItem('madden_bowl_v2.7');
-        if(saved) state = JSON.parse(saved);
-        await syncData();
-        updateModeInfo();
-        renderAll();
-        setInterval(syncData, 30000);
-    };
+    const saved = localStorage.getItem('madden_bowl_v2.7');
+    if (saved) {
+        state = JSON.parse(saved);
+        // WICHTIG: Sicherstellen, dass die View auf 'running' steht, wenn Spieler da sind
+        if (state.players && state.players.length > 0) {
+            state.currentView = 'running';
+        }
+    }
+    
+    // Initialisierung der UI
+    updateModeInfo();
+    
+    // Zuerst lokal rendern, damit die Seite sofort da ist
+    renderAll();
+    
+    // Dann Cloud-Sync im Hintergrund
+    await syncData();
+    
+    setInterval(syncData, 30000);
+};
 </script>
 </body>
 </html>	
+
