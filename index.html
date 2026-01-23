@@ -613,47 +613,68 @@ function renderGroupMatches() {
 }
 
 function initPlayoffs() {
+    // Initialisiert das Array nur einmalig mit leeren Slots, falls noch nicht geschehen
     if(state.playoffMatches.length > 0) return;
-    let s = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
-    const bye = { id: -1, name: "BYE", team: null };
+    
     const dur = state.config.durG + state.config.durB; 
     
     state.playoffMatches = [
-        // PHASE 1: Wildcard (2 Slots à 2 Spiele)
-        {id:'ub1', p1:s[0], p2:s[7]||bye, s1:null, s2:null, phase:'Wildcard', offset: 0}, 
-        {id:'ub2', p1:s[3], p2:s[4]||bye, s1:null, s2:null, phase:'Wildcard', offset: 0},
-        {id:'ub3', p1:s[1], p2:s[6]||bye, s1:null, s2:null, phase:'Wildcard', offset: dur}, 
-        {id:'ub4', p1:s[2], p2:s[5]||bye, s1:null, s2:null, phase:'Wildcard', offset: dur},
+        // 0-3: Wildcard
+        {id:'ub1', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0}, 
+        {id:'ub2', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0},
+        {id:'ub3', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur}, 
+        {id:'ub4', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur},
         
-		// PHASE 2: Divisional (Jetzt getrennt!)
-        // Erst die Elimination R1 (Verlierer der Wildcard)
+        // 4-5: Elimination Round 1 (Loser of Wildcard)
         {id:'lb1', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3}, 
         {id:'lb2', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3},
-        // Dann die Upper Semis (Gewinner der Wildcard)
+        
+        // 6-7: Upper Semis (Winner of Wildcard)
         {id:'us1', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2}, 
         {id:'us2', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2},
         
-        // PHASE 3: Elimination Round 2
+        // 8-9: Elimination Round 2 (Div-Loser vs Elim-Winner)
         {id:'lb3', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4}, 
         {id:'lb4', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
         
-        // PHASE 4: Final Four
+        // 10-11: Final Four
         {id:'uf',  p1:null, p2:null, s1:null, s2:null, phase:'Champ Semi', offset: dur*5}, 
         {id:'ls',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Semi', offset: dur*5},
         
-        // PHASE 5: Elim Final
+        // 12: Elimination Final
         {id:'lf',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Final', offset: dur*6},
         
-        // PHASE 6: Grand Finale
+        // 13: Grand Finale
         {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'GRAND FINALE', offset: dur*7}
     ];
 }
-		
+
 function updatePlayoffLogic() {
     const m = state.playoffMatches; 
-    if(!m.length) return;
-    
-    // Hilfsfunktionen für Gewinner/Verlierer
+    if(!m || m.length === 0) return;
+
+    // 1. Aktuelle Tabelle sortieren (Live-Ranking)
+    let s = [...state.players].sort((a,b) => {
+        if(b.wins !== a.wins) return b.wins - a.wins;
+        // H2H Check
+        let h2h = state.matches.find(gm => ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) && gm.s1!==null);
+        if(h2h) {
+            let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+            let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+            if(aS !== bS) return bS - aS;
+        }
+        return b.diff - a.diff;
+    });
+
+    const bye = { id: -1, name: "BYE", team: null };
+
+    // 2. Wildcard-Paarungen (0-3) aktualisieren, solange kein Score eingetragen ist
+    if (m[0].s1 === null && m[0].s2 === null) { m[0].p1 = s[0]; m[0].p2 = s[7] || bye; }
+    if (m[1].s1 === null && m[1].s2 === null) { m[1].p1 = s[3]; m[1].p2 = s[4] || bye; }
+    if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
+    if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
+
+    // Hilfsfunktionen für Win/Loss
     const win = (match) => {
         if (!match || match.s1 === null) return null;
         if (match.p2 && match.p2.id === -1) return match.p1; 
@@ -664,69 +685,50 @@ function updatePlayoffLogic() {
         return (match.s1 > match.s2) ? match.p2 : match.p1;
     };
 
-    // Hilfsfunktion: Sortiert Spieler nach ihrem ursprünglichen Seed (1 bis 8)
+    // Sortierung nach ursprünglichem Seed (für Reseeding)
     const sortBySeed = (players) => {
-        const seedOrder = [...state.players]
-            .sort((a,b) => b.wins - a.wins || b.diff - a.diff)
-            .map(p => p.id);
+        const seedOrder = s.map(p => p.id);
         return players.filter(p => p !== null).sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
     };
 
-    // --- PHASE 1: Wildcard -> Divisional & Elim R1 ---
+    // --- PHASE 2: Divisional & Elim R1 ---
     const wcWinners = sortBySeed([win(m[0]), win(m[1]), win(m[2]), win(m[3])]);
     const wcLosers = sortBySeed([loss(m[0]), loss(m[1]), loss(m[2]), loss(m[3])]);
 
-    // Divisional (Upper Semis): Best vs Worst, 2nd vs 3rd
+    // Divisional (Upper Semis)
     if(wcWinners.length >= 4) {
-        m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3]; // Match 6: Seed #1 vs #4 der verbliebenen
-        m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2]; // Match 7: Seed #2 vs #3 der verbliebenen
+        m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3];
+        m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2];
     }
 
-    // Elim R1 (Lower): Hier spielen die Verlierer der Wildcard
+    // Elim R1
     if(wcLosers.length >= 2) {
-        m[4].p1 = wcLosers[0]; m[4].p2 = wcLosers[wcLosers.length-1]; // Best Loser vs Worst Loser
+        m[4].p1 = wcLosers[0]; m[4].p2 = wcLosers[wcLosers.length-1] || wcLosers[1];
     }
     if(wcLosers.length >= 4) {
-        m[5].p1 = wcLosers[1]; m[5].p2 = wcLosers[2]; // Die mittleren beiden Verlierer
+        m[5].p1 = wcLosers[1]; m[5].p2 = wcLosers[2];
     }
 
-    // --- PHASE 2: Divisional -> Elim R2 ---
+    // --- PHASE 3: Elim R2 ---
     const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
     const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
 
-    // Elim R2: Divisional-Verlierer treffen auf Elim-R1-Gewinner
-    // Reseeding: Best Div-Loser spielt gegen schlechtesten Elim-Winner
     if(divLosers.length >= 2 && elimR1Winners.length >= 2) {
         m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[1]; 
         m[9].p1 = divLosers[1]; m[9].p2 = elimR1Winners[0];
-    } else if (divLosers.length >= 1 && elimR1Winners.length >= 1) {
-        // Fallback für weniger Spieler
-        m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[0];
     }
 
-    // --- PHASE 3: Semi-Finals (Final Four) ---
-    // Upper Semi (Champ Semi)
-    const upperFinalists = sortBySeed([win(m[6]), win(m[7])]);
-    if(upperFinalists.length === 2) {
-        m[10].p1 = upperFinalists[0]; m[10].p2 = upperFinalists[1];
-    }
-    
-    // Lower Semi (Elim Semi)
+    // --- PHASE 4: Semi Finals ---
+    m[10].p1 = win(m[6]); m[10].p2 = win(m[7]); // Upper Semi
+
     const elimR2Winners = sortBySeed([win(m[8]), win(m[9])]);
-    if(elimR2Winners.length === 2) {
-        m[11].p1 = elimR2Winners[0]; m[11].p2 = elimR2Winners[1];
-    } else if(elimR2Winners.length === 1) {
-        m[11].p1 = elimR2Winners[0];
+    if(elimR2Winners.length >= 2) {
+        m[11].p1 = elimR2Winners[0]; m[11].p2 = elimR2Winners[1]; // Lower Semi
     }
 
-    // --- PHASE 4: Finals ---
-    // Elim Final: Verlierer des Upper Finals gegen Gewinner des Lower Semis
-    m[12].p1 = loss(m[10]); 
-    m[12].p2 = win(m[11]);
-
-    // Grand Finale: Gewinner des Upper Finals gegen Gewinner des Elim Finals
-    m[13].p1 = win(m[10]); 
-    m[13].p2 = win(m[12]);
+    // --- PHASE 5: Finals ---
+    m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]); // Elim Final
+    m[13].p1 = win(m[10]); m[13].p2 = win(m[12]); // Grand Finale
 }
 
 function renderPlayoffPicture() {
@@ -1090,6 +1092,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
