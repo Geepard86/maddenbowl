@@ -2,91 +2,406 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MADDEN BOWL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MADDEN BOWL - PRO MANAGER v2.9</title>
     <style>
-        :root { --nfl-blue: #013369; --nfl-red: #D50A0A; --bg: #0b0e14; --card: #1c2431; --accent: #00ffcc; --gray: #4a5568; --slot-bg: #161f2c; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; padding: 20px; }
-        .container { max-width: 1100px; margin: auto; }
-        h1 { text-align: center; font-size: 3em; text-transform: uppercase; letter-spacing: 5px; color: white; border-bottom: 5px solid var(--nfl-red); padding-bottom: 10px; margin-bottom: 20px; }
-        h2, h3 { color: var(--accent); text-transform: uppercase; border-left: 4px solid var(--nfl-red); padding-left: 15px; margin-top: 40px; }
-        .card { background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 25px; border: 1px solid #2d3748; }
-        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; background: #2d3748; padding: 20px; border-radius: 8px; }
-        .config-item { display: flex; flex-direction: column; gap: 5px; }
-        .mode-info { background: #111827; padding: 15px; border-radius: 8px; border: 1px dashed var(--accent); margin-bottom: 20px; line-height: 1.8; font-size: 0.95em; }
-        .player-input-card { background: #2d3748; padding: 15px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
-        select, input { background: #0b0e14; border: 1px solid #4a5568; color: white; padding: 10px; border-radius: 6px; font-size: 1rem; }
-        .btn { background: var(--nfl-red); color: white; border: none; padding: 15px; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; transition: 0.3s; margin-top: 10px; }
-        .btn:hover { background: #ff1a1a; }
-        .btn-secondary { background: var(--gray); padding: 8px 15px; font-size: 0.8em; border: none; color: white; border-radius: 4px; cursor: pointer; }
-        .time-slot { background: var(--slot-bg); padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #2d3748; }
-        .slot-header { color: var(--accent); font-family: monospace; font-size: 1.1rem; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-        .slot-header::after { content: ""; height: 1px; background: #2d3748; flex-grow: 1; }
-        .match-row { background: #232d3d; margin-bottom: 8px; padding: 10px; border-radius: 6px; display: grid; grid-template-columns: 120px 1fr auto 1fr; align-items: center; gap: 10px; }
+        :root { 
+            --nfl-blue: #013369; --nfl-red: #D50A0A; --bg: #0b1119; --card: #161f2c; 
+            --accent: #00ffcc; --gray: #4a5568; --slot-bg: #1c2431; 
+        }
+        
+        body { font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: white; margin: 0; padding: 10px; overflow-x: hidden; scroll-behavior: smooth; }
+        .container { max-width: 1200px; margin: auto; }
+        h1 { text-align: center; font-size: 1.8em; letter-spacing: 2px; border-bottom: 3px solid var(--nfl-red); padding-bottom: 5px; text-transform: uppercase; }
+
+        @media (max-width: 800px) {
+            .match-row { grid-template-columns: 1fr 50px 1fr !important; gap: 5px !important; font-size: 0.85em; }
+            .stadium-tag { display: none; }
+            .score-input { width: 35px; height: 30px; font-size: 1rem; }
+			.next-games { grid-template-columns: 1fr; } /* Untereinander auf Mobile */	
+        }
+
+        .card { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #2d3748; }
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; background: #2d3748; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .config-item { display: flex; flex-direction: column; font-size: 0.8em; }
+        
+        .player-input-card { background: #2d3748; padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 5px; margin-bottom: 5px; }
+        select, input { background: #0b1119; border: 1px solid #4a5568; color: white; padding: 8px; border-radius: 6px; }
+
+        .btn { background: var(--nfl-red); color: white; border: none; padding: 15px; font-weight: bold; cursor: pointer; border-radius: 6px; width: 100%; transition: 0.3s; }
+        .btn-secondary { background: var(--gray); padding: 8px 12px; font-size: 0.75em; border: none; color: white; border-radius: 4px; cursor: pointer; }
+		
+        .time-slot { background: var(--slot-bg); padding: 12px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #2d3748; }
+        .slot-header { color: var(--accent); font-family: monospace; font-size: 0.9rem; margin-bottom: 8px; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; }
+        
+        .match-row { background: #232d3d; margin-bottom: 5px; padding: 8px; border-radius: 6px; display: grid; grid-template-columns: 100px 1fr auto 1fr; align-items: center; gap: 10px; }
         .match-row.finished { border-left: 4px solid var(--accent); }
-        .stadium-tag { font-size: 0.65em; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
-        .team-box { display: flex; align-items: center; gap: 10px; font-weight: bold; min-height: 40px; }
+        .team-box { display: flex; align-items: center; gap: 8px; font-weight: bold; }
         .team-box.right { justify-content: flex-end; text-align: right; }
-        .score-input { width: 45px; height: 35px; text-align: center; font-size: 1.2rem; font-weight: bold; background: white !important; color: black !important; border: none; border-radius: 4px; }
-        .logo-img { width: 32px; height: 32px; object-fit: contain; }
-        .hidden { display: none; }
-        .setup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px; text-align: center; border-bottom: 1px solid #2d3748; }
-        .highlight-out { background: rgba(213, 10, 10, 0.2); color: #ff8888; }
-        .team-select-mini { background: #111827; color: white; border: none; font-size: 0.8em; padding: 2px; border-radius: 4px; }
-        .at-symbol { color: var(--accent); font-weight: 900; font-size: 1.1rem; margin: 0 5px; text-shadow: 0 0 5px rgba(0, 255, 204, 0.3); }
+        
+        .score-input { width: 40px; height: 35px; text-align: center; font-size: 1.1rem; font-weight: bold; background: white !important; color: black !important; border: none; border-radius: 4px; }
+        .score-input:disabled { background: #cbd5e0 !important; color: #4a5568 !important; opacity: 1; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+        th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
+		
+.next-games { 
+    display: flex; /* Flex statt Grid auf oberster Ebene */
+    flex-direction: column; 
+    background: linear-gradient(135deg, #1a202c, #0b1119); 
+    padding: 20px 20px 20px 35px; /* Viel Platz links zur grünen Linie */
+    border-radius: 8px;
+    border-left: 6px solid var(--accent);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.next-grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+}
+
+/* Entferne das alte Padding/Margin vom umschließenden Container falls vorhanden */
+#nextUp {
+    padding: 0;
+    margin-bottom: 20px;
+}
+
+.next-card { 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    background: rgba(255,255,255,0.05); 
+    padding: 8px 12px; 
+    border-radius: 6px; 
+    margin-top: 5px; 
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: 0.2s;
+}
+
+.next-card:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); }
+
+.status-tag {
+    font-size: 0.6em; 
+    padding: 2px 6px; 
+    border-radius: 3px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+.tag-live { background: var(--nfl-red); animation: pulse 2s infinite; }
+.tag-next { background: var(--gray); }
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+
+/* --- CLEANED & FIXED BRACKET LAYOUT --- */
+.bracket-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px 0;
+}
+
+.playoff-grid {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: rgba(0,0,0,0.2);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* Die zentrale Trennlinie */
+.bracket-row-flow {
+    display: flex;
+    gap: 15px;
+    position: relative;
+    padding: 20px 0;
+    overflow-x: auto; /* Scrollbar auf Mobile falls es zu breit wird */
+}
+
+/* Der horizontale Trenner exakt in der Mitte */
+.bracket-row-flow::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    border-bottom: 2px dashed #4a5568;
+    z-index: 1;
+}
+
+/* Label für die Trennlinie */
+.bracket-row-flow::after {
+    content: "ELIMINATION PATH (LOWER BRACKET)";
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg);
+    padding: 0 10px;
+    font-size: 0.65em;
+    font-weight: bold;
+    color: #4a5568;
+    z-index: 2;
+    letter-spacing: 1px;
+}
+
+.bracket-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 175px;
+    flex: 1;
+    z-index: 3; /* Über der Linie */
+}
+
+.column-header {
+    height: 40px;
+    margin-bottom: 10px;
+}
+
+/* Upper und Lower Floor Sektionen */
+.upper-floor, .lower-floor {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 10px 0;
+    flex: 1;
+}
+
+/* Abstandhalter damit die Linie dazwischen durchläuft */
+.upper-floor { margin-bottom: 40px; justify-content: flex-start; }
+.lower-floor { margin-top: 40px; justify-content: flex-start; }
+
+/* Spezielle Zentrierung für Finalrunden */
+.upper-floor[style*="center"], .lower-floor[style*="center"] {
+    justify-content: center;
+}
+
+/* Match Box Design */
+.bracket-match {
+    background: #1c2431;
+    border: 1px solid #4a5568;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    border-left: 4px solid var(--gray);
+    transition: all 0.2s ease;
+}
+
+.match-active { 
+    border-left-color: var(--accent); 
+    box-shadow: 0 0 15px rgba(0, 255, 204, 0.15);
+}
+
+.bracket-match-header {
+    background: #2d3748;
+    font-size: 0.6em;
+    padding: 6px 10px;
+    text-transform: uppercase;
+    color: #cbd5e0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.bracket-team {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    min-height: 35px;
+}
+
+.bracket-team.winner {
+    color: var(--accent);
+    font-weight: bold;
+}
+
+.bracket-score {
+    font-family: monospace;
+    background: #0b1119;
+    padding: 2px 6px;
+    border-radius: 4px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.wildcard-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+}
+
+.wc-badge {
+    font-size: 0.7em;
+    padding: 4px 8px;
+    background: var(--nfl-blue);
+    border-radius: 4px;
+    margin-bottom: 5px;
+    display: inline-block;
+}
+
+/* Status-Styles */
+.bracket-team.winner { 
+    color: var(--accent) !important; 
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(0, 255, 204, 0.4);
+}
+.bracket-team.winner img { 
+    filter: drop-shadow(0 0 5px var(--accent)); 
+}
+
+.bracket-team.eliminated { 
+    text-decoration: line-through; 
+    opacity: 0.5; 
+    filter: grayscale(1);
+}
+
+.seed-tag { color: white; font-weight: bold; margin-right: 4px; }
+
+/* Anpassung Wildcard Header */
+	{
+    background: #2d3748;
+    font-size: 0.65em;
+    padding: 5px 10px;
+    text-transform: uppercase;
+    color: #cbd5e0;
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #4a5568;
+    border-radius: 6px 6px 0 0;
+}
+
+#infoPanel a:hover {
+    color: var(--accent) !important;
+}
+
+#infoPanel strong {
+    font-size: 0.85em;
+    letter-spacing: 1px;
+    display: inline-block;
+    margin-bottom: 4px;
+}
+
+.logo-img { width: 20px; height: 20px; vertical-align: middle; }
+.hidden { display: none !important; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>MADDEN BOWL</h1>
-
-    <div style="display:flex; justify-content: space-between; margin-bottom: 20px;">
-        <button class="btn btn-secondary" onclick="window.print()">Drucken / PDF</button>
-        <button class="btn btn-secondary" style="background:#2d3748" onclick="resetTournament()">✖ Turnier Reset</button>
+    <div id="live-header">
+        <h1>MADDEN BOWL LIVE</h1>
+<div id="nextUp" class="next-games">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+        <small style="color:var(--accent); font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">
+            Turnier-Informationen & Live-Tracking
+        </small>
+        <button onclick="document.getElementById('infoPanel').classList.toggle('hidden')" 
+                class="btn-secondary" style="padding: 2px 8px; font-size: 0.6em; background: var(--nfl-blue);">
+            ⓘ REGELN & SETTINGS
+        </button>
     </div>
 
-    <div id="setup" class="card">
-        <h2>Turnier-Konfiguration</h2>
-        <div class="config-grid">
-            <div class="config-item"><label>Startzeit:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
-            <div class="config-item"><label>Min/Gruppe:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
-            <div class="config-item"><label>Min/Playoff:</label><input type="number" id="durPlay" value="45" onchange="updateModeInfo()"></div>
-            <div class="config-item"><label>Min/Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
-            <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Stadion 1"></div>
-            <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="Stadion 2"></div>
+    <div id="infoPanel" class="hidden" style="background: rgba(0,0,0,0.3); border: 1px solid #2d3748; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 0.75em; line-height: 1.5;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+                <strong style="color:var(--accent);">⚙️ MADDEN SETTINGS</strong><br>
+                • Zeit: 3 Min (Reg.) / 4 Min (Playoffs)<br>
+                • Level: Pro | Style: Simulation<br>
+                • Kicking: Classic Meter | Passing: Placement<br>
+                • Wetter: Random
+            </div>
+            <div>
+                <strong style="color:var(--accent);">📜 TURNIER-REGELN</strong><br>
+                • Draft: Neueinsteiger > Vorjahresletzte<br>
+                • Team-Limit: OVR ≤ 90<br>
+                • Trade: Freiwilliger Down-Trade nach 2L
+            </div>
+            <div>
+                <strong style="color:var(--accent);">🎮 CONTROLLER HUB</strong><br>
+                <a href="https://www.ea.com/games/madden-nfl/madden-nfl-26/controls-hub/playstation-controls-hub" 
+                   target="_blank" style="color: white; text-decoration: underline;">
+                   Madden 26 Controls Hub (EA)
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div id="nextGamesList" style="width: 100%;"></div>
+</div>
+    </div>
+
+    <div id="admin-panel" class="hidden">
+        <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
+            <button class="btn-secondary" onclick="window.print()">PDF Export</button>
+            <button class="btn-secondary" style="background:#2d3748" onclick="syncData(true)">☁ Cloud Sync</button>
+            <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
         </div>
 
-        <label>Anzahl Spieler:</label>
-        <select id="playerCount" onchange="updateModeInfo()">
-            <option value="6">6 Spieler</option>
-            <option value="7">7 Spieler</option>
-            <option value="8" selected>8 Spieler</option>
-            <option value="9">9 Spieler</option>
-            <option value="10">10 Spieler</option>
-        </select>
-
-        <div id="modeDescription" class="mode-info"></div>
-        <div id="playerInputs" class="setup-grid" style="margin-top:20px;"></div>
-        <button class="btn" onclick="startTournament()">MADDEN BOWL STARTEN</button>
+        <div id="setup-view" class="card">
+            <h2>Tournament Setup</h2>
+            <div class="config-grid">
+                <div class="config-item"><label>Start:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
+                <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
+                <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Mercedes-Benz"></div>
+                <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="SoFi Stadium"></div>
+            </div>
+            <select id="playerCount" onchange="updateModeInfo()" style="width:100%; margin-bottom: 10px;">
+                <option value="8" selected>8 Spieler (Standard)</option>
+                <option value="6">6 Spieler</option>
+                <option value="7">7 Spieler</option>
+                <option value="9">9 Spieler</option>
+                <option value="10">10 Spieler</option>
+            </select>
+            <div id="playerInputs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;"></div>
+            <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
+        </div>
     </div>
 
-    <div id="groupPhase" class="card hidden">
-        <div id="tableContainer"></div>
-        <h2>Spielplan Gruppenphase</h2>
-        <div id="groupMatches"></div>
-        <button class="btn" onclick="showView('playoffs')" style="background:var(--nfl-blue); margin-top:30px;">PLAYOFFS STARTEN</button>
-    </div>
+    <div id="main-content">
+        <div id="tableContainer" class="card"></div>
 
-    <div id="playoffs" class="card hidden">
-        <button class="btn btn-secondary" onclick="showView('groupPhase')">← Zurück zur Tabelle</button>
-        <div id="playoffSections"></div>
+        <div id="playoff-picture" class="card">
+            <h2>NFL Playoff Picture</h2>
+            <div class="bracket-wrapper">
+                <div class="bracket-title">Upper Bracket (Winner's Path)</div>
+                <div id="upper-bracket" class="bracket-row"></div>
+                
+                <div class="bracket-title" style="border-color: #555; margin-top:20px;">Lower Bracket (Elimination Path)</div>
+                <div id="lower-bracket" class="bracket-row"></div>
+            </div>
+        </div>
+        
+        <div id="groupPhase" class="card">
+            <h2>Group Stage Schedule</h2>
+            <div id="groupMatches"></div>
+        </div>
+
+        <div id="playoffs" class="card">
+            <h2>Playoff Match Admin</h2>
+            <div id="playoffSections"></div>
+        </div>
     </div>
 </div>
 
 <script>
+    const BIN_ID = "f3d732f4ad334280c483";
+    const API_URL = `https://api.npoint.io/${BIN_ID}`;
+    const isAdmin = window.location.search.includes('Altima');
+
     const nflTeams = [
         {n: "Cardinals", id: "ARI"}, {n: "Falcons", id: "ATL"}, {n: "Ravens", id: "BAL"}, {n: "Bills", id: "BUF"},
         {n: "Panthers", id: "CAR"}, {n: "Bears", id: "CHI"}, {n: "Bengals", id: "CIN"}, {n: "Browns", id: "CLE"},
@@ -99,12 +414,29 @@
     ];
 
     const schedules = {
+        8: [ [[0,1],[4,5]], [[2,3],[6,7]], [[1,2],[5,6]], [[3,0],[7,4]], [[0,2],[4,6]], [[1,3],[5,7]], [[0,4],[1,5]], [[2,6],[3,7]], [[5,0],[6,1]], [[7,2],[4,3]] ],
         6: [ [[0,1],[2,3]], [[4,5],[0,2]], [[3,4],[5,0]], [[1,4],[2,5]], [[0,3],[5,1]], [[4,2],[3,5]], [[1,0],[2,4]], [[0,4]] ],
         7: [ [[0,1],[2,3]], [[4,5],[6,0]], [[2,1],[4,3]], [[6,5],[1,3]], [[0,4],[5,2]], [[6,1],[3,5]], [[0,2],[4,6]], [[5,1],[2,6]], [[3,0],[1,4]], [[5,0],[3,6]], [[2,4]] ],
-        8: [ [[0,1],[4,5]], [[2,3],[6,7]], [[1,2],[5,6]], [[3,0],[7,4]], [[0,2],[4,6]], [[1,3],[5,7]], [[0,4],[1,5]], [[2,6],[3,7]], [[5,0],[6,1]], [[7,2],[4,3]] ],
         9: [ [[0,1],[3,4]], [[7,6],[2,0]], [[4,5],[6,8]], [[1,2],[5,3]], [[8,7],[0,3]], [[4,1],[5,2]], [[6,0],[1,7]], [[3,8],[2,6]], [[7,4],[8,5]] ],
         10:[ [[0,1],[5,6]], [[2,3],[7,8]], [[0,4],[5,9]], [[1,2],[6,7]], [[3,4],[8,9]], [[2,0],[7,5]], [[3,1],[8,6]], [[4,2],[9,7]], [[1,4],[6,9]], [[4,5],[9,0]], [[0,5],[1,6]], [[2,7],[3,8]], [[4,9]] ]
     };
+	
+	const playoffLabels = {
+    ub1: { p1: "Highest Seed", p2: "Bottom Seed" },
+    ub2: { p1: "2nd Best Seed", p2: "2nd Bottom Seed" },
+    ub3: { p1: "3rd Best Seed", p2: "3rd Bottom Seed" },
+    ub4: { p1: "4th Best Seed", p2: "4th Bottom Seed" },
+    lb1: { p1: "Best Loser", p2: "Worst Loser" },
+    lb2: { p1: "2nd Best Loser", p2: "2nd Worst Loser" },
+    us1: { p1: "Highest Seed", p2: "Bottom Seed" },
+    us2: { p1: "2nd Best Seed", p2: "2nd Bottom Seed" },
+    lb3: { p1: "Div. Loser (L)", p2: "Elim. Winner (H)" },
+    lb4: { p1: "Div. Loser (H)", p2: "Elim. Winner (L)" },
+    uf:  { p1: "Upper Semi #1", p2: "Upper Semi #2" },
+    ls:  { p1: "Lower Semi #1", p2: "Lower Semi #2" },
+    lf:  { p1: "U-Champ Loser", p2: "L-Champ Winner" },
+    gf:  { p1: "Finalist (U)", p2: "Finalist (L)" }
+};
 
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
 
@@ -112,6 +444,40 @@
         if (!teamId || teamId === -1) return '';
         return `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png" class="logo-img">`;
     }
+
+async function syncData(isUpload = false) {
+    // Wenn wir hochladen wollen
+    if (isUpload) {
+        try {
+            console.log("Sende Daten via PUT an Cloud...");
+            const res = await fetch(API_URL, { 
+                method: 'PUT', // PUT ist zwingend für npoint Updates
+                body: JSON.stringify(state), 
+                headers: {'Content-Type': 'application/json'} 
+            });
+            if (!res.ok) throw new Error('Server antwortete mit Status ' + res.status);
+            console.log("Cloud-Sync erfolgreich.");
+        } catch (e) {
+            console.warn("Cloud-Sync fehlgeschlagen, arbeite lokal weiter:", e);
+            // Wir werfen keinen Fehler mehr nach oben, damit das Skript weiterläuft!
+        }
+    } else {
+        // Laden-Logik
+        try {
+            const res = await fetch(API_URL);
+            if (!res.ok) return;
+            const data = await res.json();
+            
+            // Nur laden, wenn wir nicht Admin sind (verhindert Überschreiben lokaler Eingaben)
+            if (data && data.players && !isAdmin) {
+                state = data;
+                renderAll();
+            }
+        } catch (e) {
+            console.warn("Laden fehlgeschlagen:", e);
+        }
+    }
+}
 
     function addMinutes(time, mins) {
         let [h, m] = time.split(':').map(Number);
@@ -121,203 +487,555 @@
 
     function updateModeInfo() {
         const count = parseInt(document.getElementById('playerCount').value);
-        const start = document.getElementById('startTime').value;
-        const durG = parseInt(document.getElementById('durGroup').value) || 30;
-        const durP = parseInt(document.getElementById('durPlay').value) || 45;
-        const durB = parseInt(document.getElementById('durBreak').value) || 15;
-
-        let modus = "", games = "", cutBye = "", totalGMatches = 0;
-
-        if (count === 6) { modus = "6er Gruppe (Jeder gegen jeden)"; totalGMatches = 15; games = "15 Gruppen-Spiele (5 pro Person)"; cutBye = "Alle kommen weiter (P1 & P2 erhalten Bye)"; }
-        else if (count === 7) { modus = "7er Gruppe (Jeder gegen jeden)"; totalGMatches = 21; games = "21 Gruppen-Spiele (6 pro Person)"; cutBye = "Alle kommen weiter (P1 erhält ein Bye)"; }
-        else if (count === 8) { modus = "Gruppenphase (8 Spieler)"; totalGMatches = 20; games = "20 Gruppen-Spiele (5 pro Person)"; cutBye = "Alle 8 Spieler rücken in die Playoffs vor"; }
-        else if (count === 9) { modus = "Gruppenphase (9 Spieler)"; totalGMatches = 18; games = "18 Gruppen-Spiele (4 pro Person)"; cutBye = "Platz 9 scheidet nach der Gruppenphase aus"; }
-        else if (count === 10) { modus = "Gruppenphase (10 Spieler)"; totalGMatches = 25; games = "25 Gruppen-Spiele (5 pro Person)"; cutBye = "Platz 9 & 10 scheiden nach der Gruppenphase aus"; }
-
-        let groupSlots = Math.ceil(totalGMatches / 2);
-        let groupEndTime = addMinutes(start, groupSlots * (durG + durB) - durB);
-        let finalTime = addMinutes(addMinutes(groupEndTime, 15), 7 * (durP + durB));
-
-        document.getElementById('modeDescription').innerHTML = `
-            🏆 <b>Modus:</b> ${modus}<br>
-            🏆 <b>Playoff-Modus:</b> Doppel-KO (Double Elimination)<br>
-            🏈 <b>Spiele:</b> ${games}<br>
-            ⏱ <b>Zeiten:</b> Gruppe bis ca. ${groupEndTime} Uhr | <b>FINAL KICKOFF: ca. ${finalTime} Uhr</b><br>
-            📉 <b>Cut / Bye:</b> ${cutBye}
-        `;
         initSetupInputs(count);
     }
 
     function initSetupInputs(count) {
         const container = document.getElementById('playerInputs');
-        if (container.children.length === count) return;
         container.innerHTML = '';
         for(let i=0; i<count; i++) {
             let options = nflTeams.map(t => `<option value="${t.id}">${t.n}</option>`).join('');
-            container.innerHTML += `<div class="player-input-card"><input type="text" id="pName${i}" placeholder="Spieler Name"><select id="pTeam${i}">${options}</select></div>`;
+            container.innerHTML += `<div class="player-input-card"><input type="text" id="pName${i}" placeholder="Spieler ${i+1}"><select id="pTeam${i}">${options}</select></div>`;
         }
     }
 
     function startTournament() {
         const count = parseInt(document.getElementById('playerCount').value);
-        state.config = { start: document.getElementById('startTime').value, durG: parseInt(document.getElementById('durGroup').value), durP: parseInt(document.getElementById('durPlay').value), durB: parseInt(document.getElementById('durBreak').value), s1: document.getElementById('stadium1').value, s2: document.getElementById('stadium2').value };
+        state.config = { start: document.getElementById('startTime').value, durG: parseInt(document.getElementById('durGroup').value), durP: 45, durB: 15, s1: document.getElementById('stadium1').value, s2: document.getElementById('stadium2').value };
         state.players = [];
         for(let i=0; i<count; i++) {
-            state.players.push({ id: i, name: document.getElementById(`pName${i}`).value || `P${i+1}`, team: document.getElementById(`pTeam${i}`).value, wins: 0, diff: 0, played: 0 });
+            state.players.push({ id: i, name: document.getElementById(`pName${i}`).value || `P${i+1}`, team: document.getElementById(`pTeam${i}`).value, wins: 0, diff: 0, pointsFor: 0, played: 0 });
         }
         state.slots = schedules[count].map(slotData => slotData.map(m => ({ p1: m[0], p2: m[1], s1: null, s2: null })));
         state.matches = state.slots.flat();
         state.playoffMatches = [];
-        showView('groupPhase');
-    }
-
-    function renderTable() {
-        state.players.forEach(p => { p.wins = 0; p.diff = 0; p.played = 0; });
-        state.matches.forEach(m => {
-            if(m.s1 !== null && m.s2 !== null) {
-                state.players[m.p1].played++; state.players[m.p2].played++;
-                state.players[m.p1].diff += (m.s1 - m.s2); state.players[m.p2].diff += (m.s2 - m.s1);
-                if(m.s1 > m.s2) state.players[m.p1].wins++; else if(m.s2 > m.s1) state.players[m.p2].wins++;
-            }
-        });
-        let sorted = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
-        let count = state.players.length;
-        let html = `<h3>Gesamttabelle</h3><table><tr><th>#</th><th>Team</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
-        sorted.forEach((p, i) => {
-            let rowClass = (count === 9 && i === 8) || (count === 10 && i >= 8) ? "highlight-out" : "";
-            let teamOptions = nflTeams.map(t => `<option value="${t.id}" ${t.id === p.team ? 'selected' : ''}>${t.n}</option>`).join('');
-            html += `<tr class="${rowClass}"><td>${i+1}</td><td><div style="display:flex; align-items:center; gap:5px;">${getLogoHtml(p.team)}<select class="team-select-mini" onchange="changeTeam(${p.id}, this.value)">${teamOptions}</select></div></td><td>${p.name}</td><td>${p.wins}-${p.played - p.wins}</td><td>${p.diff}</td></tr>`;
-        });
-        document.getElementById('tableContainer').innerHTML = html + `</table>`;
+        state.currentView = 'running';
+        renderAll(); save(); if(isAdmin) syncData(true);
     }
 
     function changeTeam(pid, tid) {
         state.players.find(x => x.id === pid).team = tid;
-        renderTable(); renderGroupMatches(); if(state.playoffMatches.length) { initPlayoffs(); renderPlayoffs(); }
-        save();
+        renderAll(); save(); if(isAdmin) syncData(true);
     }
 
-    function renderGroupMatches() {
-        let currentTime = state.config.start;
-        document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
-            let html = `<div class="time-slot"><div class="slot-header">${currentTime} Uhr</div>`;
-            slot.forEach((m, mIdx) => {
-                const p1 = state.players[m.p1], p2 = state.players[m.p2], gIdx = state.matches.indexOf(m);
-                html += `<div class="match-row ${m.s1!==null?'finished':''}">
-                    <div class="stadium-tag">${mIdx===0?state.config.s1:state.config.s2}</div>
-                    <div class="team-box right">${p2.name} ${getLogoHtml(p2.team)}</div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <input type="number" class="score-input" value="${m.s2!==null?m.s2:''}" onchange="setScore('group',${gIdx},2,this.value)">
-                        <span class="at-symbol">@</span>
-                        <input type="number" class="score-input" value="${m.s1!==null?m.s1:''}" onchange="setScore('group',${gIdx},1,this.value)">
-                    </div>
-                    <div class="team-box">${getLogoHtml(p1.team)} ${p1.name}</div>
-                </div>`;
-            });
-            currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
-            return html + `</div>`;
-        }).join('');
+    function renderTable() {
+        state.players.forEach(p => { p.wins = 0; p.diff = 0; p.pointsFor = 0; p.played = 0; });
+        state.matches.forEach(m => {
+            if(m.s1 !== null && m.s2 !== null) {
+                state.players[m.p1].played++; state.players[m.p2].played++;
+                state.players[m.p1].pointsFor += m.s1; state.players[m.p2].pointsFor += m.s2;
+                state.players[m.p1].diff += (m.s1 - m.s2); state.players[m.p2].diff += (m.s2 - m.s1);
+                if(m.s1 > m.s2) state.players[m.p1].wins++; else if(m.s2 > m.s1) state.players[m.p2].wins++;
+            }
+        });
+        let sorted = [...state.players].sort((a,b) => {
+            if(b.wins !== a.wins) return b.wins - a.wins;
+            let h2h = state.matches.find(m => ((m.p1===a.id && m.p2===b.id) || (m.p1===b.id && m.p2===a.id)) && m.s1!==null);
+            if(h2h) {
+                let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+                let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+                if(aS !== bS) return bS - aS;
+            }
+            return b.diff - a.diff;
+        });
+        let html = `<h3>Table</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+        sorted.forEach((p, i) => {
+            let teamSelect = isAdmin ? `<select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em">${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}</select>` : '';
+            html += `<tr><td>${i+1}</td><td>${getLogoHtml(p.team)} ${teamSelect}</td><td>${p.name}</td><td>${p.wins}-${p.played - p.wins}</td><td>${p.diff}</td></tr>`;
+        });
+        document.getElementById('tableContainer').innerHTML = html + `</table>`;
     }
+
+function renderGroupMatches() {
+    let currentTime = state.config.start;
+    document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
+        let html = `<div class="time-slot" id="gslot-${i}"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
+        
+        slot.forEach((m, mIdx) => {
+            const p1 = state.players[m.p1];
+            const p2 = state.players[m.p2];
+            const gIdx = state.matches.indexOf(m);
+            
+            // Die ID gmatch-${gIdx} ist der Anker für den Klick im Header
+            html += `
+                <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
+                    <div class="stadium-tag">${mIdx === 0 ? state.config.s1 : state.config.s2}</div>
+                    <div class="team-box right">
+                        ${p2.name} ${getLogoHtml(p2.team)}
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}" 
+                               onchange="setScore('group',${gIdx},2,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                        <span style="color:var(--accent)">@</span>
+                        <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}" 
+                               onchange="setScore('group',${gIdx},1,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                    </div>
+                    <div class="team-box">
+                        ${getLogoHtml(p1.team)} ${p1.name}
+                    </div>
+                </div>`;
+        });
+        
+        currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
+        return html + `</div>`;
+    }).join('');
+}
 
     function setScore(type, idx, p, val) {
         let v = val==="" ? null : parseInt(val);
-        if(type==='group') { if(p===1) state.matches[idx].s1=v; else state.matches[idx].s2=v; renderTable(); } 
-        else { if(p===1) state.playoffMatches[idx].s1=v; else state.playoffMatches[idx].s2=v; renderPlayoffs(); }
-        save();
+        if(type==='group') { if(p===1) state.matches[idx].s1=v; else state.matches[idx].s2=v; } 
+        else { if(p===1) state.playoffMatches[idx].s1=v; else state.playoffMatches[idx].s2=v; }
+        renderAll(); save(); if(isAdmin) syncData(true);
     }
 
-    function showView(v) { 
-        state.currentView = v; 
-        document.getElementById('setup').classList.toggle('hidden', v!=='setup'); 
-        document.getElementById('groupPhase').classList.toggle('hidden', v!=='groupPhase'); 
-        document.getElementById('playoffs').classList.toggle('hidden', v!=='playoffs'); 
-        if(v==='groupPhase'){ renderTable(); renderGroupMatches(); } 
-        if(v==='playoffs'){ if(!state.playoffMatches.length) initPlayoffs(); renderPlayoffs(); } 
-        save(); 
-    }
-
-    function initPlayoffs() {
-        let s = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
-        const bye = { id: -1, name: "BYE", team: null };
-        state.playoffMatches = [
-            {id:'ub1', p1:null, p2:null, s1:null, s2:null, phase:'Viertelfinale'}, {id:'ub2', p1:null, p2:null, s1:null, s2:null, phase:'Viertelfinale'},
-            {id:'ub3', p1:null, p2:null, s1:null, s2:null, phase:'Viertelfinale'}, {id:'ub4', p1:null, p2:null, s1:null, s2:null, phase:'Viertelfinale'},
-            {id:'lb1', p1:null, p2:null, s1:null, s2:null, phase:'Lower R1'}, {id:'lb2', p1:null, p2:null, s1:null, s2:null, phase:'Lower R1'},
-            {id:'us1', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semis'}, {id:'us2', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semis'},
-            {id:'lb3', p1:null, p2:null, s1:null, s2:null, phase:'Lower R2'}, {id:'lb4', p1:null, p2:null, s1:null, s2:null, phase:'Lower R2'},
-            {id:'uf', p1:null, p2:null, s1:null, s2:null, phase:'Finals Semi'}, {id:'ls', p1:null, p2:null, s1:null, s2:null, phase:'Finals Semi'},
-            {id:'lf', p1:null, p2:null, s1:null, s2:null, phase:'Lower Final'}, {id:'gf', p1:null, p2:null, s1:null, s2:null, phase:'GRAND FINALE'}
-        ];
-        if(state.players.length >= 8) {
-            state.playoffMatches[0].p1=s[0]; state.playoffMatches[0].p2=s[7]; state.playoffMatches[1].p1=s[3]; state.playoffMatches[1].p2=s[4];
-            state.playoffMatches[2].p1=s[1]; state.playoffMatches[2].p2=s[6]; state.playoffMatches[3].p1=s[2]; state.playoffMatches[3].p2=s[5];
-        } else if(state.players.length == 7) {
-            state.playoffMatches[0].p1=s[0]; state.playoffMatches[0].p2=bye; state.playoffMatches[0].s1=1; state.playoffMatches[0].s2=0;
-            state.playoffMatches[1].p1=s[3]; state.playoffMatches[1].p2=s[4]; state.playoffMatches[2].p1=s[1]; state.playoffMatches[2].p2=s[6]; state.playoffMatches[3].p1=s[2]; state.playoffMatches[3].p2=s[5];
-        } else if(state.players.length == 6) {
-            state.playoffMatches[0].p1=s[0]; state.playoffMatches[0].p2=bye; state.playoffMatches[0].s1=1; state.playoffMatches[0].s2=0;
-            state.playoffMatches[1].p1=s[3]; state.playoffMatches[1].p2=s[4]; state.playoffMatches[2].p1=s[1]; state.playoffMatches[2].p2=bye; state.playoffMatches[2].s1=1; state.playoffMatches[2].s2=0;
-            state.playoffMatches[3].p1=s[2]; state.playoffMatches[3].p2=s[5];
-        }
-    }
-
-    function renderPlayoffs() {
-        updatePlayoffLogic();
-        let groupEnd = addMinutes(state.config.start, state.slots.length * (state.config.durG + state.config.durB));
-        let currentTime = addMinutes(groupEnd, 15);
-        document.getElementById('playoffSections').innerHTML = [...new Set(state.playoffMatches.map(m => m.phase))].map(phase => {
-            let pms = state.playoffMatches.filter(m => m.phase === phase);
-            let html = `<h3>${phase}</h3>`;
-            for(let i=0; i<pms.length; i+=2) {
-                html += `<div class="time-slot"><div class="slot-header">${currentTime} Uhr</div>`;
-                html += renderPlayoffRow(pms[i], state.playoffMatches.indexOf(pms[i]), state.config.s1);
-                if(pms[i+1]) html += renderPlayoffRow(pms[i+1], state.playoffMatches.indexOf(pms[i+1]), state.config.s2);
-                html += `</div>`; currentTime = addMinutes(currentTime, state.config.durP + state.config.durB);
-            }
-            return html;
-        }).join('');
-    }
-
-    function renderPlayoffRow(m, idx, stadium) {
-        let p1 = m.p1, p2 = m.p2;
-        const isBye = p2 && p2.id === -1;
+function initPlayoffs() {
+    if(state.playoffMatches.length > 0) return;
+    let s = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
+    const bye = { id: -1, name: "BYE", team: null };
+    const dur = state.config.durG + state.config.durB; 
+    
+    state.playoffMatches = [
+        // PHASE 1: Wildcard (2 Slots à 2 Spiele)
+        {id:'ub1', p1:s[0], p2:s[7]||bye, s1:null, s2:null, phase:'Wildcard', offset: 0}, 
+        {id:'ub2', p1:s[3], p2:s[4]||bye, s1:null, s2:null, phase:'Wildcard', offset: 0},
+        {id:'ub3', p1:s[1], p2:s[6]||bye, s1:null, s2:null, phase:'Wildcard', offset: dur}, 
+        {id:'ub4', p1:s[2], p2:s[5]||bye, s1:null, s2:null, phase:'Wildcard', offset: dur},
         
-        let sorted = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
-        let seed1 = p1 ? sorted.findIndex(p => p.id === p1.id) : 99;
-        let seed2 = p2 ? sorted.findIndex(p => p.id === p2.id) : 99;
+		// PHASE 2: Divisional (Jetzt getrennt!)
+        // Erst die Elimination R1 (Verlierer der Wildcard)
+        {id:'lb1', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3}, 
+        {id:'lb2', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3},
+        // Dann die Upper Semis (Gewinner der Wildcard)
+        {id:'us1', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2}, 
+        {id:'us2', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2},
+        
+        // PHASE 3: Elimination Round 2
+        {id:'lb3', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4}, 
+        {id:'lb4', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
+        
+        // PHASE 4: Final Four
+        {id:'uf',  p1:null, p2:null, s1:null, s2:null, phase:'Champ Semi', offset: dur*5}, 
+        {id:'ls',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Semi', offset: dur*5},
+        
+        // PHASE 5: Elim Final
+        {id:'lf',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Final', offset: dur*6},
+        
+        // PHASE 6: Grand Finale
+        {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'GRAND FINALE', offset: dur*7}
+    ];
+}
+		
+function updatePlayoffLogic() {
+    const m = state.playoffMatches; 
+    if(!m.length) return;
+    
+    // Hilfsfunktionen für Gewinner/Verlierer
+    const win = (match) => {
+        if (!match || match.s1 === null) return null;
+        if (match.p2 && match.p2.id === -1) return match.p1; 
+        return (match.s1 > match.s2) ? match.p1 : match.p2;
+    };
+    const loss = (match) => {
+        if (!match || match.s1 === null || (match.p2 && match.p2.id === -1)) return null;
+        return (match.s1 > match.s2) ? match.p2 : match.p1;
+    };
 
-        let gast = p1, heim = p2, sG = m.s1, sH = m.s2, iG = 1, iH = 2;
+    // Hilfsfunktion: Sortiert Spieler nach ihrem ursprünglichen Seed (1 bis 8)
+    const sortBySeed = (players) => {
+        const seedOrder = [...state.players]
+            .sort((a,b) => b.wins - a.wins || b.diff - a.diff)
+            .map(p => p.id);
+        return players.filter(p => p !== null).sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
+    };
 
-        if (seed1 < seed2 && !isBye) {
-            gast = p2; heim = p1; sG = m.s2; sH = m.s1; iG = 2; iH = 1;
+    // --- PHASE 1: Wildcard -> Divisional & Elim R1 ---
+    const wcWinners = sortBySeed([win(m[0]), win(m[1]), win(m[2]), win(m[3])]);
+    const wcLosers = sortBySeed([loss(m[0]), loss(m[1]), loss(m[2]), loss(m[3])]);
+
+    // Divisional (Upper Semis): Best vs Worst, 2nd vs 3rd
+    if(wcWinners.length >= 4) {
+        m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3]; // Match 6: Seed #1 vs #4 der verbliebenen
+        m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2]; // Match 7: Seed #2 vs #3 der verbliebenen
+    }
+
+    // Elim R1 (Lower): Hier spielen die Verlierer der Wildcard
+    if(wcLosers.length >= 2) {
+        m[4].p1 = wcLosers[0]; m[4].p2 = wcLosers[wcLosers.length-1]; // Best Loser vs Worst Loser
+    }
+    if(wcLosers.length >= 4) {
+        m[5].p1 = wcLosers[1]; m[5].p2 = wcLosers[2]; // Die mittleren beiden Verlierer
+    }
+
+    // --- PHASE 2: Divisional -> Elim R2 ---
+    const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
+    const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
+
+    // Elim R2: Divisional-Verlierer treffen auf Elim-R1-Gewinner
+    // Reseeding: Best Div-Loser spielt gegen schlechtesten Elim-Winner
+    if(divLosers.length >= 2 && elimR1Winners.length >= 2) {
+        m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[1]; 
+        m[9].p1 = divLosers[1]; m[9].p2 = elimR1Winners[0];
+    } else if (divLosers.length >= 1 && elimR1Winners.length >= 1) {
+        // Fallback für weniger Spieler
+        m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[0];
+    }
+
+    // --- PHASE 3: Semi-Finals (Final Four) ---
+    // Upper Semi (Champ Semi)
+    const upperFinalists = sortBySeed([win(m[6]), win(m[7])]);
+    if(upperFinalists.length === 2) {
+        m[10].p1 = upperFinalists[0]; m[10].p2 = upperFinalists[1];
+    }
+    
+    // Lower Semi (Elim Semi)
+    const elimR2Winners = sortBySeed([win(m[8]), win(m[9])]);
+    if(elimR2Winners.length === 2) {
+        m[11].p1 = elimR2Winners[0]; m[11].p2 = elimR2Winners[1];
+    } else if(elimR2Winners.length === 1) {
+        m[11].p1 = elimR2Winners[0];
+    }
+
+    // --- PHASE 4: Finals ---
+    // Elim Final: Verlierer des Upper Finals gegen Gewinner des Lower Semis
+    m[12].p1 = loss(m[10]); 
+    m[12].p2 = win(m[11]);
+
+    // Grand Finale: Gewinner des Upper Finals gegen Gewinner des Elim Finals
+    m[13].p1 = win(m[10]); 
+    m[13].p2 = win(m[12]);
+}
+
+function renderPlayoffPicture() {
+    const m = state.playoffMatches;
+    if (!m.length) return;
+
+    const totalGroupMinutes = state.slots.length * (state.config.durG + state.config.durB);
+    const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+
+    const getSeed = (player) => {
+        if (!player || player.id === -1) return "";
+        const sorted = [...state.players].sort((a, b) => b.wins - a.wins || b.diff - a.diff);
+        return sorted.findIndex(p => p.id === player.id) + 1;
+    };
+
+    // Zentrale Hilfsfunktion für Namen, Seeds und Status-Effekte
+    const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left') => {
+        if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+        if (player.id === -1) return "BYE";
+        
+        const seedColor = isWinner ? 'var(--accent)' : 'white';
+        const textColor = isWinner ? 'var(--accent)' : 'inherit';
+        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
+        const logo = getLogoHtml(player.team);
+        const name = player.name;
+        
+        const style = isLoser ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
+        const winnerClass = isWinner ? 'winner' : ''; // Nutzt den CSS-Glow für das Logo
+
+        return `<span class="${winnerClass}" style="${style} color:${textColor};">
+            ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
+        </span>`;
+    };
+
+    const renderM = (match, idx, placeholderP1, placeholderP2) => {
+        if (!match) return "";
+        const active = match.p1 && match.p2 && match.p2.id !== -1 && match.s1 === null;
+        const time = addMinutes(groupEndTime, match.offset);
+        const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
+        
+        const hasScore = match.s1 !== null && match.s2 !== null;
+        const w1 = hasScore && match.s1 > match.s2;
+        const w2 = hasScore && match.s2 > match.s1;
+        const l1 = hasScore && match.s1 < match.s2;
+        const l2 = hasScore && match.s2 < match.s1;
+
+        return `
+            <div class="bracket-match ${active ? 'match-active' : ''}">
+                <div class="bracket-match-header"><span>${match.phase} | ${time}</span><span>${stadium}</span></div>
+                <div class="bracket-team ${w2 ? 'winner' : ''}">
+                    ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left')}
+                    <span class="bracket-score">${match.s2 !== null ? match.s2 : ''}</span>
+                </div>
+                <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
+                <div class="bracket-team ${w1 ? 'winner' : ''}">
+                    ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left')}
+                    <span class="bracket-score">${match.s1 !== null ? match.s1 : ''}</span>
+                </div>
+            </div>`;
+    };
+
+    // Wildcard Summary mit Ergebnissen und dynamischen Farben
+    let wcSummaryHtml = `<div class="wildcard-summary" style="grid-template-columns: repeat(2, 1fr);">`;
+    [m[0], m[1], m[2], m[3]].forEach((match, i) => {
+        if (match.p1) {
+            const time = addMinutes(groupEndTime, match.offset);
+            const stadium = (i % 2 === 0) ? state.config.s1 : state.config.s2;
+            const hasScore = match.s1 !== null && match.s2 !== null;
+            const w1 = hasScore && match.s1 > match.s2;
+            const w2 = hasScore && match.s2 > match.s1;
+            const l1 = hasScore && match.s1 < match.s2;
+            const l2 = hasScore && match.s2 < match.s1;
+
+            wcSummaryHtml += `
+                <div class="bracket-match">
+                    <div class="bracket-match-header"><span>WC Game ${i+1} | ${time}</span><span>${stadium}</span></div>
+                    <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
+                        <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left')}</div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="bracket-score" style="${w2?'color:var(--accent)':''}">${match.s2 !== null ? match.s2 : '-'}</span>
+                            <span style="color:var(--nfl-red); font-weight:bold;">:</span>
+                            <span class="bracket-score" style="${w1?'color:var(--accent)':''}">${match.s1 !== null ? match.s1 : '-'}</span>
+                        </div>
+                        <div style="flex:1; text-align:right;">${formatPlayer(match.p1, "TBD", w1, l1, 'right')}</div>
+                    </div>
+                </div>`;
+        }
+    });
+    wcSummaryHtml += `</div>`;
+
+    document.getElementById('playoff-picture').innerHTML = `
+        <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
+        ${wcSummaryHtml}
+        
+<div class="playoff-grid" style="margin-top:20px;">
+            <div class="bracket-row-flow">
+                
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Divisional</div></div>
+                    <div class="upper-floor">
+                        ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
+                        ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
+                    </div>
+                    <div class="lower-floor">
+                        ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
+                        ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
+                    </div>
+                </div>
+
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Elim. Rd 2</div></div>
+                    <div class="upper-floor"></div> 
+                    <div class="lower-floor">
+                        ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
+                        ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
+                    </div>
+                </div>
+
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Semi-Finals</div></div>
+                    <div class="upper-floor" style="justify-content: center;">
+                        ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
+                    </div>
+                    <div class="lower-floor" style="justify-content: center;">
+                        ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
+                    </div>
+                </div>
+
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Elim. Final</div></div>
+                    <div class="upper-floor"></div>
+                    <div class="lower-floor" style="justify-content: center;">
+                        ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
+                    </div>
+                </div>
+
+                <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
+                    <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+                    <div class="upper-floor" style="justify-content: center; height: 100%;">
+                        ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
+                    </div>
+                </div>
+
+            </div>
+        </div>`
+}
+
+function renderNextGames() {
+    const dur = state.config.durG + state.config.durB;
+    const totalGroupMinutes = state.slots.length * dur;
+    const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+
+    // Hilfsfunktion zur Ermittlung der korrekten Startzeit
+    const getMatchTime = (m, type) => {
+        if (type === 'g') {
+            // Finde heraus, im wievielten Slot dieses spezifische Gruppenspiel steckt
+            const slotIdx = state.slots.findIndex(slot => slot.some(match => 
+                match.p1 === m.p1 && match.p2 === m.p2
+            ));
+            return addMinutes(state.config.start, slotIdx * dur);
+        } else {
+            // Playoff-Zeit basierend auf dem Ende der Gruppenphase + Offset
+            return addMinutes(groupEndTime, m.offset);
+        }
+    };
+
+    // Alle ungespielten Spiele sammeln
+    let allMatches = [
+        ...state.matches.filter(m => m.s1 === null).map(m => ({
+            ...m, t: 'g', anchor: `gmatch-${state.matches.indexOf(m)}` 
+        })),
+        ...state.playoffMatches.filter(m => m.s1 === null && m.p1 && m.p2 && m.p2.id !== -1).map((m, i) => ({
+            ...m, t: 'p', anchor: `pmatch-${state.playoffMatches.indexOf(m)}` 
+        }))
+    ];
+
+    // Zeitstempel für Sortierung/Anzeige zuweisen
+    allMatches.forEach(m => m.displayTime = getMatchTime(m, m.t));
+
+    // Aufteilung: 2 Live links, 2 Upcoming rechts
+    const liveMatches = allMatches.slice(0, 2);
+    const upcomingMatches = allMatches.slice(2, 4);
+
+    const formatMiniCard = (m, labelClass, labelText) => {
+        const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;
+        const p2 = m.t === 'g' ? state.players[m.p2] : m.p2;
+        
+        // Stadion-Logik für Gruppenspiele (Slot-basiert)
+        let stadium = state.config.s1;
+        if (m.t === 'g') {
+            const matchIndexInSlot = state.slots.find(s => s.includes(m))?.indexOf(m);
+            stadium = matchIndexInSlot === 1 ? state.config.s2 : state.config.s1;
+        } else {
+            // In Playoffs ist oft das erste Spiel eines Paares in S1, das zweite in S2
+            stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
         }
 
-        return `<div class="match-row ${m.s1!==null?'finished':''}">
-            <div class="stadium-tag">${stadium}</div>
-            <div class="team-box right">${gast?gast.name:'TBD'} ${getLogoHtml(gast?gast.team:null)}</div>
-            <div style="display:flex; align-items:center; gap:8px;">
-                <input type="number" class="score-input" value="${sG!==null?sG:''}" onchange="setScore('playoff',${idx},${iG},this.value)" ${isBye?'disabled':''}>
-                <span class="at-symbol">@</span>
-                <input type="number" class="score-input" value="${sH!==null?sH:''}" onchange="setScore('playoff',${idx},${iH},this.value)" ${isBye?'disabled':''}>
-            </div>
-            <div class="team-box">${getLogoHtml(heim?heim.team:null)} ${heim?heim.name:(isBye?'BYE':'TBD')}</div>
-        </div>`;
-    }
+        const scrollTarget = m.t === 'g' ? 'groupPhase' : 'playoffs';
 
-    function updatePlayoffLogic() {
-        const m = state.playoffMatches; if(!m.length) return;
-        const win = (x) => { if(!x || x.s1 === null || x.s2 === null) return null; if(x.p2 && x.p2.id === -1) return x.p1; return (x.s1 > x.s2) ? x.p1 : (x.s1 < x.s2 ? x.p2 : null); };
-        const loss = (x) => { if(!x || x.s1 === null || x.s2 === null || (x.p2 && x.p2.id === -1)) return null; return (x.s1 > x.s2) ? x.p2 : (x.s1 < x.s2 ? x.p1 : null); };
-        m[4].p1=loss(m[0]); m[4].p2=loss(m[1]); m[5].p1=loss(m[2]); m[5].p2=loss(m[3]);
-        m[6].p1=win(m[0]); m[6].p2=win(m[1]); m[7].p1=win(m[2]); m[7].p2=win(m[3]);
-        m[8].p1=win(m[4]); m[8].p2=loss(m[7]); m[9].p1=win(m[5]); m[9].p2=loss(m[6]);
-        m[10].p1=win(m[6]); m[10].p2=win(m[7]); m[11].p1=win(m[8]); m[11].p2=win(m[9]);
-        m[12].p1=win(m[11]); m[12].p2=loss(m[10]); m[13].p1=win(m[10]); m[13].p2=win(m[12]);
+        return `
+            <div class="next-card" onclick="document.getElementById('${m.anchor}').scrollIntoView({behavior:'smooth'})">
+                <div style="font-size: 0.8em; flex-grow: 1;">
+                    <div style="color: var(--accent); font-size: 0.7em; margin-bottom: 2px;">
+                        ${m.displayTime} Uhr | ${stadium}
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span>${p2.name}</span> ${getLogoHtml(p2.team)} 
+                        <span style="color: var(--nfl-red); font-weight: bold; font-size: 0.8em;">@</span> 
+                        ${getLogoHtml(p1.team)} <span>${p1.name}</span>
+                    </div>
+                </div>
+                <div class="status-tag ${labelClass}">${labelText}</div>
+            </div>`;
+    };
+
+document.getElementById('nextGamesList').innerHTML = `
+    <div class="next-grid-container">
+        <div>
+            <small style="color:var(--nfl-red); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
+                On the Field:
+            </small>
+            ${liveMatches.map(m => formatMiniCard(m, 'tag-live', 'LIVE')).join('') || 
+              '<div class="next-card" style="cursor:default; opacity:0.5;">Pause / Wartezeit</div>'}
+        </div>
+        
+        <div>
+            <small style="color:var(--accent); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
+                Upcoming Battles:
+            </small>
+            ${upcomingMatches.map(m => formatMiniCard(m, 'tag-next', 'NEXT')).join('') || 
+              '<div class="next-card" style="cursor:default; opacity:0.5;">Keine weiteren Spiele</div>'}
+        </div>
+    </div>
+`;
+}
+
+function renderAll() {
+    // Falls wir im Setup-Modus sind und Admin-Rechte haben, zeige das Setup-Panel
+    if (state.currentView === 'setup' && isAdmin) {
+        document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('setup-view').classList.remove('hidden');
+        document.getElementById('main-content').classList.add('hidden');
+    } else {
+        // Normaler Turnier-Modus
+        if (isAdmin) document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('setup-view').classList.add('hidden');
+        document.getElementById('main-content').classList.remove('hidden');
+
+        // Basis-Komponenten rendern
+        renderTable();
+        renderGroupMatches();
+        initPlayoffs();
+        updatePlayoffLogic();
+        renderPlayoffPicture();
+        renderNextGames();
+
+        // --- PLAYOFF ADMIN SECTIONS (GRUPPIERT NACH ZEIT-SLOTS) ---
+
+        // 1. Gruppierung der Playoff-Matches nach Zeit-Offsets (Offset = Minuten nach Gruppenphase)
+        const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
+            const offset = match.offset || 0;
+            if (!groups[offset]) groups[offset] = [];
+            groups[offset].push({ match, index: i });
+            return groups;
+        }, {});
+
+        // 2. Berechnung der Startzeit der Playoffs (Endzeit der Gruppenphase)
+        const dur = state.config.durG + state.config.durB;
+        const totalGroupMinutes = state.slots.length * dur;
+        const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+
+        // 3. Generierung des HTML für die Playoff-Admin-Liste
+        document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
+            .sort((a, b) => parseInt(a) - parseInt(b)) // Chronologische Sortierung der Offsets
+            .map(offset => {
+                const time = addMinutes(groupEndTime, parseInt(offset));
+                const matchesInSlot = playoffGroups[offset];
+                
+                // Header für den Zeit-Slot (analog zur Group Stage)
+                let html = `
+                    <div class="time-slot">
+                        <div class="slot-header">
+                            <span>${time} Uhr | Playoff-Phase</span>
+                        </div>`;
+                
+                matchesInSlot.forEach(({ match, index }) => {
+                    // Hole Bezeichnungen (z.B. "Highest Seed") aus dem zentralen Objekt
+                    const labels = playoffLabels[match.id] || { p1: "TBD", p2: "TBD" };
+                    
+                    // Stadion-Zuweisung: Index 0 im Slot = Stadion 1, Index 1 = Stadion 2
+                    const stadium = (matchesInSlot.indexOf(matchesInSlot.find(m => m.index === index)) === 0) 
+                                    ? state.config.s1 : state.config.s2;
+                    
+                    html += `
+                        <div id="pmatch-${index}" class="match-row ${match.s1 !== null ? 'finished' : ''}">
+                            <div class="stadium-tag" style="font-size:0.6em">${match.phase} | ${stadium}</div>
+                            
+                            <div class="team-box right">
+                                ${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name + ' ' + getLogoHtml(match.p2.team)) : labels.p2}
+                            </div>
+                            
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}" 
+                                       onchange="setScore('playoff',${index},2,this.value)" 
+                                       ${(!isAdmin || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
+                                <span style="color:var(--accent)">@</span>
+                                <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}" 
+                                       onchange="setScore('playoff',${index},1,this.value)" 
+                                       ${(!isAdmin || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
+                            </div>
+                            
+                            <div class="team-box">
+                                ${match.p1 ? getLogoHtml(match.p1.team) + ' ' + match.p1.name : labels.p1}
+                            </div>
+                        </div>`;
+                });
+                
+                return html + `</div>`; // Ende des Time-Slots
+            }).join('');
     }
+}
 
     function save() { localStorage.setItem('madden_bowl_v2.7', JSON.stringify(state)); }
-    function resetTournament() { if(confirm("Gesamtes Turnier löschen?")) { localStorage.removeItem('madden_bowl_v2.7'); location.reload(); } }
-    window.onload = () => { let saved = localStorage.getItem('madden_bowl_v2.7'); if(saved){ state=JSON.parse(saved); initSetupInputs(state.players.length); showView(state.currentView); updateModeInfo(); } else updateModeInfo(); };
+    function resetTournament() { if(confirm("Full Reset? Alle Daten gehen verloren.")) { localStorage.clear(); location.reload(); } }
+
+    window.onload = async () => {
+        const saved = localStorage.getItem('madden_bowl_v2.7');
+        if(saved) state = JSON.parse(saved);
+        await syncData();
+        updateModeInfo();
+        renderAll();
+        setInterval(syncData, 30000);
+    };
 </script>
 </body>
-</html>
+</html>	
