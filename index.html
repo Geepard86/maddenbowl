@@ -445,39 +445,17 @@
         return `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png" class="logo-img">`;
     }
 
-async function syncData(isUpload = false) {
-    // Wenn wir hochladen wollen
-    if (isUpload) {
+    async function syncData(isUpload = false) {
         try {
-            console.log("Sende Daten via PUT an Cloud...");
-            const res = await fetch(API_URL, { 
-                method: 'PUT', // PUT ist zwingend für npoint Updates
-                body: JSON.stringify(state), 
-                headers: {'Content-Type': 'application/json'} 
-            });
-            if (!res.ok) throw new Error('Server antwortete mit Status ' + res.status);
-            console.log("Cloud-Sync erfolgreich.");
-        } catch (e) {
-            console.warn("Cloud-Sync fehlgeschlagen, arbeite lokal weiter:", e);
-            // Wir werfen keinen Fehler mehr nach oben, damit das Skript weiterläuft!
-        }
-    } else {
-        // Laden-Logik
-        try {
-            const res = await fetch(API_URL);
-            if (!res.ok) return;
-            const data = await res.json();
-            
-            // Nur laden, wenn wir nicht Admin sind (verhindert Überschreiben lokaler Eingaben)
-            if (data && data.players && !isAdmin) {
-                state = data;
-                renderAll();
+            if (isUpload) {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(state), headers: {'Content-Type': 'application/json'} });
+            } else {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                if (data && data.players) { state = data; renderAll(); }
             }
-        } catch (e) {
-            console.warn("Laden fehlgeschlagen:", e);
-        }
+        } catch (e) { console.error(e); }
     }
-}
 
     function addMinutes(time, mins) {
         let [h, m] = time.split(':').map(Number);
