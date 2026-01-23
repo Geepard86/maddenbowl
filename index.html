@@ -354,11 +354,15 @@
         <div id="setup-view" class="card">
             <h2>Tournament Setup</h2>
             <div class="config-grid">
-                <div class="config-item"><label>Start:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
-                <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
-                <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Mercedes-Benz"></div>
-                <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="SoFi Stadium"></div>
-            </div>
+			    <div class="config-item"><label>Start:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
+			    <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
+			    <div class="config-item"><label>Min/P:</label><input type="number" id="durPlayoff" value="45" onchange="updateModeInfo()"></div>
+			    <div class="config-item"><label>Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
+			    <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Mercedes-Benz"></div>
+			    <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="SoFi Stadium"></div>
+			</div>
+<div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;">
+</div>
             <select id="playerCount" onchange="updateModeInfo()" style="width:100%; margin-bottom: 10px;">
                 <option value="8" selected>8 Spieler (Standard)</option>
                 <option value="6">6 Spieler</option>
@@ -489,9 +493,53 @@ async function syncData(isUpload = false) {
     }
 
     function updateModeInfo() {
-        const count = parseInt(document.getElementById('playerCount').value);
-        initSetupInputs(count);
-    }
+    const count = parseInt(document.getElementById('playerCount').value);
+    const start = document.getElementById('startTime').value;
+    const dG = parseInt(document.getElementById('durGroup').value) || 0;
+    const dP = parseInt(document.getElementById('durPlayoff').value) || 0;
+    const dB = parseInt(document.getElementById('durBreak').value) || 0;
+
+    // Metadaten für die Modi
+    const modeMeta = {
+        6: { games: 15, perP: 5, cut: "Alle kommen weiter (P1 & P2 erhalten Bye)", groupSlots: 8 },
+        7: { games: 21, perP: 6, cut: "Alle kommen weiter (P1 erhält ein Bye)", groupSlots: 11 },
+        8: { games: 20, perP: 5, cut: "Alle 8 Spieler rücken in die Playoffs vor", groupSlots: 10 },
+        9: { games: 18, perP: 4, cut: "Platz 9 scheidet nach der Gruppenphase aus", groupSlots: 9 },
+        10: { games: 25, perP: 5, cut: "Platz 9 & 10 scheiden nach der Gruppenphase aus", groupSlots: 13 }
+    };
+
+    const meta = modeMeta[count];
+    
+    // Zeitberechnung
+    // Gruppenphase Ende = Start + (Slots * (Dauer + Pause))
+    const groupMinutes = meta.groupSlots * (dG + dB);
+    const groupEndTime = addMinutes(start, groupMinutes);
+    
+    // Playoff Ende (Double Elim hat ca. 7 Phasen/Offsets in deiner Logik)
+    const playoffMinutes = 8 * (dP + dB); // 8 Phasen bis zum Finale inkl. Puffer
+    const finalKickoffTime = addMinutes(groupEndTime, 7 * (dP + dB));
+
+    const infoBox = document.getElementById('dynamicInfoBox');
+    infoBox.innerHTML = `
+        <div style="color:var(--accent); font-weight:bold; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">
+            🏆 Modus: ${count === 6 || count === 7 ? count + 'er Gruppe (Jeder gegen jeden)' : 'Gruppenphase (' + count + ' Spieler)'}
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+                <b>🛡 Playoff-Modus:</b> Doppel-KO (Double Elim)<br>
+                <b>🏈 Spiele:</b> ${meta.games} gesamt (${meta.perP} pro Person)<br>
+                <b>📉 Cut / Bye:</b> ${meta.cut}
+            </div>
+            <div style="border-left: 1px solid #4a5568; padding-left: 15px;">
+                <b>⏱ Gruppe Ende:</b> ca. ${groupEndTime} Uhr<br>
+                <b style="color:var(--nfl-red)">🏈 FINAL KICKOFF:</b> ca. ${finalKickoffTime} Uhr<br>
+                <small style="opacity:0.7">Basis: ${dG}m/G, ${dP}m/P, ${dB}m Pause</small>
+            </div>
+        </div>
+    `;
+
+    initSetupInputs(count);
+}
 
     function initSetupInputs(count) {
         const container = document.getElementById('playerInputs');
@@ -503,18 +551,37 @@ async function syncData(isUpload = false) {
     }
 
     function startTournament() {
-        const count = parseInt(document.getElementById('playerCount').value);
-        state.config = { start: document.getElementById('startTime').value, durG: parseInt(document.getElementById('durGroup').value), durP: 45, durB: 15, s1: document.getElementById('stadium1').value, s2: document.getElementById('stadium2').value };
-        state.players = [];
-        for(let i=0; i<count; i++) {
-            state.players.push({ id: i, name: document.getElementById(`pName${i}`).value || `P${i+1}`, team: document.getElementById(`pTeam${i}`).value, wins: 0, diff: 0, pointsFor: 0, played: 0 });
-        }
-        state.slots = schedules[count].map(slotData => slotData.map(m => ({ p1: m[0], p2: m[1], s1: null, s2: null })));
-        state.matches = state.slots.flat();
-        state.playoffMatches = [];
-        state.currentView = 'running';
-        renderAll(); save(); if(isAdmin) syncData(true);
+    const count = parseInt(document.getElementById('playerCount').value);
+    
+    // Übernahme der neuen Werte in den State
+    state.config = { 
+        start: document.getElementById('startTime').value, 
+        durG: parseInt(document.getElementById('durGroup').value), 
+        durP: parseInt(document.getElementById('durPlayoff').value), // Neu
+        durB: parseInt(document.getElementById('durBreak').value),   // Neu
+        s1: document.getElementById('stadium1').value, 
+        s2: document.getElementById('stadium2').value 
+    };
+
+    state.players = [];
+    for(let i=0; i<count; i++) {
+        state.players.push({ 
+            id: i, 
+            name: document.getElementById(`pName${i}`).value || `P${i+1}`, 
+            team: document.getElementById(`pTeam${i}`).value, 
+            wins: 0, diff: 0, pointsFor: 0, played: 0 
+        });
     }
+
+    state.slots = schedules[count].map(slotData => slotData.map(m => ({ p1: m[0], p2: m[1], s1: null, s2: null })));
+    state.matches = state.slots.flat();
+    state.playoffMatches = []; // Wird durch renderAll -> initPlayoffs neu erstellt
+    state.currentView = 'running';
+    
+    renderAll(); 
+    save(); 
+    if(isAdmin) syncData(true);
+}
 
     function changeTeam(pid, tid) {
         state.players.find(x => x.id === pid).team = tid;
@@ -616,11 +683,11 @@ function initPlayoffs() {
     // Initialisiert das Array nur einmalig mit leeren Slots, falls noch nicht geschehen
     if(state.playoffMatches.length > 0) return;
     
-    const dur = state.config.durG + state.config.durB; 
+    const dur = state.config.durP + state.config.durB;
     
     state.playoffMatches = [
         // 0-3: Wildcard
-        {id:'ub1', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0}, 
+		{id:'ub1', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0}, 
         {id:'ub2', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0},
         {id:'ub3', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur}, 
         {id:'ub4', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur},
@@ -1092,6 +1159,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
