@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MADDEN BOWL - PRO MANAGER v2.9</title>
     <style>
-        :root { 
+		:root { 
     --nfl-blue: #013369; 
     --nfl-red: #D50A0A; 
     --bg: #0b1119; 
@@ -122,26 +122,50 @@ select, input {
 .match-row { 
     background: #232d3d; 
     margin-bottom: 5px; 
-    padding: 8px; 
+    padding: 10px; 
     border-radius: 6px; 
-    display: grid; 
-    grid-template-columns: 100px 1fr auto 1fr; 
+    display: flex; 
     align-items: center; 
     gap: 10px; 
+    position: relative;
 }
 
 .match-row.finished { border-left: 4px solid var(--accent); }
 
+.stadium-tag { 
+    font-size: 0.65em; 
+    color: var(--gray); 
+    text-transform: uppercase; 
+    width: 90px; 
+    flex-shrink: 0;
+    white-space: normal;
+    line-height: 1.2;
+}
+
 .team-box { 
+    flex: 1; 
     display: flex; 
     align-items: center; 
     gap: 8px; 
     font-weight: bold; 
-    white-space: nowrap;
+    min-width: 0;
+}
+
+.team-box span {
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .team-box.right { justify-content: flex-end; text-align: right; }
+
+.score-area {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    justify-content: center;
+    flex-shrink: 0;
+}
 
 .score-input { 
     width: 40px; 
@@ -156,10 +180,6 @@ select, input {
 }
 
 .score-input:disabled { background: #cbd5e0 !important; color: #4a5568 !important; opacity: 1; }
-
-/* --- TABLE --- */
-table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 
 /* --- NEXT GAMES HUB --- */
 .next-games { 
@@ -198,19 +218,15 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-/* --- PLAYOFF BRACKET (NFL PICTURE) --- */
-.bracket-wrapper { display: flex; flex-direction: column; gap: 20px; padding: 20px 0; }
-
+/* --- PLAYOFF BRACKET --- */
 .playoff-grid { 
-    display: flex; 
-    flex-direction: column; 
-    position: relative; 
     background: rgba(0,0,0,0.2); 
     border-radius: 12px; 
     padding: 10px; 
+    overflow-x: auto;
 }
 
-.bracket-row-flow { display: flex; gap: 15px; position: relative; padding: 20px 0; overflow-x: auto; }
+.bracket-row-flow { display: flex; gap: 15px; position: relative; padding: 20px 0; }
 
 .bracket-row-flow::before {
     content: "";
@@ -224,16 +240,14 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 .bracket-column { display: flex; flex-direction: column; min-width: 175px; flex: 1; z-index: 3; }
 
 .upper-floor, .lower-floor { display: flex; flex-direction: column; gap: 15px; padding: 10px 0; flex: 1; }
-.upper-floor { margin-bottom: 40px; justify-content: flex-start; }
-.lower-floor { margin-top: 40px; justify-content: flex-start; }
+.upper-floor { margin-bottom: 40px; }
+.lower-floor { margin-top: 40px; }
 
 .bracket-match { 
     background: #1c2431; 
     border: 1px solid #4a5568; 
     border-radius: 8px; 
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     border-left: 4px solid var(--gray);
-    width: 100%;
 }
 
 .match-active { border-left-color: var(--accent); box-shadow: 0 0 15px rgba(0, 255, 204, 0.15); }
@@ -254,7 +268,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 /* --- WILDCARD SUMMARY --- */
 .wildcard-summary {
     display: grid;
-    grid-template-columns: 1fr 1fr; /* 2 Spalten Standard */
+    grid-template-columns: 1fr 1fr;
     gap: 15px;
     margin-bottom: 15px;
 }
@@ -262,28 +276,30 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 /* --- MOBILE OPTIMIERUNG --- */
 @media (max-width: 800px) {
     .next-grid-container { grid-template-columns: 1fr; }
-    
-    /* Wildcards untereinander */
     .wildcard-summary { grid-template-columns: 1fr !important; }
 
-    /* Schedule Overlap Fix */
-    .match-row { 
-        grid-template-columns: 1fr auto 1fr !important; 
-        gap: 5px !important; 
+    .match-row {
+        flex-wrap: wrap;
+        padding: 8px;
     }
-    
-    .stadium-tag { display: none; }
-    
-    .team-box { font-size: 0.8em; }
-    .team-box img { width: 16px; height: 16px; }
 
+    .stadium-tag {
+        width: 100%;
+        margin-bottom: 4px;
+        font-size: 0.6em;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 2px;
+        display: block;
+    }
+
+    .team-box { font-size: 0.85em; }
     .score-input { width: 32px !important; height: 30px !important; font-size: 1rem !important; }
 }
 
 .logo-img { width: 20px; height: 20px; vertical-align: middle; }
 .hidden { display: none !important; }
 
-.bracket-team.winner { color: var(--accent) !important; font-weight: bold; text-shadow: 0 0 8px rgba(0, 255, 204, 0.4); }
+.bracket-team.winner { color: var(--accent) !important; font-weight: bold; }
 .bracket-team.winner img { filter: drop-shadow(0 0 5px var(--accent)); }
     </style>
 </head>
@@ -606,7 +622,7 @@ async function syncData(isUpload = false) {
 
 function renderGroupMatches() {
     let currentTime = state.config.start;
-    let matchCounter = 0; // Sicherer Zähler für den globalen Index
+    let matchCounter = 0;
     
     document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
         let html = `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
@@ -614,22 +630,26 @@ function renderGroupMatches() {
         slot.forEach((m, mIdx) => {
             const p1 = state.players[m.p1];
             const p2 = state.players[m.p2];
-            const gIdx = matchCounter++; // Inkrementiert für jedes Match im Array
+            const gIdx = matchCounter++;
+            const stadium = mIdx === 0 ? state.config.s1 : state.config.s2; // Stadion-Zuweisung
             
-html += `
-    <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
-        <div class="team-box right">
-            ${p2.name} ${getLogoHtml(p2.team)}
-        </div>
-        <div style="display:flex; align-items:center; gap:5px; justify-content:center;">
-            <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}" ...>
-            <span style="color:var(--accent); font-weight:bold;">:</span>
-            <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}" ...>
-        </div>
-        <div class="team-box">
-            ${getLogoHtml(p1.team)} ${p1.name}
-        </div>
-    </div>`;
+            html += `
+                <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
+                    <div class="stadium-tag">${stadium}</div>
+                    <div class="team-box right">
+                        <span>${p2.name}</span> ${getLogoHtml(p2.team)}
+                    </div>
+                    <div class="score-area">
+                        <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}" 
+                               onchange="setScore('group',${gIdx},2,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                        <span style="color:var(--accent)">:</span>
+                        <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}" 
+                               onchange="setScore('group',${gIdx},1,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                    </div>
+                    <div class="team-box">
+                        ${getLogoHtml(p1.team)} <span>${p1.name}</span>
+                    </div>
+                </div>`;
         });
         
         currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
@@ -1075,27 +1095,29 @@ function renderAll() {
                                     ? state.config.s1 : state.config.s2;
                     
                     html += `
-                        <div id="pmatch-${index}" class="match-row ${match.s1 !== null ? 'finished' : ''}">
-                            <div class="stadium-tag" style="font-size:0.6em">${match.phase} | ${stadium}</div>
-                            
-                            <div class="team-box right">
-                                ${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name + ' ' + getLogoHtml(match.p2.team)) : labels.p2}
-                            </div>
-                            
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}" 
-                                       onchange="setScore('playoff',${index},2,this.value)" 
-                                       ${(!isAdmin || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
-                                <span style="color:var(--accent)">@</span>
-                                <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}" 
-                                       onchange="setScore('playoff',${index},1,this.value)" 
-                                       ${(!isAdmin || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
-                            </div>
-                            
-                            <div class="team-box">
-                                ${match.p1 ? getLogoHtml(match.p1.team) + ' ' + match.p1.name : labels.p1}
-                            </div>
-                        </div>`;
+    <div id="pmatch-${index}" class="match-row ${match.s1 !== null ? 'finished' : ''}">
+        <div class="stadium-tag">${match.phase}<br>${stadium}</div>
+        
+        <div class="team-box right">
+            <span>${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name) : labels.p2}</span>
+            ${match.p2 ? getLogoHtml(match.p2.team) : ''}
+        </div>
+        
+        <div class="score-area">
+            <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}" 
+                   onchange="setScore('playoff',${index},2,this.value)" 
+                   ${(!isAdmin || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
+            <span style="color:var(--accent)">:</span>
+            <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}" 
+                   onchange="setScore('playoff',${index},1,this.value)" 
+                   ${(!isAdmin || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
+        </div>
+        
+        <div class="team-box">
+            ${match.p1 ? getLogoHtml(match.p1.team) : ''}
+            <span>${match.p1 ? match.p1.name : labels.p1}</span>
+        </div>
+    </div>`;
                 });
                 
                 return html + `</div>`; // Ende des Time-Slots
@@ -1149,6 +1171,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
