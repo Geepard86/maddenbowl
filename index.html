@@ -1041,10 +1041,10 @@ function renderAll() {
     function resetTournament() { if(confirm("Full Reset? Alle Daten gehen verloren.")) { localStorage.clear(); location.reload(); } }
 
  window.onload = async () => {
-    // 1. Zuerst versuchen, Cloud-Daten zu holen
+    // 1. Versuche IMMER erst die Cloud zu laden
     await syncData(); 
 
-    // 2. Nur wenn Cloud leer ist/fehlschlägt, LocalStorage als Fallback
+    // 2. Falls Cloud leer (neues Turnier), schau in LocalStorage
     if (!state.players || state.players.length === 0) {
         const saved = localStorage.getItem('madden_bowl_v2.7');
         if (saved) {
@@ -1052,17 +1052,21 @@ function renderAll() {
         }
     }
 
-    if (state.players && state.players.length > 0) {
+    // 3. Wenn immer noch nichts da ist und wir Admin sind -> Setup
+    if (!state.players || state.players.length === 0) {
+        state.currentView = 'setup';
+    } else {
         state.currentView = 'running';
     }
     
-    updateModeInfo();
     renderAll();
-    setInterval(syncData, 30000);
+    // Intervall etwas hochsetzen auf 45 Sek, um Traffic zu sparen
+    setInterval(() => syncData(false), 45000); 
 };
 </script>
 </body>
 </html>	
+
 
 
 
