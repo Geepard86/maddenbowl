@@ -809,7 +809,7 @@ function updatePlayoffLogic() {
 
 function renderPlayoffPicture() {
     const m = state.playoffMatches;
-    if (!m.length) return;
+    if (!m || m.length === 0) return;
 
     const totalGroupMinutes = state.slots.length * (state.config.durG + state.config.durB);
     const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
@@ -822,27 +822,26 @@ function renderPlayoffPicture() {
 
     // Zentrale Hilfsfunktion für Namen, Seeds und Status-Effekte
     const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left', matchId) => {
-    if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
-    if (player.id === -1) return "BYE";
-    
-    const seedColor = isWinner ? 'var(--accent)' : 'white';
-    const textColor = isWinner ? 'var(--accent)' : 'inherit';
-    const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
-    const logo = getLogoHtml(player.team);
-    const name = player.name;
-    
-    // LOGIK FÜR DURCHSTREICHEN:
-    // Nur durchstreichen, wenn es ein Lower Bracket Match (lb...) oder das Grand Finale (gf) ist
-    // UND das Team der Verlierer dieses Matches ist.
-    const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
-    const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
-    
-    const winnerClass = isWinner ? 'winner' : '';
+        if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+        if (player.id === -1) return "BYE";
+        
+        const seedColor = isWinner ? 'var(--accent)' : 'white';
+        const textColor = isWinner ? 'var(--accent)' : 'inherit';
+        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
+        const logo = getLogoHtml(player.team);
+        const name = player.name;
+        
+        // LOGIK FÜR DURCHSTREICHEN:
+        // Nur durchstreichen, wenn es ein Lower Bracket Match (lb...), Semi (ls), Final (lf) oder Grand Finale (gf) ist
+        const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+        const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
+        
+        const winnerClass = isWinner ? 'winner' : '';
 
-    return `<span class="${winnerClass}" style="${style} color:${textColor};">
-        ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
-    </span>`;
-};
+        return `<span class="${winnerClass}" style="${style} color:${textColor};">
+            ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
+        </span>`;
+    }; // <-- Diese Klammer hatte gefehlt!
 
     const renderM = (match, idx, placeholderP1, placeholderP2) => {
         if (!match) return "";
@@ -860,18 +859,18 @@ function renderPlayoffPicture() {
             <div class="bracket-match ${active ? 'match-active' : ''}">
                 <div class="bracket-match-header"><span>${match.phase} | ${time}</span><span>${stadium}</span></div>
                 <div class="bracket-team ${w2 ? 'winner' : ''}">
-                    ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left')}
+                    ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left', match.id)}
                     <span class="bracket-score">${match.s2 !== null ? match.s2 : ''}</span>
                 </div>
                 <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
                 <div class="bracket-team ${w1 ? 'winner' : ''}">
-                    ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left')}
+                    ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left', match.id)}
                     <span class="bracket-score">${match.s1 !== null ? match.s1 : ''}</span>
                 </div>
             </div>`;
     };
 
-    // Wildcard Summary mit Ergebnissen und dynamischen Farben
+    // Wildcard Summary
     let wcSummaryHtml = `<div class="wildcard-summary">`;
     [m[0], m[1], m[2], m[3]].forEach((match, i) => {
         if (match.p1) {
@@ -887,13 +886,13 @@ function renderPlayoffPicture() {
                 <div class="bracket-match">
                     <div class="bracket-match-header"><span>WC Game ${i+1} | ${time}</span><span>${stadium}</span></div>
                     <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
-                        <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left')}</div>
+                        <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left', match.id)}</div>
                         <div style="display:flex; align-items:center; gap:8px;">
                             <span class="bracket-score" style="${w2?'color:var(--accent)':''}">${match.s2 !== null ? match.s2 : '-'}</span>
                             <span style="color:var(--nfl-red); font-weight:bold;">:</span>
                             <span class="bracket-score" style="${w1?'color:var(--accent)':''}">${match.s1 !== null ? match.s1 : '-'}</span>
                         </div>
-                        <div style="flex:1; text-align:right;">${formatPlayer(match.p1, "TBD", w1, l1, 'right')}</div>
+                        <div style="flex:1; text-align:right;">${formatPlayer(match.p1, "TBD", w1, l1, 'right', match.id)}</div>
                     </div>
                 </div>`;
         }
@@ -903,10 +902,8 @@ function renderPlayoffPicture() {
     document.getElementById('playoff-picture').innerHTML = `
         <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
         ${wcSummaryHtml}
-        
-<div class="playoff-grid" style="margin-top:20px;">
+        <div class="playoff-grid" style="margin-top:20px;">
             <div class="bracket-row-flow">
-                
                 <div class="bracket-column">
                     <div class="column-header"><div class="bracket-title">Divisional</div></div>
                     <div class="upper-floor">
@@ -918,7 +915,6 @@ function renderPlayoffPicture() {
                         ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
                     </div>
                 </div>
-
                 <div class="bracket-column">
                     <div class="column-header"><div class="bracket-title">Elim. Rd 2</div></div>
                     <div class="upper-floor"></div> 
@@ -927,7 +923,6 @@ function renderPlayoffPicture() {
                         ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
                     </div>
                 </div>
-
                 <div class="bracket-column">
                     <div class="column-header"><div class="bracket-title">Semi-Finals</div></div>
                     <div class="upper-floor" style="justify-content: center;">
@@ -937,7 +932,6 @@ function renderPlayoffPicture() {
                         ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
                     </div>
                 </div>
-
                 <div class="bracket-column">
                     <div class="column-header"><div class="bracket-title">Elim. Final</div></div>
                     <div class="upper-floor"></div>
@@ -945,16 +939,14 @@ function renderPlayoffPicture() {
                         ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
                     </div>
                 </div>
-
                 <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
                     <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
                     <div class="upper-floor" style="justify-content: center; height: 100%;">
                         ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
                     </div>
                 </div>
-
             </div>
-        </div>`
+        </div>`;
 }
 
 function renderNextGames() {
@@ -1180,6 +1172,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
