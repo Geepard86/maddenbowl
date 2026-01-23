@@ -445,29 +445,41 @@
         return `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png" class="logo-img">`;
     }
 
-    async function syncData(isUpload = false) {
+	let isSyncing = false; // Verhindert Überlappung
+
+async function syncData(isUpload = false) {
+    if (isSyncing && !isUpload) return; // Blockiere Download, wenn gerade ein Upload läuft
+    
     try {
         if (isUpload) {
+            isSyncing = true; 
             await fetch(API_URL, { 
                 method: 'POST', 
                 body: JSON.stringify(state), 
                 headers: {'Content-Type': 'application/json'} 
             });
-            console.log("Cloud Sync: Upload erfolgreich");
+            console.log("Cloud Sync: Upload abgeschlossen");
+            // Kurze Pause, damit die Cloud Zeit hat, die Daten zu verarbeiten
+            setTimeout(() => { isSyncing = false; }, 2000); 
         } else {
             const res = await fetch(API_URL);
             const data = await res.json();
             
-            // WICHTIG: Nur überschreiben, wenn wir nicht gerade selbst Admin-Änderungen machen
             if (data && data.players) { 
-                // Wenn wir Admin sind, laden wir nur, wenn wir nicht gerade aktiv sind
-                if (!isAdmin || !document.activeElement.classList.contains('score-input')) {
-                    state = data; 
+                // Prüfe, ob der User gerade tippt. Wenn ja: NICHT überschreiben!
+                const isTyping = document.activeElement.classList.contains('score-input');
+                if (!isTyping && !isSyncing) {
+                    state = data;
+                    // Referenzen nach Download wiederherstellen
+                    if (state.slots) state.matches = state.slots.flat();
                     renderAll(); 
                 }
             }
         }
-    } catch (e) { console.error("Sync Fehler:", e); }
+    } catch (e) { 
+        console.error("Sync Fehler:", e); 
+        isSyncing = false;
+    }
 }
 
     function addMinutes(time, mins) {
@@ -1078,6 +1090,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
