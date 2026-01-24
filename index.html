@@ -463,10 +463,17 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
 
 	function getOVR(teamId) {
-    const year = state.config.year || "none";
+    // 1. Prüfen, ob das Jahr schon im State (laufendes Turnier) gespeichert ist
+    // 2. Falls nicht, direkt aus dem Dropdown im Setup lesen
+    const year = state.config.year || (document.getElementById('maddenYear') ? document.getElementById('maddenYear').value : "none");
     if (year === "none" || !maddenRatings[year]) return "";
     const rating = maddenRatings[year][teamId];
-    return rating ? ` (${rating})` : "";
+    return rating ? ` [${rating}]` : "";
+}
+	
+	function renderPlayerInputs() {
+    const count = parseInt(document.getElementById('playerCount').value);
+    initSetupInputs(count);
 }
 	
     function getLogoHtml(teamId) {
@@ -562,7 +569,7 @@ async function syncData(isUpload = false) {
             </div>
         </div>
     `;
-
+	renderPlayerInputs();
     initSetupInputs(count);
 }
 
@@ -1205,6 +1212,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
