@@ -368,6 +368,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 			    <div class="config-item"><label>Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
 			    <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Mercedes-Benz"></div>
 			    <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="SoFi Stadium"></div>
+				<div class="config-item"><label>Madden Version:</label><select id="maddenYear" onchange="renderPlayerInputs()"><option value="2026">Madden 26</option></select></div>
 			</div>
 <div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;">
 </div>
@@ -425,6 +426,15 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
         {n: "Seahawks", id: "SEA"}, {n: "Buccaneers", id: "TB"}, {n: "Titans", id: "TEN"}, {n: "Commanders", id: "WAS"}
     ];
 
+	const maddenRatings = {
+    "2026": {
+        "ARI": 80, "ATL": 80, "BAL": 87, "BUF": 88, "CAR": 80, "CHI": 84, "CIN": 81, "CLE": 81,
+        "DAL": 81, "DEN": 91, "DET": 87, "GB": 83, "HOU": 86, "IND": 82, "JAX": 84, "KC": 85,
+        "LV": 76, "LAC": 82, "LAR": 89, "MIA": 79, "MIN": 85, "NE": 86, "NO": 77, "NYG": 78,
+        "NYJ": 74, "PHI": 90, "PIT": 84, "SF": 84, "SEA": 85, "TB": 83, "TEN": 75, "WAS": 79
+    }
+};
+
     const schedules = {
         8: [ [[0,1],[4,5]], [[2,3],[6,7]], [[1,2],[5,6]], [[3,0],[7,4]], [[0,2],[4,6]], [[1,3],[5,7]], [[0,4],[1,5]], [[2,6],[3,7]], [[5,0],[6,1]], [[7,2],[4,3]] ],
         6: [ [[0,1],[2,3]], [[4,5],[0,2]], [[3,4],[5,0]], [[1,4],[2,5]], [[0,3],[5,1]], [[4,2],[3,5]], [[1,0],[2,4]], [[0,4]] ],
@@ -452,6 +462,13 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
 
+	function getOVR(teamId) {
+    const year = state.config.year || "none";
+    if (year === "none" || !maddenRatings[year]) return "";
+    const rating = maddenRatings[year][teamId];
+    return rating ? ` (${rating})` : "";
+}
+	
     function getLogoHtml(teamId) {
         if (!teamId || teamId === -1) return '';
         return `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png" class="logo-img">`;
@@ -550,13 +567,28 @@ async function syncData(isUpload = false) {
 }
 
     function initSetupInputs(count) {
-        const container = document.getElementById('playerInputs');
-        container.innerHTML = '';
-        for(let i=0; i<count; i++) {
-            let options = nflTeams.map(t => `<option value="${t.id}">${t.n}</option>`).join('');
-            container.innerHTML += `<div class="player-input-card"><input type="text" id="pName${i}" placeholder="Spieler ${i+1}"><select id="pTeam${i}">${options}</select></div>`;
-        }
+    const container = document.getElementById('playerInputs');
+    // Wichtig: Wir leeren den Container nur, wenn sich die Anzahl der Spieler geändert hat
+    // oder wenn wir die Dropdowns mit neuen Ratings (anderes Jahr) neu zeichnen müssen
+    container.innerHTML = '';
+
+    for(let i=0; i<count; i++) {
+        // Hier ist die entscheidende Änderung: 
+        // Wir hängen getOVR(t.id) an den Teamnamen an.
+        let options = nflTeams.map(t => {
+            const ratingDisplay = getOVR(t.id); // Holt z.B. " [91]"
+            return `<option value="${t.id}">${t.n}${ratingDisplay}</option>`;
+        }).join('');
+
+        container.innerHTML += `
+            <div class="player-input-card">
+                <input type="text" id="pName${i}" placeholder="Spieler Name">
+                <select id="pTeam${i}">
+                    ${options}
+                </select>
+            </div>`;
     }
+}
 
     function startTournament() {
     const count = parseInt(document.getElementById('playerCount').value);
@@ -568,7 +600,8 @@ async function syncData(isUpload = false) {
         durP: parseInt(document.getElementById('durPlayoff').value), // Neu
         durB: parseInt(document.getElementById('durBreak').value),   // Neu
         s1: document.getElementById('stadium1').value, 
-        s2: document.getElementById('stadium2').value 
+        s2: document.getElementById('stadium2').value,
+		year: document.getElementById('maddenYear').value
     };
 
     state.players = [];
@@ -1172,6 +1205,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
