@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MADDEN BOWL - PRO MANAGER v2.9</title>
+    <title>MADDEN BOWL MANAGER</title>
     <style>
 		:root { 
     --nfl-blue: #013369; 
@@ -437,7 +437,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
         </div>
 
         <div id="playoffs" class="card">
-            <h2>Playoff Match Admin</h2>
+            <h2>Playoff Schedule</h2>
             <div id="playoffSections"></div>
         </div>
     </div>
@@ -608,26 +608,29 @@ async function syncData(isUpload = false) {
 
     function initSetupInputs(count) {
     const container = document.getElementById('playerInputs');
-    // Wichtig: Wir leeren den Container nur, wenn sich die Anzahl der Spieler geändert hat
-    // oder wenn wir die Dropdowns mit neuen Ratings (anderes Jahr) neu zeichnen müssen
+    if (container.children.length === count) return;
     container.innerHTML = '';
 
+    // NEU: Teams nach OVR absteigend sortieren
+    const sortedTeams = [...nflTeams].sort((a, b) => b.ovr - a.ovr);
+
     for(let i=0; i<count; i++) {
-        // Hier ist die entscheidende Änderung: 
-        // Wir hängen getOVR(t.id) an den Teamnamen an.
-        let options = nflTeams.map(t => {
-            const ratingDisplay = getOVR(t.id); // Holt z.B. " [91]"
-            return `<option value="${t.id}">${t.n}${ratingDisplay}</option>`;
-        }).join('');
+        // Die Optionen basieren jetzt auf der sortierten Liste
+        let options = sortedTeams.map(t => 
+            `<option value="${t.id}">${t.n} (OVR: ${t.ovr})</option>`
+        ).join('');
 
         container.innerHTML += `
             <div class="player-input-card">
                 <input type="text" id="pName${i}" placeholder="Spieler Name">
-                <select id="pTeam${i}">
+                <select id="pTeam${i}" onchange="updateTeamAvailability()">
+                    <option value="" disabled selected>Team wählen...</option>
                     ${options}
                 </select>
             </div>`;
     }
+    // Initial prüfen (falls Teams vorbelegt sind)
+    updateTeamAvailability();
 }
 
     function startTournament() {
@@ -1245,9 +1248,44 @@ function renderAll() {
 
     setInterval(() => syncData(false), 45000);
 };
+
+function updateTeamAvailability() {
+    // Alle Team-Dropdowns finden
+    const selects = document.querySelectorAll('[id^="pTeam"]');
+    
+    // Alle aktuell gewählten Werte sammeln (außer dem leeren Standardwert)
+    const selectedValues = Array.from(selects)
+        .map(s => s.value)
+        .filter(val => val !== "");
+
+    selects.forEach(currentSelect => {
+        const options = currentSelect.options;
+        
+        for (let i = 0; i < options.length; i++) {
+            const option = options[i];
+            if (option.value === "") continue; // "Team wählen..." ignorieren
+
+            // Prüfen, ob dieser Wert woanders gewählt wurde
+            const isChosenElsewhere = selectedValues.some((val) => {
+                return val === option.value && val !== currentSelect.value;
+            });
+
+            if (isChosenElsewhere) {
+                option.disabled = true;
+                option.style.color = "#4a5568"; // Grau
+                option.style.backgroundColor = "#1a202c"; // Dunkler Hintergrund
+            } else {
+                option.disabled = false;
+                option.style.color = ""; 
+                option.style.backgroundColor = "";
+            }
+        }
+    });
+}
 </script>
 </body>
 </html>	
+
 
 
 
