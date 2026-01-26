@@ -263,12 +263,37 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     text-transform: uppercase; 
     display: flex; 
     justify-content: space-between; 
+	color: rgba(255, 255, 255, 0.9); /* Etwas weißer/heller */
+	font-weight: 600;
 }
 
 .bracket-team { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 0.85em; min-height: 35px; }
 
 .bracket-score { font-family: monospace; background: #0b1119; padding: 2px 6px; border-radius: 4px; min-width: 20px; text-align: center; }
+/* Zentrierung der Spaltenüberschriften */
+.column-header {
+    text-align: center;
+    margin-bottom: 10px;
+}
 
+.bracket-title {
+    display: inline-block;
+    border-bottom: 2px solid var(--accent);
+    padding: 0 10px 5px 10px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Optimierung der Playoff-Labels (TBD Texte) */
+.bracket-team span[style*="#4a5568"] {
+    font-size: 0.85em; /* Kleiner für bessere Passform */
+    line-height: 1.1;
+    display: block; /* Erlaubt Zeilenumbruch */
+    max-width: 120px;
+}
+		
 /* --- WILDCARD SUMMARY --- */
 .wildcard-summary {
     display: grid;
@@ -298,6 +323,14 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 
     .team-box { font-size: 0.85em; }
     .score-input { width: 32px !important; height: 30px !important; font-size: 1rem !important; }
+	.bracket-team {
+        font-size: 0.75em;
+        padding: 4px 8px;
+    }
+    .bracket-team span[style*="#4a5568"] {
+        font-size: 0.7em;
+        white-space: normal; /* Erlaubt Umbruch in der Box */
+    }
 }
 
 .logo-img { width: 20px; height: 20px; vertical-align: middle; }
@@ -940,53 +973,53 @@ function renderPlayoffPicture() {
     wcSummaryHtml += `</div>`;
 
     document.getElementById('playoff-picture').innerHTML = `
-        <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
-        ${wcSummaryHtml}
-        <div class="playoff-grid" style="margin-top:20px;">
-            <div class="bracket-row-flow">
-                <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Contender Round</div></div>
-                    <div class="upper-floor">
-                        ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
-                        ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
-                    </div>
-                    <div class="lower-floor">
-                        ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
-                        ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
-                    </div>
+    <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
+    ${wcSummaryHtml}
+    <div class="playoff-grid" style="margin-top:20px;">
+        <div class="bracket-row-flow">
+            <div class="bracket-column">
+                <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+                <div class="upper-floor">
+                    ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
+                    ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
                 </div>
-                <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Survival Round</div></div>
-                    <div class="upper-floor"></div> 
-                    <div class="lower-floor">
-                        ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
-                        ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
-                    </div>
-                </div>
-                <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Finals</div></div>
-                    <div class="upper-floor" style="justify-content: center;">
-                        ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
-                    </div>
-                    <div class="lower-floor" style="justify-content: center;">
-                        ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
-                    </div>
-                </div>
-                <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
-                    <div class="upper-floor"></div>
-                    <div class="lower-floor" style="justify-content: center;">
-                        ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
-                    </div>
-                </div>
-                <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
-                    <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
-                    <div class="upper-floor" style="justify-content: center; height: 100%;">
-                        ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
-                    </div>
+                <div class="lower-floor">
+                    ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
+                    ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
                 </div>
             </div>
-        </div>`;
+            <div class="bracket-column">
+                <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+                <div class="upper-floor"></div> 
+                <div class="lower-floor">
+                    ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
+                    ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
+                </div>
+            </div>
+            <div class="bracket-column">
+                <div class="column-header"><div class="bracket-title">Finals</div></div>
+                <div class="upper-floor" style="justify-content: center;">
+                    ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
+                </div>
+                <div class="lower-floor" style="justify-content: center;">
+                    ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
+                </div>
+            </div>
+            <div class="bracket-column">
+                <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+                <div class="upper-floor"></div>
+                <div class="lower-floor" style="justify-content: center;">
+                    ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
+                </div>
+            </div>
+            <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
+                <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+                <div class="upper-floor" style="justify-content: center; height: 100%;">
+                    ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
+                </div>
+            </div>
+        </div>
+    </div>`;
 }
 
 function renderNextGames() {
@@ -1121,11 +1154,14 @@ function renderAll() {
                 const matchesInSlot = playoffGroups[offset];
                 
                 // Header für den Zeit-Slot (analog zur Group Stage)
-                let html = `
-                    <div class="time-slot">
-                        <div class="slot-header">
-                            <span>${time} Uhr | Playoff-Phase</span>
-                        </div>`;
+                // Ermittle den Namen der aktuellen Runde aus dem ersten Match des Slots
+				const roundName = matchesInSlot[0].match.phase || "Playoff-Phase";
+    
+			    let html = `
+			        <div class="time-slot">
+			            <div class="slot-header">
+			                <span>${time} Uhr | ${roundName}</span>
+			            </div>`;
                 
                 matchesInSlot.forEach(({ match, index }) => {
                     // Hole Bezeichnungen (z.B. "Highest Seed") aus dem zentralen Objekt
@@ -1212,6 +1248,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
