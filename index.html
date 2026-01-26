@@ -456,8 +456,8 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     lb4: { p1: "Upper Semi Loser #1", p2: "Elim. Winner #2" },
     uf:  { p1: "Upper Semi #1", p2: "Upper Semi #2" },
     ls:  { p1: "Lower Semi #1", p2: "Lower Semi #2" },
-    lf:  { p1: "U-Champ Loser", p2: "L-Champ Winner" },
-    gf:  { p1: "Finalist (U)", p2: "Finalist (L)" }
+    lf:  { p1: "Upper Final Loser", p2: "Elim. Semi Winner" },
+    gf:  { p1: "Upper Finalist", p2: "Lower Finalist" }
 };
 
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
@@ -924,7 +924,7 @@ function renderPlayoffPicture() {
 
             wcSummaryHtml += `
                 <div class="bracket-match">
-                    <div class="bracket-match-header"><span>WC Wildcard Game #${i+1} | ${time}</span><span>${stadium}</span></div>
+                    <div class="bracket-match-header"><span>Wildcard Game #${i+1} | ${time}</span><span>${stadium}</span></div>
                     <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
                         <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left', match.id)}</div>
                         <div style="display:flex; align-items:center; gap:8px;">
@@ -1212,6 +1212,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
