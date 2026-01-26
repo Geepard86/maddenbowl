@@ -452,8 +452,8 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     lb2: { p1: "2nd Best Loser", p2: "2nd Worst Loser" },
     us1: { p1: "Highest Seed", p2: "Bottom Seed" },
     us2: { p1: "2nd Best Seed", p2: "2nd Bottom Seed" },
-    lb3: { p1: "Div. Loser (L)", p2: "Elim. Winner (H)" },
-    lb4: { p1: "Div. Loser (H)", p2: "Elim. Winner (L)" },
+    lb3: { p1: "Upper Semi Loser #2", p2: "Elim. Winner #1" },
+    lb4: { p1: "Upper Semi Loser #1", p2: "Elim. Winner #2" },
     uf:  { p1: "Upper Semi #1", p2: "Upper Semi #2" },
     ls:  { p1: "Lower Semi #1", p2: "Lower Semi #2" },
     lf:  { p1: "U-Champ Loser", p2: "L-Champ Winner" },
@@ -754,14 +754,14 @@ function initPlayoffs() {
         {id:'lb4', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
         
         // 10-11: Final Four
-        {id:'uf',  p1:null, p2:null, s1:null, s2:null, phase:'Champ Semi', offset: dur*5}, 
+        {id:'uf',  p1:null, p2:null, s1:null, s2:null, phase:'Upper Final', offset: dur*5}, 
         {id:'ls',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Semi', offset: dur*5},
         
         // 12: Elimination Final
         {id:'lf',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Final', offset: dur*6},
         
         // 13: Grand Finale
-        {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'GRAND FINALE', offset: dur*7}
+        {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'Madden Bowl', offset: dur*7}
     ];
 }
 
@@ -924,7 +924,7 @@ function renderPlayoffPicture() {
 
             wcSummaryHtml += `
                 <div class="bracket-match">
-                    <div class="bracket-match-header"><span>WC Game ${i+1} | ${time}</span><span>${stadium}</span></div>
+                    <div class="bracket-match-header"><span>WC Wildcard Game #${i+1} | ${time}</span><span>${stadium}</span></div>
                     <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
                         <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left', match.id)}</div>
                         <div style="display:flex; align-items:center; gap:8px;">
@@ -945,7 +945,7 @@ function renderPlayoffPicture() {
         <div class="playoff-grid" style="margin-top:20px;">
             <div class="bracket-row-flow">
                 <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Divisional</div></div>
+                    <div class="column-header"><div class="bracket-title">Contender Round</div></div>
                     <div class="upper-floor">
                         ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
                         ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
@@ -956,7 +956,7 @@ function renderPlayoffPicture() {
                     </div>
                 </div>
                 <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Elim. Rd 2</div></div>
+                    <div class="column-header"><div class="bracket-title">Survival Round</div></div>
                     <div class="upper-floor"></div> 
                     <div class="lower-floor">
                         ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
@@ -964,7 +964,7 @@ function renderPlayoffPicture() {
                     </div>
                 </div>
                 <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Semi-Finals</div></div>
+                    <div class="column-header"><div class="bracket-title">Finals</div></div>
                     <div class="upper-floor" style="justify-content: center;">
                         ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
                     </div>
@@ -973,7 +973,7 @@ function renderPlayoffPicture() {
                     </div>
                 </div>
                 <div class="bracket-column">
-                    <div class="column-header"><div class="bracket-title">Elim. Final</div></div>
+                    <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
                     <div class="upper-floor"></div>
                     <div class="lower-floor" style="justify-content: center;">
                         ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
@@ -1212,6 +1212,7 @@ function renderAll() {
 </script>
 </body>
 </html>	
+
 
 
 
