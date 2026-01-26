@@ -608,17 +608,24 @@ async function syncData(isUpload = false) {
 
     function initSetupInputs(count) {
     const container = document.getElementById('playerInputs');
-    if (container.children.length === count) return;
     container.innerHTML = '';
+    
+    // 1. Das aktuell gewählte Jahr aus dem Dropdown holen
+    const year = document.getElementById('maddenYear').value;
+    const ratings = maddenRatings[year] || {};
 
-    // NEU: Teams nach OVR absteigend sortieren
-    const sortedTeams = [...nflTeams].sort((a, b) => b.ovr - a.ovr);
+    // 2. Teams klonen und das Rating für die Sortierung hinzufügen
+    const sortedTeams = nflTeams.map(t => ({
+        ...t,
+        rating: ratings[t.id] || 0
+    })).sort((a, b) => b.rating - a.rating);
 
+    // 3. Inputs generieren
     for(let i=0; i<count; i++) {
-        // Die Optionen basieren jetzt auf der sortierten Liste
-        let options = sortedTeams.map(t => 
-            `<option value="${t.id}">${t.n} (OVR: ${t.ovr})</option>`
-        ).join('');
+        let options = sortedTeams.map(t => {
+            const ratingDisplay = t.rating > 0 ? ` [${t.rating}]` : "";
+            return `<option value="${t.id}">${t.n}${ratingDisplay}</option>`;
+        }).join('');
 
         container.innerHTML += `
             <div class="player-input-card">
@@ -629,8 +636,8 @@ async function syncData(isUpload = false) {
                 </select>
             </div>`;
     }
-    // Initial prüfen (falls Teams vorbelegt sind)
-    updateTeamAvailability();
+    // Wichtig: Sofort prüfen, ob Teams deaktiviert werden müssen
+    setTimeout(updateTeamAvailability, 50);
 }
 
     function startTournament() {
@@ -1250,34 +1257,26 @@ function renderAll() {
 };
 
 function updateTeamAvailability() {
-    // Alle Team-Dropdowns finden
     const selects = document.querySelectorAll('[id^="pTeam"]');
-    
-    // Alle aktuell gewählten Werte sammeln (außer dem leeren Standardwert)
-    const selectedValues = Array.from(selects)
-        .map(s => s.value)
-        .filter(val => val !== "");
+    const selectedValues = Array.from(selects).map(s => s.value).filter(v => v !== "");
 
     selects.forEach(currentSelect => {
         const options = currentSelect.options;
-        
         for (let i = 0; i < options.length; i++) {
-            const option = options[i];
-            if (option.value === "") continue; // "Team wählen..." ignorieren
+            const opt = options[i];
+            if (opt.value === "") continue;
 
-            // Prüfen, ob dieser Wert woanders gewählt wurde
-            const isChosenElsewhere = selectedValues.some((val) => {
-                return val === option.value && val !== currentSelect.value;
-            });
+            // Ist dieses Team bei einem ANDEREN Spieler schon gewählt?
+            const isChosenElsewhere = selectedValues.some(val => 
+                val === opt.value && val !== currentSelect.value
+            );
 
             if (isChosenElsewhere) {
-                option.disabled = true;
-                option.style.color = "#4a5568"; // Grau
-                option.style.backgroundColor = "#1a202c"; // Dunkler Hintergrund
+                opt.disabled = true;
+                opt.style.color = "#4a5568"; // Grau in der Liste
             } else {
-                option.disabled = false;
-                option.style.color = ""; 
-                option.style.backgroundColor = "";
+                opt.disabled = false;
+                opt.style.color = ""; // Normal
             }
         }
     });
@@ -1285,6 +1284,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
