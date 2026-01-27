@@ -739,26 +739,25 @@ async function syncData(isUpload = false) {
     let html = `<h3>NFL Standing</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
     
     sorted.forEach((p, i) => {
-        let rowClass = "";
-        let statusBadge = "";
+        // --- NEU: Hier wird das Array für jede Zeile neu erstellt ---
+        let classes = []; 
 
-        // --- DYNAMISCHE HIGHLIGHTS JE NACH SPIELERANZAHL ---
         // Logik für Bye-Plätze (Grün)
         if (count === 6 && i < 2) {
             classes.push("row-bye");
-            if (i === 1) classes.push("row-bye-last"); // Linie nach dem 2. Platz
+            if (i === 1) classes.push("row-bye-last");
         } else if (count === 7 && i === 0) {
             classes.push("row-bye");
-            classes.push("row-bye-last"); // Linie nach dem 1. Platz
+            classes.push("row-bye-last");
         }
 
         // Logik für Ausscheider (Rot)
         if (count === 9 && i === 8) {
             classes.push("row-eliminated");
-            classes.push("row-eliminated-first"); // Linie vor dem 9. Platz
+            classes.push("row-eliminated-first");
         } else if (count === 10 && i >= 8) {
             classes.push("row-eliminated");
-            if (i === 8) classes.push("row-eliminated-first"); // Linie vor dem 9. Platz
+            if (i === 8) classes.push("row-eliminated-first");
         }
 		
         let teamSelect = isAdmin ? `
@@ -766,15 +765,16 @@ async function syncData(isUpload = false) {
                 ${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}
             </select>` : '';
 
+        // --- Korrektur: Wir nutzen classes.join(' '), um die Klassen in den String zu bringen ---
         html += `
-            <tr class="${rowClass}">
+            <tr class="${classes.join(' ')}">
                 <td>${i+1}</td>
                 <td>
                     <div style="display:flex; align-items:center; justify-content:center;">
                         ${getLogoHtml(p.team)} ${teamSelect}
                     </div>
                 </td>
-                <td style="font-weight:bold;">${p.name} ${statusBadge}</td>
+                <td style="font-weight:bold;">${p.name}</td>
                 <td>${p.wins}-${p.played - p.wins}</td>
                 <td style="color:${p.diff > 0 ? 'var(--accent)' : (p.diff < 0 ? 'var(--nfl-red)' : 'white')}">
                     ${p.diff > 0 ? '+' : ''}${p.diff}
@@ -1384,5 +1384,6 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
