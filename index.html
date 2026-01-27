@@ -1180,14 +1180,20 @@ function renderAll() {
         document.getElementById('main-content').classList.remove('hidden');
 
         // Layout-Anpassung: Wenn Playoffs laufen, schiebe das Bracket nach oben
-        const groupSection = document.getElementById('groupPhase');
-        const playoffSection = document.getElementById('playoff-picture');
-        
-        if (state.playoffMatches && state.playoffMatches.length > 0) {
-            playoffSection.style.order = "1";
-            groupSection.style.order = "2";
-            // Tabelle bleibt meistens ganz oben (order 0)
-            document.getElementById('tableContainer').style.order = "0";
+        const playoffStarted = state.playoffMatches && state.playoffMatches.length > 0;
+
+        if (!playoffStarted) {
+            // GRUPPENPHASE: Tabelle -> Picture -> Gruppe -> Playoff-Admin
+            table.style.order = "0";
+            bracket.style.order = "1";
+            groupMatches.style.order = "2";
+            playoffAdmin.style.order = "3";
+        } else {
+            // PLAYOFFS: Picture -> Playoff-Admin -> Tabelle -> Gruppe
+            bracket.style.order = "0";
+            playoffAdmin.style.order = "1";
+            table.style.order = "2";
+            groupMatches.style.order = "3";
         }
 		
         // Basis-Komponenten rendern
@@ -1341,3 +1347,4 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
