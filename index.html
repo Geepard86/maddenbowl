@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MADDEN BOWL MANAGER</title>
-	<link rel="icon" type="image/png" href="favicon.ico">
+	<link rel="icon" type="image/png" href="maddenbowl.ico">
     <style>
 		:root { 
     --nfl-blue: #013369; 
@@ -1165,6 +1165,9 @@ function initPlayoffs() {
         
         // 13: Grand Finale
         {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'Madden Bowl', offset: dur*7}
+		
+		// 14: ToiletBowl
+		{id:'tb',  p1:null, p2:null, s1:null, s2:null, phase:'Toilet Bowl', offset: dur*6}  // Index 14 (NEU)
     ];
 }
 
@@ -1248,6 +1251,15 @@ function updatePlayoffLogic() {
     // --- PHASE 5: Finals ---
     m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]); // Elim Final
     m[13].p1 = win(m[10]); m[13].p2 = win(m[12]); // Grand Finale
+
+	// --- Toilet Bowl ---
+    const tbLoser1 = loss(m[4]); // Verlierer von lb1
+    const tbLoser2 = loss(m[5]); // Verlierer von lb2
+
+    if (tbLoser1 && tbLoser2 && m[14]) {
+        m[14].p1 = tbLoser1;
+        m[14].p2 = tbLoser2;
+    }
 }
 
 function renderPlayoffPicture() {
@@ -1342,54 +1354,115 @@ function renderPlayoffPicture() {
     });
     wcSummaryHtml += `</div>`;
 
+    // --- AB HIER ERSETZEN ---
+
+    // 1. TOILET BOWL HTML (Battle for #7)
+    let toiletBowlHtml = "";
+    const tb = m[14];
+    if (tb && tb.p1 && tb.p2) {
+        const active = tb.s1 === null;
+        toiletBowlHtml = `
+            <div class="card" style="margin-top:40px; border: 2px dashed var(--nfl-red); background: rgba(213, 10, 10, 0.05);">
+                <h3 style="color:var(--nfl-red); text-align:center; margin-bottom:15px;">🚽 TOILET BOWL (Battle for #7)</h3>
+                <div style="display:flex; justify-content:center;">
+                    ${renderM(tb, 14, "Loser R1 #1", "Loser R1 #2")}
+                </div>
+            </div>`;
+    }
+
+    // 2. GESAMT-RANGLISTE (Erscheint, wenn Finale & Toilet Bowl fertig sind)
+    let rankingHtml = "";
+    if (m[13] && m[13].s1 !== null && m[14] && m[14].s1 !== null) {
+        // Hilfsfunktion für den Seed-Vergleich (Tie-Breaker)
+        const getSeed = (p) => {
+            const sorted = [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff);
+            return sorted.findIndex(x => x.id === p.id);
+        };
+        
+        const p56 = [loss(m[8]), loss(m[9])].sort((a,b) => getSeed(a) - getSeed(b));
+
+        const ranking = [
+            win(m[13]),  // #1
+            loss(m[13]), // #2
+            loss(m[12]), // #3
+            loss(m[11]), // #4
+            p56[0],      // #5
+            p56[1],      // #6
+            win(m[14]),  // #7
+            loss(m[14])  // #8 (Sacko)
+        ];
+
+        rankingHtml = `
+            <div class="card" style="margin-top:30px; border: 2px solid var(--accent); background: linear-gradient(180deg, rgba(0,255,204,0.1) 0%, transparent 100%);">
+                <h2 style="text-align:center; color:var(--accent); margin-top:0;">🏆 FINAL RANKINGS</h2>
+                <table style="width:100%; border-collapse:collapse;">
+                    ${ranking.map((p, i) => `
+                        <tr style="border-bottom: 1px solid #2d3748; ${i === 7 ? 'color:var(--nfl-red);' : ''}">
+                            <td style="padding:10px; font-weight:bold; width:40px;">#${i+1}</td>
+                            <td style="padding:10px; display:flex; align-items:center; gap:10px;">
+                                ${getLogoHtml(p.team)} <b>${p.name}</b>
+                            </td>
+                            <td style="padding:10px; text-align:right; font-size:0.75em; font-weight:bold; letter-spacing:1px;">
+                                ${i === 0 ? '🏆 CHAMPION' : (i === 7 ? '💩 SACKO' : '')}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </table>
+            </div>`;
+    }
+
+    // Finale Zuweisung an das HTML-Element
     document.getElementById('playoff-picture').innerHTML = `
-    <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
-    ${wcSummaryHtml}
-    <div class="playoff-grid" style="margin-top:20px;">
-        <div class="bracket-row-flow">
-            <div class="bracket-column">
-                <div class="column-header"><div class="bracket-title">Contender Round</div></div>
-                <div class="upper-floor">
-                    ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
-                    ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
+        <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
+        ${wcSummaryHtml}
+        <div class="playoff-grid" style="margin-top:20px;">
+            <div class="bracket-row-flow">
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+                    <div class="upper-floor">
+                        ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
+                        ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
+                    </div>
+                    <div class="lower-floor">
+                        ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
+                        ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
+                    </div>
                 </div>
-                <div class="lower-floor">
-                    ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
-                    ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+                    <div class="upper-floor"></div> 
+                    <div class="lower-floor">
+                        ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
+                        ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
+                    </div>
                 </div>
-            </div>
-            <div class="bracket-column">
-                <div class="column-header"><div class="bracket-title">Survival Round</div></div>
-                <div class="upper-floor"></div> 
-                <div class="lower-floor">
-                    ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
-                    ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Finals</div></div>
+                    <div class="upper-floor" style="justify-content: center;">
+                        ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
+                    </div>
+                    <div class="lower-floor" style="justify-content: center;">
+                        ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
+                    </div>
                 </div>
-            </div>
-            <div class="bracket-column">
-                <div class="column-header"><div class="bracket-title">Finals</div></div>
-                <div class="upper-floor" style="justify-content: center;">
-                    ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+                    <div class="upper-floor"></div>
+                    <div class="lower-floor" style="justify-content: center;">
+                        ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
+                    </div>
                 </div>
-                <div class="lower-floor" style="justify-content: center;">
-                    ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
-                </div>
-            </div>
-            <div class="bracket-column">
-                <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
-                <div class="upper-floor"></div>
-                <div class="lower-floor" style="justify-content: center;">
-                    ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
-                </div>
-            </div>
-            <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
-                <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
-                <div class="upper-floor" style="justify-content: center; height: 100%;">
-                    ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
+                <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
+                    <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+                    <div class="upper-floor" style="justify-content: center; height: 100%;">
+                        ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
+                    </div>
                 </div>
             </div>
         </div>
-    </div>`;
+        ${toiletBowlHtml}
+        ${rankingHtml}
+    `;
 }
 
 function renderNextGames() {
@@ -1657,6 +1730,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
