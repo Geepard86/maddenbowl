@@ -390,6 +390,17 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 }
 
 .mini-pairing-card b { color: var(--accent); }
+
+.opponent-row {
+    display: flex;
+    justify-content: space-between;
+    background: rgba(255,255,255,0.05);
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    border-left: 3px solid var(--accent);
+}
+.opponent-row b { color: var(--accent); }
 		
 /* --- WILDCARD SUMMARY --- */
 .wildcard-summary {
@@ -593,6 +604,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
 	let availableSlots = [];
+	let lastDrawnPlayer = { name: "", slot: null };
 
 	function initSetupInputs(count) {
     const container = document.getElementById('playerInputs');
@@ -647,35 +659,54 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 }
 
 function updateLivePreview() {
+    const previewContainer = document.getElementById('liveSchedulePreview');
+    if (!previewContainer || !lastDrawnPlayer.name) {
+        previewContainer.innerHTML = "<div style='color:var(--gray)'>Noch kein Slot gezogen...</div>";
+        return;
+    }
+
     const count = parseInt(document.getElementById('playerCount').value);
     const schedule = schedules[count];
-    const previewContainer = document.getElementById('liveSchedulePreview');
-    if (!previewContainer) return;
+    const mySlot = lastDrawnPlayer.slot;
 
-    // Aktuelle Namen oder Platzhalter holen
+    // Alle Namen aktuell auslesen
     const currentNames = Array.from({length: count}, (_, i) => {
         const val = document.getElementById(`pName${i}`).value;
-        return val ? `<span style="color:var(--accent)">${val}</span>` : `<span style="color:var(--gray)">P${i+1}</span>`;
+        return val || `P${i+1}`;
     });
 
-    let html = "";
-    // Zeige die ersten Paarungen basierend auf dem Schedule
-    // Bei 8 Spielern: Slot 1 vs 2, 5 vs 6 etc.
-    if (schedule && schedule[0]) {
-        schedule[0].forEach((match, idx) => {
-            html += `
-                <div class="mini-pairing-card">
-                    <small style="color:var(--gray)">Match ${idx + 1}</small><br>
-                    ${currentNames[match[1]]} <b style="color:var(--nfl-red)">@</b> ${currentNames[match[0]]}
+    let html = `<div style="grid-column: 1 / -1; margin-bottom: 10px;">
+                    <h4 style="margin:0; color:var(--accent)">🏈 ${lastDrawnPlayer.name}s Gruppengegner:</h4>
                 </div>`;
+
+    // Suche im Spielplan alle Spiele, an denen mySlot beteiligt ist
+    schedule.forEach((round, roundIdx) => {
+        round.forEach(match => {
+            if (match[0] === mySlot || match[1] === mySlot) {
+                const opponentSlot = (match[0] === mySlot) ? match[1] : match[0];
+                const opponentName = currentNames[opponentSlot];
+                const isHome = (match[0] === mySlot);
+
+                html += `
+                    <div class="opponent-row">
+                        <span>Runde ${roundIdx + 1}</span>
+                        <span>
+                            ${isHome ? `<b>${lastDrawnPlayer.name}</b> vs ${opponentName}` : `${opponentName} vs <b>${lastDrawnPlayer.name}</b>`}
+                        </span>
+                    </div>`;
+            }
         });
-    }
+    });
+
     previewContainer.innerHTML = html;
 }
 
 function finalizeDraw(name) {
     const randomIndex = Math.floor(Math.random() * availableSlots.length);
     const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
+
+    // Merken, wer gerade gezogen hat
+    lastDrawnPlayer = { name: name, slot: chosenSlot };
 
     const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
     const hiddenInput = document.getElementById(`pName${chosenSlot}`);
@@ -689,7 +720,7 @@ function finalizeDraw(name) {
     hiddenInput.value = name;
     row.classList.add('assigned');
 
-    // WICHTIG: Vorschau aktualisieren
+    // Live-Vorschau mit Fokus auf den neuen Spieler
     updateLivePreview();
     
     document.getElementById('nextPlayerName').value = "";
@@ -844,18 +875,17 @@ async function syncData(isUpload = false) {
     
     availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
 
-    // Paarungen generieren für die Info-Box
-    let pairingHtml = '<div class="draft-pairing-container">';
-    for(let i=0; i < count; i+=2) {
-        if(i+1 < count) {
-            pairingHtml += `
-                <div class="mini-pairing-card">
-                    <b>Match ${Math.floor(i/2)+1}</b><br>
-                    P${i+1} vs P${i+2}
-                </div>`;
-        }
-    }
-    pairingHtml += '</div>';
+    // OVR Ratings & Sortierung für die Dropdowns vorbereiten
+    const year = document.getElementById('maddenYear').value;
+    const ratings = maddenRatings[year] || {};
+    const sortedTeams = nflTeams.map(t => ({
+        ...t,
+        rating: ratings[t.id] || 0
+    })).sort((a, b) => b.rating - a.rating);
+
+    const teamOptions = sortedTeams.map(t => 
+        `<option value="${t.id}">${t.n} [${t.rating}]</option>`
+    ).join('');
 
     let html = `
         <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
@@ -865,18 +895,23 @@ async function syncData(isUpload = false) {
                 <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
             </div>
         </div>
-        <h4 style="color:var(--gray); font-size:0.7em; text-transform:uppercase; letter-spacing:1px">Erste Paarungen:</h4>
-        ${pairingHtml}
+        
+        <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.85em; min-height: 50px;">
+            <div id="liveSchedulePreview" style="display: flex; flex-direction: column; gap: 5px;">
+                <div style="color:var(--gray); text-align:center;">Noch kein Slot gezogen...</div>
+            </div>
+        </div>
+
         <div id="draftBoard">`;
 
     for(let i=0; i<count; i++) {
         html += `
             <div class="draft-row" id="row-${i}">
                 <div class="slot-label">P${i+1}</div>
-                <div id="pDisplayName${i}" class="name-display">--- offen ---</div>
+                <div id="pDisplayName${i}" class="name-display" style="color:var(--gray)">--- offen ---</div>
                 <select id="pTeam${i}" class="team-select" onchange="updateTeamAvailability()">
                     <option value="" disabled selected>Team wählen...</option>
-                    ${nflTeams.map(t => `<option value="${t.id}">${t.n}</option>`).join('')}
+                    ${teamOptions}
                 </select>
                 <input type="hidden" id="pName${i}" value="">
             </div>`;
@@ -1624,6 +1659,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
