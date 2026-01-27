@@ -323,6 +323,40 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     display: block; /* Erlaubt Zeilenumbruch */
     max-width: 120px;
 }
+
+.draft-row {
+    display: grid;
+    grid-template-columns: 50px 1fr 1fr;
+    gap: 15px;
+    align-items: center;
+    padding: 15px;
+    background: #2d3748;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border-left: 5px solid #4a5568;
+}
+
+.draft-row.assigned {
+    border-left-color: var(--accent);
+    background: #344052;
+}
+
+/* Paarungs-Visualisierung: P1 & P2 gehören zusammen, P3 & P4 etc. */
+.draft-row:nth-child(even) {
+    margin-bottom: 25px; /* Größerer Abstand nach jedem Paar */
+    position: relative;
+}
+
+.draft-row:nth-child(even)::after {
+    content: "⬆ GEGEN ⬆";
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7em;
+    color: var(--gray);
+    letter-spacing: 2px;
+}
 		
 /* --- WILDCARD SUMMARY --- */
 .wildcard-summary {
@@ -442,6 +476,10 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
                 <option value="9">9 Spieler</option>
                 <option value="10">10 Spieler</option>
             </select>
+			<div style="margin-bottom: 15px; font-size: 0.8em; color: var(--gray); text-align: center;">
+    💡 <b>Draft-Info:</b> P1 spielt gegen P2 | P3 gegen P4 | P5 gegen P6 | P7 gegen P8
+</div>
+<div id="playerInputs"></div>
             <div id="playerInputs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;"></div>
             <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
         </div>
@@ -524,6 +562,74 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 };
 
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
+	let availableSlots = [];
+
+	function initSetupInputs(count) {
+    const container = document.getElementById('playerInputs');
+    container.innerHTML = '';
+    
+    // Slots initialisieren (0, 1, 2...)
+    availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
+
+    // Oben ein Eingabefeld für den "nächsten" Spieler
+    let html = `
+        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 30px;">
+            <h3>Nächster Spieler: Auslosung</h3>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="nextPlayerName" placeholder="Dein Name..." style="flex: 1;">
+                <button class="btn" onclick="drawSlot()" style="margin:0; width: auto;">🎲 Slot ziehen</button>
+            </div>
+        </div>
+        <div id="draftBoard" class="setup-grid">`;
+
+    // Die leeren Slots (P1, P2...) vorbereiten
+    for(let i=0; i<count; i++) {
+        html += `
+            <div class="draft-row" id="row-${i}">
+                <div class="slot-label">P${i+1}</div>
+                <div id="pDisplayName${i}" class="name-display">--- wartet ---</div>
+                <select id="pTeam${i}" class="team-select">
+                    <option value="" disabled selected>Team wählen...</option>
+                    ${nflTeams.map(t => `<option value="${t.id}">${t.n}</option>`).join('')}
+                </select>
+                <input type="hidden" id="pName${i}" value="">
+            </div>`;
+    }
+    container.innerHTML = html + `</div>`;
+}
+
+function drawSlot() {
+    const nameInput = document.getElementById('nextPlayerName');
+    const name = nameInput.value.trim();
+
+    if (!name) {
+        alert("Bitte erst einen Namen eingeben!");
+        return;
+    }
+    if (availableSlots.length === 0) {
+        alert("Alle Plätze sind bereits belegt!");
+        return;
+    }
+
+    // Zufälligen Index aus den verfügbaren Slots wählen
+    const randomIndex = Math.floor(Math.random() * availableSlots.length);
+    const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
+
+    // Visuelle Zuweisung
+    const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
+    const hiddenInput = document.getElementById(`pName${chosenSlot}`);
+    const row = document.getElementById(`row-${chosenSlot}`);
+
+    nameDisplay.innerText = name;
+    nameDisplay.style.color = "var(--accent)";
+    nameDisplay.style.fontWeight = "bold";
+    hiddenInput.value = name;
+    row.classList.add('assigned');
+
+    // Eingabefeld leeren für den Nächsten
+    nameInput.value = "";
+    nameInput.focus();
+}
 
 	function getOVR(teamId) {
     // 1. Prüfen, ob das Jahr schon im State (laufendes Turnier) gespeichert ist
@@ -640,34 +746,37 @@ async function syncData(isUpload = false) {
     const container = document.getElementById('playerInputs');
     container.innerHTML = '';
     
-    // 1. Das aktuell gewählte Jahr aus dem Dropdown holen
     const year = document.getElementById('maddenYear').value;
     const ratings = maddenRatings[year] || {};
-
-    // 2. Teams klonen und das Rating für die Sortierung hinzufügen
     const sortedTeams = nflTeams.map(t => ({
         ...t,
         rating: ratings[t.id] || 0
     })).sort((a, b) => b.rating - a.rating);
 
-    // 3. Inputs generieren
-    for(let i=0; i<count; i++) {
-        let options = sortedTeams.map(t => {
-            const ratingDisplay = t.rating > 0 ? ` [${t.rating}]` : "";
-            return `<option value="${t.id}">${t.n}${ratingDisplay}</option>`;
-        }).join('');
+    const teamOptions = sortedTeams.map(t => 
+        `<option value="${t.id}">${t.n} [${t.rating}]</option>`
+    ).join('');
 
+    for(let i=0; i<count; i++) {
         container.innerHTML += `
-            <div class="player-input-card">
-                <input type="text" id="pName${i}" placeholder="Spieler Name">
+            <div class="draft-row" id="row-${i}">
+                <div class="slot-label">P${i+1}</div>
+                <input type="text" id="pName${i}" placeholder="Name eingeben..." oninput="checkDraftStatus(${i})">
                 <select id="pTeam${i}" onchange="updateTeamAvailability()">
                     <option value="" disabled selected>Team wählen...</option>
-                    ${options}
+                    ${teamOptions}
                 </select>
+                <button class="btn-random" onclick="assignRandomName(${i})" title="Zufälliger Name">🎲</button>
             </div>`;
     }
-    // Wichtig: Sofort prüfen, ob Teams deaktiviert werden müssen
-    setTimeout(updateTeamAvailability, 50);
+}
+
+// Hilfsfunktion: Markiert die Zeile grün, wenn Name und Team da sind
+function checkDraftStatus(idx) {
+    const name = document.getElementById(`pName${idx}`).value;
+    const row = document.getElementById(`row-${idx}`);
+    if(name.length > 1) row.classList.add('assigned');
+    else row.classList.remove('assigned');
 }
 
     function startTournament() {
@@ -782,7 +891,25 @@ async function syncData(isUpload = false) {
             </tr>`;
     });
 
-    document.getElementById('tableContainer').innerHTML = html + `</table>`;
+	let legendHtml = `<div class="table-legend">`;
+    if (count === 6 || count === 7) {
+        legendHtml += `
+            <div class="legend-item">
+                <div class="legend-color color-bye"></div>
+                <span>Freilos (Bye) für Playoff-Runde 1</span>
+            </div>`;
+    }
+    if (count === 9 || count === 10) {
+        legendHtml += `
+            <div class="legend-item">
+                <div class="legend-color color-eliminated"></div>
+                <span>Platzierung scheidet aus</span>
+            </div>`;
+    }
+    legendHtml += `</div>`;
+
+    // Das gesamte HTML (Tabelle + Legende) in den Container schreiben
+    document.getElementById('tableContainer').innerHTML = html + `</table>` + legendHtml;
 }
 
 function renderGroupMatches() {
@@ -1384,6 +1511,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
