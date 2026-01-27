@@ -324,38 +324,37 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     max-width: 120px;
 }
 
+/* --- DRAFT GRID LAYOUT --- */
+#draftBoard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Slots nebeneinander auf Laptop */
+    gap: 15px;
+    margin-top: 20px;
+}
+
 .draft-row {
     display: grid;
     grid-template-columns: 50px 1fr 1fr;
     gap: 15px;
     align-items: center;
     padding: 15px;
-    background: #2d3748;
+    background: var(--slot-bg);
     border-radius: 8px;
-    margin-bottom: 10px;
-    border-left: 5px solid #4a5568;
+    border-left: 5px solid var(--gray);
+    margin-bottom: 0; /* Gleicher Abstand durch Grid-Gap */
 }
 
 .draft-row.assigned {
     border-left-color: var(--accent);
-    background: #344052;
+    background: #232d3d;
 }
 
-/* Paarungs-Visualisierung: P1 & P2 gehören zusammen, P3 & P4 etc. */
+/* Entfernt das "GEGEN" und die ungleichen Abstände */
 .draft-row:nth-child(even) {
-    margin-bottom: 25px; /* Größerer Abstand nach jedem Paar */
-    position: relative;
+    margin-bottom: 0;
 }
-
 .draft-row:nth-child(even)::after {
-    content: "⬆ GEGEN ⬆";
-    position: absolute;
-    top: -22px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.7em;
-    color: var(--gray);
-    letter-spacing: 2px;
+    display: none;
 }
 
 		/* --- DRAFT ANIMATION & VISUALS --- */
@@ -705,7 +704,6 @@ function finalizeDraw(name) {
     const randomIndex = Math.floor(Math.random() * availableSlots.length);
     const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
 
-    // Merken, wer gerade gezogen hat
     lastDrawnPlayer = { name: name, slot: chosenSlot };
 
     const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
@@ -720,11 +718,14 @@ function finalizeDraw(name) {
     hiddenInput.value = name;
     row.classList.add('assigned');
 
-    // Live-Vorschau mit Fokus auf den neuen Spieler
     updateLivePreview();
     
+    // Nach der Animation kurz zur Gegner-Vorschau springen
+    document.getElementById('draftPreview').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
     document.getElementById('nextPlayerName').value = "";
-    document.getElementById('nextPlayerName').focus();
+    // Fokus zurück zum Namenfeld für den nächsten Spieler
+    setTimeout(() => document.getElementById('nextPlayerName').focus(), 1000);
 }
 
 function drawSlot() {
@@ -734,18 +735,17 @@ function drawSlot() {
     if (!name) { alert("Bitte erst einen Namen eingeben!"); return; }
     if (availableSlots.length === 0) { alert("Alle Plätze belegt!"); return; }
 
+    // Automatisch zum Board scrollen (sanft)
+    document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
     const btn = document.querySelector('button[onclick="drawSlot()"]');
-    btn.disabled = true; // Button sperren während Animation
+    btn.disabled = true;
 
     let counter = 0;
-    const maxSpins = 15; // Wie oft es blinkt
+    const maxSpins = 15;
     
-    // Animation starten
     const spinInterval = setInterval(() => {
-        // Alle Zeilen kurz neutral setzen
         document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
-        
-        // Zufällige freie Zeile aufleuchten lassen
         const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
         document.getElementById(`row-${tempSlot}`).classList.add('spinning');
         
@@ -1659,6 +1659,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
