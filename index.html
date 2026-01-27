@@ -357,6 +357,39 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     color: var(--gray);
     letter-spacing: 2px;
 }
+
+		/* --- DRAFT ANIMATION & VISUALS --- */
+@keyframes highlight-glow {
+    0% { background: #2d3748; transform: scale(1); }
+    50% { background: var(--accent); transform: scale(1.02); }
+    100% { background: #344052; transform: scale(1); }
+}
+
+.spinning {
+    animation: highlight-glow 0.15s infinite;
+    border-color: var(--accent) !important;
+}
+
+.draft-pairing-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+}
+
+.mini-pairing-card {
+    background: var(--slot-bg);
+    border: 1px solid var(--gray);
+    padding: 5px;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.75em;
+}
+
+.mini-pairing-card b { color: var(--accent); }
 		
 /* --- WILDCARD SUMMARY --- */
 .wildcard-summary {
@@ -479,8 +512,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 			<div style="margin-bottom: 15px; font-size: 0.8em; color: var(--gray); text-align: center;">
     💡 <b>Draft-Info:</b> P1 spielt gegen P2 | P3 gegen P4 | P5 gegen P6 | P7 gegen P8
 </div>
-<div id="playerInputs"></div>
-            <div id="playerInputs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;"></div>
+<div id="playerInputs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;"></div>
             <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
         </div>
     </div>
@@ -602,33 +634,52 @@ function drawSlot() {
     const nameInput = document.getElementById('nextPlayerName');
     const name = nameInput.value.trim();
 
-    if (!name) {
-        alert("Bitte erst einen Namen eingeben!");
-        return;
-    }
-    if (availableSlots.length === 0) {
-        alert("Alle Plätze sind bereits belegt!");
-        return;
-    }
+    if (!name) { alert("Bitte erst einen Namen eingeben!"); return; }
+    if (availableSlots.length === 0) { alert("Alle Plätze belegt!"); return; }
 
-    // Zufälligen Index aus den verfügbaren Slots wählen
+    const btn = document.querySelector('button[onclick="drawSlot()"]');
+    btn.disabled = true; // Button sperren während Animation
+
+    let counter = 0;
+    const maxSpins = 15; // Wie oft es blinkt
+    
+    // Animation starten
+    const spinInterval = setInterval(() => {
+        // Alle Zeilen kurz neutral setzen
+        document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+        
+        // Zufällige freie Zeile aufleuchten lassen
+        const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+        document.getElementById(`row-${tempSlot}`).classList.add('spinning');
+        
+        counter++;
+        if (counter >= maxSpins) {
+            clearInterval(spinInterval);
+            finalizeDraw(name);
+            btn.disabled = false;
+        }
+    }, 80);
+}
+
+function finalizeDraw(name) {
     const randomIndex = Math.floor(Math.random() * availableSlots.length);
     const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
 
-    // Visuelle Zuweisung
     const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
     const hiddenInput = document.getElementById(`pName${chosenSlot}`);
     const row = document.getElementById(`row-${chosenSlot}`);
 
+    // Alle Animation-Klassen entfernen und Finale setzen
+    document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+    
     nameDisplay.innerText = name;
     nameDisplay.style.color = "var(--accent)";
     nameDisplay.style.fontWeight = "bold";
     hiddenInput.value = name;
     row.classList.add('assigned');
 
-    // Eingabefeld leeren für den Nächsten
-    nameInput.value = "";
-    nameInput.focus();
+    document.getElementById('nextPlayerName').value = "";
+    document.getElementById('nextPlayerName').focus();
 }
 
 	function getOVR(teamId) {
@@ -746,29 +797,46 @@ async function syncData(isUpload = false) {
     const container = document.getElementById('playerInputs');
     container.innerHTML = '';
     
-    const year = document.getElementById('maddenYear').value;
-    const ratings = maddenRatings[year] || {};
-    const sortedTeams = nflTeams.map(t => ({
-        ...t,
-        rating: ratings[t.id] || 0
-    })).sort((a, b) => b.rating - a.rating);
+    availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
 
-    const teamOptions = sortedTeams.map(t => 
-        `<option value="${t.id}">${t.n} [${t.rating}]</option>`
-    ).join('');
+    // Paarungen generieren für die Info-Box
+    let pairingHtml = '<div class="draft-pairing-container">';
+    for(let i=0; i < count; i+=2) {
+        if(i+1 < count) {
+            pairingHtml += `
+                <div class="mini-pairing-card">
+                    <b>Match ${Math.floor(i/2)+1}</b><br>
+                    P${i+1} vs P${i+2}
+                </div>`;
+        }
+    }
+    pairingHtml += '</div>';
+
+    let html = `
+        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
+            <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
+                <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
+            </div>
+        </div>
+        <h4 style="color:var(--gray); font-size:0.7em; text-transform:uppercase; letter-spacing:1px">Erste Paarungen:</h4>
+        ${pairingHtml}
+        <div id="draftBoard">`;
 
     for(let i=0; i<count; i++) {
-        container.innerHTML += `
+        html += `
             <div class="draft-row" id="row-${i}">
                 <div class="slot-label">P${i+1}</div>
-                <input type="text" id="pName${i}" placeholder="Name eingeben..." oninput="checkDraftStatus(${i})">
-                <select id="pTeam${i}" onchange="updateTeamAvailability()">
+                <div id="pDisplayName${i}" class="name-display">--- offen ---</div>
+                <select id="pTeam${i}" class="team-select" onchange="updateTeamAvailability()">
                     <option value="" disabled selected>Team wählen...</option>
-                    ${teamOptions}
+                    ${nflTeams.map(t => `<option value="${t.id}">${t.n}</option>`).join('')}
                 </select>
-                <button class="btn-random" onclick="assignRandomName(${i})" title="Zufälliger Name">🎲</button>
+                <input type="hidden" id="pName${i}" value="">
             </div>`;
     }
+    container.innerHTML = html + `</div>`;
 }
 
 // Hilfsfunktion: Markiert die Zeile grün, wenn Name und Team da sind
@@ -1511,6 +1579,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
