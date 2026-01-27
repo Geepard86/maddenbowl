@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MADDEN BOWL MANAGER</title>
+	<link rel="icon" type="image/png" href="favicon.png">
     <style>
 		:root { 
     --nfl-blue: #013369; 
@@ -184,6 +185,9 @@ select, input {
 		/* --- TABLE --- */
 table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
 th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
+.row-bye { background: rgba(0, 255, 204, 0.15) !important; border-left: 4px solid var(--accent); }
+.row-eliminated { opacity: 0.5; background: rgba(213, 10, 10, 0.1) !important; text-decoration: line-through; }
+.badge-bye { font-size: 0.7em; background: var(--accent); color: black; padding: 2px 5px; border-radius: 4px; margin-left: 5px; }
 		
 /* --- NEXT GAMES HUB --- */
 .next-games { 
@@ -680,32 +684,72 @@ async function syncData(isUpload = false) {
     }
 
     function renderTable() {
-        state.players.forEach(p => { p.wins = 0; p.diff = 0; p.pointsFor = 0; p.played = 0; });
-        state.matches.forEach(m => {
-            if(m.s1 !== null && m.s2 !== null) {
-                state.players[m.p1].played++; state.players[m.p2].played++;
-                state.players[m.p1].pointsFor += m.s1; state.players[m.p2].pointsFor += m.s2;
-                state.players[m.p1].diff += (m.s1 - m.s2); state.players[m.p2].diff += (m.s2 - m.s1);
-                if(m.s1 > m.s2) state.players[m.p1].wins++; else if(m.s2 > m.s1) state.players[m.p2].wins++;
-            }
-        });
-        let sorted = [...state.players].sort((a,b) => {
-            if(b.wins !== a.wins) return b.wins - a.wins;
-            let h2h = state.matches.find(m => ((m.p1===a.id && m.p2===b.id) || (m.p1===b.id && m.p2===a.id)) && m.s1!==null);
-            if(h2h) {
-                let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
-                let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
-                if(aS !== bS) return bS - aS;
-            }
-            return b.diff - a.diff;
-        });
-        let html = `<h3>Table</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
-        sorted.forEach((p, i) => {
-            let teamSelect = isAdmin ? `<select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em">${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}</select>` : '';
-            html += `<tr><td>${i+1}</td><td>${getLogoHtml(p.team)} ${teamSelect}</td><td>${p.name}</td><td>${p.wins}-${p.played - p.wins}</td><td>${p.diff}</td></tr>`;
-        });
-        document.getElementById('tableContainer').innerHTML = html + `</table>`;
-    }
+    // 1. Stats zurücksetzen
+    state.players.forEach(p => { p.wins = 0; p.diff = 0; p.pointsFor = 0; p.played = 0; });
+    
+    // 2. Gruppenspiele auswerten
+    state.matches.forEach(m => {
+        if(m.s1 !== null && m.s2 !== null) {
+            state.players[m.p1].played++; state.players[m.p2].played++;
+            state.players[m.p1].pointsFor += m.s1; state.players[m.p2].pointsFor += m.s2;
+            state.players[m.p1].diff += (m.s1 - m.s2); state.players[m.p2].diff += (m.s2 - m.s1);
+            if(m.s1 > m.s2) state.players[m.p1].wins++; else if(m.s2 > m.s1) state.players[m.p2].wins++;
+        }
+    });
+
+    // 3. Sortierung (Wins -> H2H -> Diff)
+    let sorted = [...state.players].sort((a,b) => {
+        if(b.wins !== a.wins) return b.wins - a.wins;
+        let h2h = state.matches.find(m => ((m.p1===a.id && m.p2===b.id) || (m.p1===b.id && m.p2===a.id)) && m.s1!==null);
+        if(h2h) {
+            let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+            let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+            if(aS !== bS) return bS - aS;
+        }
+        return b.diff - a.diff;
+    });
+
+    let count = state.players.length;
+    let html = `<h3>Standings</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+    
+    sorted.forEach((p, i) => {
+        let rowClass = "";
+        let statusBadge = "";
+
+        // --- DYNAMISCHE HIGHLIGHTS JE NACH SPIELERANZAHL ---
+        if (count === 6) {
+            if (i < 2) { rowClass = "row-bye"; statusBadge = '<span class="badge-bye">BYE</span>'; }
+        } else if (count === 7) {
+            if (i === 0) { rowClass = "row-bye"; statusBadge = '<span class="badge-bye">BYE</span>'; }
+        } else if (count === 9) {
+            if (i === 8) rowClass = "row-eliminated";
+        } else if (count === 10) {
+            if (i >= 8) rowClass = "row-eliminated";
+        }
+
+        let teamSelect = isAdmin ? `
+            <select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em; margin-left:5px;">
+                ${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}
+            </select>` : '';
+
+        html += `
+            <tr class="${rowClass}">
+                <td>${i+1}</td>
+                <td>
+                    <div style="display:flex; align-items:center; justify-content:center;">
+                        ${getLogoHtml(p.team)} ${teamSelect}
+                    </div>
+                </td>
+                <td style="font-weight:bold;">${p.name} ${statusBadge}</td>
+                <td>${p.wins}-${p.played - p.wins}</td>
+                <td style="color:${p.diff > 0 ? 'var(--accent)' : (p.diff < 0 ? 'var(--nfl-red)' : 'white')}">
+                    ${p.diff > 0 ? '+' : ''}${p.diff}
+                </td>
+            </tr>`;
+    });
+
+    document.getElementById('tableContainer').innerHTML = html + `</table>`;
+}
 
 function renderGroupMatches() {
     let currentTime = state.config.start;
@@ -1133,6 +1177,16 @@ function renderAll() {
         document.getElementById('setup-view').classList.add('hidden');
         document.getElementById('main-content').classList.remove('hidden');
 
+		// NEU: Wenn Playoffs aktiv sind, Reihenfolge ändern
+        const mainContent = document.getElementById('mainContent');
+        if (state.playoffMatches && state.playoffMatches.length > 0) {
+            // Setzt das Playoff-Picture nach oben (order: 1) und Gruppe nach unten (order: 2)
+            document.getElementById('playoff-section').style.order = "1";
+            document.getElementById('group-section').style.order = "2";
+            mainContent.style.display = "flex";
+            mainContent.style.flexDirection = "column";
+        }
+
         // Basis-Komponenten rendern
         renderTable();
         renderGroupMatches();
@@ -1284,6 +1338,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
