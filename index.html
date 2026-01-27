@@ -506,8 +506,8 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 			    <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
 			    <div class="config-item"><label>Min/P:</label><input type="number" id="durPlayoff" value="45" onchange="updateModeInfo()"></div>
 			    <div class="config-item"><label>Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
-			    <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Mercedes-Benz"></div>
-			    <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="SoFi Stadium"></div>
+			    <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Altima Field"></div>
+			    <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="KEVAG Stadium"></div>
 				<div class="config-item"><label>Madden Version:</label><select id="maddenYear" onchange="renderPlayerInputs()"><option value="2026">Madden 26</option></select></div>
 			</div>
 <div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;">
@@ -659,39 +659,37 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 
 function updateLivePreview() {
     const previewContainer = document.getElementById('liveSchedulePreview');
-    if (!previewContainer || !lastDrawnPlayer.name) {
-        previewContainer.innerHTML = "<div style='color:var(--gray)'>Noch kein Slot gezogen...</div>";
-        return;
-    }
+    if (!previewContainer || !lastDrawnPlayer.name) return;
 
     const count = parseInt(document.getElementById('playerCount').value);
     const schedule = schedules[count];
     const mySlot = lastDrawnPlayer.slot;
 
-    // Alle Namen aktuell auslesen
-    const currentNames = Array.from({length: count}, (_, i) => {
-        const val = document.getElementById(`pName${i}`).value;
-        return val || `P${i+1}`;
-    });
-
-    let html = `<div style="grid-column: 1 / -1; margin-bottom: 10px;">
+    let html = `<div style="grid-column: 1 / -1; margin-bottom: 10px; border-bottom: 1px solid var(--accent); padding-bottom: 5px;">
                     <h4 style="margin:0; color:var(--accent)">🏈 ${lastDrawnPlayer.name}s Gruppengegner:</h4>
                 </div>`;
 
-    // Suche im Spielplan alle Spiele, an denen mySlot beteiligt ist
     schedule.forEach((round, roundIdx) => {
         round.forEach(match => {
             if (match[0] === mySlot || match[1] === mySlot) {
-                const opponentSlot = (match[0] === mySlot) ? match[1] : match[0];
-                const opponentName = currentNames[opponentSlot];
+                const oppSlot = (match[0] === mySlot) ? match[1] : match[0];
+                const oppName = document.getElementById(`pName${oppSlot}`).value || `P${oppSlot + 1}`;
+                const oppTeamId = document.getElementById(`pTeam${oppSlot}`).value;
+                
+                // Logo-URL generieren
+                const logoUrl = oppTeamId ? `https://static.www.nfl.com/t_q-with-fallback/w_32,h_32/league/api/clubs/logos/${oppTeamId}` : '';
+                const logoHtml = logoUrl ? `<img src="${logoUrl}" style="width:24px; height:24px; object-fit:contain;">` : `<span style="width:24px; display:inline-block"></span>`;
+
                 const isHome = (match[0] === mySlot);
 
                 html += `
-                    <div class="opponent-row">
-                        <span>Runde ${roundIdx + 1}</span>
-                        <span>
-                            ${isHome ? `<b>${lastDrawnPlayer.name}</b> vs ${opponentName}` : `${opponentName} vs <b>${lastDrawnPlayer.name}</b>`}
-                        </span>
+                    <div class="opponent-row" style="display:flex; align-items:center; gap:10px; justify-content: space-between;">
+                        <span style="color:var(--gray); min-width:60px;">Runde ${roundIdx + 1}</span>
+                        <div style="flex:1; display:flex; align-items:center; gap:10px;">
+                            ${logoHtml}
+                            <span style="${!oppTeamId ? 'color:var(--gray)' : ''}">${oppName}</span>
+                        </div>
+                        <span style="font-size: 0.8em; color:var(--accent)">${isHome ? 'HOME' : 'AWAY'}</span>
                     </div>`;
             }
         });
@@ -735,15 +733,24 @@ function drawSlot() {
     if (!name) { alert("Bitte erst einen Namen eingeben!"); return; }
     if (availableSlots.length === 0) { alert("Alle Plätze belegt!"); return; }
 
-    // Automatisch zum Board scrollen (sanft)
-    document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // PRÜFUNG: Haben alle bisherigen Spieler ein Team gewählt?
+    const totalSlots = parseInt(document.getElementById('playerCount').value);
+    for (let i = 0; i < totalSlots; i++) {
+        const nameVal = document.getElementById(`pName${i}`).value;
+        const teamVal = document.getElementById(`pTeam${i}`).value;
+        if (nameVal !== "" && teamVal === "") {
+            alert(`Stopp! ${nameVal} muss erst ein Team wählen, bevor der nächste Slot gezogen werden kann.`);
+            document.getElementById(`pTeam${i}`).focus();
+            return;
+        }
+    }
 
+    document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
     const btn = document.querySelector('button[onclick="drawSlot()"]');
     btn.disabled = true;
 
     let counter = 0;
     const maxSpins = 15;
-    
     const spinInterval = setInterval(() => {
         document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
         const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
@@ -757,7 +764,7 @@ function drawSlot() {
         }
     }, 80);
 }
-
+	
 	function getOVR(teamId) {
     // 1. Prüfen, ob das Jahr schon im State (laufendes Turnier) gespeichert ist
     // 2. Falls nicht, direkt aus dem Dropdown im Setup lesen
@@ -1632,33 +1639,25 @@ function renderAll() {
 };
 
 function updateTeamAvailability() {
-    const selects = document.querySelectorAll('[id^="pTeam"]');
-    const selectedValues = Array.from(selects).map(s => s.value).filter(v => v !== "");
+    const selects = document.querySelectorAll('.team-select');
+    const selectedTeams = Array.from(selects).map(s => s.value).filter(v => v !== "");
 
-    selects.forEach(currentSelect => {
-        const options = currentSelect.options;
-        for (let i = 0; i < options.length; i++) {
-            const opt = options[i];
-            if (opt.value === "") continue;
-
-            // Ist dieses Team bei einem ANDEREN Spieler schon gewählt?
-            const isChosenElsewhere = selectedValues.some(val => 
-                val === opt.value && val !== currentSelect.value
-            );
-
-            if (isChosenElsewhere) {
-                opt.disabled = true;
-                opt.style.color = "#4a5568"; // Grau in der Liste
-            } else {
-                opt.disabled = false;
-                opt.style.color = ""; // Normal
+    selects.forEach(s => {
+        const currentVal = s.value;
+        Array.from(s.options).forEach(opt => {
+            if (opt.value !== "" && opt.value !== currentVal) {
+                opt.disabled = selectedTeams.includes(opt.value);
             }
-        }
+        });
     });
+
+    // WICHTIG: Hier die Vorschau triggern
+    updateLivePreview();
 }
 </script>
 </body>
 </html>	
+
 
 
 
