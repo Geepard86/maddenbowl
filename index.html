@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MADDEN BOWL MANAGER</title>
-	<link rel="icon" type="image/png" href="favicon.png">
+	<link rel="icon" type="image/png" href="favicon.ico">
     <style>
 		:root { 
     --nfl-blue: #013369; 
@@ -185,9 +185,11 @@ select, input {
 		/* --- TABLE --- */
 table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
 th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
-.row-bye { background: rgba(0, 255, 204, 0.15) !important; border-left: 4px solid var(--accent); }
-.row-eliminated { opacity: 0.5; background: rgba(213, 10, 10, 0.1) !important; text-decoration: line-through; }
-.badge-bye { font-size: 0.7em; background: var(--accent); color: black; padding: 2px 5px; border-radius: 4px; margin-left: 5px; }
+/* Erlaubt die Neusortierung der Sektionen */
+#main-content { display: flex; flex-direction: column; }
+#table-section { order: 0; }
+#playoff-section { order: 1; }
+#group-section { order: 2; }
 		
 /* --- NEXT GAMES HUB --- */
 .next-games { 
@@ -710,7 +712,7 @@ async function syncData(isUpload = false) {
     });
 
     let count = state.players.length;
-    let html = `<h3>Standings</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+    let html = `<h3>NFL Standing</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
     
     sorted.forEach((p, i) => {
         let rowClass = "";
@@ -1177,16 +1179,17 @@ function renderAll() {
         document.getElementById('setup-view').classList.add('hidden');
         document.getElementById('main-content').classList.remove('hidden');
 
-		// NEU: Wenn Playoffs aktiv sind, Reihenfolge ändern
-        const mainContent = document.getElementById('mainContent');
+        // Layout-Anpassung: Wenn Playoffs laufen, schiebe das Bracket nach oben
+        const groupSection = document.getElementById('groupPhase');
+        const playoffSection = document.getElementById('playoff-picture');
+        
         if (state.playoffMatches && state.playoffMatches.length > 0) {
-            // Setzt das Playoff-Picture nach oben (order: 1) und Gruppe nach unten (order: 2)
-            document.getElementById('playoff-section').style.order = "1";
-            document.getElementById('group-section').style.order = "2";
-            mainContent.style.display = "flex";
-            mainContent.style.flexDirection = "column";
+            playoffSection.style.order = "1";
+            groupSection.style.order = "2";
+            // Tabelle bleibt meistens ganz oben (order 0)
+            document.getElementById('tableContainer').style.order = "0";
         }
-
+		
         // Basis-Komponenten rendern
         renderTable();
         renderGroupMatches();
@@ -1338,24 +1341,3 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
