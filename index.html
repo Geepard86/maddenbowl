@@ -503,16 +503,14 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
 <div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;">
 </div>
             <select id="playerCount" onchange="updateModeInfo()" style="width:100%; margin-bottom: 10px;">
-                <option value="8" selected>8 Spieler (Standard)</option>
-                <option value="6">6 Spieler</option>
-                <option value="7">7 Spieler</option>
-                <option value="9">9 Spieler</option>
-                <option value="10">10 Spieler</option>
-            </select>
-			<div style="margin-bottom: 15px; font-size: 0.8em; color: var(--gray); text-align: center;">
-    💡 <b>Draft-Info:</b> P1 spielt gegen P2 | P3 gegen P4 | P5 gegen P6 | P7 gegen P8
-</div>
-<div id="playerInputs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;"></div>
+    <option value="8" selected>8 Spieler (Standard)</option>
+    <option value="6">6 Spieler</option>
+    <option value="7">7 Spieler</option>
+    <option value="9">9 Spieler</option>
+    <option value="10">10 Spieler</option>
+</select>
+
+<div id="playerInputs"></div>
             <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
         </div>
     </div>
@@ -602,7 +600,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     
     availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
 
-    // OVR Ratings vorbereiten & sortieren
+    // OVR Ratings & Sortierung vorbereiten
     const year = document.getElementById('maddenYear').value;
     const ratings = maddenRatings[year] || {};
     const sortedTeams = nflTeams.map(t => ({
@@ -614,6 +612,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
         `<option value="${t.id}">${t.n} [${t.rating}]</option>`
     ).join('');
 
+    // Dynamisches HTML für das Draft-Interface
     let html = `
         <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
             <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
@@ -624,7 +623,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
         </div>
         
         <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.85em;">
-            <h4 style="color:var(--accent); margin-top:0;">📋 Live Spielplan-Vorschau</h4>
+            <h4 style="color:var(--accent); margin-top:0;">📋 Deine ersten Gegner</h4>
             <div id="liveSchedulePreview" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                 </div>
         </div>
@@ -644,7 +643,7 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
             </div>`;
     }
     container.innerHTML = html + `</div>`;
-    updateLivePreview(); // Initiale Vorschau mit P1, P2...
+    updateLivePreview(); 
 }
 
 function updateLivePreview() {
@@ -653,25 +652,48 @@ function updateLivePreview() {
     const previewContainer = document.getElementById('liveSchedulePreview');
     if (!previewContainer) return;
 
-    // Aktuelle Namen aus den Hidden Inputs holen
+    // Aktuelle Namen oder Platzhalter holen
     const currentNames = Array.from({length: count}, (_, i) => {
         const val = document.getElementById(`pName${i}`).value;
-        return val || `P${i+1}`;
+        return val ? `<span style="color:var(--accent)">${val}</span>` : `<span style="color:var(--gray)">P${i+1}</span>`;
     });
 
     let html = "";
-    // Nur die ersten 4 Slots/Runden anzeigen, um die Übersicht zu behalten
-    schedule.slice(0, 4).forEach((slot, index) => {
-        html += `<div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:4px;">
-                    <small style="color:var(--gray)">Runde ${index+1}</small><br>`;
-        slot.forEach(match => {
-            const n1 = currentNames[match[0]];
-            const n2 = currentNames[match[1]];
-            html += `<div style="margin-top:4px;">${n2} <b style="color:var(--nfl-red)">@</b> ${n1}</div>`;
+    // Zeige die ersten Paarungen basierend auf dem Schedule
+    // Bei 8 Spielern: Slot 1 vs 2, 5 vs 6 etc.
+    if (schedule && schedule[0]) {
+        schedule[0].forEach((match, idx) => {
+            html += `
+                <div class="mini-pairing-card">
+                    <small style="color:var(--gray)">Match ${idx + 1}</small><br>
+                    ${currentNames[match[1]]} <b style="color:var(--nfl-red)">@</b> ${currentNames[match[0]]}
+                </div>`;
         });
-        html += `</div>`;
-    });
+    }
     previewContainer.innerHTML = html;
+}
+
+function finalizeDraw(name) {
+    const randomIndex = Math.floor(Math.random() * availableSlots.length);
+    const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
+
+    const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
+    const hiddenInput = document.getElementById(`pName${chosenSlot}`);
+    const row = document.getElementById(`row-${chosenSlot}`);
+
+    document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+    
+    nameDisplay.innerText = name;
+    nameDisplay.style.color = "var(--accent)";
+    nameDisplay.style.fontWeight = "bold";
+    hiddenInput.value = name;
+    row.classList.add('assigned');
+
+    // WICHTIG: Vorschau aktualisieren
+    updateLivePreview();
+    
+    document.getElementById('nextPlayerName').value = "";
+    document.getElementById('nextPlayerName').focus();
 }
 
 function drawSlot() {
@@ -703,32 +725,6 @@ function drawSlot() {
             btn.disabled = false;
         }
     }, 80);
-}
-
-function finalizeDraw(name) {
-    const randomIndex = Math.floor(Math.random() * availableSlots.length);
-    const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
-
-    const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
-    const hiddenInput = document.getElementById(`pName${chosenSlot}`);
-    const row = document.getElementById(`row-${chosenSlot}`);
-
-    // Alle Animation-Klassen entfernen und Finale setzen
-    document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
-    
-    nameDisplay.innerText = name;
-    nameDisplay.style.color = "var(--accent)";
-    nameDisplay.style.fontWeight = "bold";
-    hiddenInput.value = name;
-    row.classList.add('assigned');
-	nameDisplay.innerText = name;
-    hiddenInput.value = name;
-    row.classList.add('assigned');
-
-    updateLivePreview(); // <--- NEU: Spielplan-Namen aktualisieren
-    
-    document.getElementById('nextPlayerName').value = "";
-    document.getElementById('nextPlayerName').focus();
 }
 
 	function getOVR(teamId) {
@@ -1628,6 +1624,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
