@@ -600,34 +600,78 @@ th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
     const container = document.getElementById('playerInputs');
     container.innerHTML = '';
     
-    // Slots initialisieren (0, 1, 2...)
     availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
 
-    // Oben ein Eingabefeld für den "nächsten" Spieler
+    // OVR Ratings vorbereiten & sortieren
+    const year = document.getElementById('maddenYear').value;
+    const ratings = maddenRatings[year] || {};
+    const sortedTeams = nflTeams.map(t => ({
+        ...t,
+        rating: ratings[t.id] || 0
+    })).sort((a, b) => b.rating - a.rating);
+
+    const teamOptions = sortedTeams.map(t => 
+        `<option value="${t.id}">${t.n} [${t.rating}]</option>`
+    ).join('');
+
     let html = `
-        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 30px;">
-            <h3>Nächster Spieler: Auslosung</h3>
+        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
+            <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
             <div style="display: flex; gap: 10px;">
-                <input type="text" id="nextPlayerName" placeholder="Dein Name..." style="flex: 1;">
-                <button class="btn" onclick="drawSlot()" style="margin:0; width: auto;">🎲 Slot ziehen</button>
+                <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
+                <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
             </div>
         </div>
-        <div id="draftBoard" class="setup-grid">`;
+        
+        <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.85em;">
+            <h4 style="color:var(--accent); margin-top:0;">📋 Live Spielplan-Vorschau</h4>
+            <div id="liveSchedulePreview" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                </div>
+        </div>
 
-    // Die leeren Slots (P1, P2...) vorbereiten
+        <div id="draftBoard">`;
+
     for(let i=0; i<count; i++) {
         html += `
             <div class="draft-row" id="row-${i}">
                 <div class="slot-label">P${i+1}</div>
-                <div id="pDisplayName${i}" class="name-display">--- wartet ---</div>
-                <select id="pTeam${i}" class="team-select">
+                <div id="pDisplayName${i}" class="name-display" style="color:var(--gray)">--- offen ---</div>
+                <select id="pTeam${i}" class="team-select" onchange="updateTeamAvailability()">
                     <option value="" disabled selected>Team wählen...</option>
-                    ${nflTeams.map(t => `<option value="${t.id}">${t.n}</option>`).join('')}
+                    ${teamOptions}
                 </select>
                 <input type="hidden" id="pName${i}" value="">
             </div>`;
     }
     container.innerHTML = html + `</div>`;
+    updateLivePreview(); // Initiale Vorschau mit P1, P2...
+}
+
+function updateLivePreview() {
+    const count = parseInt(document.getElementById('playerCount').value);
+    const schedule = schedules[count];
+    const previewContainer = document.getElementById('liveSchedulePreview');
+    if (!previewContainer) return;
+
+    // Aktuelle Namen aus den Hidden Inputs holen
+    const currentNames = Array.from({length: count}, (_, i) => {
+        const val = document.getElementById(`pName${i}`).value;
+        return val || `P${i+1}`;
+    });
+
+    let html = "";
+    // Nur die ersten 4 Slots/Runden anzeigen, um die Übersicht zu behalten
+    schedule.slice(0, 4).forEach((slot, index) => {
+        html += `<div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:4px;">
+                    <small style="color:var(--gray)">Runde ${index+1}</small><br>`;
+        slot.forEach(match => {
+            const n1 = currentNames[match[0]];
+            const n2 = currentNames[match[1]];
+            html += `<div style="margin-top:4px;">${n2} <b style="color:var(--nfl-red)">@</b> ${n1}</div>`;
+        });
+        html += `</div>`;
+    });
+    previewContainer.innerHTML = html;
 }
 
 function drawSlot() {
@@ -677,7 +721,12 @@ function finalizeDraw(name) {
     nameDisplay.style.fontWeight = "bold";
     hiddenInput.value = name;
     row.classList.add('assigned');
+	nameDisplay.innerText = name;
+    hiddenInput.value = name;
+    row.classList.add('assigned');
 
+    updateLivePreview(); // <--- NEU: Spielplan-Namen aktualisieren
+    
     document.getElementById('nextPlayerName').value = "";
     document.getElementById('nextPlayerName').focus();
 }
@@ -1579,6 +1628,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
