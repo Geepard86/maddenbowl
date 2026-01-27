@@ -185,6 +185,30 @@ select, input {
 		/* --- TABLE --- */
 table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
 th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
+
+/* --- TABLE HIGHLIGHTS --- */
+/* Bye-Plätze: Dezentes Grün und eine Trennlinie nach unten */
+.row-bye { 
+    background: rgba(0, 255, 204, 0.08) !important; 
+    border-left: 4px solid var(--accent);
+}
+/* Gestrichelte Linie nach dem letzten Bye-Platz */
+.row-bye-last {
+    border-bottom: 2px dashed var(--accent) !important;
+}
+/* Ausscheidende Plätze: Dezentes Rot, Text leicht transparent */
+.row-eliminated { 
+    background: rgba(213, 10, 10, 0.08) !important; 
+    border-left: 4px solid var(--nfl-red);
+    opacity: 0.8;
+}
+/* Gestrichelte Linie VOR dem ersten Ausscheider */
+.row-eliminated-first {
+    border-top: 2px dashed var(--nfl-red) !important;
+}
+/* Entferne das alte Badge-Design, da wir es nicht mehr nutzen */
+.badge-bye { display: none; }
+		
 /* Erlaubt die Neusortierung der Sektionen */
 #main-content { display: flex; flex-direction: column; }
 #table-section { order: 0; }
@@ -719,16 +743,24 @@ async function syncData(isUpload = false) {
         let statusBadge = "";
 
         // --- DYNAMISCHE HIGHLIGHTS JE NACH SPIELERANZAHL ---
-        if (count === 6) {
-            if (i < 2) { rowClass = "row-bye"; statusBadge = '<span class="badge-bye">BYE</span>'; }
-        } else if (count === 7) {
-            if (i === 0) { rowClass = "row-bye"; statusBadge = '<span class="badge-bye">BYE</span>'; }
-        } else if (count === 9) {
-            if (i === 8) rowClass = "row-eliminated";
-        } else if (count === 10) {
-            if (i >= 8) rowClass = "row-eliminated";
+        // Logik für Bye-Plätze (Grün)
+        if (count === 6 && i < 2) {
+            classes.push("row-bye");
+            if (i === 1) classes.push("row-bye-last"); // Linie nach dem 2. Platz
+        } else if (count === 7 && i === 0) {
+            classes.push("row-bye");
+            classes.push("row-bye-last"); // Linie nach dem 1. Platz
         }
 
+        // Logik für Ausscheider (Rot)
+        if (count === 9 && i === 8) {
+            classes.push("row-eliminated");
+            classes.push("row-eliminated-first"); // Linie vor dem 9. Platz
+        } else if (count === 10 && i >= 8) {
+            classes.push("row-eliminated");
+            if (i === 8) classes.push("row-eliminated-first"); // Linie vor dem 9. Platz
+        }
+		
         let teamSelect = isAdmin ? `
             <select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em; margin-left:5px;">
                 ${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}
@@ -1168,6 +1200,11 @@ document.getElementById('nextGamesList').innerHTML = `
 }
 
 function renderAll() {
+	const table = document.getElementById('tableContainer');
+    const bracket = document.getElementById('playoff-picture');
+    const groupMatches = document.getElementById('groupPhase');
+    const playoffAdmin = document.getElementById('playoffs');
+    const mainContent = document.getElementById('main-content');
     // Falls wir im Setup-Modus sind und Admin-Rechte haben, zeige das Setup-Panel
     if (state.currentView === 'setup' && isAdmin) {
         document.getElementById('admin-panel').classList.remove('hidden');
@@ -1347,4 +1384,5 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
