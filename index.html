@@ -1269,61 +1269,138 @@ function renderPlayoffPicture() {
     const totalGroupMinutes = state.slots.length * (state.config.durG + state.config.durB);
     const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
 
-    const getSeed = (player) => {
+    const getSeedNum = (player) => {
         if (!player || player.id === -1) return "";
         const sorted = [...state.players].sort((a, b) => b.wins - a.wins || b.diff - a.diff);
         return sorted.findIndex(p => p.id === player.id) + 1;
     };
 
-    // Zentrale Hilfsfunktion für Namen, Seeds und Status-Effekte
     const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left', matchId) => {
         if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
         if (player.id === -1) return "BYE";
-        
         const seedColor = isWinner ? 'var(--accent)' : 'white';
-        const textColor = isWinner ? 'var(--accent)' : 'inherit';
-        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
-        const logo = getLogoHtml(player.team);
-        const name = player.name;
-        
-        // LOGIK FÜR DURCHSTREICHEN:
-        // Nur durchstreichen, wenn es ein Lower Bracket Match (lb...), Semi (ls), Final (lf) oder Grand Finale (gf) ist
-        const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeedNum(player)}]</span>`;
+        const isEndElimination = matchId.startsWith('lb') || ['ls','lf','gf','tb'].includes(matchId);
         const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
-        
-        const winnerClass = isWinner ? 'winner' : '';
-
-        return `<span class="${winnerClass}" style="${style} color:${textColor};">
-            ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
+        return `<span class="${isWinner ? 'winner' : ''}" style="${style} color:${isWinner ? 'var(--accent)' : 'inherit'};">
+            ${side === 'left' ? `${seed} ${player.name} ${getLogoHtml(player.team)}` : `${getLogoHtml(player.team)} ${player.name} ${seed}`}
         </span>`;
-    }; // <-- Diese Klammer hatte gefehlt!
+    };
 
     const renderM = (match, idx, placeholderP1, placeholderP2) => {
         if (!match) return "";
         const active = match.p1 && match.p2 && match.p2.id !== -1 && match.s1 === null;
         const time = addMinutes(groupEndTime, match.offset);
         const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
-        
         const hasScore = match.s1 !== null && match.s2 !== null;
         const w1 = hasScore && match.s1 > match.s2;
         const w2 = hasScore && match.s2 > match.s1;
-        const l1 = hasScore && match.s1 < match.s2;
-        const l2 = hasScore && match.s2 < match.s1;
 
         return `
             <div class="bracket-match ${active ? 'match-active' : ''}">
                 <div class="bracket-match-header"><span>${match.phase} | ${time}</span><span>${stadium}</span></div>
                 <div class="bracket-team ${w2 ? 'winner' : ''}">
-                    ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left', match.id)}
+                    ${formatPlayer(match.p2, placeholderP2, w2, hasScore && !w2, 'left', match.id)}
                     <span class="bracket-score">${match.s2 !== null ? match.s2 : ''}</span>
                 </div>
                 <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
                 <div class="bracket-team ${w1 ? 'winner' : ''}">
-                    ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left', match.id)}
+                    ${formatPlayer(match.p1, placeholderP1, w1, hasScore && !w1, 'left', match.id)}
                     <span class="bracket-score">${match.s1 !== null ? match.s1 : ''}</span>
                 </div>
             </div>`;
     };
+
+    // Wildcard Summary
+    let wcSummaryHtml = `<div class="wildcard-summary">`;
+    [m[0], m[1], m[2], m[3]].forEach((match, i) => {
+        if (match.p1) {
+            const hasScore = match.s1 !== null && match.s2 !== null;
+            const w1 = hasScore && match.s1 > match.s2;
+            const w2 = hasScore && match.s2 > match.s1;
+            wcSummaryHtml += `
+                <div class="bracket-match">
+                    <div class="bracket-match-header"><span>Wildcard #${i+1} | ${addMinutes(groupEndTime, match.offset)}</span></div>
+                    <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
+                        ${formatPlayer(match.p2, "TBD", w2, hasScore && !w2, 'left', match.id)}
+                        <div style="display:flex; gap:5px;"><span class="bracket-score">${match.s2 !== null ? match.s2 : '-'}</span> : <span class="bracket-score">${match.s1 !== null ? match.s1 : '-'}</span></div>
+                        ${formatPlayer(match.p1, "TBD", w1, hasScore && !w1, 'right', match.id)}
+                    </div>
+                </div>`;
+        }
+    });
+    wcSummaryHtml += `</div>`;
+
+    // 1. TOILET BOWL HTML
+    let toiletBowlHtml = "";
+    const tb = m[14];
+    if (tb && tb.p1 && tb.p2) {
+        toiletBowlHtml = `
+            <div class="card" style="margin-top:40px; border: 2px dashed var(--nfl-red); background: rgba(213, 10, 10, 0.05);">
+                <h3 style="color:var(--nfl-red); text-align:center; margin-bottom:15px;">🚽 TOILET BOWL (Battle for #7)</h3>
+                <div style="display:flex; justify-content:center;">
+                    ${renderM(tb, 14, "Loser R1 #1", "Loser R1 #2")}
+                </div>
+            </div>`;
+    }
+
+    // 2. GESAMT-RANGLISTE
+    let rankingHtml = "";
+    if (m[13] && m[13].s1 !== null && m[14] && m[14].s1 !== null) {
+        const getSeedIdx = (p) => [...state.players].sort((a,b) => b.wins - a.wins || b.diff - a.diff).findIndex(x => x.id === p.id);
+        const p56 = [loss(m[8]), loss(m[9])].sort((a,b) => getSeedIdx(a) - getSeedIdx(b));
+        const finalRanks = [win(m[13]), loss(m[13]), loss(m[12]), loss(m[11]), p56[0], p56[1], win(m[14]), loss(m[14])];
+
+        rankingHtml = `
+            <div class="card" style="margin-top:30px; border: 2px solid var(--accent); background: linear-gradient(180deg, rgba(0,255,204,0.1) 0%, transparent 100%);">
+                <h2 style="text-align:center; color:var(--accent); margin-top:0;">🏆 FINAL RANKINGS</h2>
+                <table style="width:100%; border-collapse:collapse;">
+                    ${finalRanks.map((p, i) => `
+                        <tr style="border-bottom: 1px solid #2d3748; ${i === 7 ? 'color:var(--nfl-red);' : ''}">
+                            <td style="padding:10px; font-weight:bold; width:40px;">#${i+1}</td>
+                            <td style="padding:10px; display:flex; align-items:center; gap:10px;">${getLogoHtml(p.team)} <b>${p.name}</b></td>
+                            <td style="padding:10px; text-align:right; font-size:0.75em; font-weight:bold;">${i === 0 ? '🏆 CHAMPION' : (i === 7 ? '💩 SACKO' : '')}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+            </div>`;
+    }
+
+    document.getElementById('playoff-picture').innerHTML = `
+        <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
+        ${wcSummaryHtml}
+        <div class="playoff-grid" style="margin-top:20px;">
+            <div class="bracket-row-flow">
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+                    <div class="upper-floor">${renderM(m[6], 6, "US1 P1", "US1 P2")}${renderM(m[7], 7, "US2 P1", "US2 P2")}</div>
+                    <div class="lower-floor">${renderM(m[4], 4, "LB1 P1", "LB1 P2")}${renderM(m[5], 5, "LB2 P1", "LB2 P2")}</div>
+                </div>
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+                    <div class="upper-floor"></div> 
+                    <div class="lower-floor">${renderM(m[8], 8, "LB3 P1", "LB3 P2")}${renderM(m[9], 9, "LB4 P1", "LB4 P2")}</div>
+                </div>
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Finals</div></div>
+                    <div class="upper-floor" style="justify-content: center;">${renderM(m[10], 10, "UF P1", "UF P2")}</div>
+                    <div class="lower-floor" style="justify-content: center;">${renderM(m[11], 11, "LS P1", "LS P2")}</div>
+                </div>
+                <div class="bracket-column">
+                    <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+                    <div class="upper-floor"></div>
+                    <div class="lower-floor" style="justify-content: center;">${renderM(m[12], 12, "LF P1", "LF P2")}</div>
+                </div>
+                <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
+                    <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+                    <div class="upper-floor" style="justify-content: center; height: 100%;">${renderM(m[13], 13, "Bowl P1", "Bowl P2")}</div>
+                </div>
+            </div>
+        </div>
+        ${toiletBowlHtml}
+        ${rankingHtml}
+    `;
+}
 
     // Wildcard Summary
     let wcSummaryHtml = `<div class="wildcard-summary">`;
@@ -1598,72 +1675,59 @@ function renderAll() {
 
         // --- PLAYOFF ADMIN SECTIONS (GRUPPIERT NACH ZEIT-SLOTS) ---
 
-        // 1. Gruppierung der Playoff-Matches nach Zeit-Offsets (Offset = Minuten nach Gruppenphase)
-        const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
-            const offset = match.offset || 0;
-            if (!groups[offset]) groups[offset] = [];
-            groups[offset].push({ match, index: i });
-            return groups;
-        }, {});
+        // --- In renderAll() den Bereich für playoffSections suchen und ersetzen ---
 
-        // 2. Berechnung der Startzeit der Playoffs (Endzeit der Gruppenphase)
-        const dur = state.config.durG + state.config.durB;
-        const totalGroupMinutes = state.slots.length * dur;
-        const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+const groups = state.playoffMatches.reduce((g, m, i) => { 
+    if (!m) return g; // Falls ein Match-Objekt leer ist, überspringen
+    const o = m.offset || 0; 
+    if (!g[o]) g[o] = []; 
+    g[o].push({m, i}); 
+    return g; 
+}, {});
 
-        // 3. Generierung des HTML für die Playoff-Admin-Liste
-        document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
-            .sort((a, b) => parseInt(a) - parseInt(b)) // Chronologische Sortierung der Offsets
-            .map(offset => {
-                const time = addMinutes(groupEndTime, parseInt(offset));
-                const matchesInSlot = playoffGroups[offset];
-                
-                // Header für den Zeit-Slot (analog zur Group Stage)
-                // Ermittle den Namen der aktuellen Runde aus dem ersten Match des Slots
-				const roundName = matchesInSlot[0].match.phase || "Playoff-Phase";
-    
-			    let html = `
-			        <div class="time-slot">
-			            <div class="slot-header">
-			                <span>${time} Uhr | ${roundName}</span>
-			            </div>`;
-                
-                matchesInSlot.forEach(({ match, index }) => {
-                    // Hole Bezeichnungen (z.B. "Highest Seed") aus dem zentralen Objekt
-                    const labels = playoffLabels[match.id] || { p1: "TBD", p2: "TBD" };
-                    
-                    // Stadion-Zuweisung: Index 0 im Slot = Stadion 1, Index 1 = Stadion 2
-                    const stadium = (matchesInSlot.indexOf(matchesInSlot.find(m => m.index === index)) === 0) 
-                                    ? state.config.s1 : state.config.s2;
-                    
-                    html += `
-    <div id="pmatch-${index}" class="match-row ${match.s1 !== null ? 'finished' : ''}">
-        <div class="stadium-tag">${match.phase}<br>${stadium}</div>
+const dur = state.config.durG + state.config.durB;
+const groupEndTime = addMinutes(state.config.start, state.slots.length * dur);
+
+document.getElementById('playoffSections').innerHTML = Object.keys(groups)
+    .sort((a,b) => parseInt(a) - parseInt(b))
+    .map(o => {
+        const time = addMinutes(groupEndTime, parseInt(o));
+        // Name der Phase aus dem ersten Match des Slots nehmen
+        const roundName = groups[o][0].m.phase;
         
-        <div class="team-box right">
-            <span>${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name) : labels.p2}</span>
-            ${match.p2 ? getLogoHtml(match.p2.team) : ''}
-        </div>
+        let h = `<div class="time-slot">
+                    <div class="slot-header"><span>${time} Uhr | ${roundName}</span></div>`;
         
-        <div class="score-area">
-            <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}" 
-                   onchange="setScore('playoff',${index},2,this.value)" 
-                   ${(!isAdmin || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
-            <span style="color:var(--accent)">:</span>
-            <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}" 
-                   onchange="setScore('playoff',${index},1,this.value)" 
-                   ${(!isAdmin || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
-        </div>
-        
-        <div class="team-box">
-            ${match.p1 ? getLogoHtml(match.p1.team) : ''}
-            <span>${match.p1 ? match.p1.name : labels.p1}</span>
-        </div>
-    </div>`;
-                });
-                
-                return html + `</div>`; // Ende des Time-Slots
-            }).join('');
+        groups[o].forEach(({m, i}) => {
+            const l = playoffLabels[m.id] || {p1: "TBD", p2: "TBD"};
+            
+            // Prüfung: Ist es ein Toilet Bowl Match ohne Teilnehmer? Dann ausblenden.
+            if (m.id === 'tb' && (!m.p1 || !m.p2)) return;
+
+            h += `
+                <div id="pmatch-${i}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
+                    <div class="stadium-tag">${m.phase}</div>
+                    <div class="team-box right">
+                        <span>${m.p2 ? (m.p2.id === -1 ? 'BYE' : m.p2.name) : l.p2}</span>
+                        ${m.p2 ? getLogoHtml(m.p2.team) : ''}
+                    </div>
+                    <div class="score-area">
+                        <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}" 
+                               onchange="setScore('playoff',${i},2,this.value)" 
+                               ${(!isAdmin || (m.p2 && m.p2.id === -1)) ? 'disabled' : ''}>
+                        <span style="color:var(--accent)">:</span>
+                        <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}" 
+                               onchange="setScore('playoff',${i},1,this.value)" 
+                               ${(!isAdmin || (m.p1 && m.p1.id === -1)) ? 'disabled' : ''}>
+                    </div>
+                    <div class="team-box">
+                        ${m.p1 ? getLogoHtml(m.p1.team) : ''}
+                        <span>${m.p1 ? m.p1.name : l.p1}</span>
+                    </div>
+                </div>`;
+        });
+        return h + `</div>`;
+    }).join('');
     }
 }
 
@@ -1730,6 +1794,7 @@ function updateTeamAvailability() {
 </script>
 </body>
 </html>	
+
 
 
 
