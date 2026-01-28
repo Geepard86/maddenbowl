@@ -1,0 +1,330 @@
+{
+  "schemaVersion": 1,
+  "season": 2025,
+  "tournament": {
+    "season": 2025,
+    "players": [
+      {
+        "name": "Martin",
+        "team": "TB"
+      },
+      {
+        "name": "Alex",
+        "team": "GB"
+      },
+      {
+        "name": "Michael",
+        "team": "MIA"
+      },
+      {
+        "name": "Raffa",
+        "team": "LAR"
+      },
+      {
+        "name": "Tim",
+        "team": "CIN"
+      },
+      {
+        "name": "Tobi F.",
+        "team": "HOU"
+      },
+      {
+        "name": "Tobi W.",
+        "team": "WAS"
+      },
+      {
+        "name": "Markus",
+        "team": "MIN"
+      }
+    ],
+    "matches": [
+      {
+        "stage": "group",
+        "homeTeam": "GB",
+        "awayTeam": "TB",
+        "homeScore": 31,
+        "awayScore": 28
+      },
+      {
+        "stage": "group",
+        "homeTeam": "LAR",
+        "awayTeam": "MIA",
+        "homeScore": 34,
+        "awayScore": 21
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "CIN",
+        "homeScore": 35,
+        "awayScore": 37
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "WAS",
+        "homeScore": 26,
+        "awayScore": 31
+      },
+      {
+        "stage": "group",
+        "homeTeam": "TB",
+        "awayTeam": "LAR",
+        "homeScore": 14,
+        "awayScore": 21
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "GB",
+        "homeScore": 18,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "CIN",
+        "awayTeam": "MIN",
+        "homeScore": 28,
+        "awayScore": 31
+      },
+      {
+        "stage": "group",
+        "homeTeam": "WAS",
+        "awayTeam": "HOU",
+        "homeScore": 35,
+        "awayScore": 21
+      },
+      {
+        "stage": "group",
+        "homeTeam": "LAR",
+        "awayTeam": "CIN",
+        "homeScore": 36,
+        "awayScore": 11
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "TB",
+        "homeScore": 43,
+        "awayScore": 10
+      },
+      {
+        "stage": "group",
+        "homeTeam": "WAS",
+        "awayTeam": "GB",
+        "homeScore": 21,
+        "awayScore": 14
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "HOU",
+        "homeScore": 35,
+        "awayScore": 28
+      },
+      {
+        "stage": "group",
+        "homeTeam": "GB",
+        "awayTeam": "LAR",
+        "homeScore": 24,
+        "awayScore": 41
+      },
+      {
+        "stage": "group",
+        "homeTeam": "CIN",
+        "awayTeam": "WAS",
+        "homeScore": 27,
+        "awayScore": 10
+      },
+      {
+        "stage": "group",
+        "homeTeam": "TB",
+        "awayTeam": "MIN",
+        "homeScore": 17,
+        "awayScore": 14
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "MIA",
+        "homeScore": 17,
+        "awayScore": 21
+      },
+      {
+        "stage": "group",
+        "homeTeam": "WAS",
+        "awayTeam": "LAR",
+        "homeScore": 14,
+        "awayScore": 28
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "GB",
+        "homeScore": 10,
+        "awayScore": 31
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "TB",
+        "homeScore": 42,
+        "awayScore": 32
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "CIN",
+        "homeScore": 24,
+        "awayScore": 49
+      },
+      {
+        "stage": "group",
+        "homeTeam": "LAR",
+        "awayTeam": "MIN",
+        "homeScore": 13,
+        "awayScore": 10
+      },
+      {
+        "stage": "group",
+        "homeTeam": "GB",
+        "awayTeam": "HOU",
+        "homeScore": 35,
+        "awayScore": 28
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "WAS",
+        "homeScore": 26,
+        "awayScore": 29
+      },
+      {
+        "stage": "group",
+        "homeTeam": "TB",
+        "awayTeam": "CIN",
+        "homeScore": 7,
+        "awayScore": 16
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "LAR",
+        "homeScore": 17,
+        "awayScore": 7
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "MIA",
+        "homeScore": 34,
+        "awayScore": 29
+      },
+      {
+        "stage": "group",
+        "homeTeam": "CIN",
+        "awayTeam": "GB",
+        "homeScore": 3,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "WAS",
+        "awayTeam": "TB",
+        "homeScore": 14,
+        "awayScore": 17
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "TB",
+        "awayTeam": "LAR",
+        "homeScore": 7,
+        "awayScore": 10
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "HOU",
+        "awayTeam": "GB",
+        "homeScore": 25,
+        "awayScore": 27
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIA",
+        "awayTeam": "CIN",
+        "homeScore": 16,
+        "awayScore": 28
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIN",
+        "awayTeam": "WAS",
+        "homeScore": 24,
+        "awayScore": 14
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIA",
+        "awayTeam": "LAR",
+        "homeScore": 38,
+        "awayScore": 21
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIN",
+        "awayTeam": "GB",
+        "homeScore": 30,
+        "awayScore": 21
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIA",
+        "awayTeam": "MIN",
+        "homeScore": 22,
+        "awayScore": 25
+      }
+    ],
+    "standings": [
+      {
+        "rank": 1,
+        "name": "Markus",
+        "points": 900
+      },
+      {
+        "rank": 2,
+        "name": "Micha",
+        "points": 700
+      },
+      {
+        "rank": 3,
+        "name": "Raffa",
+        "points": 600
+      },
+      {
+        "rank": 4,
+        "name": "Alex",
+        "points": 500
+      },
+      {
+        "rank": 5,
+        "name": "Tim",
+        "points": 400
+      },
+      {
+        "rank": 6,
+        "name": "Tobi W.",
+        "points": 300
+      },
+      {
+        "rank": 7,
+        "name": "Tobi F.",
+        "points": 200
+      },
+      {
+        "rank": 8,
+        "name": "Martin",
+        "points": 100
+      }
+    ]
+  }
+}

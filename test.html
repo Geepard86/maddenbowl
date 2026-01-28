@@ -1,0 +1,1952 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MADDEN BOWL MANAGER</title>
+  <link rel="icon" type="image/png" href="maddenbowl.ico" />
+
+  <style>
+    :root {
+      --nfl-blue: #013369;
+      --nfl-red: #D50A0A;
+      --bg: #0b1119;
+      --card: #161f2c;
+      --accent: #00ffcc;
+      --gray: #4a5568;
+      --slot-bg: #1c2431;
+    }
+
+    body {
+      font-family: 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: white;
+      margin: 0;
+      padding: 10px;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+    }
+
+    .container { max-width: 1200px; margin: auto; }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8em;
+      letter-spacing: 2px;
+      border-bottom: 3px solid var(--nfl-red);
+      padding-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    h2 { color: var(--accent); font-size: 1.2em; text-transform: uppercase; margin-top: 0; }
+
+    /* --- CARDS & CONFIG --- */
+    .card {
+      background: var(--card);
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border: 1px solid #2d3748;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      background: #2d3748;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .config-item { display: flex; flex-direction: column; font-size: 0.8em; }
+
+    select, input {
+      background: #0b1119;
+      border: 1px solid #4a5568;
+      color: white;
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    /* --- BUTTONS --- */
+    .btn {
+      background: var(--nfl-red);
+      color: white;
+      border: none;
+      padding: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 6px;
+      width: 100%;
+      transition: 0.3s;
+    }
+
+    .btn-secondary {
+      background: var(--gray);
+      padding: 8px 12px;
+      font-size: 0.75em;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* --- SCHEDULE & MATCH ROWS --- */
+    .time-slot {
+      background: var(--slot-bg);
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #2d3748;
+    }
+
+    .slot-header {
+      color: var(--accent);
+      font-family: monospace;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #2d3748;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .match-row {
+      background: #232d3d;
+      margin-bottom: 8px;
+      padding: 10px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      flex-wrap: wrap;
+    }
+
+    .match-row.finished { border-left: 4px solid var(--accent); }
+
+    .stadium-tag {
+      font-size: 0.65em;
+      color: var(--gray);
+      text-transform: uppercase;
+      width: 90px;
+      flex-shrink: 0;
+      white-space: normal;
+      line-height: 1.2;
+    }
+
+    .team-box {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: bold;
+      min-width: 0;
+    }
+
+    .team-box span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .team-box.right { justify-content: flex-end; text-align: right; }
+
+    .score-area {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .score-input {
+      width: 40px;
+      height: 35px;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: bold;
+      background: white !important;
+      color: black !important;
+      border: none;
+      border-radius: 4px;
+    }
+
+    .score-input:disabled {
+      background: #cbd5e0 !important;
+      color: #4a5568 !important;
+      opacity: 1;
+    }
+
+    /* --- TABLE --- */
+    table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+    th, td { padding: 10px; text-align: center; border-bottom: 1px solid #2d3748; }
+
+    /* --- TABLE HIGHLIGHTS --- */
+    .row-bye {
+      background: rgba(0, 255, 204, 0.08) !important;
+      border-left: 4px solid var(--accent);
+    }
+    .row-bye-last { border-bottom: 2px dashed var(--accent) !important; }
+
+    .row-eliminated {
+      background: rgba(213, 10, 10, 0.08) !important;
+      border-left: 4px solid var(--nfl-red);
+      opacity: 0.8;
+    }
+    .row-eliminated-first { border-top: 2px dashed var(--nfl-red) !important; }
+
+    .badge-bye { display: none; }
+
+    /* Erlaubt die Neusortierung der Sektionen */
+    #main-content { display: flex; flex-direction: column; }
+    #table-section { order: 0; }
+    #playoff-section { order: 1; }
+    #group-section { order: 2; }
+
+    /* --- NEXT GAMES HUB --- */
+    .next-games {
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #1a202c, #0b1119);
+      padding: 20px 20px 20px 35px;
+      border-radius: 8px;
+      border-left: 6px solid var(--accent);
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .next-grid-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 25px;
+    }
+
+    .next-card {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.05);
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-top: 5px;
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: 0.2s;
+    }
+
+    .status-tag { font-size: 0.6em; padding: 2px 6px; border-radius: 3px; font-weight: bold; text-transform: uppercase; }
+    .tag-live { background: var(--nfl-red); animation: pulse 2s infinite; }
+    .tag-next { background: var(--gray); }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+    /* --- PLAYOFF BRACKET --- */
+    .playoff-grid {
+      background: rgba(0,0,0,0.2);
+      border-radius: 12px;
+      padding: 10px;
+      overflow-x: auto;
+    }
+
+    .bracket-row-flow { display: flex; gap: 15px; position: relative; padding: 20px 0; }
+
+    .bracket-row-flow::before {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 50%;
+      transform: translateY(-50%);
+      border-bottom: 2px dashed #4a5568;
+      z-index: 1;
+    }
+
+    .bracket-column { display: flex; flex-direction: column; min-width: 175px; flex: 1; z-index: 3; }
+
+    .upper-floor, .lower-floor { display: flex; flex-direction: column; gap: 15px; padding: 10px 0; flex: 1; }
+    .upper-floor { margin-bottom: 40px; }
+    .lower-floor { margin-top: 40px; }
+
+    .bracket-match {
+      background: #1c2431;
+      border: 1px solid #4a5568;
+      border-radius: 8px;
+      border-left: 4px solid var(--gray);
+    }
+
+    .match-active { border-left-color: var(--accent); box-shadow: 0 0 15px rgba(0, 255, 204, 0.15); }
+
+    .bracket-match-header {
+      background: #2d3748;
+      font-size: 0.6em;
+      padding: 6px 10px;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+    }
+
+    .bracket-team { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font-size: 0.85em; min-height: 35px; }
+
+    .bracket-score { font-family: monospace; background: #0b1119; padding: 2px 6px; border-radius: 4px; min-width: 20px; text-align: center; }
+
+    .column-header { text-align: center; margin-bottom: 10px; }
+
+    .bracket-title {
+      display: inline-block;
+      border-bottom: 2px solid var(--accent);
+      padding: 0 10px 5px 10px;
+      font-size: 0.75em;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .bracket-team span[style*="#4a5568"] {
+      font-size: 0.85em;
+      line-height: 1.1;
+      display: block;
+      max-width: 120px;
+    }
+
+    /* --- DRAFT GRID LAYOUT --- */
+    #draftBoard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .draft-row {
+      display: grid;
+      grid-template-columns: 50px 1fr 1fr;
+      gap: 15px;
+      align-items: center;
+      padding: 15px;
+      background: var(--slot-bg);
+      border-radius: 8px;
+      border-left: 5px solid var(--gray);
+      margin-bottom: 0;
+    }
+
+    .draft-row.assigned {
+      border-left-color: var(--accent);
+      background: #232d3d;
+    }
+
+    /* --- DRAFT ANIMATION & VISUALS --- */
+    @keyframes highlight-glow {
+      0% { background: #2d3748; transform: scale(1); }
+      50% { background: var(--accent); transform: scale(1.02); }
+      100% { background: #344052; transform: scale(1); }
+    }
+
+    .spinning {
+      animation: highlight-glow 0.15s infinite;
+      border-color: var(--accent) !important;
+    }
+
+    .opponent-row {
+      display: flex;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.05);
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-bottom: 5px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .opponent-row b { color: var(--accent); }
+
+    /* --- WILDCARD SUMMARY --- */
+    .wildcard-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+
+    /* --- MOBILE OPTIMIERUNG --- */
+    @media (max-width: 800px) {
+      .next-grid-container { grid-template-columns: 1fr; }
+      .wildcard-summary { grid-template-columns: 1fr !important; }
+
+      .match-row {
+        padding: 8px;
+      }
+
+      .stadium-tag {
+        width: 100%;
+        margin-bottom: 4px;
+        font-size: 0.6em;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 2px;
+        display: block;
+      }
+
+      .team-box { font-size: 0.85em; }
+      .score-input { width: 32px !important; height: 30px !important; font-size: 1rem !important; }
+
+      .bracket-team { font-size: 0.75em; padding: 4px 8px; }
+      .bracket-team span[style*="#4a5568"] { font-size: 0.7em; white-space: normal; }
+    }
+
+    .logo-img { width: 20px; height: 20px; vertical-align: middle; }
+    .hidden { display: none !important; }
+
+    .bracket-team.winner { color: var(--accent) !important; font-weight: bold; }
+    .bracket-team.winner img { filter: drop-shadow(0 0 5px var(--accent)); }
+
+    /* --- MATCH META (INSIGHTS + ODDS) --- */
+    .match-meta {
+      margin-top: 6px;
+      font-size: 0.7em;
+      color: rgba(255,255,255,0.85);
+      line-height: 1.3;
+      width: 100%;
+      display: grid;
+      gap: 4px;
+      padding-left: 100px; /* aligns under content roughly (stadium-tag width) */
+      box-sizing: border-box;
+    }
+    @media (max-width: 800px) {
+      .match-meta { padding-left: 0; }
+    }
+    .meta-badges { display:flex; flex-wrap:wrap; gap:6px; }
+    .badge {
+      border: 1px solid #2d3748;
+      background: rgba(0,0,0,0.25);
+      padding: 3px 6px;
+      border-radius: 999px;
+      font-family: monospace;
+    }
+    .meta-insights { color: rgba(255,255,255,0.8); }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div id="live-header">
+      <h1>MADDEN BOWL LIVE</h1>
+
+      <div id="nextUp" class="next-games">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+          <small style="color:var(--accent); font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">
+            Turnier-Informationen & Live-Tracking
+          </small>
+          <button onclick="document.getElementById('infoPanel').classList.toggle('hidden')"
+                  class="btn-secondary" style="padding: 2px 8px; font-size: 0.6em; background: var(--nfl-blue);">
+            ⓘ REGELN & SETTINGS
+          </button>
+        </div>
+
+        <div id="infoPanel" class="hidden" style="background: rgba(0,0,0,0.3); border: 1px solid #2d3748; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 0.75em; line-height: 1.5;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+              <strong style="color:var(--accent);">⚙️ MADDEN SETTINGS</strong><br>
+              • Zeit: 3 Min (Reg.) / 4 Min (Playoffs)<br>
+              • Level: Pro | Style: Simulation<br>
+              • Kicking: Classic Meter | Passing: Placement<br>
+              • Wetter: Random
+            </div>
+            <div>
+              <strong style="color:var(--accent);">📜 TURNIER-REGELN</strong><br>
+              • Draft: Neueinsteiger > Vorjahresletzte<br>
+              • Team-Limit: OVR ≤ 90<br>
+              • Trade: Freiwilliger Down-Trade nach 2L
+            </div>
+            <div>
+              <strong style="color:var(--accent);">🎮 CONTROLLER HUB</strong><br>
+              <a href="https://www.ea.com/games/madden-nfl/madden-nfl-26/controls-hub/playstation-controls-hub"
+                 target="_blank" style="color: white; text-decoration: underline;">
+                Madden 26 Controls Hub (EA)
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div id="nextGamesList" style="width: 100%;"></div>
+      </div>
+    </div>
+
+    <div id="admin-panel" class="hidden">
+      <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
+        <button class="btn-secondary" onclick="window.print()">PDF Export</button>
+        <button class="btn-secondary" style="background:#2d3748" onclick="syncData(true)">☁ Cloud Sync</button>
+        <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+      </div>
+
+      <div id="setup-view" class="card">
+        <h2>Tournament Setup</h2>
+
+        <div class="config-grid">
+          <div class="config-item"><label>Start:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Min/P:</label><input type="number" id="durPlayoff" value="45" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Altima Field"></div>
+          <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="KEVAG Stadium"></div>
+          <div class="config-item">
+            <label>Madden Version:</label>
+            <select id="maddenYear" onchange="renderPlayerInputs()">
+              <option value="2026">Madden 26</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;"></div>
+
+        <select id="playerCount" onchange="updateModeInfo()" style="width:100%; margin-bottom: 10px;">
+          <option value="8" selected>8 Spieler (Standard)</option>
+          <option value="6">6 Spieler</option>
+          <option value="7">7 Spieler</option>
+          <option value="9">9 Spieler</option>
+          <option value="10">10 Spieler</option>
+        </select>
+
+        <div id="playerInputs"></div>
+        <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
+      </div>
+    </div>
+
+    <div id="main-content">
+      <div id="tableContainer" class="card"></div>
+
+      <div id="playoff-picture" class="card">
+        <h2>NFL Playoff Picture</h2>
+        <div class="bracket-wrapper">
+          <div class="bracket-title">Upper Bracket (Winner's Path)</div>
+          <div id="upper-bracket" class="bracket-row"></div>
+
+          <div class="bracket-title" style="border-color: #555; margin-top:20px;">Lower Bracket (Elimination Path)</div>
+          <div id="lower-bracket" class="bracket-row"></div>
+        </div>
+      </div>
+
+      <div id="groupPhase" class="card">
+        <h2>Group Stage Schedule</h2>
+        <div id="groupMatches"></div>
+      </div>
+
+      <div id="playoffs" class="card">
+        <h2>Playoff Schedule</h2>
+        <div id="playoffSections"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // CONFIG / BASE
+    // =========================================================
+    const BIN_ID = "f3d732f4ad334280c483";
+    const API_URL = `https://api.npoint.io/${BIN_ID}`;
+    const isAdmin = window.location.search.includes('Altima');
+
+    // --- HISTORY JSON FILES (place next to HTML or adjust paths) ---
+    const HISTORY_SOURCES = [
+      "maddenbowl_2022.json",
+      "maddenbowl_2023.json",
+      "maddenbowl_2024.json",
+      "maddenbowl_2025.json",
+    ];
+
+    const nflTeams = [
+      {n: "Cardinals", id: "ARI"}, {n: "Falcons", id: "ATL"}, {n: "Ravens", id: "BAL"}, {n: "Bills", id: "BUF"},
+      {n: "Panthers", id: "CAR"}, {n: "Bears", id: "CHI"}, {n: "Bengals", id: "CIN"}, {n: "Browns", id: "CLE"},
+      {n: "Cowboys", id: "DAL"}, {n: "Broncos", id: "DEN"}, {n: "Lions", id: "DET"}, {n: "Packers", id: "GB"},
+      {n: "Texans", id: "HOU"}, {n: "Colts", id: "IND"}, {n: "Jaguars", id: "JAX"}, {n: "Chiefs", id: "KC"},
+      {n: "Raiders", id: "LV"}, {n: "Chargers", id: "LAC"}, {n: "Rams", id: "LAR"}, {n: "Dolphins", id: "MIA"},
+      {n: "Vikings", id: "MIN"}, {n: "Patriots", id: "NE"}, {n: "Saints", id: "NO"}, {n: "Giants", id: "NYG"},
+      {n: "Jets", id: "NYJ"}, {n: "Eagles", id: "PHI"}, {n: "Steelers", id: "PIT"}, {n: "49ers", id: "SF"},
+      {n: "Seahawks", id: "SEA"}, {n: "Buccaneers", id: "TB"}, {n: "Titans", id: "TEN"}, {n: "Commanders", id: "WAS"}
+    ];
+
+    const maddenRatings = {
+      "2026": {
+        "ARI": 80, "ATL": 80, "BAL": 87, "BUF": 88, "CAR": 80, "CHI": 84, "CIN": 81, "CLE": 81,
+        "DAL": 81, "DEN": 91, "DET": 87, "GB": 83, "HOU": 86, "IND": 82, "JAX": 84, "KC": 85,
+        "LV": 76, "LAC": 82, "LAR": 89, "MIA": 79, "MIN": 85, "NE": 86, "NO": 77, "NYG": 78,
+        "NYJ": 74, "PHI": 90, "PIT": 84, "SF": 84, "SEA": 85, "TB": 83, "TEN": 75, "WAS": 79
+      }
+    };
+
+    const schedules = {
+      8: [ [[0,1],[4,5]], [[2,3],[6,7]], [[1,2],[5,6]], [[3,0],[7,4]], [[0,2],[4,6]], [[1,3],[5,7]], [[0,4],[1,5]], [[2,6],[3,7]], [[5,0],[6,1]], [[7,2],[4,3]] ],
+      6: [ [[0,1],[2,3]], [[4,5],[0,2]], [[3,4],[5,0]], [[1,4],[2,5]], [[0,3],[5,1]], [[4,2],[3,5]], [[1,0],[2,4]], [[0,4]] ],
+      7: [ [[0,1],[2,3]], [[4,5],[6,0]], [[2,1],[4,3]], [[6,5],[1,3]], [[0,4],[5,2]], [[6,1],[3,5]], [[0,2],[4,6]], [[5,1],[2,6]], [[3,0],[1,4]], [[5,0],[3,6]], [[2,4]] ],
+      9: [ [[0,1],[3,4]], [[7,6],[2,0]], [[4,5],[6,8]], [[1,2],[5,3]], [[8,7],[0,3]], [[4,1],[5,2]], [[6,0],[1,7]], [[3,8],[2,6]], [[7,4],[8,5]] ],
+      10:[ [[0,1],[5,6]], [[2,3],[7,8]], [[0,4],[5,9]], [[1,2],[6,7]], [[3,4],[8,9]], [[2,0],[7,5]], [[3,1],[8,6]], [[4,2],[9,7]], [[1,4],[6,9]], [[4,5],[9,0]], [[0,5],[1,6]], [[2,7],[3,8]], [[4,9]] ]
+    };
+
+    const playoffLabels = {
+      ub1: { p1: "Highest Seed", p2: "Bottom Seed" },
+      ub2: { p1: "2nd Best Seed", p2: "2nd Bottom Seed" },
+      ub3: { p1: "3rd Best Seed", p2: "3rd Bottom Seed" },
+      ub4: { p1: "4th Best Seed", p2: "4th Bottom Seed" },
+      lb1: { p1: "Best Loser", p2: "Worst Loser" },
+      lb2: { p1: "2nd Best Loser", p2: "2nd Worst Loser" },
+      us1: { p1: "Highest Seed", p2: "Bottom Seed" },
+      us2: { p1: "2nd Best Seed", p2: "2nd Bottom Seed" },
+      lb3: { p1: "Upper Semi Loser #2", p2: "Elim. Winner #1" },
+      lb4: { p1: "Upper Semi Loser #1", p2: "Elim. Winner #2" },
+      uf:  { p1: "Upper Semi #1", p2: "Upper Semi #2" },
+      ls:  { p1: "Lower Semi #1", p2: "Lower Semi #2" },
+      lf:  { p1: "Upper Final Loser", p2: "Elim. Semi Winner" },
+      gf:  { p1: "Upper Finalist", p2: "Lower Finalist" }
+    };
+
+    let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
+    let availableSlots = [];
+    let lastDrawnPlayer = { name: "", slot: null };
+
+    // =========================================================
+    // HISTORY / STATS / ODDS
+    // =========================================================
+    let history = {
+      loaded: false,
+      seasons: [],
+      players: new Set(),
+      matches: [],
+      byPair: new Map(),
+      byPlayer: new Map(),
+    };
+
+    function normName(name) { return (name || "").trim(); }
+    function pairKey(a, b) {
+      const A = normName(a), B = normName(b);
+      return (A < B) ? `${A}|${B}` : `${B}|${A}`;
+    }
+
+    async function loadHistory() {
+      const seasonData = [];
+      for (const url of HISTORY_SOURCES) {
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (!res.ok) continue;
+          const json = await res.json();
+          seasonData.push(json);
+        } catch (e) {
+          console.warn("History load failed:", url, e);
+        }
+      }
+
+      history.seasons = seasonData
+        .map(x => x?.tournament)
+        .filter(Boolean);
+
+      // Reset indices
+      history.players = new Set();
+      history.matches = [];
+      history.byPair = new Map();
+      history.byPlayer = new Map();
+
+      for (const t of history.seasons) {
+        const season = t.season;
+        const teamToPlayer = new Map();
+        (t.players || []).forEach(p => {
+          const n = normName(p.name);
+          if (!n) return;
+          history.players.add(n);
+          if (p.team) teamToPlayer.set(p.team, n);
+        });
+
+        (t.matches || []).forEach(m => {
+          const homePlayer = teamToPlayer.get(m.homeTeam) || null;
+          const awayPlayer = teamToPlayer.get(m.awayTeam) || null;
+          if (!homePlayer || !awayPlayer) return;
+
+          const match = {
+            season,
+            stage: m.stage,                 // "group" | "playoff"
+            homePlayer,
+            awayPlayer,
+            homeTeam: m.homeTeam,
+            awayTeam: m.awayTeam,
+            homeScore: m.homeScore,
+            awayScore: m.awayScore,
+            total: (m.homeScore ?? 0) + (m.awayScore ?? 0),
+            source: "history",
+          };
+          history.matches.push(match);
+
+          const pk = pairKey(homePlayer, awayPlayer);
+          if (!history.byPair.has(pk)) history.byPair.set(pk, []);
+          history.byPair.get(pk).push(match);
+
+          for (const pl of [homePlayer, awayPlayer]) {
+            if (!history.byPlayer.has(pl)) history.byPlayer.set(pl, []);
+            history.byPlayer.get(pl).push(match);
+          }
+        });
+      }
+
+      history.loaded = true;
+      buildPlayerDatalist();
+      console.log("History loaded:", {
+        seasons: history.seasons.length,
+        players: history.players.size,
+        matches: history.matches.length
+      });
+    }
+
+    function buildPlayerDatalist() {
+      const listId = "playerNameSuggestions";
+      let dl = document.getElementById(listId);
+      if (!dl) {
+        dl = document.createElement("datalist");
+        dl.id = listId;
+        document.body.appendChild(dl);
+      }
+      const names = Array.from(history.players).sort((a,b) => a.localeCompare(b, "de"));
+      dl.innerHTML = names.map(n => `<option value="${n}"></option>`).join("");
+
+      const inp = document.getElementById("nextPlayerName");
+      if (inp) inp.setAttribute("list", listId);
+    }
+
+    function getCurrentMatchesNormalized() {
+      const out = [];
+
+      (state.matches || []).forEach(m => {
+        if (m.s1 === null || m.s2 === null) return;
+        const home = state.players[m.p1];
+        const away = state.players[m.p2];
+        if (!home || !away) return;
+        out.push({
+          season: Number(state.config.year) || "current",
+          stage: "group",
+          homePlayer: home.name,
+          awayPlayer: away.name,
+          homeTeam: home.team,
+          awayTeam: away.team,
+          homeScore: m.s1,
+          awayScore: m.s2,
+          total: m.s1 + m.s2,
+          source: "current",
+        });
+      });
+
+      (state.playoffMatches || []).forEach(pm => {
+        if (!pm?.p1 || !pm?.p2) return;
+        if (pm.p1.id === -1 || pm.p2.id === -1) return;
+        if (pm.s1 === null || pm.s2 === null) return;
+        out.push({
+          season: Number(state.config.year) || "current",
+          stage: "playoff",
+          homePlayer: pm.p1.name,
+          awayPlayer: pm.p2.name,
+          homeTeam: pm.p1.team,
+          awayTeam: pm.p2.team,
+          homeScore: pm.s1,
+          awayScore: pm.s2,
+          total: pm.s1 + pm.s2,
+          source: "current",
+        });
+      });
+
+      return out;
+    }
+
+    function computeMatchupStats(playerA, playerB, currentOnly = false) {
+      const A = normName(playerA), B = normName(playerB);
+      if (!A || !B) return null;
+
+      const pk = pairKey(A, B);
+      const histMatches = currentOnly ? [] : (history.byPair.get(pk) || []);
+      const curMatches = getCurrentMatchesNormalized().filter(m => pairKey(m.homePlayer, m.awayPlayer) === pk);
+      const all = [...histMatches, ...curMatches];
+
+      const base = {
+        games: all.length,
+        aWins: 0,
+        bWins: 0,
+        aPoints: 0,
+        bPoints: 0,
+        totals: [],
+        lastWinners: [],
+        playoff: { games: 0, aWins: 0, bWins: 0 },
+        home: { aHomeGames: 0, aHomeWins: 0, bHomeGames: 0, bHomeWins: 0 },
+      };
+
+      const scoreFor = (m, who) => {
+        if (m.homePlayer === who) return m.homeScore;
+        if (m.awayPlayer === who) return m.awayScore;
+        return 0;
+      };
+      const isHome = (m, who) => m.homePlayer === who;
+
+      all.forEach(m => {
+        const aS = scoreFor(m, A);
+        const bS = scoreFor(m, B);
+        base.aPoints += aS;
+        base.bPoints += bS;
+        base.totals.push(m.total);
+
+        let winner = null;
+        if (aS > bS) { base.aWins++; winner = A; }
+        else if (bS > aS) { base.bWins++; winner = B; }
+        base.lastWinners.push(winner);
+
+        if (isHome(m, A)) { base.home.aHomeGames++; if (winner === A) base.home.aHomeWins++; }
+        if (isHome(m, B)) { base.home.bHomeGames++; if (winner === B) base.home.bHomeWins++; }
+
+        if (m.stage === "playoff") {
+          base.playoff.games++;
+          if (winner === A) base.playoff.aWins++;
+          if (winner === B) base.playoff.bWins++;
+        }
+      });
+
+      const aPPG = base.games ? (base.aPoints / base.games) : 0;
+      const bPPG = base.games ? (base.bPoints / base.games) : 0;
+      const avgTotal = base.totals.length ? (base.totals.reduce((s,x)=>s+x,0) / base.totals.length) : 0;
+
+      const streak = (() => {
+        const last = base.lastWinners[base.lastWinners.length - 1];
+        if (!last) return { who: null, n: 0 };
+        let n = 0;
+        for (let i = base.lastWinners.length - 1; i >= 0; i--) {
+          if (base.lastWinners[i] === last) n++;
+          else break;
+        }
+        return { who: last, n };
+      })();
+
+      return {
+        ...base,
+        aPPG,
+        bPPG,
+        avgTotal,
+        last3: base.lastWinners.slice(-3),
+        streak
+      };
+    }
+
+    function pickBestInsights(homePlayer, awayPlayer) {
+      const H = normName(homePlayer), A = normName(awayPlayer);
+      if (!history.loaded || !H || !A) return [];
+
+      const sAll = computeMatchupStats(H, A, false);
+      const sCur = computeMatchupStats(H, A, true);
+      if (!sAll) return [];
+
+      const insights = [];
+
+      if (sAll.games >= 3) {
+        insights.push({
+          score: 10 + sAll.games,
+          text: `Direkter Vergleich: ${H} vs ${A} steht ${sAll.aWins}:${sAll.bWins}.`
+        });
+      }
+
+      const last3 = (sAll.last3 || []).filter(Boolean);
+      if (last3.length >= 3) {
+        const h3 = last3.filter(x => x === H).length;
+        const a3 = last3.filter(x => x === A).length;
+        if (h3 === 3) insights.push({ score: 11, text: `Die letzten 3 Duelle gingen alle an ${H}.` });
+        else if (a3 === 3) insights.push({ score: 11, text: `Die letzten 3 Duelle gingen alle an ${A}.` });
+        else insights.push({ score: 6, text: `Letzte 3 Duelle: ${H} ${h3}–${a3} ${A}.` });
+      }
+
+      if (sAll.streak?.n >= 3 && sAll.streak.who) {
+        insights.push({
+          score: 9 + sAll.streak.n,
+          text: `Streak: ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge in diesem Matchup.`
+        });
+      }
+
+      if (sAll.home.aHomeGames >= 3) {
+        const pct = sAll.home.aHomeWins / sAll.home.aHomeGames;
+        if (pct >= 0.75) insights.push({ score: 8, text: `Zuhause ist ${H} in diesem Matchup stark: ${sAll.home.aHomeWins}/${sAll.home.aHomeGames}.` });
+      }
+      if (sAll.home.bHomeGames >= 3) {
+        const pct = sAll.home.bHomeWins / sAll.home.bHomeGames;
+        if (pct >= 0.75) insights.push({ score: 8, text: `Zuhause ist ${A} in diesem Matchup stark: ${sAll.home.bHomeWins}/${sAll.home.bHomeGames}.` });
+      }
+
+      if (sAll.games >= 3) {
+        if (sAll.aPPG >= 30 && sAll.bPPG >= 30) {
+          insights.push({ score: 9, text: `Offensiv-Spektakel: beide scoren im Schnitt 30+ PPG (${H}: ${sAll.aPPG.toFixed(1)}, ${A}: ${sAll.bPPG.toFixed(1)}).` });
+        } else {
+          insights.push({ score: 5, text: `Average PPG im Matchup: ${H} ${sAll.aPPG.toFixed(1)} | ${A} ${sAll.bPPG.toFixed(1)}.` });
+        }
+      }
+
+      if (sAll.games >= 3) {
+        const hAllowed = sAll.bPoints / sAll.games;
+        const aAllowed = sAll.aPoints / sAll.games;
+        if (hAllowed < 14) insights.push({ score: 8, text: `Defense-Wall: ${H} lässt gegen ${A} im Schnitt nur ${hAllowed.toFixed(1)} Punkte zu.` });
+        if (aAllowed < 14) insights.push({ score: 8, text: `Defense-Wall: ${A} lässt gegen ${H} im Schnitt nur ${aAllowed.toFixed(1)} Punkte zu.` });
+      }
+
+      if (sAll.playoff.games >= 2) {
+        insights.push({
+          score: 10,
+          text: `Clutch-Faktor (Playoffs): ${H} vs ${A} ${sAll.playoff.aWins}:${sAll.playoff.bWins}.`
+        });
+      }
+
+      if (sCur && sCur.games >= 1) {
+        insights.push({ score: 7, text: `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).` });
+      }
+
+      insights.sort((x,y) => y.score - x.score);
+      return insights.slice(0, 3).map(x => x.text);
+    }
+
+    function computeEloMap() {
+      const elo = new Map();
+      const K = 18;
+      const ensure = (p) => { if (!elo.has(p)) elo.set(p, 1500); };
+
+      const all = [
+        ...history.matches.map(m => ({...m, source:"history"})),
+        ...getCurrentMatchesNormalized()
+      ];
+
+      const stageOrder = { group: 0, playoff: 1 };
+      all.sort((a,b) => (Number(a.season) - Number(b.season)) || ((stageOrder[a.stage]||0)-(stageOrder[b.stage]||0)));
+
+      const winProb = (ea, eb) => 1 / (1 + Math.pow(10, (eb - ea) / 400));
+
+      all.forEach(m => {
+        const A = m.homePlayer, B = m.awayPlayer;
+        ensure(A); ensure(B);
+
+        const aScore = m.homeScore, bScore = m.awayScore;
+        if (aScore == null || bScore == null) return;
+
+        const Ea = elo.get(A), Eb = elo.get(B);
+        const Pa = winProb(Ea, Eb);
+        const Sa = aScore > bScore ? 1 : (aScore < bScore ? 0 : 0.5);
+
+        const mov = Math.abs(aScore - bScore);
+        const movFactor = 1 + Math.min(0.5, mov / 30);
+
+        const delta = K * movFactor * (Sa - Pa);
+        elo.set(A, Ea + delta);
+        elo.set(B, Eb - delta);
+      });
+
+      return elo;
+    }
+
+    function moneylineFromProb(p) {
+      if (p <= 0 || p >= 1) return null;
+      if (p >= 0.5) return Math.round(-100 * (p / (1 - p)));
+      return Math.round(100 * ((1 - p) / p));
+    }
+
+    function normalCdf(x) {
+      const t = 1 / (1 + 0.2316419 * Math.abs(x));
+      const d = 0.3989423 * Math.exp(-x*x/2);
+      let p = d*t*(0.3193815 + t*(-0.3565638 + t*(1.781478 + t*(-1.821256 + t*1.330274))));
+      if (x > 0) p = 1 - p;
+      return p;
+    }
+
+    function getPpgEstimate(player) {
+      const matches = [
+        ...(history.byPlayer.get(player) || []),
+        ...getCurrentMatchesNormalized().filter(m => m.homePlayer === player || m.awayPlayer === player),
+      ];
+      let pts = 0, g = 0;
+      matches.forEach(m => {
+        const s = (m.homePlayer === player) ? m.homeScore : m.awayScore;
+        if (s == null) return;
+        pts += s; g++;
+      });
+      if (!g) return 21;
+      const raw = pts / g;
+      const w = Math.min(0.7, g / 20);
+      return raw * w + 21 * (1 - w);
+    }
+
+    // simple cache (recomputed on score updates)
+    let _oddsCacheKey = "";
+    let _eloCache = null;
+
+    function getEloCached() {
+      const key = JSON.stringify({
+        hist: history.matches.length,
+        curG: (state.matches||[]).filter(m=>m.s1!==null && m.s2!==null).length,
+        curP: (state.playoffMatches||[]).filter(m=>m.s1!==null && m.s2!==null).length,
+      });
+      if (key !== _oddsCacheKey) {
+        _oddsCacheKey = key;
+        _eloCache = computeEloMap();
+      }
+      return _eloCache || new Map();
+    }
+
+    function computeOddsForMatch(homePlayer, awayPlayer) {
+      const elo = getEloCached();
+      const Eh = elo.get(homePlayer) ?? 1500;
+      const Ea = elo.get(awayPlayer) ?? 1500;
+
+      const homeAdv = 35;
+      const pHome = 1 / (1 + Math.pow(10, ((Ea) - (Eh + homeAdv)) / 400));
+      const pAway = 1 - pHome;
+
+      const mlHome = moneylineFromProb(pHome);
+      const mlAway = moneylineFromProb(pAway);
+
+      const ppgH = getPpgEstimate(homePlayer);
+      const ppgA = getPpgEstimate(awayPlayer);
+      const mu = ppgH + ppgA;
+
+      const sigma = 13;
+      const line = Math.round(mu * 2) / 2;
+      const pOver = 1 - normalCdf((line - mu) / sigma);
+      const pUnder = 1 - pOver;
+
+      return { pHome, pAway, mlHome, mlAway, ouLine: line, pOver, pUnder, muTotal: mu };
+    }
+
+    function renderMatchMeta(homeName, awayName) {
+      if (!history.loaded) return "";
+      const H = normName(homeName), A = normName(awayName);
+      if (!H || !A) return "";
+
+      const insights = pickBestInsights(H, A);
+      const odds = computeOddsForMatch(H, A);
+
+      const badges = [
+        `ML: ${H} ${odds.mlHome > 0 ? "+" : ""}${odds.mlHome} | ${A} ${odds.mlAway > 0 ? "+" : ""}${odds.mlAway}`,
+        `O/U ${odds.ouLine} (O ${(odds.pOver*100).toFixed(0)}% / U ${(odds.pUnder*100).toFixed(0)}%)`,
+      ];
+
+      return `
+        <div class="match-meta">
+          <div class="meta-badges">
+            ${badges.map(b => `<span class="badge">${b}</span>`).join("")}
+          </div>
+          <div class="meta-insights">
+            ${insights.length ? insights.map(t => `• ${t}`).join("<br>") : "<span style='opacity:.7'>Noch keine ausreichenden Daten für Insights.</span>"}
+          </div>
+        </div>
+      `;
+    }
+
+    // =========================================================
+    // UI HELPERS / SYNC
+    // =========================================================
+    function getLogoHtml(teamId) {
+      if (!teamId || teamId === -1) return '';
+      return `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png" class="logo-img">`;
+    }
+
+    let isSyncing = false;
+
+    async function syncData(isUpload = false) {
+      if (isSyncing && !isUpload) return;
+
+      try {
+        if (isUpload) {
+          isSyncing = true;
+          await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(state),
+            headers: {'Content-Type': 'application/json'}
+          });
+          setTimeout(() => { isSyncing = false; }, 2000);
+        } else {
+          const res = await fetch(API_URL);
+          const data = await res.json();
+
+          if (data && data.players) {
+            const isTyping = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('score-input');
+            if (!isTyping && !isSyncing) {
+              state = data;
+              if (state.slots) state.matches = state.slots.flat();
+              renderAll();
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Sync Fehler:", e);
+        isSyncing = false;
+      }
+    }
+
+    function addMinutes(time, mins) {
+      let [h, m] = time.split(':').map(Number);
+      let date = new Date();
+      date.setHours(h, m + mins);
+      return date.getHours().toString().padStart(2, '0') + ":" + date.getMinutes().toString().padStart(2, '0');
+    }
+
+    function save() { localStorage.setItem('madden_bowl_v2.7', JSON.stringify(state)); }
+
+    async function resetTournament() {
+      if(confirm("Full Reset? Alle Daten (lokal & Cloud) werden unwiderruflich gelöscht.")) {
+        localStorage.clear();
+        state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
+        await syncData(true);
+        location.reload();
+      }
+    }
+
+    // =========================================================
+    // SETUP / DRAFT
+    // =========================================================
+    function renderPlayerInputs() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      initSetupInputs(count);
+      buildPlayerDatalist();
+    }
+
+    function initSetupInputs(count) {
+      const container = document.getElementById('playerInputs');
+      container.innerHTML = '';
+
+      availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
+
+      const year = document.getElementById('maddenYear').value;
+      const ratings = maddenRatings[year] || {};
+      const sortedTeams = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 }))
+                                  .sort((a, b) => b.rating - a.rating);
+
+      const teamOptions = sortedTeams.map(t =>
+        `<option value="${t.id}">${t.n} [${t.rating}]</option>`
+      ).join('');
+
+      let html = `
+        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
+          <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
+            <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
+          </div>
+          <small style="display:block; opacity:.7; margin-top:8px;">
+            Tipp: alte Spielernamen werden vorgeschlagen – neue Namen gehen natürlich auch.
+          </small>
+        </div>
+
+        <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.85em; min-height: 50px;">
+          <div id="liveSchedulePreview" style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="color:var(--gray); text-align:center;">Noch kein Slot gezogen...</div>
+          </div>
+        </div>
+
+        <div id="draftBoard">`;
+
+      for (let i = 0; i < count; i++) {
+        html += `
+          <div class="draft-row" id="row-${i}">
+            <div class="slot-label">P${i+1}</div>
+            <div id="pDisplayName${i}" class="name-display" style="color:var(--gray)">--- offen ---</div>
+            <select id="pTeam${i}" class="team-select" onchange="updateTeamAvailability()">
+              <option value="" disabled selected>Team wählen...</option>
+              ${teamOptions}
+            </select>
+            <input type="hidden" id="pName${i}" value="">
+          </div>`;
+      }
+
+      container.innerHTML = html + `</div>`;
+
+      buildPlayerDatalist();
+    }
+
+    function updateLivePreview() {
+      const previewContainer = document.getElementById('liveSchedulePreview');
+      if (!previewContainer || !lastDrawnPlayer.name) return;
+
+      const count = parseInt(document.getElementById('playerCount').value);
+      const schedule = schedules[count];
+      const mySlot = lastDrawnPlayer.slot;
+
+      let html = `
+        <div style="margin-bottom: 10px; border-bottom: 1px solid var(--accent); padding-bottom: 5px;">
+          <h4 style="margin:0; color:var(--accent)">🏈 ${lastDrawnPlayer.name}s Gruppengegner:</h4>
+        </div>`;
+
+      schedule.forEach((round, roundIdx) => {
+        round.forEach(match => {
+          if (match[0] === mySlot || match[1] === mySlot) {
+            const oppSlot = (match[0] === mySlot) ? match[1] : match[0];
+            const oppName = document.getElementById(`pName${oppSlot}`).value || `P${oppSlot + 1}`;
+            const oppTeamId = document.getElementById(`pTeam${oppSlot}`).value;
+
+            const logoUrl = oppTeamId ? `https://static.www.nfl.com/t_q-with-fallback/w_32,h_32/league/api/clubs/logos/${oppTeamId}` : '';
+            const logoHtml = logoUrl ? `<img src="${logoUrl}" style="width:24px; height:24px; object-fit:contain;">` : `<span style="width:24px; display:inline-block"></span>`;
+            const isHome = (match[0] === mySlot);
+
+            html += `
+              <div class="opponent-row" style="display:flex; align-items:center; gap:10px; justify-content: space-between;">
+                <span style="color:var(--gray); min-width:60px;">Runde ${roundIdx + 1}</span>
+                <div style="flex:1; display:flex; align-items:center; gap:10px;">
+                  ${logoHtml}
+                  <span style="${!oppTeamId ? 'color:var(--gray)' : ''}">${oppName}</span>
+                </div>
+                <span style="font-size: 0.8em; color:var(--accent)">${isHome ? 'HOME' : 'AWAY'}</span>
+              </div>`;
+          }
+        });
+      });
+
+      previewContainer.innerHTML = html;
+    }
+
+    function finalizeDraw(name) {
+      const randomIndex = Math.floor(Math.random() * availableSlots.length);
+      const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
+
+      lastDrawnPlayer = { name: name, slot: chosenSlot };
+
+      const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
+      const hiddenInput = document.getElementById(`pName${chosenSlot}`);
+      const row = document.getElementById(`row-${chosenSlot}`);
+
+      document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+
+      nameDisplay.innerText = name;
+      nameDisplay.style.color = "var(--accent)";
+      nameDisplay.style.fontWeight = "bold";
+      hiddenInput.value = name;
+      row.classList.add('assigned');
+
+      updateLivePreview();
+
+      document.getElementById('draftPreview').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      document.getElementById('nextPlayerName').value = "";
+      setTimeout(() => document.getElementById('nextPlayerName').focus(), 500);
+    }
+
+    function drawSlot() {
+      const nameInput = document.getElementById('nextPlayerName');
+      const name = nameInput.value.trim();
+
+      if (!name) { alert("Bitte erst einen Namen eingeben!"); return; }
+      if (availableSlots.length === 0) { alert("Alle Plätze belegt!"); return; }
+
+      const totalSlots = parseInt(document.getElementById('playerCount').value);
+      for (let i = 0; i < totalSlots; i++) {
+        const nameVal = document.getElementById(`pName${i}`).value;
+        const teamVal = document.getElementById(`pTeam${i}`).value;
+        if (nameVal !== "" && teamVal === "") {
+          alert(`Stopp! ${nameVal} muss erst ein Team wählen, bevor der nächste Slot gezogen werden kann.`);
+          document.getElementById(`pTeam${i}`).focus();
+          return;
+        }
+      }
+
+      document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const btn = document.querySelector('button[onclick="drawSlot()"]');
+      btn.disabled = true;
+
+      let counter = 0;
+      const maxSpins = 15;
+      const spinInterval = setInterval(() => {
+        document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+        const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+        document.getElementById(`row-${tempSlot}`).classList.add('spinning');
+
+        counter++;
+        if (counter >= maxSpins) {
+          clearInterval(spinInterval);
+          finalizeDraw(name);
+          btn.disabled = false;
+        }
+      }, 80);
+    }
+
+    function updateTeamAvailability() {
+      const selects = document.querySelectorAll('.team-select');
+      const selectedTeams = Array.from(selects).map(s => s.value).filter(v => v !== "");
+
+      selects.forEach(s => {
+        const currentVal = s.value;
+        Array.from(s.options).forEach(opt => {
+          if (opt.value !== "" && opt.value !== currentVal) {
+            opt.disabled = selectedTeams.includes(opt.value);
+          }
+        });
+      });
+
+      updateLivePreview();
+    }
+
+    // =========================================================
+    // MODE INFO + START
+    // =========================================================
+    function updateModeInfo() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      const start = document.getElementById('startTime').value;
+      const dG = parseInt(document.getElementById('durGroup').value) || 0;
+      const dP = parseInt(document.getElementById('durPlayoff').value) || 0;
+      const dB = parseInt(document.getElementById('durBreak').value) || 0;
+
+      const modeMeta = {
+        6: { games: 15, perP: 5, cut: "Alle kommen weiter (P1 & P2 erhalten Bye)", groupSlots: 8 },
+        7: { games: 21, perP: 6, cut: "Alle kommen weiter (P1 erhält ein Bye)", groupSlots: 11 },
+        8: { games: 20, perP: 5, cut: "Alle 8 Spieler rücken in die Playoffs vor", groupSlots: 10 },
+        9: { games: 18, perP: 4, cut: "Platz 9 scheidet nach der Gruppenphase aus", groupSlots: 9 },
+        10:{ games: 25, perP: 5, cut: "Platz 9 & 10 scheiden nach der Gruppenphase aus", groupSlots: 13 }
+      };
+
+      const meta = modeMeta[count];
+
+      const groupMinutes = meta.groupSlots * (dG + dB);
+      const groupEndTime = addMinutes(start, groupMinutes);
+      const finalKickoffTime = addMinutes(groupEndTime, 7 * (dP + dB));
+
+      const infoBox = document.getElementById('dynamicInfoBox');
+      infoBox.innerHTML = `
+        <div style="color:var(--accent); font-weight:bold; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">
+          🏆 Modus: ${count === 6 || count === 7 ? count + 'er Gruppe (Jeder gegen jeden)' : 'Gruppenphase (' + count + ' Spieler)'}
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <b>🛡 Playoff-Modus:</b> Doppel-KO (Double Elim)<br>
+            <b>🏈 Spiele:</b> ${meta.games} gesamt (${meta.perP} pro Person)<br>
+            <b>📉 Cut / Bye:</b> ${meta.cut}
+          </div>
+          <div style="border-left: 1px solid #4a5568; padding-left: 15px;">
+            <b>⏱ Gruppe Ende:</b> ca. ${groupEndTime} Uhr<br>
+            <b style="color:var(--nfl-red)">🏈 FINAL KICKOFF:</b> ca. ${finalKickoffTime} Uhr<br>
+            <small style="opacity:0.7">Basis: ${dG}m/G, ${dP}m/P, ${dB}m Pause</small>
+          </div>
+        </div>
+      `;
+
+      renderPlayerInputs();
+    }
+
+    function startTournament() {
+      const count = parseInt(document.getElementById('playerCount').value);
+
+      state.config = {
+        start: document.getElementById('startTime').value,
+        durG: parseInt(document.getElementById('durGroup').value),
+        durP: parseInt(document.getElementById('durPlayoff').value),
+        durB: parseInt(document.getElementById('durBreak').value),
+        s1: document.getElementById('stadium1').value,
+        s2: document.getElementById('stadium2').value,
+        year: document.getElementById('maddenYear').value
+      };
+
+      state.players = [];
+      for (let i = 0; i < count; i++) {
+        state.players.push({
+          id: i,
+          name: document.getElementById(`pName${i}`).value || `P${i+1}`,
+          team: document.getElementById(`pTeam${i}`).value,
+          wins: 0, diff: 0, pointsFor: 0, played: 0
+        });
+      }
+
+      state.slots = schedules[count].map(slotData => slotData.map(m => ({ p1: m[0], p2: m[1], s1: null, s2: null })));
+      state.matches = state.slots.flat();
+      state.playoffMatches = [];
+      state.currentView = 'running';
+
+      renderAll();
+      save();
+      if (isAdmin) syncData(true);
+    }
+
+    function changeTeam(pid, tid) {
+      state.players.find(x => x.id === pid).team = tid;
+      renderAll(); save(); if (isAdmin) syncData(true);
+    }
+
+    // =========================================================
+    // TABLE + GROUP MATCHES
+    // =========================================================
+    function renderTable() {
+      state.players.forEach(p => { p.wins = 0; p.diff = 0; p.pointsFor = 0; p.played = 0; });
+
+      state.matches.forEach(m => {
+        if (m.s1 !== null && m.s2 !== null) {
+          state.players[m.p1].played++; state.players[m.p2].played++;
+          state.players[m.p1].pointsFor += m.s1; state.players[m.p2].pointsFor += m.s2;
+          state.players[m.p1].diff += (m.s1 - m.s2); state.players[m.p2].diff += (m.s2 - m.s1);
+          if (m.s1 > m.s2) state.players[m.p1].wins++;
+          else if (m.s2 > m.s1) state.players[m.p2].wins++;
+        }
+      });
+
+      let sorted = [...state.players].sort((a,b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        let h2h = state.matches.find(m => ((m.p1===a.id && m.p2===b.id) || (m.p1===b.id && m.p2===a.id)) && m.s1!==null);
+        if (h2h) {
+          let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+          let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+          if (aS !== bS) return bS - aS;
+        }
+        return b.diff - a.diff;
+      });
+
+      let count = state.players.length;
+      let html = `<h3>NFL Standing</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+
+      sorted.forEach((p, i) => {
+        let classes = [];
+
+        if (count === 6 && i < 2) { classes.push("row-bye"); if (i === 1) classes.push("row-bye-last"); }
+        else if (count === 7 && i === 0) { classes.push("row-bye"); classes.push("row-bye-last"); }
+
+        if (count === 9 && i === 8) { classes.push("row-eliminated"); classes.push("row-eliminated-first"); }
+        else if (count === 10 && i >= 8) { classes.push("row-eliminated"); if (i === 8) classes.push("row-eliminated-first"); }
+
+        let teamSelect = isAdmin ? `
+          <select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em; margin-left:5px;">
+            ${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}
+          </select>` : '';
+
+        html += `
+          <tr class="${classes.join(' ')}">
+            <td>${i+1}</td>
+            <td>
+              <div style="display:flex; align-items:center; justify-content:center;">
+                ${getLogoHtml(p.team)} ${teamSelect}
+              </div>
+            </td>
+            <td style="font-weight:bold;">${p.name}</td>
+            <td>${p.wins}-${p.played - p.wins}</td>
+            <td style="color:${p.diff > 0 ? 'var(--accent)' : (p.diff < 0 ? 'var(--nfl-red)' : 'white')}">
+              ${p.diff > 0 ? '+' : ''}${p.diff}
+            </td>
+          </tr>`;
+      });
+
+      document.getElementById('tableContainer').innerHTML = html + `</table>`;
+    }
+
+    function renderGroupMatches() {
+      let currentTime = state.config.start;
+      let matchCounter = 0;
+
+      document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
+        let html = `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
+
+        slot.forEach((m, mIdx) => {
+          const p1 = state.players[m.p1]; // home
+          const p2 = state.players[m.p2]; // away
+          const gIdx = matchCounter++;
+          const stadium = mIdx === 0 ? state.config.s1 : state.config.s2;
+
+          html += `
+            <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
+              <div class="stadium-tag">${stadium}</div>
+              <div class="team-box right">
+                <span>${p2.name}</span> ${getLogoHtml(p2.team)}
+              </div>
+              <div class="score-area">
+                <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}"
+                       onchange="setScore('group',${gIdx},2,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                <span style="color:var(--accent)">:</span>
+                <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}"
+                       onchange="setScore('group',${gIdx},1,this.value)" ${!isAdmin ? 'disabled' : ''}>
+              </div>
+              <div class="team-box">
+                ${getLogoHtml(p1.team)} <span>${p1.name}</span>
+              </div>
+
+              ${renderMatchMeta(p1.name, p2.name)}
+            </div>`;
+        });
+
+        currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
+        return html + `</div>`;
+      }).join('');
+    }
+
+    function setScore(type, idx, p, val) {
+      let v = val === "" ? null : parseInt(val);
+      const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
+      if (!targetArray[idx]) return;
+
+      if (p === 1) targetArray[idx].s1 = v;
+      else targetArray[idx].s2 = v;
+
+      save();
+
+      // invalidate odds cache
+      _oddsCacheKey = "";
+
+      updatePlayoffLogic();
+      renderTable();
+      renderPlayoffPicture();
+      renderNextGames();
+
+      // re-render group/playoff lists so meta updates too
+      renderGroupMatches();
+      renderAllPlayoffAdmin();
+
+      if (isAdmin) syncData(true);
+    }
+
+    // =========================================================
+    // PLAYOFFS
+    // =========================================================
+    function initPlayoffs() {
+      if (state.playoffMatches.length > 0) return;
+
+      const dur = state.config.durP + state.config.durB;
+
+      state.playoffMatches = [
+        {id:'ub1', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0},
+        {id:'ub2', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0},
+        {id:'ub3', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur},
+        {id:'ub4', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur},
+
+        {id:'lb1', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3},
+        {id:'lb2', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3},
+
+        {id:'us1', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2},
+        {id:'us2', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2},
+
+        {id:'lb3', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
+        {id:'lb4', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
+
+        {id:'uf',  p1:null, p2:null, s1:null, s2:null, phase:'Upper Final', offset: dur*5},
+        {id:'ls',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Semi', offset: dur*5},
+
+        {id:'lf',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Final', offset: dur*6},
+
+        {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'Madden Bowl', offset: dur*7}
+      ];
+    }
+
+    function updatePlayoffLogic() {
+      const m = state.playoffMatches;
+      if (!m || m.length === 0) return;
+
+      let s = [...state.players].sort((a,b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        let h2h = state.matches.find(gm => ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) && gm.s1!==null);
+        if (h2h) {
+          let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+          let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+          if (aS !== bS) return bS - aS;
+        }
+        return b.diff - a.diff;
+      });
+
+      const bye = { id: -1, name: "BYE", team: null };
+
+      if (m[0].s1 === null && m[0].s2 === null) { m[0].p1 = s[0]; m[0].p2 = s[7] || bye; }
+      if (m[1].s1 === null && m[1].s2 === null) { m[1].p1 = s[3]; m[1].p2 = s[4] || bye; }
+      if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
+      if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
+
+      const win = (match) => {
+        if (!match || match.s1 === null) return null;
+        if (match.p2 && match.p2.id === -1) return match.p1;
+        return (match.s1 > match.s2) ? match.p1 : match.p2;
+      };
+      const loss = (match) => {
+        if (!match || match.s1 === null || (match.p2 && match.p2.id === -1)) return null;
+        return (match.s1 > match.s2) ? match.p2 : match.p1;
+      };
+
+      const sortBySeed = (players) => {
+        const seedOrder = s.map(p => p.id);
+        return players.filter(p => p !== null).sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
+      };
+
+      const wcWinners = sortBySeed([win(m[0]), win(m[1]), win(m[2]), win(m[3])]);
+      const wcLosers  = sortBySeed([loss(m[0]), loss(m[1]), loss(m[2]), loss(m[3])]);
+
+      if (wcWinners.length >= 4) {
+        m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3];
+        m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2];
+      }
+
+      if (wcLosers.length >= 2) {
+        m[4].p1 = wcLosers[0]; m[4].p2 = wcLosers[wcLosers.length-1] || wcLosers[1];
+      }
+      if (wcLosers.length >= 4) {
+        m[5].p1 = wcLosers[1]; m[5].p2 = wcLosers[2];
+      }
+
+      const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
+      const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
+
+      if (divLosers.length >= 2 && elimR1Winners.length >= 2) {
+        m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[1];
+        m[9].p1 = divLosers[1]; m[9].p2 = elimR1Winners[0];
+      }
+
+      m[10].p1 = win(m[6]); m[10].p2 = win(m[7]);
+
+      const elimR2Winners = sortBySeed([win(m[8]), win(m[9])]);
+      if (elimR2Winners.length >= 2) {
+        m[11].p1 = elimR2Winners[0]; m[11].p2 = elimR2Winners[1];
+      }
+
+      m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]);
+      m[13].p1 = win(m[10]);  m[13].p2 = win(m[12]);
+    }
+
+    function renderPlayoffPicture() {
+      const m = state.playoffMatches;
+      if (!m || m.length === 0) return;
+
+      const totalGroupMinutes = state.slots.length * (state.config.durG + state.config.durB);
+      const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+
+      const getSeed = (player) => {
+        if (!player || player.id === -1) return "";
+        const sorted = [...state.players].sort((a, b) => b.wins - a.wins || b.diff - a.diff);
+        return sorted.findIndex(p => p.id === player.id) + 1;
+      };
+
+      const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left', matchId) => {
+        if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+        if (player.id === -1) return "BYE";
+
+        const seedColor = isWinner ? 'var(--accent)' : 'white';
+        const textColor = isWinner ? 'var(--accent)' : 'inherit';
+        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
+        const logo = getLogoHtml(player.team);
+        const name = player.name;
+
+        const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+        const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
+        const winnerClass = isWinner ? 'winner' : '';
+
+        return `<span class="${winnerClass}" style="${style} color:${textColor};">
+          ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
+        </span>`;
+      };
+
+      const renderM = (match, idx, placeholderP1, placeholderP2) => {
+        if (!match) return "";
+        const active = match.p1 && match.p2 && match.p2.id !== -1 && match.s1 === null;
+        const time = addMinutes(groupEndTime, match.offset);
+        const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
+
+        const hasScore = match.s1 !== null && match.s2 !== null;
+        const w1 = hasScore && match.s1 > match.s2;
+        const w2 = hasScore && match.s2 > match.s1;
+        const l1 = hasScore && match.s1 < match.s2;
+        const l2 = hasScore && match.s2 < match.s1;
+
+        return `
+          <div class="bracket-match ${active ? 'match-active' : ''}">
+            <div class="bracket-match-header"><span>${match.phase} | ${time}</span><span>${stadium}</span></div>
+            <div class="bracket-team ${w2 ? 'winner' : ''}">
+              ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left', match.id)}
+              <span class="bracket-score">${match.s2 !== null ? match.s2 : ''}</span>
+            </div>
+            <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
+            <div class="bracket-team ${w1 ? 'winner' : ''}">
+              ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left', match.id)}
+              <span class="bracket-score">${match.s1 !== null ? match.s1 : ''}</span>
+            </div>
+          </div>`;
+      };
+
+      let wcSummaryHtml = `<div class="wildcard-summary">`;
+      [m[0], m[1], m[2], m[3]].forEach((match, i) => {
+        if (match.p1) {
+          const time = addMinutes(groupEndTime, match.offset);
+          const stadium = (i % 2 === 0) ? state.config.s1 : state.config.s2;
+          const hasScore = match.s1 !== null && match.s2 !== null;
+          const w1 = hasScore && match.s1 > match.s2;
+          const w2 = hasScore && match.s2 > match.s1;
+          const l1 = hasScore && match.s1 < match.s2;
+          const l2 = hasScore && match.s2 < match.s1;
+
+          wcSummaryHtml += `
+            <div class="bracket-match">
+              <div class="bracket-match-header"><span>Wildcard Game #${i+1} | ${time}</span><span>${stadium}</span></div>
+              <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
+                <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left', match.id)}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="bracket-score" style="${w2?'color:var(--accent)':''}">${match.s2 !== null ? match.s2 : '-'}</span>
+                  <span style="color:var(--nfl-red); font-weight:bold;">:</span>
+                  <span class="bracket-score" style="${w1?'color:var(--accent)':''}">${match.s1 !== null ? match.s1 : '-'}</span>
+                </div>
+                <div style="flex:1; text-align:right;">${formatPlayer(match.p1, "TBD", w1, l1, 'right', match.id)}</div>
+              </div>
+            </div>`;
+        }
+      });
+      wcSummaryHtml += `</div>`;
+
+      document.getElementById('playoff-picture').innerHTML = `
+        <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
+        ${wcSummaryHtml}
+        <div class="playoff-grid" style="margin-top:20px;">
+          <div class="bracket-row-flow">
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+              <div class="upper-floor">
+                ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
+                ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
+              </div>
+              <div class="lower-floor">
+                ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
+                ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+              <div class="upper-floor"></div>
+              <div class="lower-floor">
+                ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
+                ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Finals</div></div>
+              <div class="upper-floor" style="justify-content: center;">
+                ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
+              </div>
+              <div class="lower-floor" style="justify-content: center;">
+                ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+              <div class="upper-floor"></div>
+              <div class="lower-floor" style="justify-content: center;">
+                ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
+              <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+              <div class="upper-floor" style="justify-content: center; height: 100%;">
+                ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderAllPlayoffAdmin() {
+      // group matches already rendered separately
+      if (!state.playoffMatches || state.playoffMatches.length === 0) {
+        document.getElementById('playoffSections').innerHTML = "";
+        return;
+      }
+
+      const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
+        const offset = match.offset || 0;
+        if (!groups[offset]) groups[offset] = [];
+        groups[offset].push({ match, index: i });
+        return groups;
+      }, {});
+
+      const dur = state.config.durG + state.config.durB;
+      const totalGroupMinutes = state.slots.length * dur;
+      const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+
+      document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
+        .sort((a, b) => parseInt(a) - parseInt(b))
+        .map(offset => {
+          const time = addMinutes(groupEndTime, parseInt(offset));
+          const matchesInSlot = playoffGroups[offset];
+          const roundName = matchesInSlot[0].match.phase || "Playoff-Phase";
+
+          let html = `
+            <div class="time-slot">
+              <div class="slot-header">
+                <span>${time} Uhr | ${roundName}</span>
+              </div>`;
+
+          matchesInSlot.forEach(({ match, index }) => {
+            const labels = playoffLabels[match.id] || { p1: "TBD", p2: "TBD" };
+            const stadium = (matchesInSlot.findIndex(x => x.index === index) === 0) ? state.config.s1 : state.config.s2;
+
+            html += `
+              <div id="pmatch-${index}" class="match-row ${match.s1 !== null ? 'finished' : ''}">
+                <div class="stadium-tag">${match.phase}<br>${stadium}</div>
+
+                <div class="team-box right">
+                  <span>${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name) : labels.p2}</span>
+                  ${match.p2 ? getLogoHtml(match.p2.team) : ''}
+                </div>
+
+                <div class="score-area">
+                  <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}"
+                         onchange="setScore('playoff',${index},2,this.value)"
+                         ${(!isAdmin || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
+                  <span style="color:var(--accent)">:</span>
+                  <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}"
+                         onchange="setScore('playoff',${index},1,this.value)"
+                         ${(!isAdmin || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
+                </div>
+
+                <div class="team-box">
+                  ${match.p1 ? getLogoHtml(match.p1.team) : ''}
+                  <span>${match.p1 ? match.p1.name : labels.p1}</span>
+                </div>
+
+                ${match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1 ? renderMatchMeta(match.p1.name, match.p2.name) : ""}
+              </div>`;
+          });
+
+          return html + `</div>`;
+        }).join('');
+    }
+
+    // =========================================================
+    // NEXT GAMES
+    // =========================================================
+    function renderNextGames() {
+      const dur = state.config.durG + state.config.durB;
+      const totalGroupMinutes = state.slots.length * dur;
+      const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+
+      const getMatchTime = (m, type) => {
+        if (type === 'g') {
+          const slotIdx = state.slots.findIndex(slot => slot.some(match =>
+            match.p1 === m.p1 && match.p2 === m.p2
+          ));
+          return addMinutes(state.config.start, slotIdx * dur);
+        } else {
+          return addMinutes(groupEndTime, m.offset);
+        }
+      };
+
+      let allMatches = [
+        ...state.matches.filter(m => m.s1 === null).map(m => ({
+          ...m, t: 'g', anchor: `gmatch-${state.matches.indexOf(m)}`
+        })),
+        ...state.playoffMatches.filter(m => m.s1 === null && m.p1 && m.p2 && m.p2.id !== -1).map(m => ({
+          ...m, t: 'p', anchor: `pmatch-${state.playoffMatches.indexOf(m)}`
+        }))
+      ];
+
+      allMatches.forEach(m => m.displayTime = getMatchTime(m, m.t));
+
+      const liveMatches = allMatches.slice(0, 2);
+      const upcomingMatches = allMatches.slice(2, 4);
+
+      const formatMiniCard = (m, labelClass, labelText) => {
+        const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;
+        const p2 = m.t === 'g' ? state.players[m.p2] : m.p2;
+
+        let stadium = state.config.s1;
+        if (m.t === 'g') {
+          const slot = state.slots.find(s => s.includes(m));
+          const matchIndexInSlot = slot ? slot.indexOf(m) : 0;
+          stadium = matchIndexInSlot === 1 ? state.config.s2 : state.config.s1;
+        } else {
+          stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
+        }
+
+        return `
+          <div class="next-card" onclick="document.getElementById('${m.anchor}').scrollIntoView({behavior:'smooth'})">
+            <div style="font-size: 0.8em; flex-grow: 1;">
+              <div style="color: var(--accent); font-size: 0.7em; margin-bottom: 2px;">
+                ${m.displayTime} Uhr | ${stadium}
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>${p2.name}</span> ${getLogoHtml(p2.team)}
+                <span style="color: var(--nfl-red); font-weight: bold; font-size: 0.8em;">@</span>
+                ${getLogoHtml(p1.team)} <span>${p1.name}</span>
+              </div>
+            </div>
+            <div class="status-tag ${labelClass}">${labelText}</div>
+          </div>`;
+      };
+
+      document.getElementById('nextGamesList').innerHTML = `
+        <div class="next-grid-container">
+          <div>
+            <small style="color:var(--nfl-red); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
+              On the Field:
+            </small>
+            ${liveMatches.map(m => formatMiniCard(m, 'tag-live', 'LIVE')).join('') ||
+              '<div class="next-card" style="cursor:default; opacity:0.5;">Pause / Wartezeit</div>'}
+          </div>
+
+          <div>
+            <small style="color:var(--accent); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
+              Upcoming Battles:
+            </small>
+            ${upcomingMatches.map(m => formatMiniCard(m, 'tag-next', 'NEXT')).join('') ||
+              '<div class="next-card" style="cursor:default; opacity:0.5;">Keine weiteren Spiele</div>'}
+          </div>
+        </div>`;
+    }
+
+    // =========================================================
+    // RENDER ALL
+    // =========================================================
+    function renderAll() {
+      const table = document.getElementById('tableContainer');
+      const bracket = document.getElementById('playoff-picture');
+      const groupMatches = document.getElementById('groupPhase');
+      const playoffAdmin = document.getElementById('playoffs');
+
+      if (state.currentView === 'setup' && isAdmin) {
+        document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('setup-view').classList.remove('hidden');
+        document.getElementById('main-content').classList.add('hidden');
+      } else {
+        if (isAdmin) document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('setup-view').classList.add('hidden');
+        document.getElementById('main-content').classList.remove('hidden');
+
+        const playoffStarted = state.playoffMatches && state.playoffMatches.length > 0;
+
+        if (!playoffStarted) {
+          table.style.order = "0";
+          bracket.style.order = "1";
+          groupMatches.style.order = "2";
+          playoffAdmin.style.order = "3";
+        } else {
+          bracket.style.order = "0";
+          playoffAdmin.style.order = "1";
+          table.style.order = "2";
+          groupMatches.style.order = "3";
+        }
+
+        renderTable();
+        renderGroupMatches();
+        initPlayoffs();
+        updatePlayoffLogic();
+        renderPlayoffPicture();
+        renderNextGames();
+        renderAllPlayoffAdmin();
+      }
+    }
+
+    // =========================================================
+    // LOAD
+    // =========================================================
+    window.onload = async () => {
+      // Load historical data first (for suggestions + stats)
+      await loadHistory();
+
+      // Cloud then local fallback
+      await syncData();
+
+      if (!state.players || state.players.length === 0) {
+        const s = localStorage.getItem('madden_bowl_v2.7');
+        if (s) state = JSON.parse(s);
+      }
+
+      if (!state.players || state.players.length === 0) {
+        updateModeInfo();
+      }
+
+      if (state.slots && state.slots.length > 0) {
+        state.matches = state.slots.flat();
+      }
+
+      state.currentView = (state.players && state.players.length > 0) ? 'running' : 'setup';
+
+      renderAll();
+      updatePlayoffLogic();
+      renderAll();
+
+      setInterval(() => syncData(false), 45000);
+    };
+  </script>
+</body>
+</html>
