@@ -2506,7 +2506,11 @@ const ringsHtml = rings > 0
         .map(offset => {
           const time = addMinutes(groupEndTime, parseInt(offset));
           const matchesInSlot = playoffGroups[offset];
-          const roundName = matchesInSlot[0].match.phase || "Playoff-Phase";
+          const roundName =
+  matchesInSlot[0].match.session ||
+  matchesInSlot[0].match.phase ||
+  "Playoff-Phase";
+
 
           let html = `
             <div class="time-slot">
@@ -3062,6 +3066,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
