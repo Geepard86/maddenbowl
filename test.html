@@ -576,7 +576,7 @@
     <div id="main-content">
       <div id="standingsCard" class="card">
   <div class="card-topbar">
-    <h2 style="margin:0;">NFL Standing</h2>
+    <h2 style="margin:0;">Regular Season Standing</h2>
     <button id="toggleStandingsBtn" class="btn-secondary hidden" onclick="toggleSection('standings')">
       ▼
     </button>
@@ -587,7 +587,7 @@
 </div>
 
 <div id="playoff-picture" class="card">
-  <h2>NFL Playoff Picture</h2>
+  <h2>Playoff Picture</h2>
   <div class="bracket-wrapper">
     <div class="bracket-title">Upper Bracket (Winner's Path)</div>
     <div id="upper-bracket" class="bracket-row"></div>
@@ -599,7 +599,7 @@
 
 <div id="groupPhase" class="card">
   <div class="card-topbar">
-    <h2 style="margin:0;">Group Stage Schedule</h2>
+    <h2 style="margin:0;">Regular Season Schedule</h2>
     <button id="toggleGroupBtn" class="btn-secondary hidden" onclick="toggleSection('group')">
       ▼
     </button>
@@ -2221,28 +2221,34 @@ const ringsHtml = rings > 0
       const dur = state.config.durP + state.config.durB;
 
       state.playoffMatches = [
-        {id:'ub1', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0},
-        {id:'ub2', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: 0},
-        {id:'ub3', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur},
-        {id:'ub4', p1:null, p2:null, s1:null, s2:null, phase:'Wildcard', offset: dur},
+  // ───────────────────── Wildcard ─────────────────────
+  {id:'ub1', phase:'Wildcard', session:'Wildcard', offset: 0},
+  {id:'ub2', phase:'Wildcard', session:'Wildcard', offset: 0},
+  {id:'ub3', phase:'Wildcard', session:'Wildcard', offset: dur},
+  {id:'ub4', phase:'Wildcard', session:'Wildcard', offset: dur},
 
-        {id:'lb1', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3},
-        {id:'lb2', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R1', offset: dur*3},
+  // ────────────────── Contender Round ─────────────────
+  {id:'us1', phase:'Upper Semi', session:'Contender Round', offset: dur*2},
+  {id:'us2', phase:'Upper Semi', session:'Contender Round', offset: dur*2},
 
-        {id:'us1', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2},
-        {id:'us2', p1:null, p2:null, s1:null, s2:null, phase:'Upper Semi', offset: dur*2},
+  // ────────────────── Survival Round ──────────────────
+  {id:'lb1', phase:'Elim. R1', session:'Survival Round', offset: dur*3},
+  {id:'lb2', phase:'Elim. R1', session:'Survival Round', offset: dur*3},
+  {id:'lb3', phase:'Elim. R2', session:'Survival Round', offset: dur*4},
+  {id:'lb4', phase:'Elim. R2', session:'Survival Round', offset: dur*4},
 
-        {id:'lb3', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
-        {id:'lb4', p1:null, p2:null, s1:null, s2:null, phase:'Elim. R2', offset: dur*4},
+  // ───────────────────── Finals ───────────────────────
+  {id:'uf',  phase:'Upper Final', session:'Finals', offset: dur*5},
+  {id:'ls',  phase:'Elim. Semi',  session:'Finals', offset: dur*5},
 
-        {id:'uf',  p1:null, p2:null, s1:null, s2:null, phase:'Upper Final', offset: dur*5},
-        {id:'ls',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Semi', offset: dur*5},
+  // ────────────────── Judgement Day ───────────────────
+  {id:'lf',  phase:'Elim. Final', session:'Judgement Day', offset: dur*6},
+  {id:'tb',  phase:'Toilet Bowl', session:'Judgement Day', offset: dur*6},
 
-        {id:'lf',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Final', offset: dur*6},
-        {id:'tb',  p1:null, p2:null, s1:null, s2:null, phase:'Toilet Bowl', offset: dur*6},
+  // ─────────────────── Madden Bowl ────────────────────
+  {id:'gf',  phase:'Madden Bowl', session:'Madden Bowl', offset: dur*7}
+].map(m => ({ ...m, p1:null, p2:null, s1:null, s2:null }));
 
-        {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'Madden Bowl', offset: dur*7}
-      ];
     }
 
     function updatePlayoffLogic() {
@@ -3056,6 +3062,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
