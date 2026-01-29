@@ -2400,13 +2400,22 @@ function fallbackInsights(H, A) {
       };
 
       let allMatches = [
-        ...state.matches.filter(m => !isFinished(m)).map(...)
-          ...m, t: 'g', anchor: `gmatch-${state.matches.indexOf(m)}`
-        })),
-        ...state.playoffMatches.filter(m => !isFinished(m) && m.p1 && m.p2 && m.p2.id !== -1).map(...)
-          ...m, t: 'p', anchor: `pmatch-${state.playoffMatches.indexOf(m)}`
-        }))
-      ];
+  ...state.matches
+    .filter(m => !isFinished(m))
+    .map(m => ({
+      ...m,
+      t: 'g',
+      anchor: `gmatch-${state.matches.indexOf(m)}`
+    })),
+
+  ...state.playoffMatches
+    .filter(m => !isFinished(m) && m.p1 && m.p2 && m.p2.id !== -1)
+    .map(m => ({
+      ...m,
+      t: 'p',
+      anchor: `pmatch-${state.playoffMatches.indexOf(m)}`
+    }))
+];
 
       allMatches.forEach(m => m.displayTime = getMatchTime(m, m.t));
 
@@ -2628,6 +2637,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
