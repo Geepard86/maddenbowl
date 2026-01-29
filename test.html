@@ -535,6 +535,7 @@
     <div id="admin-panel" class="hidden">
       <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
         <button class="btn-secondary" onclick="window.print()">PDF Export</button>
+        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
         <button class="btn-secondary" style="background:#2d3748" onclick="syncData(true)">☁ Cloud Sync</button>
         <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
       </div>
@@ -1536,6 +1537,112 @@ function renderMatchMeta(homeName, awayName, isFinished) {
     // UI HELPERS / SYNC
     // =========================================================
 
+
+    function getSeasonForHistoryExport() {
+  const y = Number(state?.config?.year);
+  return Number.isFinite(y) ? y : new Date().getFullYear();
+}
+
+
+function buildStandingsExport() {
+  // stellt sicher, dass wins/diff etc. aktuell sind
+  renderTable();
+
+  const base = computeBaseRanking();
+  const final = applyToiletBowlOverride(base);
+
+  // standings: rank/name/points
+  const arr = final.ordered.map((r, idx) => ({
+    rank: r.displayRank || r.rank || (idx + 1),
+    name: r.name,
+    points: r.points
+  }));
+
+  // sicherheitshalber sortieren
+  arr.sort((a,b) => a.rank - b.rank);
+  return arr;
+}
+
+function exportHistoryJson() {
+  if (!state?.players?.length) {
+    alert("Kein aktives Turnier zum Exportieren gefunden.");
+    return;
+  }
+
+  const season = getSeasonForHistoryExport();
+
+  // players
+  const players = (state.players || [])
+    .map(p => ({ name: (p.name || "").trim(), team: p.team }))
+    .filter(p => p.name && p.team);
+
+  // matches (nur fertige, ohne BYE)
+  const matches = [];
+
+  // group matches: p1 = home, p2 = away
+  (state.matches || []).forEach(m => {
+    if (m?.s1 == null || m?.s2 == null) return;
+    const home = state.players[m.p1];
+    const away = state.players[m.p2];
+    if (!home?.team || !away?.team) return;
+
+    matches.push({
+      stage: "group",
+      homeTeam: home.team,
+      awayTeam: away.team,
+      homeScore: m.s1,
+      awayScore: m.s2
+    });
+  });
+
+  // playoff matches: p1 = home, p2 = away (BYE rausfiltern)
+  (state.playoffMatches || []).forEach(pm => {
+    if (!pm?.p1 || !pm?.p2) return;
+    if (pm.p1.id === -1 || pm.p2.id === -1) return;     // BYE
+    if (pm?.s1 == null || pm?.s2 == null) return;       // nur fertige
+
+    matches.push({
+      stage: "playoff",
+      homeTeam: pm.p1.team,
+      awayTeam: pm.p2.team,
+      homeScore: pm.s1,
+      awayScore: pm.s2
+    });
+  });
+
+  // standings
+  const standings = buildStandingsExport();
+
+  // final object
+  const out = {
+    schemaVersion: 1,
+    season,
+    tournament: {
+      season,
+      players,
+      matches,
+      standings
+    }
+  };
+
+  // Download als Datei
+  const filename = `maddenbowl_${season}.json`;
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+
+  console.log("History JSON exported:", filename, out);
+}
+
+    
     function isFinished(match) {
       return match && match.s1 !== null && match.s2 !== null;
     }
@@ -2944,6 +3051,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
