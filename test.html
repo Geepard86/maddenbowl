@@ -655,6 +655,7 @@
       uf:  { p1: "Upper Semi #1", p2: "Upper Semi #2" },
       ls:  { p1: "Lower Semi #1", p2: "Lower Semi #2" },
       lf:  { p1: "Upper Final Loser", p2: "Elim. Semi Winner" },
+      tb:  { p1: "1st Eliminated",   p2: "2nd Eliminated" },
       gf:  { p1: "Upper Finalist", p2: "Lower Finalist" }
     };
 
@@ -2069,6 +2070,7 @@ function fallbackInsights(H, A) {
         {id:'ls',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Semi', offset: dur*5},
 
         {id:'lf',  p1:null, p2:null, s1:null, s2:null, phase:'Elim. Final', offset: dur*6},
+        {id:'tb',  p1:null, p2:null, s1:null, s2:null, phase:'Toilet Bowl', offset: dur*6},
 
         {id:'gf',  p1:null, p2:null, s1:null, s2:null, phase:'Madden Bowl', offset: dur*7}
       ];
@@ -2143,6 +2145,14 @@ function fallbackInsights(H, A) {
 
       m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]);
       m[13].p1 = win(m[10]);  m[13].p2 = win(m[12]);
+
+      const tb = m.find(x => x.id === "tb");
+      if (tb && tb.s1 === null && tb.s2 === null) {
+        const firstElim  = loss(m[4]); // lb1 loser
+        const secondElim = loss(m[5]); // lb2 loser
+        tb.p1 = firstElim;
+        tb.p2 = secondElim;
+  }
     }
 
     function renderPlayoffPicture() {
@@ -2273,6 +2283,7 @@ function fallbackInsights(H, A) {
               <div class="upper-floor"></div>
               <div class="lower-floor" style="justify-content: center;">
                 ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
+                ${renderM(m.find(x=>x.id==="tb"), state.playoffMatches.findIndex(x=>x.id==="tb"), playoffLabels.tb.p1, playoffLabels.tb.p2)}
               </div>
             </div>
 
@@ -2605,6 +2616,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
