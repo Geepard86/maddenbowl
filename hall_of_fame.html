@@ -378,73 +378,212 @@
     // ALL-TIME
     // =========================================================
     function computeAllTime() {
-      const all = new Map();
+  const all = new Map();
 
-      hof.seasons.forEach(s => {
-        const sm = seasonPlayerStats(s);
-        sm.forEach(p => {
-          const a = ensurePlayerAgg(all, p.name);
-          a.seasons += 1; // echte Teilnahme
-          a.games += p.games; a.wins += p.wins; a.losses += p.losses;
-          a.pf += p.pf; a.pa += p.pa; a.diff += p.diff;
-          a.group.games += p.group.games; a.group.wins += p.group.wins; a.group.losses += p.group.losses;
-          a.playoff.games += p.playoff.games; a.playoff.wins += p.playoff.wins; a.playoff.losses += p.playoff.losses;
-          a.points += p.points;
-          a.championships += p.championships;
-          a.runnerUps += p.runnerUps;
-          a.podiums += p.podiums;
-          if (p.bestRank != null) a.bestRank = (a.bestRank == null) ? p.bestRank : Math.min(a.bestRank, p.bestRank);
-        });
-      });
+  // ---- Aggregate per season into all-time player agg ----
+  hof.seasons.forEach(s => {
+    const sm = seasonPlayerStats(s);
+    sm.forEach(p => {
+      const a = ensurePlayerAgg(all, p.name);
+      a.seasons += 1; // Teilnahme
+      a.games += p.games; a.wins += p.wins; a.losses += p.losses;
+      a.pf += p.pf; a.pa += p.pa; a.diff += p.diff;
+      a.group.games += p.group.games; a.group.wins += p.group.wins; a.group.losses += p.group.losses;
+      a.playoff.games += p.playoff.games; a.playoff.wins += p.playoff.wins; a.playoff.losses += p.playoff.losses;
+      a.points += p.points;
+      a.championships += p.championships;
+      a.runnerUps += p.runnerUps;
+      a.podiums += p.podiums;
+      if (p.bestRank != null) a.bestRank = (a.bestRank == null) ? p.bestRank : Math.min(a.bestRank, p.bestRank);
+    });
+  });
 
-      // derived
-      const table = [...all.values()].map(a => ({
-        ...a,
-        winPct: a.games ? (a.wins / a.games) : 0,
-        ppg: a.games ? (a.pf / a.games) : 0,
-        papg: a.games ? (a.pa / a.games) : 0,
-      }));
+  const table = [...all.values()].map(a => ({
+    ...a,
+    winPct: a.games ? (a.wins / a.games) : 0,
+    ppg: a.games ? (a.pf / a.games) : 0,
+    papg: a.games ? (a.pa / a.games) : 0,
+    avgDiff: a.games ? (a.diff / a.games) : 0,
+    playoffWinPct: a.playoff.games ? (a.playoff.wins / a.playoff.games) : 0,
+    groupWinPct: a.group.games ? (a.group.wins / a.group.games) : 0,
+  }));
 
-      // default sort: championships, points, winPct, diff, pf
-      table.sort((A,B) =>
-        (B.championships - A.championships) ||
-        (B.points - A.points) ||
-        (B.winPct - A.winPct) ||
-        (B.diff - A.diff) ||
-        (B.pf - A.pf) ||
-        A.name.localeCompare(B.name,"de")
-      );
+  // Default sort: championships, points, winPct, diff, pf
+  table.sort((A,B) =>
+    (B.championships - A.championships) ||
+    (B.points - A.points) ||
+    (B.winPct - A.winPct) ||
+    (B.diff - A.diff) ||
+    (B.pf - A.pf) ||
+    A.name.localeCompare(B.name,"de")
+  );
 
-      // all-time records from matches across seasons
-      const allMatches = [];
-      hof.seasons.forEach(s => {
-        s.matches.forEach(m => {
-          if (m.homeScore == null || m.awayScore == null) return;
-          if (!m.homePlayer || !m.awayPlayer) return;
-          allMatches.push({ ...m, season: s.season });
-        });
-      });
+  // ---- Collect all finished matches across seasons ----
+  const allMatches = [];
+  hof.seasons.forEach(s => {
+    s.matches.forEach(m => {
+      if (m.homeScore == null || m.awayScore == null) return;
+      if (!m.homePlayer || !m.awayPlayer) return;
+      allMatches.push({ ...m, season: s.season });
+    });
+  });
 
-      const rec = [];
-      if (allMatches.length) {
-        const byTotal = [...allMatches].sort((a,b)=>((b.homeScore+b.awayScore)-(a.homeScore+a.awayScore)));
-        const byDiff  = [...allMatches].sort((a,b)=>Math.abs((b.homeScore-b.awayScore)) - Math.abs((a.homeScore-a.awayScore)));
-        const byHighSingle = [...allMatches].sort((a,b)=>Math.max(b.homeScore,b.awayScore) - Math.max(a.homeScore,a.awayScore));
+  // Helper to push record rows
+  const rec = [];
+  const pushRec = (k, v, tag="") => rec.push({ k, v, tag });
 
-        const t = byTotal[0];
-        rec.push({ k:"All-Time höchste Gesamtpunkte", v:`${t.season}: ${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore} (${t.homeScore+t.awayScore})`, tag:t.stage });
+  // Helper pickers
+  const pickMax = (arr, valFn) => arr.length ? arr.reduce((a,b)=> valFn(b)>valFn(a)?b:a) : null;
+  const pickMin = (arr, valFn) => arr.length ? arr.reduce((a,b)=> valFn(b)<valFn(a)?b:a) : null;
 
-        const d = byDiff[0];
-        rec.push({ k:"All-Time größter Blowout", v:`${d.season}: ${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore} (Diff ${Math.abs(d.homeScore-d.awayScore)})`, tag:d.stage });
+  // ==== PLAYER AWARDS ====
+  if (table.length) {
+    const mostTitles = pickMax(table, x=>x.championships);
+    if (mostTitles) pushRec("👑 Most Championships", `${mostTitles.name} – ${mostTitles.championships}`, "awards");
 
-        const hs = byHighSingle[0];
-        const maxTeam = hs.homeScore >= hs.awayScore ? hs.homePlayer : hs.awayPlayer;
-        const maxVal  = Math.max(hs.homeScore, hs.awayScore);
-        rec.push({ k:"All-Time höchster Team-Score", v:`${hs.season}: ${maxTeam} – ${maxVal} Punkte`, tag:hs.stage });
-      }
+    const mostFinals = pickMax(table, x=>x.championships + x.runnerUps);
+    if (mostFinals) pushRec("🎭 Most Finals (1st/2nd)", `${mostFinals.name} – ${mostFinals.championships + mostFinals.runnerUps}`, "awards");
 
-      hof.allTime = { table, records: rec, matchCount: allMatches.length };
+    const mostPodiums = pickMax(table, x=>x.podiums);
+    if (mostPodiums) pushRec("🥉 Most Podiums (Top 3)", `${mostPodiums.name} – ${mostPodiums.podiums}`, "awards");
+
+    const bestRank = pickMin(table.filter(x=>x.bestRank!=null), x=>x.bestRank);
+    if (bestRank) pushRec("⭐ Best Ever Finish", `${bestRank.name} – Best Rank #${bestRank.bestRank}`, "awards");
+
+    const ironman = pickMax(table, x=>x.games);
+    if (ironman) pushRec("🧱 Ironman (Most Games)", `${ironman.name} – ${ironman.games} Games`, "volume");
+
+    const mostWins = pickMax(table, x=>x.wins);
+    if (mostWins) pushRec("✅ Most Wins", `${mostWins.name} – ${mostWins.wins} Wins`, "volume");
+
+    const mostLosses = pickMax(table, x=>x.losses);
+    if (mostLosses) pushRec("💀 Most Losses", `${mostLosses.name} – ${mostLosses.losses} Losses`, "volume");
+
+    const moneyMan = pickMax(table, x=>x.points);
+    if (moneyMan) pushRec("💰 Most Points (Standings)", `${moneyMan.name} – ${moneyMan.points} Punkte`, "volume");
+
+    const eliteWin = pickMax(table.filter(x=>x.games>=10), x=>x.winPct);
+    if (eliteWin) pushRec("📈 Best Win% (min 10 Games)", `${eliteWin.name} – ${(eliteWin.winPct*100).toFixed(1)}%`, "rate");
+
+    const bestDiff = pickMax(table.filter(x=>x.games>=10), x=>x.avgDiff);
+    if (bestDiff) pushRec("🧨 Best Avg Diff (min 10 Games)", `${bestDiff.name} – ${(bestDiff.avgDiff>0?"+":"")}${bestDiff.avgDiff.toFixed(1)} / Game`, "rate");
+
+    const bestOff = pickMax(table.filter(x=>x.games>=10), x=>x.ppg);
+    if (bestOff) pushRec("🏈 Best Offense (PPG, min 10)", `${bestOff.name} – ${bestOff.ppg.toFixed(1)} PPG`, "rate");
+
+    const bestDef = pickMin(table.filter(x=>x.games>=10), x=>x.papg);
+    if (bestDef) pushRec("🛡️ Best Defense (PA/G, min 10)", `${bestDef.name} – ${bestDef.papg.toFixed(1)} PA/G`, "rate");
+
+    const playoffGoat = pickMax(table.filter(x=>x.playoff.games>=6), x=>x.playoffWinPct);
+    if (playoffGoat) pushRec("🔥 Best Playoff Win% (min 6 PO Games)", `${playoffGoat.name} – ${(playoffGoat.playoffWinPct*100).toFixed(1)}%`, "playoff");
+
+    const groupKing = pickMax(table.filter(x=>x.group.games>=10), x=>x.groupWinPct);
+    if (groupKing) pushRec("🧪 Best Group Win% (min 10 Group)", `${groupKing.name} – ${(groupKing.groupWinPct*100).toFixed(1)}%`, "group");
+  }
+
+  // ==== MATCH RECORDS ====
+  if (allMatches.length) {
+    const byTotal = [...allMatches].sort((a,b)=>((b.homeScore+b.awayScore)-(a.homeScore+a.awayScore)));
+    const byDiff  = [...allMatches].sort((a,b)=>Math.abs(b.homeScore-b.awayScore) - Math.abs(a.homeScore-a.awayScore));
+    const byHighSingle = [...allMatches].sort((a,b)=>Math.max(b.homeScore,b.awayScore) - Math.max(a.homeScore,a.awayScore));
+    const byLowTotal = [...allMatches].sort((a,b)=>((a.homeScore+a.awayScore)-(b.homeScore+b.awayScore)));
+
+    const t = byTotal[0];
+    pushRec("🎆 Highest Total Points (Game)", `${t.season}: ${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore} (Total ${t.homeScore+t.awayScore})`, t.stage);
+
+    const d = byDiff[0];
+    pushRec("🧱 Biggest Blowout", `${d.season}: ${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore} (Diff ${Math.abs(d.homeScore-d.awayScore)})`, d.stage);
+
+    const hs = byHighSingle[0];
+    const maxTeam = hs.homeScore >= hs.awayScore ? hs.homePlayer : hs.awayPlayer;
+    const maxVal  = Math.max(hs.homeScore, hs.awayScore);
+    pushRec("🚀 Highest Team Score (Game)", `${hs.season}: ${maxTeam} – ${maxVal} Punkte`, hs.stage);
+
+    const lt = byLowTotal[0];
+    pushRec("🥶 Lowest Total Points (Game)", `${lt.season}: ${lt.homePlayer} vs ${lt.awayPlayer} – ${lt.homeScore}:${lt.awayScore} (Total ${lt.homeScore+lt.awayScore})`, lt.stage);
+
+    const onePt = allMatches.filter(m => Math.abs(m.homeScore - m.awayScore) === 1);
+    if (onePt.length) {
+      const c = onePt[0];
+      pushRec("😮 Closest Game (Diff 1)", `${c.season}: ${c.homePlayer} vs ${c.awayPlayer} – ${c.homeScore}:${c.awayScore}`, c.stage);
     }
+
+    const stageCounts = allMatches.reduce((acc,m)=>{ acc[m.stage]=(acc[m.stage]||0)+1; return acc; }, {});
+    pushRec("📊 Games by Stage", `Group ${stageCounts.group||0} | Playoff ${stageCounts.playoff||0}`, "meta");
+  }
+
+  // ==== RIVALRIES / H2H ====
+  // Build per-pair stats from matches
+  const pairMap = new Map(); // key -> {A,B,games, aWins,bWins, totalPts, maxTotalGame, ...}
+  const keyPair = (a,b) => {
+    const A = normName(a), B = normName(b);
+    return (A < B) ? `${A}|${B}` : `${B}|${A}`;
+  };
+
+  allMatches.forEach(m=>{
+    const A = normName(m.homePlayer), B = normName(m.awayPlayer);
+    const k = keyPair(A,B);
+    if (!pairMap.has(k)) pairMap.set(k, { A: (A<B?A:B), B: (A<B?B:A), games:0, aWins:0, bWins:0, totals:[], diffs:[] });
+    const p = pairMap.get(k);
+    p.games++;
+
+    const total = m.homeScore + m.awayScore;
+    const diff = Math.abs(m.homeScore - m.awayScore);
+    p.totals.push(total);
+    p.diffs.push(diff);
+
+    // winner counts relative to p.A / p.B
+    const winner = (m.homeScore > m.awayScore) ? A : B;
+    if (winner === p.A) p.aWins++;
+    else p.bWins++;
+  });
+
+  const pairs = [...pairMap.values()];
+  if (pairs.length) {
+    const mostPlayed = pickMax(pairs, x=>x.games);
+    if (mostPlayed) pushRec("🤝 Biggest Rivalry (Most Games)", `${mostPlayed.A} vs ${mostPlayed.B} – ${mostPlayed.games} Games`, "h2h");
+
+    const spiciest = pickMax(pairs.filter(x=>x.games>=3), x=> (x.totals.reduce((s,v)=>s+v,0)/x.totals.length));
+    if (spiciest) pushRec("🌶️ Highest Avg Total (min 3 Games)", `${spiciest.A} vs ${spiciest.B} – Ø ${(spiciest.totals.reduce((s,v)=>s+v,0)/spiciest.totals.length).toFixed(1)} Total`, "h2h");
+
+    const saltiest = pickMax(pairs.filter(x=>x.games>=3), x=> (x.diffs.reduce((s,v)=>s+v,0)/x.diffs.length));
+    if (saltiest) pushRec("🧂 Most Lopsided Avg (min 3 Games)", `${saltiest.A} vs ${saltiest.B} – Ø ${(saltiest.diffs.reduce((s,v)=>s+v,0)/saltiest.diffs.length).toFixed(1)} Diff`, "h2h");
+
+    const mostDominant = pickMax(pairs.filter(x=>x.games>=4), x=>{
+      const lead = Math.max(x.aWins, x.bWins);
+      const pct = lead / x.games;
+      return pct;
+    });
+    if (mostDominant) {
+      const leader = mostDominant.aWins >= mostDominant.bWins ? mostDominant.A : mostDominant.B;
+      const lead = Math.max(mostDominant.aWins, mostDominant.bWins);
+      pushRec("🧠 Most Dominant H2H (min 4 Games)", `${leader} leads ${lead}-${mostDominant.games-lead} vs ${(leader===mostDominant.A)?mostDominant.B:mostDominant.A}`, "h2h");
+    }
+  }
+
+  // ==== SEASON RECORDS (per season) ====
+  const seasonRecs = [];
+  hof.seasons.forEach(s=>{
+    const map = seasonPlayerStats(s);
+    const arr = [...map.values()];
+    if (!arr.length) return;
+
+    const bestPPG = pickMax(arr.filter(x=>x.games>=3), x=> (x.pf/x.games));
+    if (bestPPG) seasonRecs.push({ k:"Best Season Offense (PPG, min 3)", v:`${s.season}: ${bestPPG.name} – ${(bestPPG.pf/bestPPG.games).toFixed(1)} PPG`, tag:"season" });
+
+    const bestWin = pickMax(arr.filter(x=>x.games>=3), x=> (x.wins/x.games));
+    if (bestWin) seasonRecs.push({ k:"Best Season Win% (min 3)", v:`${s.season}: ${bestWin.name} – ${((bestWin.wins/bestWin.games)*100).toFixed(1)}%`, tag:"season" });
+
+    const bestDiffS = pickMax(arr.filter(x=>x.games>=3), x=> (x.diff/x.games));
+    if (bestDiffS) seasonRecs.push({ k:"Best Season Avg Diff (min 3)", v:`${s.season}: ${bestDiffS.name} – ${(bestDiffS.diff/bestDiffS.games>0?"+":"")}${(bestDiffS.diff/bestDiffS.games).toFixed(1)}`, tag:"season" });
+  });
+
+  // pick top 3 most “impressive” season recs by value inside string? keep simple: append a few
+  seasonRecs.slice(0, 12).forEach(r=>pushRec(r.k, r.v, r.tag));
+
+  hof.allTime = { table, records: rec, matchCount: allMatches.length };
+}
+
 
     // =========================================================
     // RENDER helpers
