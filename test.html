@@ -711,50 +711,11 @@
     }
 
     function getChampionFromTournament(t) {
-  // 1) Falls es einen expliziten Champion gibt (best case)
-  if (t?.champion) return normName(t.champion);
-
-  // 2) Falls es ein Ranking / finalRanking gibt
-  const fr = t?.finalRanking || t?.ranking || t?.results;
-  if (Array.isArray(fr) && fr.length) {
-    const top = fr.find(x => (x.rank === 1 || x.place === 1)) || fr[0];
-    const nm = normName(top?.name || top?.player || top?.playerName);
-    if (nm) return nm;
-  }
-
-  // 3) Über Matches: suche "Madden Bowl"/Finale/GF
-  const matches = Array.isArray(t?.matches) ? t.matches : [];
-  const final =
-    matches.find(m => (m.id === "gf" || m.matchId === "gf")) ||
-    matches.find(m => String(m.phase || m.round || m.name || "").toLowerCase().includes("madden bowl")) ||
-    matches.find(m => String(m.phase || m.round || m.name || "").toLowerCase().includes("final"));
-
-  const pickWinnerByTeams = (m) => {
-    if (!m) return null;
-    if (m.homeScore == null || m.awayScore == null) return null;
-    const homeTeam = m.homeTeam, awayTeam = m.awayTeam;
-    if (!homeTeam || !awayTeam) return null;
-
-    const teamToPlayer = new Map();
-    (t.players || []).forEach(p => {
-      const n = normName(p.name);
-      if (n && p.team) teamToPlayer.set(p.team, n);
-    });
-
-    const homeP = teamToPlayer.get(homeTeam);
-    const awayP = teamToPlayer.get(awayTeam);
-    if (!homeP || !awayP) return null;
-
-    if (m.homeScore > m.awayScore) return homeP;
-    if (m.awayScore > m.homeScore) return awayP;
-    return null;
-  };
-
-  const w = pickWinnerByTeams(final);
-  if (w) return normName(w);
-
-  return null;
+  const st = Array.isArray(t?.standings) ? t.standings : [];
+  const champ = st.find(x => Number(x.rank) === 1);
+  return normName(champ?.name) || null;
 }
+
 
 
     async function loadHistory() {
@@ -2978,6 +2939,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
