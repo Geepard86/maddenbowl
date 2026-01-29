@@ -335,16 +335,18 @@
     }
 
     /* --- DRAFT ANIMATION & VISUALS --- */
-    @keyframes highlight-glow {
-      0% { background: #2d3748; transform: scale(1); }
-      50% { background: var(--accent); transform: scale(1.02); }
-      100% { background: #344052; transform: scale(1); }
-    }
+    @keyframes highlight-spin {
+  0%   { background: #2d3748; transform: scale(1); }
+  50%  { background: rgba(213, 10, 10, 0.30); transform: scale(1.02); } /* NFL-Red */
+  100% { background: #344052; transform: scale(1); }
+}
 
-    .spinning {
-      animation: highlight-glow 0.15s infinite;
-      border-color: var(--accent) !important;
-    }
+.spinning {
+  animation: highlight-spin 0.15s infinite;
+  border-color: var(--nfl-red) !important;   /* Random-Farbe */
+  box-shadow: 0 0 12px rgba(213, 10, 10, 0.35);
+}
+
 
     .opponent-row {
       display: flex;
@@ -434,6 +436,24 @@
       flex: 1 1 320px;              /* Desktop: darf groß sein, wrappt bei Bedarf */
     }
     .meta-insights { color: rgba(255,255,255,0.8); }
+    .card-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.btn-secondary.hidden { display:none !important; }
+
+.collapsed {
+  display: none !important;
+}
+
+.rotate-180 {
+  transform: rotate(180deg);
+}
+
   </style>
 </head>
 
@@ -523,18 +543,46 @@
     </div>
 
     <div id="main-content">
-      <div id="tableContainer" class="card"></div>
+      <div id="standingsCard" class="card">
+  <div class="card-topbar">
+    <h2 style="margin:0;">NFL Standing</h2>
+    <button id="toggleStandingsBtn" class="btn-secondary hidden" onclick="toggleSection('standings')">
+      ▼
+    </button>
+  </div>
+  <div id="standingsContent">
+    <div id="tableContainer"></div>
+  </div>
+</div>
 
-      <div id="playoff-picture" class="card">
-        <h2>NFL Playoff Picture</h2>
-        <div class="bracket-wrapper">
-          <div class="bracket-title">Upper Bracket (Winner's Path)</div>
-          <div id="upper-bracket" class="bracket-row"></div>
+<div id="playoff-picture" class="card">
+  <h2>NFL Playoff Picture</h2>
+  <div class="bracket-wrapper">
+    <div class="bracket-title">Upper Bracket (Winner's Path)</div>
+    <div id="upper-bracket" class="bracket-row"></div>
 
-          <div class="bracket-title" style="border-color: #555; margin-top:20px;">Lower Bracket (Elimination Path)</div>
-          <div id="lower-bracket" class="bracket-row"></div>
-        </div>
-      </div>
+    <div class="bracket-title" style="border-color: #555; margin-top:20px;">Lower Bracket (Elimination Path)</div>
+    <div id="lower-bracket" class="bracket-row"></div>
+  </div>
+</div>
+
+<div id="groupPhase" class="card">
+  <div class="card-topbar">
+    <h2 style="margin:0;">Group Stage Schedule</h2>
+    <button id="toggleGroupBtn" class="btn-secondary hidden" onclick="toggleSection('group')">
+      ▼
+    </button>
+  </div>
+  <div id="groupContent">
+    <div id="groupMatches"></div>
+  </div>
+</div>
+
+<div id="playoffs" class="card">
+  <h2>Playoff Schedule</h2>
+  <div id="playoffSections"></div>
+</div>
+
 
       <div id="groupPhase" class="card">
         <h2>Group Stage Schedule</h2>
@@ -1635,7 +1683,7 @@ function getTitleOddsWithTrend(name) {
       });
 
       let count = state.players.length;
-      let html = `<h3>NFL Standing</h3><table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+      let html = `<table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
 
       sorted.forEach((p, i) => {
         let classes = [];
@@ -1732,6 +1780,7 @@ function getTitleOddsWithTrend(name) {
       // re-render group/playoff lists so meta updates too
       renderGroupMatches();
       renderAllPlayoffAdmin();
+      applyLayoutRules();
 
       if (isAdmin) syncData(true);
     }
@@ -2134,6 +2183,98 @@ function getTitleOddsWithTrend(name) {
     // =========================================================
     // RENDER ALL
     // =========================================================
+
+    // ---------------------------------------------------------
+// GROUP COMPLETE + LAYOUT
+// ---------------------------------------------------------
+function isGroupPhaseComplete() {
+  return (state.matches || []).length > 0 &&
+         state.matches.every(m => m.s1 !== null && m.s2 !== null);
+}
+
+// UI State (auf/zu) – bleibt über renders stabil
+state.ui = state.ui || { standingsOpen: true, groupOpen: true };
+
+function toggleSection(which) {
+  if (!state.ui) state.ui = { standingsOpen: true, groupOpen: true };
+
+  if (which === "standings") state.ui.standingsOpen = !state.ui.standingsOpen;
+  if (which === "group") state.ui.groupOpen = !state.ui.groupOpen;
+
+  applyLayoutRules();
+}
+
+function applyLayoutRules() {
+  const complete = isGroupPhaseComplete();
+
+  const standingsCard = document.getElementById("standingsCard");
+  const standingsContent = document.getElementById("standingsContent");
+  const btnStandings = document.getElementById("toggleStandingsBtn");
+
+  const bracket = document.getElementById("playoff-picture");
+
+  const group = document.getElementById("groupPhase");
+  const groupContent = document.getElementById("groupContent");
+  const btnGroup = document.getElementById("toggleGroupBtn");
+
+  const playoffs = document.getElementById("playoffs");
+
+  // --- Vor Gruppenphase Ende: Playoff Schedule gesperrt ---
+  if (!complete) {
+    // Reihenfolge:
+    // Live-Tracking -> Standing -> Playoff Picture -> Group -> Playoff Schedule (versteckt)
+    standingsCard.style.order = "0";
+    bracket.style.order = "1";
+    group.style.order = "2";
+    playoffs.style.order = "3";
+
+    playoffs.classList.add("hidden");
+
+    // Collapse-Buttons aus + Inhalte immer offen
+    btnStandings.classList.add("hidden");
+    btnGroup.classList.add("hidden");
+
+    standingsContent.classList.remove("collapsed");
+    groupContent.classList.remove("collapsed");
+
+    // UI default "offen" merken
+    state.ui.standingsOpen = true;
+    state.ui.groupOpen = true;
+
+    return;
+  }
+
+  // --- Nach Gruppenphase Ende: Playoff Schedule freigeben + Standing/Group einklappbar ---
+  // Reihenfolge:
+  // Live-Tracking -> Playoff Picture -> Playoff Schedule -> (aufklappbar) Standing -> Group
+  bracket.style.order = "0";
+  playoffs.style.order = "1";
+  standingsCard.style.order = "2";
+  group.style.order = "3";
+
+  playoffs.classList.remove("hidden");
+
+  // Buttons aktivieren
+  btnStandings.classList.remove("hidden");
+  btnGroup.classList.remove("hidden");
+
+  // Default nach Abschluss: beide zu (falls noch nie gesetzt)
+  if (typeof state.ui._postCompleteInitialized === "undefined") {
+    state.ui.standingsOpen = false;
+    state.ui.groupOpen = false;
+    state.ui._postCompleteInitialized = true;
+  }
+
+  // Apply collapse
+  standingsContent.classList.toggle("collapsed", !state.ui.standingsOpen);
+  groupContent.classList.toggle("collapsed", !state.ui.groupOpen);
+
+  // Pfeil drehen
+  btnStandings.classList.toggle("rotate-180", state.ui.standingsOpen);
+  btnGroup.classList.toggle("rotate-180", state.ui.groupOpen);
+}
+
+    
     function renderAll() {
       const table = document.getElementById('tableContainer');
       const bracket = document.getElementById('playoff-picture');
@@ -2149,20 +2290,7 @@ function getTitleOddsWithTrend(name) {
         document.getElementById('setup-view').classList.add('hidden');
         document.getElementById('main-content').classList.remove('hidden');
 
-        const playoffStarted = state.playoffMatches && state.playoffMatches.length > 0;
-
-        if (!playoffStarted) {
-          table.style.order = "0";
-          bracket.style.order = "1";
-          groupMatches.style.order = "2";
-          playoffAdmin.style.order = "3";
-        } else {
-          bracket.style.order = "0";
-          playoffAdmin.style.order = "1";
-          table.style.order = "2";
-          groupMatches.style.order = "3";
-        }
-
+        applyLayoutRules();
         renderTable();
         renderGroupMatches();
         initPlayoffs();
@@ -2202,12 +2330,14 @@ function getTitleOddsWithTrend(name) {
       recalcTitleOddsSnapshots();
       updatePlayoffLogic();
       renderAll();
+      applyLayoutRules();
 
       setInterval(() => syncData(false), 45000);
     };
   </script>
 </body>
 </html>
+
 
 
 
