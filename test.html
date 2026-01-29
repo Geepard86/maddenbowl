@@ -1440,21 +1440,18 @@ function getTitleOddsWithTrend(name) {
     );
   }
 
-  // --- Insights (immer) ---
-  let insights = [];
-  try {
-    // ⬇️ Falls deine Funktion anders heißt: hier anpassen
-    insights = pickBestInsights(H, A) || [];
-  } catch (e) {
-    insights = [];
-  }
+  // --- Insights nur für offene Spiele ---
+  let insightsHtml = "";
 
-  // Fallback, falls nichts gefunden wurde (damit die Box nicht leer aussieht)
-  if (!insights.length) {
-    const fav = (odds.pHome >= odds.pAway) ? H : A;
-    const favP = Math.max(odds.pHome, odds.pAway) * 100;
-    insights = fallbackInsights(H, A);
-  }
+  if (!isFinished) {
+    let insights = [];
+    try {
+      insights = pickBestInsights(H, A) || [];
+    } catch (e) {
+      insights = [];
+    }
+
+    if (!insights.length) insights = fallbackInsights(H, A);
 
   // --- Render HTML ---
   const badgeHtml = badges
@@ -1474,20 +1471,20 @@ function getTitleOddsWithTrend(name) {
       ">${b}</div>
     `).join("");
 
-  const insightsHtml = insights
-    .slice(0, 3)
-    .map(t => `
-      <div style="
-        margin-top:6px;
-        padding:8px 10px;
-        background:rgba(255,255,255,0.04);
-        border:1px solid rgba(255,255,255,0.06);
-        border-left:3px solid var(--accent);
-        border-radius:8px;
-        font-size:0.78em;
-        line-height:1.25;
-      ">${t}</div>
-    `).join("");
+    insightsHtml = insights
+      .slice(0, 3)
+      .map(t => `
+        <div style="
+          margin-top:6px;
+          padding:8px 10px;
+          background:rgba(255,255,255,0.04);
+          border:1px solid rgba(255,255,255,0.06);
+          border-left:3px solid var(--accent);
+          border-radius:8px;
+          font-size:0.78em;
+          line-height:1.25;
+        ">${t}</div>
+      `).join("");
 
   return `
   <div class="match-meta">
@@ -2910,6 +2907,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
