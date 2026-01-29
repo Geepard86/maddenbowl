@@ -1,0 +1,782 @@
+<!-- hall_of_fame.html -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MADDEN BOWL – Hall of Fame</title>
+  <link rel="icon" type="image/png" href="maddenbowl.ico" />
+  <style>
+    :root{
+      --nfl-blue:#013369; --nfl-red:#D50A0A;
+      --bg:#0b1119; --card:#161f2c; --slot:#1c2431;
+      --accent:#00ffcc; --gray:#4a5568; --border:#2d3748;
+    }
+    body{font-family:'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:12px;overflow-x:hidden;}
+    .container{max-width:1200px;margin:0 auto;}
+    h1{margin:10px 0 6px;text-align:center;letter-spacing:2px;text-transform:uppercase;border-bottom:3px solid var(--nfl-red);padding-bottom:6px;}
+    .topbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:10px 0 16px;}
+    .chip{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;display:inline-flex;gap:8px;align-items:center;}
+    .btn{background:var(--nfl-red);border:none;color:#fff;padding:10px 12px;border-radius:8px;font-weight:800;cursor:pointer;}
+    .btn.secondary{background:var(--gray);font-weight:700;}
+    .btn.blue{background:var(--nfl-blue);}
+    select,input{background:#0b1119;border:1px solid var(--gray);color:#fff;padding:10px;border-radius:8px;}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+    @media(min-width:900px){.grid{grid-template-columns:1.05fr 0.95fr;}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;}
+    .card h2{margin:0 0 10px;color:var(--accent);text-transform:uppercase;font-size:14px;letter-spacing:1px;}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+    .kpi{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:12px;padding:10px;}
+    .kpi .t{opacity:.8;font-size:12px;}
+    .kpi .v{font-size:18px;font-weight:900;margin-top:2px;}
+    .kpi small{opacity:.75;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th,td{padding:10px;text-align:center;border-bottom:1px solid var(--border);}
+    th{color:rgba(255,255,255,0.85);text-transform:uppercase;font-size:11px;letter-spacing:1px;}
+    td.name{text-align:left;font-weight:800;}
+    .muted{opacity:.75;}
+    .ok{color:var(--accent);font-weight:800;}
+    .bad{color:var(--nfl-red);font-weight:800;}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(0,0,0,0.25);font-family:monospace;font-size:11px;}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+    .tab{cursor:pointer;user-select:none;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(0,0,0,0.18);font-weight:800;font-size:12px;}
+    .tab.active{border-color:var(--accent);box-shadow:0 0 12px rgba(0,255,204,0.12);}
+    .slot{background:var(--slot);border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0;}
+    .slothead{display:flex;justify-content:space-between;gap:10px;color:var(--accent);font-family:monospace;font-size:12px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px;}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:#232d3d;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;margin:8px 0;}
+    .row .teams{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .row .score{font-family:monospace;font-weight:900;}
+    .hint{font-size:12px;opacity:.75;line-height:1.35;}
+    .footer{opacity:.65;font-size:12px;text-align:center;margin:18px 0 6px;}
+    a{color:#fff;text-decoration:underline;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MADDEN BOWL – HALL OF FAME</h1>
+
+    <div class="topbar">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <span class="chip">📚 Datenquelle: <span class="muted">maddenbowl_YYYY.json (gleiches Verzeichnis)</span></span>
+        <span class="chip">🏆 Ewige Tabelle + Rekorde</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="btn blue" onclick="location.href='index.html'">← Zur Live-Seite</button>
+        <button class="btn secondary" onclick="reloadAll()">Neu laden</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;">
+      <h2>Navigation</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <span class="pill">Saison:</span>
+        <select id="seasonSelect" onchange="renderSeason()"></select>
+
+        <span class="pill">Spiele-Filter:</span>
+        <select id="stageFilter" onchange="renderSeasonMatches()">
+          <option value="all">Alle</option>
+          <option value="group">Group</option>
+          <option value="playoff">Playoff</option>
+        </select>
+
+        <span class="pill">Suche:</span>
+        <input id="searchInput" placeholder="Spieler/Team..." oninput="renderSeasonMatches()" />
+
+        <span class="pill">Sort:</span>
+        <select id="matchSort" onchange="renderSeasonMatches()">
+          <option value="time">Original</option>
+          <option value="pts_desc">Gesamtpunkte ↓</option>
+          <option value="diff_desc">Blowout ↓</option>
+        </select>
+      </div>
+      <div class="hint" style="margin-top:10px;">
+        Tipp: Wenn du willst, kann ich dir auch noch einen Button auf der Live-Seite bauen („Hall of Fame“), der hierher verlinkt.
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Saison Overview</h2>
+        <div id="seasonKpis" class="kpis"></div>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="standings" onclick="setTab('standings')">Abschluss-Tabelle</div>
+          <div class="tab" data-tab="stats" onclick="setTab('stats')">Saison-Stats</div>
+          <div class="tab" data-tab="records" onclick="setTab('records')">Saison-Rekorde</div>
+        </div>
+
+        <div id="tab-standings"></div>
+        <div id="tab-stats" class="hidden"></div>
+        <div id="tab-records" class="hidden"></div>
+      </div>
+
+      <div class="card">
+        <h2>Ewige Tabelle</h2>
+        <div id="alltimeKpis" class="kpis" style="margin-bottom:10px;"></div>
+        <div class="tabs">
+          <div class="tab active" data-tab="alltime" onclick="setTab2('alltime')">All-Time Table</div>
+          <div class="tab" data-tab="allrecords" onclick="setTab2('allrecords')">All-Time Rekorde</div>
+        </div>
+        <div id="tab2-alltime"></div>
+        <div id="tab2-allrecords" class="hidden"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h2>Alle Spiele der Saison</h2>
+      <div id="matchesWrap"></div>
+    </div>
+
+    <div class="footer">
+      Hall of Fame liest lokale JSON-Dateien. Wenn etwas “leer” wirkt: prüfen ob die Datei existiert und per HTTP gehostet wird.
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // CONFIG
+    // =========================================================
+    // Ergänze hier einfach neue Jahre – Dateien müssen im gleichen Ordner liegen:
+    const HOF_SOURCES = [
+      "maddenbowl_2022.json",
+      "maddenbowl_2023.json",
+      "maddenbowl_2024.json",
+      "maddenbowl_2025.json",
+    ];
+
+    // =========================================================
+    // STATE
+    // =========================================================
+    let hof = {
+      seasons: [],          // [{season, tournament}]
+      seasonMap: new Map(), // season -> normalized season data
+      allTime: null,        // computed
+      currentSeason: null,
+      tab: "standings",
+      tab2: "alltime",
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    // =========================================================
+    // LOAD + NORMALIZE
+    // =========================================================
+    async function fetchJson(url) {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+      return await res.json();
+    }
+
+    function normName(s){ return (s || "").trim(); }
+
+    function normalizeSeason(raw) {
+      const t = raw?.tournament || raw;
+      const season = Number(raw?.season ?? t?.season);
+      const players = Array.isArray(t?.players) ? t.players : [];
+      const standings = Array.isArray(t?.standings) ? t.standings : [];
+      const matches = Array.isArray(t?.matches) ? t.matches : [];
+
+      // Map team -> player (pro Saison)
+      const teamToPlayer = new Map();
+      const nameToTeam = new Map();
+      players.forEach(p => {
+        const n = normName(p.name);
+        if (!n) return;
+        if (p.team) teamToPlayer.set(p.team, n);
+        if (p.team) nameToTeam.set(n, p.team);
+      });
+
+      // matches: in deinen JSONs sind bei matches nur Teams drin.
+      // Wir mappen homeTeam/awayTeam -> Spielername (falls möglich).
+      const nm = matches.map((m, idx) => {
+        const homeTeam = m.homeTeam ?? m.home ?? null;
+        const awayTeam = m.awayTeam ?? m.away ?? null;
+
+        const homePlayer = normName(m.homePlayer) || (homeTeam ? (teamToPlayer.get(homeTeam) || null) : null);
+        const awayPlayer = normName(m.awayPlayer) || (awayTeam ? (teamToPlayer.get(awayTeam) || null) : null);
+
+        const hs = (m.homeScore ?? m.s1 ?? null);
+        const as = (m.awayScore ?? m.s2 ?? null);
+
+        return {
+          idx,
+          stage: (m.stage || "group"),
+          homeTeam, awayTeam,
+          homePlayer, awayPlayer,
+          homeScore: (hs === null ? null : Number(hs)),
+          awayScore: (as === null ? null : Number(as)),
+        };
+      });
+
+      // standings normalisieren
+      const st = standings
+        .map(x => ({ rank: Number(x.rank), name: normName(x.name), points: Number(x.points ?? 0) }))
+        .filter(x => x.name && Number.isFinite(x.rank))
+        .sort((a,b)=>a.rank-b.rank);
+
+      return { season, players, standings: st, matches: nm, teamToPlayer, nameToTeam };
+    }
+
+    async function loadAll() {
+      const out = [];
+      for (const f of HOF_SOURCES) {
+        try {
+          const json = await fetchJson(f);
+          out.push(json);
+        } catch (e) {
+          console.warn("HOF load failed:", f, e);
+        }
+      }
+      hof.seasons = out
+        .map(x => normalizeSeason(x))
+        .filter(x => Number.isFinite(x.season))
+        .sort((a,b)=>b.season-a.season);
+
+      hof.seasonMap = new Map(hof.seasons.map(s => [s.season, s]));
+      hof.currentSeason = hof.seasons.length ? hof.seasons[0].season : null;
+
+      buildSeasonSelect();
+      computeAllTime();
+      renderAllTime();
+      renderSeason();
+    }
+
+    function buildSeasonSelect() {
+      const sel = $("seasonSelect");
+      sel.innerHTML = "";
+      if (!hof.seasons.length) {
+        sel.innerHTML = `<option value="">(keine Daten gefunden)</option>`;
+        return;
+      }
+      hof.seasons.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = String(s.season);
+        opt.textContent = String(s.season);
+        sel.appendChild(opt);
+      });
+      sel.value = String(hof.currentSeason);
+    }
+
+    // =========================================================
+    // STATS
+    // =========================================================
+    function ensurePlayerAgg(map, name) {
+      const n = normName(name);
+      if (!n) return null;
+      if (!map.has(n)) {
+        map.set(n, {
+          name: n,
+          seasons: 0,
+          games: 0, wins: 0, losses: 0,
+          pf: 0, pa: 0, diff: 0,
+          group: { games:0, wins:0, losses:0 },
+          playoff:{ games:0, wins:0, losses:0 },
+          points: 0, // standings points (dein "Punkte" System)
+          championships: 0,
+          runnerUps: 0,
+          podiums: 0, // top3
+          bestRank: null,
+        });
+      }
+      return map.get(n);
+    }
+
+    function addResult(agg, stage, scored, allowed) {
+      if (scored == null || allowed == null) return;
+      agg.games++;
+      agg.pf += scored;
+      agg.pa += allowed;
+      agg.diff += (scored - allowed);
+      const won = scored > allowed;
+      if (won) agg.wins++; else agg.losses++;
+      const bucket = stage === "playoff" ? agg.playoff : agg.group;
+      bucket.games++;
+      if (won) bucket.wins++; else bucket.losses++;
+    }
+
+    function seasonPlayerStats(seasonData) {
+      const map = new Map();
+
+      // init aus players + standings (damit auch Seasons ohne matches funktionieren)
+      seasonData.players.forEach(p => ensurePlayerAgg(map, p.name));
+      seasonData.standings.forEach(s => ensurePlayerAgg(map, s.name));
+
+      // matches
+      seasonData.matches.forEach(m => {
+        const hp = m.homePlayer, ap = m.awayPlayer;
+        if (!hp || !ap) return;
+        const A = ensurePlayerAgg(map, hp);
+        const B = ensurePlayerAgg(map, ap);
+        if (!A || !B) return;
+        addResult(A, m.stage, m.homeScore, m.awayScore);
+        addResult(B, m.stage, m.awayScore, m.homeScore);
+      });
+
+      // standings points + awards
+      seasonData.standings.forEach(s => {
+        const a = ensurePlayerAgg(map, s.name);
+        if (!a) return;
+        a.points += (s.points || 0);
+        a.seasons += 1;
+        if (a.bestRank == null || s.rank < a.bestRank) a.bestRank = s.rank;
+        if (s.rank === 1) a.championships += 1;
+        if (s.rank === 2) a.runnerUps += 1;
+        if (s.rank <= 3) a.podiums += 1;
+      });
+
+      // falls jemand in matches vorkommt, aber nicht in standings: seasons zählen wir trotzdem
+      // (hier nicht nötig bei deinem Export, aber safe)
+      map.forEach(a => {
+        if (a.seasons === 0) a.seasons = 1;
+      });
+
+      return map;
+    }
+
+    function computeSeasonRecords(seasonData, pStatsMap) {
+      const records = [];
+
+      // Match-Rekorde
+      const done = seasonData.matches.filter(m => m.homeScore != null && m.awayScore != null && m.homePlayer && m.awayPlayer);
+      if (done.length) {
+        const byTotal = [...done].sort((a,b)=>((b.homeScore+b.awayScore)-(a.homeScore+a.awayScore)));
+        const byDiff  = [...done].sort((a,b)=>Math.abs((b.homeScore-b.awayScore)) - Math.abs((a.homeScore-a.awayScore)));
+        const byHighSingle = [...done].sort((a,b)=>Math.max(b.homeScore,b.awayScore) - Math.max(a.homeScore,a.awayScore));
+
+        const t = byTotal[0];
+        records.push({ k:"Höchste Gesamtpunkte", v:`${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore} (${t.homeScore+t.awayScore})`, tag:t.stage });
+
+        const d = byDiff[0];
+        records.push({ k:"Größter Blowout", v:`${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore} (Diff ${Math.abs(d.homeScore-d.awayScore)})`, tag:d.stage });
+
+        const hs = byHighSingle[0];
+        const maxTeam = hs.homeScore >= hs.awayScore ? hs.homePlayer : hs.awayPlayer;
+        const maxVal  = Math.max(hs.homeScore, hs.awayScore);
+        records.push({ k:"Höchster Team-Score", v:`${maxTeam} – ${maxVal} Punkte`, tag:hs.stage });
+      }
+
+      // Spieler-Rekorde (Saison)
+      const arr = [...pStatsMap.values()].filter(x => x.games > 0);
+      const bestBy = (keyFn) => arr.length ? arr.reduce((a,b)=> keyFn(b) > keyFn(a) ? b : a) : null;
+
+      const mostWins = bestBy(x=>x.wins);
+      if (mostWins) records.push({ k:"Most Wins", v:`${mostWins.name} – ${mostWins.wins} Wins`, tag:"spieler" });
+
+      const bestDiff = bestBy(x=>x.diff);
+      if (bestDiff) records.push({ k:"Best Diff", v:`${bestDiff.name} – ${bestDiff.diff > 0 ? "+" : ""}${bestDiff.diff}`, tag:"spieler" });
+
+      const bestOff = bestBy(x=>x.pf);
+      if (bestOff) records.push({ k:"Most Points For", v:`${bestOff.name} – ${bestOff.pf} PF`, tag:"spieler" });
+
+      const bestDef = arr.length ? arr.reduce((a,b)=> (b.pa < a.pa ? b : a)) : null;
+      if (bestDef) records.push({ k:"Fewest Points Allowed", v:`${bestDef.name} – ${bestDef.pa} PA`, tag:"spieler" });
+
+      return records;
+    }
+
+    // =========================================================
+    // ALL-TIME
+    // =========================================================
+    function computeAllTime() {
+      const all = new Map();
+
+      hof.seasons.forEach(s => {
+        const sm = seasonPlayerStats(s);
+        sm.forEach(p => {
+          const a = ensurePlayerAgg(all, p.name);
+          a.seasons += 1; // echte Teilnahme
+          a.games += p.games; a.wins += p.wins; a.losses += p.losses;
+          a.pf += p.pf; a.pa += p.pa; a.diff += p.diff;
+          a.group.games += p.group.games; a.group.wins += p.group.wins; a.group.losses += p.group.losses;
+          a.playoff.games += p.playoff.games; a.playoff.wins += p.playoff.wins; a.playoff.losses += p.playoff.losses;
+          a.points += p.points;
+          a.championships += p.championships;
+          a.runnerUps += p.runnerUps;
+          a.podiums += p.podiums;
+          if (p.bestRank != null) a.bestRank = (a.bestRank == null) ? p.bestRank : Math.min(a.bestRank, p.bestRank);
+        });
+      });
+
+      // derived
+      const table = [...all.values()].map(a => ({
+        ...a,
+        winPct: a.games ? (a.wins / a.games) : 0,
+        ppg: a.games ? (a.pf / a.games) : 0,
+        papg: a.games ? (a.pa / a.games) : 0,
+      }));
+
+      // default sort: championships, points, winPct, diff, pf
+      table.sort((A,B) =>
+        (B.championships - A.championships) ||
+        (B.points - A.points) ||
+        (B.winPct - A.winPct) ||
+        (B.diff - A.diff) ||
+        (B.pf - A.pf) ||
+        A.name.localeCompare(B.name,"de")
+      );
+
+      // all-time records from matches across seasons
+      const allMatches = [];
+      hof.seasons.forEach(s => {
+        s.matches.forEach(m => {
+          if (m.homeScore == null || m.awayScore == null) return;
+          if (!m.homePlayer || !m.awayPlayer) return;
+          allMatches.push({ ...m, season: s.season });
+        });
+      });
+
+      const rec = [];
+      if (allMatches.length) {
+        const byTotal = [...allMatches].sort((a,b)=>((b.homeScore+b.awayScore)-(a.homeScore+a.awayScore)));
+        const byDiff  = [...allMatches].sort((a,b)=>Math.abs((b.homeScore-b.awayScore)) - Math.abs((a.homeScore-a.awayScore)));
+        const byHighSingle = [...allMatches].sort((a,b)=>Math.max(b.homeScore,b.awayScore) - Math.max(a.homeScore,a.awayScore));
+
+        const t = byTotal[0];
+        rec.push({ k:"All-Time höchste Gesamtpunkte", v:`${t.season}: ${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore} (${t.homeScore+t.awayScore})`, tag:t.stage });
+
+        const d = byDiff[0];
+        rec.push({ k:"All-Time größter Blowout", v:`${d.season}: ${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore} (Diff ${Math.abs(d.homeScore-d.awayScore)})`, tag:d.stage });
+
+        const hs = byHighSingle[0];
+        const maxTeam = hs.homeScore >= hs.awayScore ? hs.homePlayer : hs.awayPlayer;
+        const maxVal  = Math.max(hs.homeScore, hs.awayScore);
+        rec.push({ k:"All-Time höchster Team-Score", v:`${hs.season}: ${maxTeam} – ${maxVal} Punkte`, tag:hs.stage });
+      }
+
+      hof.allTime = { table, records: rec, matchCount: allMatches.length };
+    }
+
+    // =========================================================
+    // RENDER helpers
+    // =========================================================
+    function fmtPct(x){ return (x*100).toFixed(1) + "%"; }
+    function fmtSigned(n){ return (n>0?"+":"") + n; }
+    function badgeStage(stage){
+      const label = stage === "playoff" ? "PLAYOFF" : "GROUP";
+      return `<span class="pill">${label}</span>`;
+    }
+
+    function setTab(name){
+      hof.tab = name;
+      document.querySelectorAll(".tabs .tab").forEach(el=>{
+        if (el.dataset.tab) el.classList.toggle("active", el.dataset.tab===name);
+      });
+      ["standings","stats","records"].forEach(t=>{
+        const el = $("tab-"+t);
+        if (el) el.classList.toggle("hidden", t!==name);
+      });
+    }
+    function setTab2(name){
+      hof.tab2 = name;
+      // second card tabs
+      const parent = $("tab2-alltime")?.parentElement;
+      document.querySelectorAll(".card .tab").forEach(el=>{
+        // nur die mit data-tab in card #2 setzen wir via toggle in renderAllTime()
+      });
+      ["alltime","allrecords"].forEach(t=>{
+        const el = $("tab2-"+t);
+        if (el) el.classList.toggle("hidden", t!==name);
+      });
+      // set active for the 2nd tab bar only
+      const card = $("tab2-alltime")?.closest(".card");
+      if (card) {
+        card.querySelectorAll(".tabs .tab").forEach(el=>{
+          if (!el.dataset.tab) return;
+          el.classList.toggle("active", el.dataset.tab===name);
+        });
+      }
+    }
+
+    // =========================================================
+    // RENDER SEASON
+    // =========================================================
+    function renderSeason() {
+      const sel = $("seasonSelect");
+      const season = Number(sel.value);
+      hof.currentSeason = season;
+
+      const s = hof.seasonMap.get(season);
+      if (!s) return;
+
+      // KPIs
+      const matchesDone = s.matches.filter(m=>m.homeScore!=null && m.awayScore!=null).length;
+      const players = s.players.length || s.standings.length || 0;
+      const champion = s.standings.find(x=>x.rank===1)?.name || "—";
+
+      $("seasonKpis").innerHTML = [
+        kpi("Saison", String(season)),
+        kpi("Teilnehmer", String(players)),
+        kpi("Spiele (fertig)", String(matchesDone)),
+        kpi("Champion", champion),
+      ].join("");
+
+      // Tabs content
+      renderSeasonStandings();
+      renderSeasonStats();
+      renderSeasonRecords();
+
+      // Matches block
+      renderSeasonMatches();
+      setTab(hof.tab || "standings");
+    }
+
+    function kpi(title, value, sub=""){
+      return `
+        <div class="kpi">
+          <div class="t">${title}</div>
+          <div class="v">${value}</div>
+          ${sub ? `<small>${sub}</small>` : ``}
+        </div>
+      `;
+    }
+
+    function renderSeasonStandings() {
+      const s = hof.seasonMap.get(hof.currentSeason);
+      const st = s.standings || [];
+      if (!st.length) {
+        $("tab-standings").innerHTML = `<div class="hint">Keine Standings in dieser Saison-Datei gefunden.</div>`;
+        return;
+      }
+      let html = `<table>
+        <tr><th>#</th><th>Name</th><th>Punkte</th><th>Info</th></tr>`;
+      st.forEach(r=>{
+        const badge = r.rank===1 ? `<span class="pill">🏆 Champion</span>` : (r.rank===2 ? `<span class="pill">🥈 Runner-Up</span>` : (r.rank===3?`<span class="pill">🥉 Podium</span>`:""));
+        html += `<tr>
+          <td><b>${r.rank}</b></td>
+          <td class="name">${r.name}</td>
+          <td>${r.points ?? 0}</td>
+          <td>${badge}</td>
+        </tr>`;
+      });
+      html += `</table>`;
+      $("tab-standings").innerHTML = html;
+    }
+
+    function renderSeasonStats() {
+      const s = hof.seasonMap.get(hof.currentSeason);
+      const map = seasonPlayerStats(s);
+      const arr = [...map.values()].map(a => ({
+        ...a,
+        winPct: a.games ? (a.wins / a.games) : 0,
+        ppg: a.games ? (a.pf / a.games) : 0,
+        papg: a.games ? (a.pa / a.games) : 0,
+      }));
+
+      // sort: wins, win%, diff, pf
+      arr.sort((A,B)=>
+        (B.wins - A.wins) ||
+        (B.winPct - A.winPct) ||
+        (B.diff - A.diff) ||
+        (B.pf - A.pf) ||
+        A.name.localeCompare(B.name,"de")
+      );
+
+      if (!arr.length) {
+        $("tab-stats").innerHTML = `<div class="hint">Keine Spiel-Stats berechenbar (evtl. fehlen Matches/Player-Mappings in der Saison).</div>`;
+        return;
+      }
+
+      let html = `<table>
+        <tr>
+          <th>Name</th><th>G</th><th>W-L</th><th>Win%</th><th>PF</th><th>PA</th><th>Diff</th><th>Group</th><th>PO</th>
+        </tr>`;
+      arr.forEach(a=>{
+        const diffCls = a.diff>0 ? "ok" : (a.diff<0 ? "bad" : "");
+        html += `<tr>
+          <td class="name">${a.name}</td>
+          <td>${a.games}</td>
+          <td>${a.wins}-${a.losses}</td>
+          <td>${fmtPct(a.winPct)}</td>
+          <td>${a.pf}</td>
+          <td>${a.pa}</td>
+          <td class="${diffCls}">${fmtSigned(a.diff)}</td>
+          <td>${a.group.wins}-${a.group.losses}</td>
+          <td>${a.playoff.wins}-${a.playoff.losses}</td>
+        </tr>`;
+      });
+      html += `</table>`;
+      $("tab-stats").innerHTML = html;
+    }
+
+    function renderSeasonRecords() {
+      const s = hof.seasonMap.get(hof.currentSeason);
+      const map = seasonPlayerStats(s);
+      const rec = computeSeasonRecords(s, map);
+
+      if (!rec.length) {
+        $("tab-records").innerHTML = `<div class="hint">Keine Rekorde berechenbar (evtl. fehlen fertige Matches).</div>`;
+        return;
+      }
+
+      $("tab-records").innerHTML = rec.map(r => `
+        <div class="row">
+          <div><b>${r.k}</b><div class="muted" style="margin-top:4px;">${r.v}</div></div>
+          <div>${r.tag ? `<span class="pill">${r.tag.toUpperCase()}</span>` : ""}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderSeasonMatches() {
+      const s = hof.seasonMap.get(hof.currentSeason);
+      const stage = $("stageFilter").value;
+      const q = ($("searchInput").value || "").trim().toLowerCase();
+      const sort = $("matchSort").value;
+
+      let arr = [...(s.matches || [])];
+
+      // filter stage
+      if (stage !== "all") arr = arr.filter(m => m.stage === stage);
+
+      // filter search
+      if (q) {
+        arr = arr.filter(m => {
+          const a = (m.homePlayer || "") + " " + (m.awayPlayer || "") + " " + (m.homeTeam || "") + " " + (m.awayTeam || "");
+          return a.toLowerCase().includes(q);
+        });
+      }
+
+      // only finished? -> hier zeigen wir alle, aber markieren
+      const sortKey = (m) => {
+        const total = (m.homeScore ?? 0) + (m.awayScore ?? 0);
+        const diff = Math.abs((m.homeScore ?? 0) - (m.awayScore ?? 0));
+        if (sort === "pts_desc") return -total;
+        if (sort === "diff_desc") return -diff;
+        return m.idx; // original
+      };
+      arr.sort((a,b)=> sortKey(a) - sortKey(b));
+
+      if (!arr.length) {
+        $("matchesWrap").innerHTML = `<div class="hint">Keine Spiele für diesen Filter gefunden.</div>`;
+        return;
+      }
+
+      // Simple grouping by stage (slot-style)
+      const groups = new Map();
+      arr.forEach(m=>{
+        const key = m.stage || "group";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(m);
+      });
+
+      let html = "";
+      for (const [g, ms] of groups.entries()) {
+        html += `<div class="slot">
+          <div class="slothead">
+            <span>${g === "playoff" ? "PLAYOFFS" : "GROUP PHASE"}</span>
+            <span>${ms.length} Spiel(e)</span>
+          </div>
+        `;
+
+        ms.forEach(m=>{
+          const done = (m.homeScore != null && m.awayScore != null);
+          const total = done ? (m.homeScore + m.awayScore) : null;
+          const diff = done ? Math.abs(m.homeScore - m.awayScore) : null;
+
+          const left = m.homePlayer || (m.homeTeam ? `(${m.homeTeam})` : "TBD");
+          const right = m.awayPlayer || (m.awayTeam ? `(${m.awayTeam})` : "TBD");
+
+          const wLeft = done && m.homeScore > m.awayScore;
+          const wRight = done && m.awayScore > m.homeScore;
+
+          html += `
+            <div class="row">
+              <div class="teams">
+                ${badgeStage(m.stage)}
+                <span style="font-weight:900;${wLeft?'color:var(--accent)':''}">${left}</span>
+                <span class="muted">@</span>
+                <span style="font-weight:900;${wRight?'color:var(--accent)':''}">${right}</span>
+                ${done ? `<span class="pill">Total ${total}</span>` : `<span class="pill">OFFEN</span>`}
+                ${done ? `<span class="pill">Diff ${diff}</span>` : ``}
+              </div>
+              <div class="score">
+                ${done ? `${m.awayScore} : ${m.homeScore}` : `– : –`}
+              </div>
+            </div>
+          `;
+        });
+
+        html += `</div>`;
+      }
+
+      $("matchesWrap").innerHTML = html;
+    }
+
+    // =========================================================
+    // RENDER ALL-TIME
+    // =========================================================
+    function renderAllTime() {
+      const at = hof.allTime;
+      if (!at) return;
+
+      const seasonsLoaded = hof.seasons.length;
+      const players = at.table.length;
+
+      const totalGames = at.table.reduce((s,x)=>s+x.games,0);
+      const totalPlayedGames = totalGames / 2; // weil jedes Spiel 2 Spieler zählt
+
+      $("alltimeKpis").innerHTML = [
+        kpi("Saisons", String(seasonsLoaded)),
+        kpi("Spieler", String(players)),
+        kpi("Spiele (berechenbar)", String(Math.round(totalPlayedGames))),
+        kpi("Matches (Raw)", String(at.matchCount)),
+      ].join("");
+
+      // All-time table
+      let html = `<table>
+        <tr>
+          <th>#</th><th>Name</th><th>🏆</th><th>Seasons</th><th>G</th><th>W-L</th><th>Win%</th><th>Diff</th><th>PF</th><th>Punkte</th><th>Best</th>
+        </tr>`;
+      at.table.forEach((p, i)=>{
+        const diffCls = p.diff>0 ? "ok" : (p.diff<0 ? "bad" : "");
+        html += `<tr>
+          <td><b>${i+1}</b></td>
+          <td class="name">${p.name}</td>
+          <td>${p.championships}</td>
+          <td>${p.seasons}</td>
+          <td>${p.games}</td>
+          <td>${p.wins}-${p.losses}</td>
+          <td>${fmtPct(p.winPct)}</td>
+          <td class="${diffCls}">${fmtSigned(p.diff)}</td>
+          <td>${p.pf}</td>
+          <td><b>${p.points}</b></td>
+          <td>${p.bestRank ?? "-"}</td>
+        </tr>`;
+      });
+      html += `</table>`;
+      $("tab2-alltime").innerHTML = html;
+
+      // All-time records
+      if (!at.records.length) {
+        $("tab2-allrecords").innerHTML = `<div class="hint">Noch keine All-Time Rekorde berechenbar.</div>`;
+      } else {
+        $("tab2-allrecords").innerHTML = at.records.map(r => `
+          <div class="row">
+            <div><b>${r.k}</b><div class="muted" style="margin-top:4px;">${r.v}</div></div>
+            <div>${r.tag ? `<span class="pill">${r.tag.toUpperCase()}</span>` : ""}</div>
+          </div>
+        `).join("");
+      }
+
+      setTab2(hof.tab2 || "alltime");
+    }
+
+    // =========================================================
+    // UTIL
+    // =========================================================
+    function reloadAll(){
+      $("matchesWrap").innerHTML = `<div class="hint">Lade…</div>`;
+      $("tab-standings").innerHTML = "";
+      $("tab-stats").innerHTML = "";
+      $("tab-records").innerHTML = "";
+      $("tab2-alltime").innerHTML = "";
+      $("tab2-allrecords").innerHTML = "";
+      loadAll();
+    }
+
+    // =========================================================
+    // INIT
+    // =========================================================
+    window.addEventListener("load", loadAll);
+  </script>
+</body>
+</html>
