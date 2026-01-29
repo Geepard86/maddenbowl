@@ -758,14 +758,6 @@
           if (!n) return;
           history.players.add(n);
           if (p.team) teamToPlayer.set(p.team, n);
-            const champName = getChampionFromTournament(t);
-  if (champName) {
-    history.ringsByPlayer.set(
-      champName,
-      (history.ringsByPlayer.get(champName) || 0) + 1
-    );
-  }
-
         });
 
         (t.matches || []).forEach(m => {
@@ -2952,6 +2944,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
