@@ -408,9 +408,11 @@
       gap: 4px;
       padding-left: 100px; /* aligns under content roughly (stadium-tag width) */
       box-sizing: border-box;
+      overflow: hidden;
     }
     @media (max-width: 800px) {
       .match-meta { padding-left: 0; }
+      .badge.wide { flex: 1 1 100%;             /* Mobile: immer ganze Zeile */ }
     }
     .meta-badges { display:flex; flex-wrap:wrap; gap:6px; }
     .badge {
@@ -419,6 +421,17 @@
       padding: 3px 6px;
       border-radius: 999px;
       font-family: monospace;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-width: 100%;
+      white-space: normal;          /* <- wichtig */
+      overflow-wrap: anywhere;      /* bricht auch lange Strings */
+      word-break: break-word;
+      line-height: 1.2;
+    }
+    .badge.wide {
+      flex: 1 1 320px;              /* Desktop: darf groß sein, wrappt bei Bedarf */
     }
     .meta-insights { color: rgba(255,255,255,0.8); }
   </style>
@@ -1175,19 +1188,20 @@ function getTitleOddsWithTrend(name) {
   const A = (awayName || "").trim();
   if (!H || !A) return "";
 
-  // Odds
-  const odds = computeOddsForMatch(H, A);
+  // --- Odds ---
+  const odds = computeOddsForMatch(H, A); // { pHome, pAway, ouLine, ... }
   const qHome = decimalOdds(odds.pHome);
   const qAway = decimalOdds(odds.pAway);
 
-  // Badges (kurz halten => mobile safe)
-  const badges = [];
-  badges.push(`Quote: <b>${H}</b> ${qHome} | <b>${A}</b> ${qAway}`);
-  badges.push(`O/U ${odds.ouLine}`);
+  // --- Badges ---
+  const badges = [
+    `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
+    `O/U ${odds.ouLine}`,
+  ];
 
-  // Titelchance nur für offene Spiele
+  // --- Titelchance nur für offene Spiele ---
   if (!isFinished) {
-    const tHome = getTitleOddsDisplay(H);
+    const tHome = getTitleOddsDisplay(H); // { now, diff, arrow }
     const tAway = getTitleOddsDisplay(A);
 
     const colorForArrow = (arrow) =>
@@ -1196,42 +1210,75 @@ function getTitleOddsWithTrend(name) {
 
     const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
 
-    // Wichtig: lieber 2 kurze Badges statt 1 langer => läuft nie raus
     badges.push(
-      `🏆 ${H}: <b>${tHome.now.toFixed(1)}%</b> <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>`
-    );
-    badges.push(
-      `🏆 ${A}: <b>${tAway.now.toFixed(1)}%</b> <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>`
+      `🏆 Titelchance: 
+        <b>${H}</b> ${tHome.now.toFixed(1)}% <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>
+        &nbsp;|&nbsp;
+        <b>${A}</b> ${tAway.now.toFixed(1)}% <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>`
     );
   }
 
-  // Insights (deine echte Funktion)
+  // --- Insights (immer) ---
   let insights = [];
   try {
+    // ⬇️ Falls deine Funktion anders heißt: hier anpassen
     insights = pickBestInsights(H, A) || [];
   } catch (e) {
     insights = [];
   }
 
-  // Fallback falls keine Insights
+  // Fallback, falls nichts gefunden wurde (damit die Box nicht leer aussieht)
   if (!insights.length) {
     const fav = (odds.pHome >= odds.pAway) ? H : A;
     const favP = Math.max(odds.pHome, odds.pAway) * 100;
-    insights = [`📌 ${fav} ist leichter Favorit (${favP.toFixed(0)}%).`];
+    insights = [`📌 Nicht genügend Daten.`];
   }
 
-  return `
-    <div class="match-meta">
-      <div class="meta-badges">
-        ${badges.map(b => `<span class="badge">${b}</span>`).join("")}
-      </div>
-      <div class="meta-insights">
-        ${insights.slice(0, 3).map(t => `<div class="insight">${t}</div>`).join("")}
-      </div>
-    </div>
-  `;
-}
+  // --- Render HTML ---
+  const badgeHtml = badges
+    .filter(Boolean)
+    .map(b => `
+      <div style="
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:4px 8px;
+        border:1px solid rgba(255,255,255,0.10);
+        background:rgba(0,0,0,0.22);
+        border-radius:999px;
+        font-size:0.72em;
+        line-height:1.2;
+        white-space:nowrap;
+      ">${b}</div>
+    `).join("");
 
+  const insightsHtml = insights
+    .slice(0, 3)
+    .map(t => `
+      <div style="
+        margin-top:6px;
+        padding:8px 10px;
+        background:rgba(255,255,255,0.04);
+        border:1px solid rgba(255,255,255,0.06);
+        border-left:3px solid var(--accent);
+        border-radius:8px;
+        font-size:0.78em;
+        line-height:1.25;
+      ">${t}</div>
+    `).join("");
+
+  return `
+  <div class="match-meta">
+    <div class="meta-badges">
+      ${badgeHtml}
+    </div>
+    <div class="meta-insights">
+      ${insightsHtml}
+    </div>
+  </div>
+`;
+
+}
 
 
 
@@ -2161,8 +2208,6 @@ function getTitleOddsWithTrend(name) {
   </script>
 </body>
 </html>
-
-
 
 
 
