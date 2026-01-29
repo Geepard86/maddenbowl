@@ -895,86 +895,120 @@
       })();
 
       return {
-        ...base,
-        aPPG,
-        bPPG,
-        avgTotal,
-        last3: base.lastWinners.slice(-3),
-        streak
-      };
+  ...base,
+  aPPG,
+  bPPG,
+  avgTotal,
+  last3: base.lastWinners.slice(-3),
+  streak,
+  curGames: curMatches.length,
+  curLastWinners: curLastWinners.slice(-3),
+  curStreak
+};
+
+      const curLastWinners = curMatches.map(m => {
+  const aS = scoreFor(m, A);
+  const bS = scoreFor(m, B);
+  if (aS > bS) return A;
+  if (bS > aS) return B;
+  return null;
+}).filter(Boolean);
+
+const curStreak = (() => {
+  const last = curLastWinners[curLastWinners.length - 1];
+  if (!last) return { who: null, n: 0 };
+  let n = 0;
+  for (let i = curLastWinners.length - 1; i >= 0; i--) {
+    if (curLastWinners[i] === last) n++;
+    else break;
+  }
+  return { who: last, n };
+})();
     }
 
     function pickBestInsights(homePlayer, awayPlayer) {
-      const H = normName(homePlayer), A = normName(awayPlayer);
-      if (!history.loaded || !H || !A) return [];
+  const H = normName(homePlayer), A = normName(awayPlayer);
+  if (!history.loaded || !H || !A) return [];
 
-      const sAll = computeMatchupStats(H, A, false);
-      const sCur = computeMatchupStats(H, A, true);
-      if (!sAll) return [];
+  const sAll = computeMatchupStats(H, A, false);
+  const sCur = computeMatchupStats(H, A, true);
+  if (!sAll) return [];
 
-      const insights = [];
+  const cands = [];
+  const add = (type, score, text) => cands.push({ type, score, text });
 
-      if (sAll.games >= 3) {
-        insights.push({
-          score: 10 + sAll.games,
-          text: `Direkter Vergleich: ${H} vs ${A} steht ${sAll.aWins}:${sAll.bWins}.`
-        });
-      }
+  // ---------- (1) Vergleich-lastig: max 1 davon ----------
+  if (sAll.games >= 3) {
+    add("h2h", 10 + sAll.games, `Direkter Vergleich: ${H} vs ${A} steht ${sAll.aWins}:${sAll.bWins}.`);
+  }
+  if (sAll.streak?.n >= 3 && sAll.streak.who) {
+    add("streak_alltime", 9 + sAll.streak.n, `Streak (all time): ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge in diesem Matchup.`);
+  }
+  const last3 = (sAll.last3 || []).filter(Boolean);
+  if (last3.length >= 3) {
+    const h3 = last3.filter(x => x === H).length;
+    const a3 = last3.filter(x => x === A).length;
+    if (h3 === 3) add("last3", 8, `Letzte 3 Duelle: alle gingen an ${H}.`);
+    else if (a3 === 3) add("last3", 8, `Letzte 3 Duelle: alle gingen an ${A}.`);
+    else add("last3", 6, `Letzte 3 Duelle: ${H} ${h3}–${a3} ${A}.`);
+  }
 
-      const last3 = (sAll.last3 || []).filter(Boolean);
-      if (last3.length >= 3) {
-        const h3 = last3.filter(x => x === H).length;
-        const a3 = last3.filter(x => x === A).length;
-        if (h3 === 3) insights.push({ score: 11, text: `Die letzten 3 Duelle gingen alle an ${H}.` });
-        else if (a3 === 3) insights.push({ score: 11, text: `Die letzten 3 Duelle gingen alle an ${A}.` });
-        else insights.push({ score: 6, text: `Letzte 3 Duelle: ${H} ${h3}–${a3} ${A}.` });
-      }
+  // ---------- (2) Lieber: aktuelles Turnier / form ----------
+  if (sCur?.curStreak?.n >= 2 && sCur.curStreak.who) {
+    add("streak_current", 12 + sCur.curStreak.n, `Streak (aktuelles Turnier): ${sCur.curStreak.who} gewann ${sCur.curStreak.n}× in Folge.`);
+  }
+  if (sCur?.games >= 1) {
+    add("current_matchup", 9, `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).`);
+  }
 
-      if (sAll.streak?.n >= 3 && sAll.streak.who) {
-        insights.push({
-          score: 9 + sAll.streak.n,
-          text: `Streak: ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge in diesem Matchup.`
-        });
-      }
+  // ---------- (3) Punkte / Defense / Totals ----------
+  if (sAll.games >= 2) {
+    add("ppg", 7, `Average PPG im Matchup: ${H} ${sAll.aPPG.toFixed(1)} | ${A} ${sAll.bPPG.toFixed(1)}.`);
+    add("total", 6, `Ø Gesamtpunkte im Matchup: ${sAll.avgTotal.toFixed(1)}.`);
+  }
+  if (sAll.games >= 2) {
+    const hAllowed = sAll.bPoints / sAll.games;
+    const aAllowed = sAll.aPoints / sAll.games;
+    if (hAllowed < 17) add("defense", 8, `Defense: ${H} lässt gegen ${A} im Schnitt nur ${hAllowed.toFixed(1)} Punkte zu.`);
+    if (aAllowed < 17) add("defense", 8, `Defense: ${A} lässt gegen ${H} im Schnitt nur ${aAllowed.toFixed(1)} Punkte zu.`);
+  }
 
-      if (sAll.home.aHomeGames >= 3) {
-        const pct = sAll.home.aHomeWins / sAll.home.aHomeGames;
-        if (pct >= 0.75) insights.push({ score: 8, text: `Zuhause ist ${H} in diesem Matchup stark: ${sAll.home.aHomeWins}/${sAll.home.aHomeGames}.` });
-      }
-      if (sAll.home.bHomeGames >= 3) {
-        const pct = sAll.home.bHomeWins / sAll.home.bHomeGames;
-        if (pct >= 0.75) insights.push({ score: 8, text: `Zuhause ist ${A} in diesem Matchup stark: ${sAll.home.bHomeWins}/${sAll.home.bHomeGames}.` });
-      }
+  // ---------- (4) Playoff-Context ----------
+  if (sAll.playoff?.games >= 2) {
+    add("playoff", 10, `Playoff-Historie: ${H} vs ${A} ${sAll.playoff.aWins}:${sAll.playoff.bWins}.`);
+  }
 
-      if (sAll.games >= 3) {
-        if (sAll.aPPG >= 30 && sAll.bPPG >= 30) {
-          insights.push({ score: 9, text: `Offensiv-Spektakel: beide scoren im Schnitt 30+ PPG (${H}: ${sAll.aPPG.toFixed(1)}, ${A}: ${sAll.bPPG.toFixed(1)}).` });
-        } else {
-          insights.push({ score: 5, text: `Average PPG im Matchup: ${H} ${sAll.aPPG.toFixed(1)} | ${A} ${sAll.bPPG.toFixed(1)}.` });
-        }
-      }
+  // ---------- Auswahl: bis zu 3, aber divers ----------
+  cands.sort((x,y) => y.score - x.score);
 
-      if (sAll.games >= 3) {
-        const hAllowed = sAll.bPoints / sAll.games;
-        const aAllowed = sAll.aPoints / sAll.games;
-        if (hAllowed < 14) insights.push({ score: 8, text: `Defense-Wall: ${H} lässt gegen ${A} im Schnitt nur ${hAllowed.toFixed(1)} Punkte zu.` });
-        if (aAllowed < 14) insights.push({ score: 8, text: `Defense-Wall: ${A} lässt gegen ${H} im Schnitt nur ${aAllowed.toFixed(1)} Punkte zu.` });
-      }
+  const chosen = [];
+  const chosenTypes = new Set();
 
-      if (sAll.playoff.games >= 2) {
-        insights.push({
-          score: 10,
-          text: `Clutch-Faktor (Playoffs): ${H} vs ${A} ${sAll.playoff.aWins}:${sAll.playoff.bWins}.`
-        });
-      }
+  const isCompareHeavy = (t) => ["h2h","last3","streak_alltime"].includes(t);
+  let compareHeavyUsed = false;
 
-      if (sCur && sCur.games >= 1) {
-        insights.push({ score: 7, text: `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).` });
-      }
+  for (const c of cands) {
+    if (chosen.length >= 3) break;
 
-      insights.sort((x,y) => y.score - x.score);
-      return insights.slice(0, 3).map(x => x.text);
+    // keine Duplikate gleicher type
+    if (chosenTypes.has(c.type)) continue;
+
+    // Vergleich-lastig nur 1x
+    if (isCompareHeavy(c.type)) {
+      if (compareHeavyUsed) continue;
+      compareHeavyUsed = true;
     }
+
+    // defense kann doppelt sein (für beide Teams), aber max 1 reicht meistens:
+    if (c.type === "defense" && chosenTypes.has("defense")) continue;
+
+    chosen.push(c.text);
+    chosenTypes.add(c.type);
+  }
+
+  return chosen;
+}
+
 
     function computeEloMap() {
       const elo = new Map();
@@ -1296,7 +1330,7 @@ function getTitleOddsWithTrend(name) {
   if (!insights.length) {
     const fav = (odds.pHome >= odds.pAway) ? H : A;
     const favP = Math.max(odds.pHome, odds.pAway) * 100;
-    insights = [`📌 Nicht genügend Daten.`];
+    insights = fallbackInsights(H, A);
   }
 
   // --- Render HTML ---
@@ -1628,6 +1662,59 @@ document.querySelectorAll('.draft-row').forEach(row => {
   }
 });
     }
+
+    function getPlayerFacts(name) {
+  const n = normName(name);
+  const cur = getCurrentMatchesNormalized().filter(m => m.homePlayer === n || m.awayPlayer === n);
+
+  let curGames = 0, curPts = 0, curAllowed = 0, curWins = 0;
+  cur.forEach(m => {
+    if (m.homeScore == null || m.awayScore == null) return;
+    curGames++;
+    const scored = (m.homePlayer === n) ? m.homeScore : m.awayScore;
+    const allowed = (m.homePlayer === n) ? m.awayScore : m.homeScore;
+    curPts += scored;
+    curAllowed += allowed;
+    if (scored > allowed) curWins++;
+  });
+
+  const histGames = (history.byPlayer.get(n) || []).length;
+
+  return {
+    curGames,
+    curWins,
+    curLosses: Math.max(0, curGames - curWins),
+    curPPG: curGames ? (curPts / curGames) : null,
+    curAPG: curGames ? (curAllowed / curGames) : null,
+    histGames,
+    ppgEstimate: getPpgEstimate(n) // nutzt history + current, fallbackt auf 21
+  };
+}
+
+function fallbackInsights(H, A) {
+  const h = getPlayerFacts(H);
+  const a = getPlayerFacts(A);
+
+  const out = [];
+
+  // 1) aktuelles Turnier bevorzugen
+  if (h.curGames > 0 || a.curGames > 0) {
+    if (h.curGames > 0) out.push(`${H} im Turnier: ${h.curWins}-${h.curLosses}, Ø ${h.curPPG.toFixed(1)} PPG / ${h.curAPG.toFixed(1)} zugelassen.`);
+    if (a.curGames > 0) out.push(`${A} im Turnier: ${a.curWins}-${a.curLosses}, Ø ${a.curPPG.toFixed(1)} PPG / ${a.curAPG.toFixed(1)} zugelassen.`);
+    return out.slice(0, 2);
+  }
+
+  // 2) history vorhanden?
+  if (h.histGames > 0 || a.histGames > 0) {
+    if (h.histGames > 0) out.push(`${H}: ${h.histGames} historische Spiele geladen, PPG-Schätzung ${h.ppgEstimate.toFixed(1)}.`);
+    if (a.histGames > 0) out.push(`${A}: ${a.histGames} historische Spiele geladen, PPG-Schätzung ${a.ppgEstimate.toFixed(1)}.`);
+    return out.slice(0, 2);
+  }
+
+  // 3) wirklich nichts
+  return [`📌 Noch keine verwertbaren Daten (weder Turnier noch History).`];
+}
+
 
     // =========================================================
     // MODE INFO + START
@@ -2406,6 +2493,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
