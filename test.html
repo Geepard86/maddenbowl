@@ -926,105 +926,78 @@ const curStreak = (() => {
 })();
     }
 
-    function pickBestInsights(homePlayer, awayPlayer) {
-  const H = normName(homePlayer), A = normName(awayPlayer);
-  if (!history.loaded || !H || !A) return [];
+   function pickBestInsights(homePlayer, awayPlayer) {
+      const H = normName(homePlayer), A = normName(awayPlayer);
+      if (!history.loaded || !H || !A) return [];
 
-  const sAll = computeMatchupStats(H, A, false); // history + current matchup
-  const sCur = computeMatchupStats(H, A, true);  // current tournament matchup only
+      const sAll = computeMatchupStats(H, A, false);
+      const sCur = computeMatchupStats(H, A, true);
+      if (!sAll) return [];
 
-  // Falls computeMatchupStats mal null liefert:
-  if (!sAll) return fallbackInsights(homePlayer, awayPlayer);
+      const insights = [];
 
-  const cands = [];
+      if (sAll.games >= 3) {
+        insights.push({
+          score: 10 + sAll.games,
+          text: `Direkter Vergleich: ${H} vs ${A} steht ${sAll.aWins}:${sAll.bWins}.`
+        });
+      }
 
-  const add = (key, score, text) => cands.push({ key, score, text });
+      const last3 = (sAll.last3 || []).filter(Boolean);
+      if (last3.length >= 3) {
+        const h3 = last3.filter(x => x === H).length;
+        const a3 = last3.filter(x => x === A).length;
+        if (h3 === 3) insights.push({ score: 11, text: `Die letzten 3 Duelle gingen alle an ${H}.` });
+        else if (a3 === 3) insights.push({ score: 11, text: `Die letzten 3 Duelle gingen alle an ${A}.` });
+        else insights.push({ score: 6, text: `Letzte 3 Duelle: ${H} ${h3}–${a3} ${A}.` });
+      }
 
-  // ---------- MATCHUP-basierte Insights (priorisiert, aber divers) ----------
-  // 1) H2H (nur EIN Fakt aus "Siege/H2H/Streak/Last3")
-  if (sAll.games >= 2) {
-    add("h2h", 12 + sAll.games, `Direkter Vergleich: ${homePlayer} vs ${awayPlayer} steht ${sAll.aWins}:${sAll.bWins}.`);
-  }
+      if (sAll.streak?.n >= 3 && sAll.streak.who) {
+        insights.push({
+          score: 9 + sAll.streak.n,
+          text: `Streak: ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge in diesem Matchup.`
+        });
+      }
 
-  // last3 / streak sind redundant zu H2H → nur wenn kein H2H gewählt ODER deutlich stärker
-  if (sAll.streak?.n >= 3 && sAll.streak.who) {
-    add("streak", 11 + sAll.streak.n, `Streak im Matchup: ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge.`);
-  }
+      if (sAll.home.aHomeGames >= 3) {
+        const pct = sAll.home.aHomeWins / sAll.home.aHomeGames;
+        if (pct >= 0.75) insights.push({ score: 8, text: `Zuhause ist ${H} in diesem Matchup stark: ${sAll.home.aHomeWins}/${sAll.home.aHomeGames}.` });
+      }
+      if (sAll.home.bHomeGames >= 3) {
+        const pct = sAll.home.bHomeWins / sAll.home.bHomeGames;
+        if (pct >= 0.75) insights.push({ score: 8, text: `Zuhause ist ${A} in diesem Matchup stark: ${sAll.home.bHomeWins}/${sAll.home.bHomeGames}.` });
+      }
 
-  const last3 = (sAll.last3 || []).filter(Boolean);
-  if (last3.length >= 3) {
-    const h3 = last3.filter(x => x === H).length;
-    const a3 = last3.filter(x => x === A).length;
-    if (h3 === 3) add("last3", 11, `Die letzten 3 Duelle gingen alle an ${homePlayer}.`);
-    else if (a3 === 3) add("last3", 11, `Die letzten 3 Duelle gingen alle an ${awayPlayer}.`);
-    else add("last3", 7, `Letzte 3 Duelle: ${homePlayer} ${h3}–${a3} ${awayPlayer}.`);
-  }
+      if (sAll.games >= 3) {
+        if (sAll.aPPG >= 30 && sAll.bPPG >= 30) {
+          insights.push({ score: 9, text: `Offensiv-Spektakel: beide scoren im Schnitt 30+ PPG (${H}: ${sAll.aPPG.toFixed(1)}, ${A}: ${sAll.bPPG.toFixed(1)}).` });
+        } else {
+          insights.push({ score: 5, text: `Average PPG im Matchup: ${H} ${sAll.aPPG.toFixed(1)} | ${A} ${sAll.bPPG.toFixed(1)}.` });
+        }
+      }
 
-  // 2) Scoring / Total (anderer Typ)
-  if (sAll.games >= 2) {
-    add("ppg", 9, `Average PPG im Matchup: ${homePlayer} ${sAll.aPPG.toFixed(1)} | ${awayPlayer} ${sAll.bPPG.toFixed(1)}.`);
-    if (sAll.avgTotal) add("total", 8, `Ø Total Points im Matchup: ${sAll.avgTotal.toFixed(1)}.`);
-  }
+      if (sAll.games >= 3) {
+        const hAllowed = sAll.bPoints / sAll.games;
+        const aAllowed = sAll.aPoints / sAll.games;
+        if (hAllowed < 14) insights.push({ score: 8, text: `Defense-Wall: ${H} lässt gegen ${A} im Schnitt nur ${hAllowed.toFixed(1)} Punkte zu.` });
+        if (aAllowed < 14) insights.push({ score: 8, text: `Defense-Wall: ${A} lässt gegen ${H} im Schnitt nur ${aAllowed.toFixed(1)} Punkte zu.` });
+      }
 
-  // 3) Defense (anderer Typ)
-  if (sAll.games >= 2) {
-    const hAllowed = sAll.bPoints / sAll.games;
-    const aAllowed = sAll.aPoints / sAll.games;
-    // nicht nur bei <14, sonst ist es oft leer
-    add("defH", 7, `${homePlayer} lässt gegen ${awayPlayer} im Schnitt ${hAllowed.toFixed(1)} Punkte zu.`);
-    add("defA", 7, `${awayPlayer} lässt gegen ${homePlayer} im Schnitt ${aAllowed.toFixed(1)} Punkte zu.`);
-  }
+      if (sAll.playoff.games >= 2) {
+        insights.push({
+          score: 10,
+          text: `Clutch-Faktor (Playoffs): ${H} vs ${A} ${sAll.playoff.aWins}:${sAll.playoff.bWins}.`
+        });
+      }
 
-  // 4) Playoff-Historie (anderer Typ)
-  if (sAll.playoff?.games >= 1) {
-    add("clutch", 10, `Playoff-H2H: ${homePlayer} vs ${awayPlayer} ${sAll.playoff.aWins}:${sAll.playoff.bWins} (${sAll.playoff.games} Spiele).`);
-  }
+      if (sCur && sCur.games >= 1) {
+        insights.push({ score: 7, text: `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).` });
+      }
 
-  // 5) Aktuelles Turnier (anderer Typ)
-  if (sCur && sCur.games >= 1) {
-    add("cur", 10, `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).`);
-  }
-
-  // ---------- Auswahl: max 3, aber nicht redundant ----------
-  // Regel: aus der "results"-Gruppe (h2h/streak/last3/cur) max 1, damit nicht 3× Siege kommt
-  const group = (k) => {
-    if (["h2h", "streak", "last3", "cur"].includes(k)) return "results";
-    if (["ppg", "total"].includes(k)) return "scoring";
-    if (k.startsWith("def")) return "defense";
-    if (k === "clutch") return "playoff";
-    return "other";
-  };
-
-  cands.sort((a, b) => b.score - a.score);
-
-  const chosen = [];
-  const usedGroups = new Set();
-
-  for (const c of cands) {
-    const g = group(c.key);
-    // results nur einmal
-    if (g === "results" && usedGroups.has("results")) continue;
-    // sonst Gruppen bevorzugen: nicht zweimal gleicher Typ, solange Alternativen da sind
-    if (usedGroups.has(g) && chosen.length < 2) continue;
-
-    chosen.push(c.text);
-    usedGroups.add(g);
-    if (chosen.length >= 3) break;
-  }
-
-  // Wenn wegen Filter zu wenig übrig blieb: einfach auffüllen nach Score (aber ohne doppelte Texte)
-  if (chosen.length < 1) return fallbackInsights(homePlayer, awayPlayer);
-
-  if (chosen.length < 3) {
-    for (const c of cands) {
-      if (chosen.includes(c.text)) continue;
-      chosen.push(c.text);
-      if (chosen.length >= 3) break;
+      insights.sort((x,y) => y.score - x.score);
+      return insights.slice(0, 3).map(x => x.text);
     }
-  }
 
-  return chosen.slice(0, 3);
-}
 
 
 
@@ -2511,6 +2484,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
