@@ -1452,6 +1452,7 @@ function getTitleOddsWithTrend(name) {
     }
 
     if (!insights.length) insights = fallbackInsights(H, A);
+    }
 
   // --- Render HTML ---
   const badgeHtml = badges
@@ -1491,9 +1492,7 @@ function getTitleOddsWithTrend(name) {
     <div class="meta-badges">
       ${badgeHtml}
     </div>
-    <div class="meta-insights">
-      ${insightsHtml}
-    </div>
+    ${!isFinished ? `<div class="meta-insights">${insightsHtml}</div>` : ``}
   </div>
 `;
 
@@ -2907,6 +2906,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
