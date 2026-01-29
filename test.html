@@ -469,6 +469,21 @@
 .rank-last td { background: rgba(213, 10, 10, 0.10); }
 .rank-note { font-size: 0.75em; color: rgba(255,255,255,0.75); text-align:left; }
 
+.ring-cell{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  font-weight:800;
+}
+.ring-icon{
+  width:16px;
+  height:16px;
+  object-fit:contain;
+  filter: drop-shadow(0 0 4px rgba(255,215,0,0.25));
+  opacity:0.95;
+}
+    
   </style>
 </head>
 
@@ -686,6 +701,7 @@
       matches: [],
       byPair: new Map(),
       byPlayer: new Map(),
+      ringsByPlayer: new Map(),
     };
 
     function normName(name) { return (name || "").trim(); }
@@ -693,6 +709,53 @@
       const A = normName(a), B = normName(b);
       return (A < B) ? `${A}|${B}` : `${B}|${A}`;
     }
+
+    function getChampionFromTournament(t) {
+  // 1) Falls es einen expliziten Champion gibt (best case)
+  if (t?.champion) return normName(t.champion);
+
+  // 2) Falls es ein Ranking / finalRanking gibt
+  const fr = t?.finalRanking || t?.ranking || t?.results;
+  if (Array.isArray(fr) && fr.length) {
+    const top = fr.find(x => (x.rank === 1 || x.place === 1)) || fr[0];
+    const nm = normName(top?.name || top?.player || top?.playerName);
+    if (nm) return nm;
+  }
+
+  // 3) Über Matches: suche "Madden Bowl"/Finale/GF
+  const matches = Array.isArray(t?.matches) ? t.matches : [];
+  const final =
+    matches.find(m => (m.id === "gf" || m.matchId === "gf")) ||
+    matches.find(m => String(m.phase || m.round || m.name || "").toLowerCase().includes("madden bowl")) ||
+    matches.find(m => String(m.phase || m.round || m.name || "").toLowerCase().includes("final"));
+
+  const pickWinnerByTeams = (m) => {
+    if (!m) return null;
+    if (m.homeScore == null || m.awayScore == null) return null;
+    const homeTeam = m.homeTeam, awayTeam = m.awayTeam;
+    if (!homeTeam || !awayTeam) return null;
+
+    const teamToPlayer = new Map();
+    (t.players || []).forEach(p => {
+      const n = normName(p.name);
+      if (n && p.team) teamToPlayer.set(p.team, n);
+    });
+
+    const homeP = teamToPlayer.get(homeTeam);
+    const awayP = teamToPlayer.get(awayTeam);
+    if (!homeP || !awayP) return null;
+
+    if (m.homeScore > m.awayScore) return homeP;
+    if (m.awayScore > m.homeScore) return awayP;
+    return null;
+  };
+
+  const w = pickWinnerByTeams(final);
+  if (w) return normName(w);
+
+  return null;
+}
+
 
     async function loadHistory() {
       const seasonData = [];
@@ -716,6 +779,7 @@
       history.matches = [];
       history.byPair = new Map();
       history.byPlayer = new Map();
+      history.ringsByPlayer = new Map();
 
       for (const t of history.seasons) {
         const season = t.season;
@@ -725,6 +789,11 @@
           if (!n) return;
           history.players.add(n);
           if (p.team) teamToPlayer.set(p.team, n);
+          const champName = getChampionFromTournament(t);
+if (champName) {
+  history.ringsByPlayer.set(champName, (history.ringsByPlayer.get(champName) || 0) + 1);
+}
+
         });
 
         (t.matches || []).forEach(m => {
@@ -1956,7 +2025,7 @@ function fallbackInsights(H, A) {
       });
 
       let count = state.players.length;
-      let html = `<table><tr><th>#</th><th>NFL</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+      let html = `<table><tr><th>#</th><th>NFL</th><th>Name</th><th>Ringe</th><th>W-L</th><th>Diff</th></tr>`;
 
       sorted.forEach((p, i) => {
         let classes = [];
@@ -1971,6 +2040,11 @@ function fallbackInsights(H, A) {
           <select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em; margin-left:5px;">
             ${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}
           </select>` : '';
+        const rings = (history?.ringsByPlayer?.get(normName(p.name)) || 0);
+const ringsHtml = rings > 0
+  ? `<div class="ring-cell"><img src="maddenbowl.ico" class="ring-icon" alt="Ring"> <span>${rings}</span></div>`
+  : `<div class="ring-cell" style="opacity:.35;">–</div>`;
+
 
         html += `
           <tr class="${classes.join(' ')}">
@@ -1981,6 +2055,7 @@ function fallbackInsights(H, A) {
               </div>
             </td>
             <td style="font-weight:bold;">${p.name}</td>
+            <td>${ringsHtml}</td>
             <td>${p.wins}-${p.played - p.wins}</td>
             <td style="color:${p.diff > 0 ? 'var(--accent)' : (p.diff < 0 ? 'var(--nfl-red)' : 'white')}">
               ${p.diff > 0 ? '+' : ''}${p.diff}
@@ -2903,6 +2978,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
