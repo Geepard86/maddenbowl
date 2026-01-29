@@ -750,6 +750,7 @@
       champName,
       (history.ringsByPlayer.get(champName) || 0) + 1
     );
+    console.log("Ring counted:", season, "->", champName);
   }
         const teamToPlayer = new Map();
         (t.players || []).forEach(p => {
@@ -2949,6 +2950,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
