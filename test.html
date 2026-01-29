@@ -2167,14 +2167,20 @@ function fallbackInsights(H, A) {
       }
 
       m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]);
-      m[13].p1 = win(m[10]);  m[13].p2 = win(m[12]);
+      const gfMatch = m.find(x => x.id === "gf");
+      if (gfMatch) {
+        gfMatch.p1 = win(m[10]); // Upper Final Winner
+        gfMatch.p2 = win(m[12]); // Elim Final Winner
+      }
 
       const tb = m.find(x => x.id === "tb");
       if (tb && tb.s1 === null && tb.s2 === null) {
         const firstElim  = loss(m[4]); // lb1 loser
         const secondElim = loss(m[5]); // lb2 loser
-        tb.p1 = firstElim;
-        tb.p2 = secondElim;
+        if (firstElim && secondElim) {   // ✅ nur setzen wenn beide existieren
+          tb.p1 = firstElim;
+          tb.p2 = secondElim;
+        }
   }
     }
 
@@ -2313,7 +2319,12 @@ function fallbackInsights(H, A) {
             <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
               <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
               <div class="upper-floor" style="justify-content: center; height: 100%;">
-                ${renderM(m[13], 13, playoffLabels.gf.p1, playoffLabels.gf.p2)}
+                ${renderM(
+                  m.find(x => x.id === "gf"),
+                  state.playoffMatches.findIndex(x => x.id === "gf"),
+                  playoffLabels.gf.p1,
+                  playoffLabels.gf.p2
+                )}
               </div>
             </div>
           </div>
@@ -2899,6 +2910,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
