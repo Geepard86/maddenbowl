@@ -744,16 +744,26 @@
 
       for (const t of history.seasons) {
         const season = t.season;
+        const champName = getChampionFromTournament(t);
+  if (champName) {
+    history.ringsByPlayer.set(
+      champName,
+      (history.ringsByPlayer.get(champName) || 0) + 1
+    );
+  }
         const teamToPlayer = new Map();
         (t.players || []).forEach(p => {
           const n = normName(p.name);
           if (!n) return;
           history.players.add(n);
           if (p.team) teamToPlayer.set(p.team, n);
-          const champName = getChampionFromTournament(t);
-if (champName) {
-  history.ringsByPlayer.set(champName, (history.ringsByPlayer.get(champName) || 0) + 1);
-}
+            const champName = getChampionFromTournament(t);
+  if (champName) {
+    history.ringsByPlayer.set(
+      champName,
+      (history.ringsByPlayer.get(champName) || 0) + 1
+    );
+  }
 
         });
 
@@ -2939,6 +2949,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
