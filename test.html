@@ -1579,36 +1579,41 @@ function exportHistoryJson() {
   // matches (nur fertige, ohne BYE)
   const matches = [];
 
-  // group matches: p1 = home, p2 = away
-  (state.matches || []).forEach(m => {
-    if (m?.s1 == null || m?.s2 == null) return;
-    const home = state.players[m.p1];
-    const away = state.players[m.p2];
-    if (!home?.team || !away?.team) return;
+// group matches: p1 = home, p2 = away
+(state.matches || []).forEach(m => {
+  if (m?.s1 == null || m?.s2 == null) return;
 
-    matches.push({
-      stage: "group",
-      homeTeam: home.team,
-      awayTeam: away.team,
-      homeScore: m.s1,
-      awayScore: m.s2
-    });
+  const home = state.players[m.p1];
+  const away = state.players[m.p2];
+  if (!home || !away) return;
+
+  matches.push({
+    stage: "group",
+    homeTeam: home.team || null,   // <- nicht mehr skippen
+    awayTeam: away.team || null,
+    homePlayer: (home.name || "").trim(),
+    awayPlayer: (away.name || "").trim(),
+    homeScore: Number(m.s1),
+    awayScore: Number(m.s2)
   });
+});
 
-  // playoff matches: p1 = home, p2 = away (BYE rausfiltern)
-  (state.playoffMatches || []).forEach(pm => {
-    if (!pm?.p1 || !pm?.p2) return;
-    if (pm.p1.id === -1 || pm.p2.id === -1) return;     // BYE
-    if (pm?.s1 == null || pm?.s2 == null) return;       // nur fertige
+// playoff matches: p1 = home, p2 = away (BYE rausfiltern)
+(state.playoffMatches || []).forEach(pm => {
+  if (!pm?.p1 || !pm?.p2) return;
+  if (pm.p1.id === -1 || pm.p2.id === -1) return;   // BYE
+  if (pm?.s1 == null || pm?.s2 == null) return;     // nur fertige
 
-    matches.push({
-      stage: "playoff",
-      homeTeam: pm.p1.team,
-      awayTeam: pm.p2.team,
-      homeScore: pm.s1,
-      awayScore: pm.s2
-    });
+  matches.push({
+    stage: "playoff",
+    homeTeam: pm.p1.team || null,                   // <- nicht mehr skippen
+    awayTeam: pm.p2.team || null,
+    homePlayer: (pm.p1.name || "").trim(),
+    awayPlayer: (pm.p2.name || "").trim(),
+    homeScore: Number(pm.s1),
+    awayScore: Number(pm.s2)
   });
+});
 
   // standings
   const standings = buildStandingsExport();
@@ -3051,6 +3056,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
