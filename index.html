@@ -483,6 +483,162 @@
   filter: drop-shadow(0 0 4px rgba(255,215,0,0.25));
   opacity:0.95;
 }
+
+    /* =========================================================
+   ELIMINATION + CHAMPION OVERLAYS
+   ========================================================= */
+
+.fx-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+
+.fx-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fx-card {
+  width: min(520px, 92vw);
+  background: radial-gradient(circle at 30% 20%, rgba(0,255,204,0.12), rgba(0,0,0,0.0) 55%),
+              rgba(22,31,44,0.95);
+  border: 1px solid #2d3748;
+  border-radius: 16px;
+  padding: 18px 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+  position: relative;
+  overflow: hidden;
+}
+
+.fx-title {
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.fx-sub {
+  opacity: .85;
+  font-size: .9rem;
+  margin-top: 4px;
+}
+
+.fx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.fx-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(0,0,0,0.35));
+}
+
+.fx-bin {
+  width: 96px;
+  height: 96px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.25);
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.fx-bin::before {
+  content: "🗑️";
+  font-size: 42px;
+  opacity: .9;
+  transform: translateY(-2px);
+}
+
+.fx-elim-anim .fx-logo {
+  animation: logoToBin 1.15s cubic-bezier(.2,.85,.2,1) forwards;
+}
+
+.fx-elim-anim .fx-bin {
+  animation: binShake .22s ease-in-out 1.02s 3;
+}
+
+@keyframes logoToBin {
+  0%   { transform: translateX(0) translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  55%  { transform: translateX(150px) translateY(-20px) rotate(14deg) scale(1.05); opacity: 1; }
+  75%  { transform: translateX(210px) translateY(10px) rotate(-18deg) scale(0.9); }
+  100% { transform: translateX(250px) translateY(55px) rotate(25deg) scale(0.45); opacity: 0; }
+}
+
+@keyframes binShake {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(2.5deg); }
+  60%  { transform: rotate(-2.5deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* --- Champion --- */
+.fx-champ-glow {
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle at 50% 50%, rgba(255,215,0,0.22), rgba(0,0,0,0.0) 55%);
+  opacity: 0;
+  animation: champGlow 1.8s ease forwards;
+}
+
+@keyframes champGlow {
+  0% { opacity: 0; transform: scale(0.9); }
+  30% { opacity: 1; transform: scale(1.0); }
+  100% { opacity: 0.9; transform: scale(1.05); }
+}
+
+.fx-trophy {
+  font-size: 56px;
+  filter: drop-shadow(0 0 14px rgba(255,215,0,0.25));
+  animation: trophyPop .9s cubic-bezier(.2,.9,.2,1) forwards;
+}
+
+@keyframes trophyPop {
+  0% { transform: translateY(12px) scale(0.6); opacity: 0; }
+  60% { transform: translateY(-4px) scale(1.08); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.fx-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-confetti span {
+  position: absolute;
+  top: -12px;
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+  background: currentColor; /* Farbe kommt über style="color:..." */
+  opacity: .95;
+  animation: confettiFall 1.7s ease-in forwards;
+}
+
+@keyframes confettiFall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(110vh) rotate(260deg); opacity: 0.9; }
+}
+
     
   </style>
 </head>
@@ -624,6 +780,40 @@
     </div>
   </div>
 
+  <!-- =========================================================
+     FX OVERLAYS
+     ========================================================= -->
+<div id="elimOverlay" class="fx-overlay hidden" aria-hidden="true">
+  <div class="fx-card" id="elimCard">
+    <div class="fx-title" style="color: var(--nfl-red);">ELIMINIERT</div>
+    <div id="elimText" class="fx-sub"></div>
+
+    <div class="fx-row">
+      <img id="elimLogo" class="fx-logo" src="" alt="Eliminated Logo">
+      <div class="fx-bin" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+
+<div id="champOverlay" class="fx-overlay hidden" aria-hidden="true">
+  <div class="fx-card">
+    <div class="fx-champ-glow"></div>
+    <div class="fx-title" style="color: gold;">MADDEN BOWL CHAMPION</div>
+
+    <div style="display:flex; align-items:center; gap:14px; margin-top:10px;">
+      <div class="fx-trophy">🏆</div>
+      <div style="flex:1;">
+        <div id="champText" style="font-weight:900; font-size:1.2rem; letter-spacing:1px;"></div>
+        <div id="champSub" class="fx-sub"></div>
+      </div>
+      <img id="champLogo" class="fx-logo" src="" alt="Champion Logo" style="width:64px; height:64px;">
+    </div>
+
+    <div id="confetti" class="fx-confetti"></div>
+  </div>
+</div>
+
+
   <script>
     // =========================================================
     // CONFIG / BASE
@@ -692,7 +882,178 @@
     let titleOddsPrev = null; // Map name -> %
     let titleOddsNow  = null; // Map name -> %
 
+// =========================================================
+// FX STATE
+// =========================================================
+let _shownElims = new Set();      // names already animated
+let _champShown = false;
 
+// safer logo url helper
+function logoUrlForTeam(teamId) {
+  if (!teamId) return "";
+  return `https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png`;
+}
+
+function getPlayerByName(name) {
+  const n = (name || "").trim();
+  return (state.players || []).find(p => (p.name || "").trim() === n) || null;
+}
+
+    function showEliminationFX(playerName) {
+  const p = getPlayerByName(playerName);
+  if (!p || !p.team) return;
+
+  const overlay = document.getElementById("elimOverlay");
+  const card = document.getElementById("elimCard");
+  const logo = document.getElementById("elimLogo");
+  const text = document.getElementById("elimText");
+
+  if (!overlay || !card || !logo || !text) return;
+
+  text.innerHTML = `<b>${p.name}</b> ist raus.`;
+  logo.src = logoUrlForTeam(p.team);
+
+  overlay.classList.remove("hidden");
+  overlay.classList.add("show");
+  overlay.setAttribute("aria-hidden", "false");
+
+  // reset animation
+  card.classList.remove("fx-elim-anim");
+  void card.offsetWidth; // reflow
+  card.classList.add("fx-elim-anim");
+
+  // auto close
+  setTimeout(() => {
+    overlay.classList.remove("show");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => overlay.classList.add("hidden"), 200);
+  }, 1800);
+
+  // click to close
+  overlay.onclick = () => {
+    overlay.classList.remove("show");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => overlay.classList.add("hidden"), 200);
+  };
+}
+
+function spawnConfetti() {
+  const holder = document.getElementById("confetti");
+  if (!holder) return;
+  holder.innerHTML = "";
+
+  // simple confetti palette via text colors (keine festen CSS-Farben nötig)
+  const colors = ["var(--accent)", "var(--nfl-red)", "gold", "#ffffff", "#4a5568"];
+
+  const count = 38;
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement("span");
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.35;
+    const dur = 1.25 + Math.random() * 0.9;
+
+    s.style.left = left + "vw";
+    s.style.animationDelay = delay + "s";
+    s.style.animationDuration = dur + "s";
+    s.style.color = colors[Math.floor(Math.random() * colors.length)];
+    s.style.transform = `rotate(${Math.random() * 90}deg)`;
+    holder.appendChild(s);
+  }
+}
+
+function showChampionFX(champName) {
+  const p = getPlayerByName(champName);
+  if (!p) return;
+
+  const overlay = document.getElementById("champOverlay");
+  const text = document.getElementById("champText");
+  const sub = document.getElementById("champSub");
+  const logo = document.getElementById("champLogo");
+
+  if (!overlay || !text || !sub || !logo) return;
+
+  text.textContent = p.name;
+  sub.innerHTML = `Glückwunsch! <span style="opacity:.85;">(${p.team || ""})</span>`;
+  logo.src = p.team ? logoUrlForTeam(p.team) : "";
+
+  spawnConfetti();
+
+  overlay.classList.remove("hidden");
+  overlay.classList.add("show");
+  overlay.setAttribute("aria-hidden", "false");
+
+  // auto close
+  setTimeout(() => {
+    overlay.classList.remove("show");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => overlay.classList.add("hidden"), 200);
+  }, 2600);
+
+  overlay.onclick = () => {
+    overlay.classList.remove("show");
+    overlay.setAttribute("aria-hidden", "true");
+    setTimeout(() => overlay.classList.add("hidden"), 200);
+  };
+}
+
+    function computeAliveNames() {
+  const alive = new Set();
+  const pm = state.playoffMatches || [];
+  const playoffsStarted = pm.length > 0;
+
+  if (!playoffsStarted) return alive;
+
+  // alive = hat noch mindestens ein offenes Playoff-Spiel (egal ob upper/lower),
+  // und ist nicht BYE
+  pm.forEach(m => {
+    if (!m) return;
+    const open = (m.s1 === null && m.s2 === null);
+    if (!open) return;
+
+    [m.p1, m.p2].forEach(pp => {
+      if (pp && pp.id !== -1 && pp.name) alive.add(pp.name);
+    });
+  });
+
+  return alive;
+}
+
+function detectAndPlayElimsAndChampion() {
+  const pm = state.playoffMatches || [];
+  if (!pm.length) return;
+
+    // Toilet Bowl Spieler rausfiltern
+  const tb = (state.playoffMatches || []).find(x => x.id === "tb");
+  const tbNames = new Set(
+    [tb?.p1?.name, tb?.p2?.name].filter(Boolean)
+  );
+
+  const alive = computeAliveNames();
+  const all = (state.players || []).map(p => p.name).filter(Boolean);
+
+  // Neu eliminierte: nicht alive, aber noch nicht gezeigt
+  const newlyOut = all.filter(name => !alive.has(name) && !_shownElims.has(name));
+
+  // NICHT alles auf einmal “spammen”: pro Ergebnis nur 1 Animation
+  if (newlyOut.length) {
+    const outName = newlyOut[0];
+    _shownElims.add(outName);
+    showEliminationFX(outName);
+  }
+
+  // Champion: GF fertig?
+  const gf = (state.playoffMatches || []).find(x => x.id === "gf");
+  if (gf && gf.s1 !== null && gf.s2 !== null && !_champShown) {
+    const champ = winnerOf(gf)?.name;
+    if (champ) {
+      _champShown = true;
+      showChampionFX(champ);
+    }
+  }
+}
+
+
+    
     // =========================================================
     // HISTORY / STATS / ODDS
     // =========================================================
@@ -2210,6 +2571,8 @@ const ringsHtml = rings > 0
       applyLayoutRules();
       renderRanking();
 
+      detectAndPlayElimsAndChampion();
+      
       if (isAdmin) syncData(true);
     }
 
@@ -3067,6 +3430,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
