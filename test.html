@@ -1497,6 +1497,18 @@ function getTitleOddsWithTrend(name) {
     // =========================================================
     // UI HELPERS / SYNC
     // =========================================================
+
+    function isFinished(match) {
+      return match && match.s1 !== null && match.s2 !== null;
+    }
+    function isOpen(match) {
+      return match && match.s1 === null && match.s2 === null;
+    }
+    // optional: falls einseitig eingetragen -> "in progress"
+    function isPartial(match) {
+      return match && ((match.s1 !== null) !== (match.s2 !== null));
+    }
+    
     function getLogoHtml(teamId) {
       if (!teamId || teamId === -1) return '';
       return `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${teamId}.png" class="logo-img">`;
@@ -1990,7 +2002,7 @@ function fallbackInsights(H, A) {
           const stadium = mIdx === 0 ? state.config.s1 : state.config.s2;
 
           html += `
-            <div id="gmatch-${gIdx}" class="match-row ${m.s1 !== null ? 'finished' : ''}">
+            <div id="gmatch-${gIdx}" class="match-row ${isFinished(m) ? 'finished' : ''}">
               <div class="stadium-tag">${stadium}</div>
               <div class="team-box right">
                 <span>${p2.name}</span> ${getLogoHtml(p2.team)}
@@ -2006,7 +2018,7 @@ function fallbackInsights(H, A) {
                 ${getLogoHtml(p1.team)} <span>${p1.name}</span>
               </div>
 
-              ${renderMatchMeta(p1.name, p2.name, (m.s1 !== null && m.s2 !== null))}
+              ${renderMatchMeta(p1.name, p2.name, isFinished(m))}
             </div>`;
         });
 
@@ -2189,7 +2201,7 @@ function fallbackInsights(H, A) {
 
       const renderM = (match, idx, placeholderP1, placeholderP2) => {
         if (!match) return "";
-        const active = match.p1 && match.p2 && match.p2.id !== -1 && match.s1 === null;
+        const active = match.p1 && match.p2 && match.p2.id !== -1 && !isFinished(match);
         const time = addMinutes(groupEndTime, match.offset);
         const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
 
@@ -2388,10 +2400,10 @@ function fallbackInsights(H, A) {
       };
 
       let allMatches = [
-        ...state.matches.filter(m => m.s1 === null).map(m => ({
+        ...state.matches.filter(m => !isFinished(m)).map(...)
           ...m, t: 'g', anchor: `gmatch-${state.matches.indexOf(m)}`
         })),
-        ...state.playoffMatches.filter(m => m.s1 === null && m.p1 && m.p2 && m.p2.id !== -1).map(m => ({
+        ...state.playoffMatches.filter(m => !isFinished(m) && m.p1 && m.p2 && m.p2.id !== -1).map(...)
           ...m, t: 'p', anchor: `pmatch-${state.playoffMatches.indexOf(m)}`
         }))
       ];
@@ -2616,6 +2628,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
