@@ -1209,7 +1209,7 @@ function getTitleOddsWithTrend(name) {
   let insights = [];
   try {
     // ⬇️ Falls deine Funktion anders heißt: hier anpassen
-    insights = getInterestingInsights(H, A, { max: 3 }) || [];
+    insights = pickBestInsights(H, A) || [];
   } catch (e) {
     insights = [];
   }
@@ -1218,7 +1218,7 @@ function getTitleOddsWithTrend(name) {
   if (!insights.length) {
     const fav = (odds.pHome >= odds.pAway) ? H : A;
     const favP = Math.max(odds.pHome, odds.pAway) * 100;
-    insights = [`📌 ${fav} ist leichter Favorit (${favP.toFixed(0)}%).`];
+    insights = [`📌 Nicht genügend Daten.`];
   }
 
   // --- Render HTML ---
@@ -1693,7 +1693,7 @@ function getTitleOddsWithTrend(name) {
                 ${getLogoHtml(p1.team)} <span>${p1.name}</span>
               </div>
 
-              ${renderMatchMeta(p1.name, p2.name)}
+              ${renderMatchMeta(p1.name, p2.name, (m.s1 !== null && m.s2 !== null))}
             </div>`;
         });
 
@@ -2031,8 +2031,10 @@ function getTitleOddsWithTrend(name) {
                   ${match.p1 ? getLogoHtml(match.p1.team) : ''}
                   <span>${match.p1 ? match.p1.name : labels.p1}</span>
                 </div>
+                ${match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1 ? renderMatchMeta(match.p1.name, match.p2.name, (match.s1 !== null && match.s2 !== null))
+  : ""
+}
 
-                ${match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1 ? renderMatchMeta(match.p1.name, match.p2.name) : ""}
               </div>`;
           });
 
@@ -2199,6 +2201,7 @@ function getTitleOddsWithTrend(name) {
   </script>
 </body>
 </html>
+
 
 
 
