@@ -1472,7 +1472,7 @@ function getTitleOddsWithTrend(name) {
       ">${b}</div>
     `).join("");
 
-    insightsHtml = insights
+    const insightsHtml = insights
       .slice(0, 3)
       .map(t => `
         <div style="
@@ -2906,6 +2906,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
