@@ -583,16 +583,6 @@
   <div id="playoffSections"></div>
 </div>
 
-
-      <div id="groupPhase" class="card">
-        <h2>Group Stage Schedule</h2>
-        <div id="groupMatches"></div>
-      </div>
-
-      <div id="playoffs" class="card">
-        <h2>Playoff Schedule</h2>
-        <div id="playoffSections"></div>
-      </div>
     </div>
   </div>
 
@@ -2087,9 +2077,11 @@ function getTitleOddsWithTrend(name) {
                   ${match.p1 ? getLogoHtml(match.p1.team) : ''}
                   <span>${match.p1 ? match.p1.name : labels.p1}</span>
                 </div>
-                ${match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1 ? renderMatchMeta(match.p1.name, match.p2.name, (match.s1 !== null && match.s2 !== null))
+                ${(match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1)
+  ? renderMatchMeta(match.p1.name, match.p2.name, (match.s1 !== null && match.s2 !== null))
   : ""
 }
+
 
               </div>`;
           });
@@ -2337,6 +2329,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
