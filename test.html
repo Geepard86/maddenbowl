@@ -930,84 +930,102 @@ const curStreak = (() => {
   const H = normName(homePlayer), A = normName(awayPlayer);
   if (!history.loaded || !H || !A) return [];
 
-  const sAll = computeMatchupStats(H, A, false);
-  const sCur = computeMatchupStats(H, A, true);
-  if (!sAll) return [];
+  const sAll = computeMatchupStats(H, A, false); // history + current matchup
+  const sCur = computeMatchupStats(H, A, true);  // current tournament matchup only
+
+  // Falls computeMatchupStats mal null liefert:
+  if (!sAll) return fallbackInsights(homePlayer, awayPlayer);
 
   const cands = [];
-  const add = (type, score, text) => cands.push({ type, score, text });
 
-  // ---------- (1) Vergleich-lastig: max 1 davon ----------
-  if (sAll.games >= 3) {
-    add("h2h", 10 + sAll.games, `Direkter Vergleich: ${H} vs ${A} steht ${sAll.aWins}:${sAll.bWins}.`);
+  const add = (key, score, text) => cands.push({ key, score, text });
+
+  // ---------- MATCHUP-basierte Insights (priorisiert, aber divers) ----------
+  // 1) H2H (nur EIN Fakt aus "Siege/H2H/Streak/Last3")
+  if (sAll.games >= 2) {
+    add("h2h", 12 + sAll.games, `Direkter Vergleich: ${homePlayer} vs ${awayPlayer} steht ${sAll.aWins}:${sAll.bWins}.`);
   }
+
+  // last3 / streak sind redundant zu H2H → nur wenn kein H2H gewählt ODER deutlich stärker
   if (sAll.streak?.n >= 3 && sAll.streak.who) {
-    add("streak_alltime", 9 + sAll.streak.n, `Streak (all time): ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge in diesem Matchup.`);
+    add("streak", 11 + sAll.streak.n, `Streak im Matchup: ${sAll.streak.who} gewann ${sAll.streak.n}× in Folge.`);
   }
+
   const last3 = (sAll.last3 || []).filter(Boolean);
   if (last3.length >= 3) {
     const h3 = last3.filter(x => x === H).length;
     const a3 = last3.filter(x => x === A).length;
-    if (h3 === 3) add("last3", 8, `Letzte 3 Duelle: alle gingen an ${H}.`);
-    else if (a3 === 3) add("last3", 8, `Letzte 3 Duelle: alle gingen an ${A}.`);
-    else add("last3", 6, `Letzte 3 Duelle: ${H} ${h3}–${a3} ${A}.`);
+    if (h3 === 3) add("last3", 11, `Die letzten 3 Duelle gingen alle an ${homePlayer}.`);
+    else if (a3 === 3) add("last3", 11, `Die letzten 3 Duelle gingen alle an ${awayPlayer}.`);
+    else add("last3", 7, `Letzte 3 Duelle: ${homePlayer} ${h3}–${a3} ${awayPlayer}.`);
   }
 
-  // ---------- (2) Lieber: aktuelles Turnier / form ----------
-  if (sCur?.curStreak?.n >= 2 && sCur.curStreak.who) {
-    add("streak_current", 12 + sCur.curStreak.n, `Streak (aktuelles Turnier): ${sCur.curStreak.who} gewann ${sCur.curStreak.n}× in Folge.`);
-  }
-  if (sCur?.games >= 1) {
-    add("current_matchup", 9, `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).`);
-  }
-
-  // ---------- (3) Punkte / Defense / Totals ----------
+  // 2) Scoring / Total (anderer Typ)
   if (sAll.games >= 2) {
-    add("ppg", 7, `Average PPG im Matchup: ${H} ${sAll.aPPG.toFixed(1)} | ${A} ${sAll.bPPG.toFixed(1)}.`);
-    add("total", 6, `Ø Gesamtpunkte im Matchup: ${sAll.avgTotal.toFixed(1)}.`);
+    add("ppg", 9, `Average PPG im Matchup: ${homePlayer} ${sAll.aPPG.toFixed(1)} | ${awayPlayer} ${sAll.bPPG.toFixed(1)}.`);
+    if (sAll.avgTotal) add("total", 8, `Ø Total Points im Matchup: ${sAll.avgTotal.toFixed(1)}.`);
   }
+
+  // 3) Defense (anderer Typ)
   if (sAll.games >= 2) {
     const hAllowed = sAll.bPoints / sAll.games;
     const aAllowed = sAll.aPoints / sAll.games;
-    if (hAllowed < 17) add("defense", 8, `Defense: ${H} lässt gegen ${A} im Schnitt nur ${hAllowed.toFixed(1)} Punkte zu.`);
-    if (aAllowed < 17) add("defense", 8, `Defense: ${A} lässt gegen ${H} im Schnitt nur ${aAllowed.toFixed(1)} Punkte zu.`);
+    // nicht nur bei <14, sonst ist es oft leer
+    add("defH", 7, `${homePlayer} lässt gegen ${awayPlayer} im Schnitt ${hAllowed.toFixed(1)} Punkte zu.`);
+    add("defA", 7, `${awayPlayer} lässt gegen ${homePlayer} im Schnitt ${aAllowed.toFixed(1)} Punkte zu.`);
   }
 
-  // ---------- (4) Playoff-Context ----------
-  if (sAll.playoff?.games >= 2) {
-    add("playoff", 10, `Playoff-Historie: ${H} vs ${A} ${sAll.playoff.aWins}:${sAll.playoff.bWins}.`);
+  // 4) Playoff-Historie (anderer Typ)
+  if (sAll.playoff?.games >= 1) {
+    add("clutch", 10, `Playoff-H2H: ${homePlayer} vs ${awayPlayer} ${sAll.playoff.aWins}:${sAll.playoff.bWins} (${sAll.playoff.games} Spiele).`);
   }
 
-  // ---------- Auswahl: bis zu 3, aber divers ----------
-  cands.sort((x,y) => y.score - x.score);
+  // 5) Aktuelles Turnier (anderer Typ)
+  if (sCur && sCur.games >= 1) {
+    add("cur", 10, `In diesem Turnier gab es das Duell schon ${sCur.games}× (Stand: ${sCur.aWins}:${sCur.bWins}).`);
+  }
+
+  // ---------- Auswahl: max 3, aber nicht redundant ----------
+  // Regel: aus der "results"-Gruppe (h2h/streak/last3/cur) max 1, damit nicht 3× Siege kommt
+  const group = (k) => {
+    if (["h2h", "streak", "last3", "cur"].includes(k)) return "results";
+    if (["ppg", "total"].includes(k)) return "scoring";
+    if (k.startsWith("def")) return "defense";
+    if (k === "clutch") return "playoff";
+    return "other";
+  };
+
+  cands.sort((a, b) => b.score - a.score);
 
   const chosen = [];
-  const chosenTypes = new Set();
-
-  const isCompareHeavy = (t) => ["h2h","last3","streak_alltime"].includes(t);
-  let compareHeavyUsed = false;
+  const usedGroups = new Set();
 
   for (const c of cands) {
-    if (chosen.length >= 3) break;
-
-    // keine Duplikate gleicher type
-    if (chosenTypes.has(c.type)) continue;
-
-    // Vergleich-lastig nur 1x
-    if (isCompareHeavy(c.type)) {
-      if (compareHeavyUsed) continue;
-      compareHeavyUsed = true;
-    }
-
-    // defense kann doppelt sein (für beide Teams), aber max 1 reicht meistens:
-    if (c.type === "defense" && chosenTypes.has("defense")) continue;
+    const g = group(c.key);
+    // results nur einmal
+    if (g === "results" && usedGroups.has("results")) continue;
+    // sonst Gruppen bevorzugen: nicht zweimal gleicher Typ, solange Alternativen da sind
+    if (usedGroups.has(g) && chosen.length < 2) continue;
 
     chosen.push(c.text);
-    chosenTypes.add(c.type);
+    usedGroups.add(g);
+    if (chosen.length >= 3) break;
   }
 
-  return chosen;
+  // Wenn wegen Filter zu wenig übrig blieb: einfach auffüllen nach Score (aber ohne doppelte Texte)
+  if (chosen.length < 1) return fallbackInsights(homePlayer, awayPlayer);
+
+  if (chosen.length < 3) {
+    for (const c of cands) {
+      if (chosen.includes(c.text)) continue;
+      chosen.push(c.text);
+      if (chosen.length >= 3) break;
+    }
+  }
+
+  return chosen.slice(0, 3);
 }
+
 
 
     function computeEloMap() {
@@ -2493,6 +2511,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
