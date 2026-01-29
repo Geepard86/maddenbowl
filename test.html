@@ -2067,11 +2067,11 @@ function getTitleOddsWithTrend(name) {
                 <div class="score-area">
                   <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}"
                          onchange="setScore('playoff',${index},2,this.value)"
-                         ${(!isAdmin || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
+                         ${(!isAdmin || !isGroupPhaseComplete() || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
                   <span style="color:var(--accent)">:</span>
                   <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}"
                          onchange="setScore('playoff',${index},1,this.value)"
-                         ${(!isAdmin || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
+                         ${(!isAdmin || !isGroupPhaseComplete() || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
                 </div>
 
                 <div class="team-box">
@@ -2230,7 +2230,7 @@ function applyLayoutRules() {
     group.style.order = "2";
     playoffs.style.order = "3";
 
-    playoffs.classList.add("hidden");
+    playoffs.classList.remove("hidden");
 
     // Collapse-Buttons aus + Inhalte immer offen
     btnStandings.classList.add("hidden");
@@ -2339,6 +2339,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
