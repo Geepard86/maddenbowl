@@ -1175,20 +1175,19 @@ function getTitleOddsWithTrend(name) {
   const A = (awayName || "").trim();
   if (!H || !A) return "";
 
-  // --- Odds ---
-  const odds = computeOddsForMatch(H, A); // { pHome, pAway, ouLine, ... }
+  // Odds
+  const odds = computeOddsForMatch(H, A);
   const qHome = decimalOdds(odds.pHome);
   const qAway = decimalOdds(odds.pAway);
 
-  // --- Badges ---
-  const badges = [
-    `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
-    `O/U ${odds.ouLine}`,
-  ];
+  // Badges (kurz halten => mobile safe)
+  const badges = [];
+  badges.push(`Quote: <b>${H}</b> ${qHome} | <b>${A}</b> ${qAway}`);
+  badges.push(`O/U ${odds.ouLine}`);
 
-  // --- Titelchance nur für offene Spiele ---
+  // Titelchance nur für offene Spiele
   if (!isFinished) {
-    const tHome = getTitleOddsDisplay(H); // { now, diff, arrow }
+    const tHome = getTitleOddsDisplay(H);
     const tAway = getTitleOddsDisplay(A);
 
     const colorForArrow = (arrow) =>
@@ -1197,81 +1196,42 @@ function getTitleOddsWithTrend(name) {
 
     const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
 
+    // Wichtig: lieber 2 kurze Badges statt 1 langer => läuft nie raus
     badges.push(
-      `🏆 Titelchance: 
-        <b>${H}</b> ${tHome.now.toFixed(1)}% <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>
-        &nbsp;|&nbsp;
-        <b>${A}</b> ${tAway.now.toFixed(1)}% <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>`
+      `🏆 ${H}: <b>${tHome.now.toFixed(1)}%</b> <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>`
+    );
+    badges.push(
+      `🏆 ${A}: <b>${tAway.now.toFixed(1)}%</b> <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>`
     );
   }
 
-  // --- Insights (immer) ---
+  // Insights (deine echte Funktion)
   let insights = [];
   try {
-    // ⬇️ Falls deine Funktion anders heißt: hier anpassen
     insights = pickBestInsights(H, A) || [];
   } catch (e) {
     insights = [];
   }
 
-  // Fallback, falls nichts gefunden wurde (damit die Box nicht leer aussieht)
+  // Fallback falls keine Insights
   if (!insights.length) {
     const fav = (odds.pHome >= odds.pAway) ? H : A;
     const favP = Math.max(odds.pHome, odds.pAway) * 100;
-    insights = [`📌 Nicht genügend Daten.`];
+    insights = [`📌 ${fav} ist leichter Favorit (${favP.toFixed(0)}%).`];
   }
 
-  // --- Render HTML ---
-  const badgeHtml = badges
-    .filter(Boolean)
-    .map(b => `
-      <div style="
-        display:inline-flex;
-        align-items:center;
-        gap:6px;
-        padding:4px 8px;
-        border:1px solid rgba(255,255,255,0.10);
-        background:rgba(0,0,0,0.22);
-        border-radius:999px;
-        font-size:0.72em;
-        line-height:1.2;
-        white-space:nowrap;
-      ">${b}</div>
-    `).join("");
-
-  const insightsHtml = insights
-    .slice(0, 3)
-    .map(t => `
-      <div style="
-        margin-top:6px;
-        padding:8px 10px;
-        background:rgba(255,255,255,0.04);
-        border:1px solid rgba(255,255,255,0.06);
-        border-left:3px solid var(--accent);
-        border-radius:8px;
-        font-size:0.78em;
-        line-height:1.25;
-      ">${t}</div>
-    `).join("");
-
   return `
-    <div style="
-      margin-top:8px;
-      padding:10px 10px 12px 10px;
-      background:rgba(0,0,0,0.25);
-      border:1px solid rgba(255,255,255,0.08);
-      border-radius:10px;
-    ">
-      <div style="display:flex; flex-wrap:wrap; gap:8px;">
-        ${badgeHtml}
+    <div class="match-meta">
+      <div class="meta-badges">
+        ${badges.map(b => `<span class="badge">${b}</span>`).join("")}
       </div>
-
-      <div style="margin-top:10px;">
-        ${insightsHtml}
+      <div class="meta-insights">
+        ${insights.slice(0, 3).map(t => `<div class="insight">${t}</div>`).join("")}
       </div>
     </div>
   `;
 }
+
 
 
 
@@ -2201,6 +2161,7 @@ function getTitleOddsWithTrend(name) {
   </script>
 </body>
 </html>
+
 
 
 
