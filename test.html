@@ -465,6 +465,10 @@
   transform: rotate(180deg);
 }
 
+.rank-champion td { font-weight: 900; color: var(--accent); }
+.rank-last td { background: rgba(213, 10, 10, 0.10); }
+.rank-note { font-size: 0.75em; color: rgba(255,255,255,0.75); text-align:left; }
+
   </style>
 </head>
 
@@ -593,6 +597,12 @@
   <h2>Playoff Schedule</h2>
   <div id="playoffSections"></div>
 </div>
+
+<div id="rankingCard" class="card">
+  <h2>Finale Rangliste</h2>
+  <div id="rankingContainer" style="overflow-x:auto;"></div>
+</div>
+
 
     </div>
   </div>
@@ -2051,6 +2061,7 @@ function fallbackInsights(H, A) {
       renderGroupMatches();
       renderAllPlayoffAdmin();
       applyLayoutRules();
+      renderRanking();
 
       if (isAdmin) syncData(true);
     }
@@ -2574,6 +2585,252 @@ function applyLayoutRules() {
   btnGroup.classList.toggle("rotate-180", state.ui.groupOpen);
 }
 
+    // =========================================================
+// RANKING / POINTS (Finale Rangliste)
+// =========================================================
+
+// Seeds aus der Gruppenphase (wie deine Tabelle: wins -> h2h -> diff)
+function getGroupSeedsFinal() {
+  const players = [...state.players];
+
+  players.sort((a, b) => {
+    if ((b.wins || 0) !== (a.wins || 0)) return (b.wins || 0) - (a.wins || 0);
+
+    const h2h = state.matches.find(m =>
+      ((m.p1 === a.id && m.p2 === b.id) || (m.p1 === b.id && m.p2 === a.id)) &&
+      m.s1 !== null && m.s2 !== null
+    );
+    if (h2h) {
+      const aS = (h2h.p1 === a.id) ? h2h.s1 : h2h.s2;
+      const bS = (h2h.p1 === b.id) ? h2h.s1 : h2h.s2;
+      if (aS !== bS) return bS - aS;
+    }
+    return (b.diff || 0) - (a.diff || 0);
+  });
+
+  const seedByName = new Map();
+  players.forEach((p, i) => seedByName.set(p.name, i + 1));
+  return seedByName;
+}
+
+function getPlayoffMatch(id) {
+  return (state.playoffMatches || []).find(x => x.id === id) || null;
+}
+
+function winnerOf(match) {
+  if (!match || match.s1 === null || match.s2 === null) return null;
+  if (match.p2 && match.p2.id === -1) return match.p1 || null;
+  return (match.s1 > match.s2) ? match.p1 : match.p2;
+}
+
+function loserOf(match) {
+  if (!match || match.s1 === null || match.s2 === null) return null;
+  if (match.p2 && match.p2.id === -1) return null;
+  return (match.s1 > match.s2) ? match.p2 : match.p1;
+}
+
+// Kern: berechnet Basis-Ranking + Basis-Punkte (ohne TB-Override)
+function computeBaseRanking() {
+  const n = state.players.length;
+  const seedByName = getGroupSeedsFinal();
+
+  // Stage-Order: höher = später ausgeschieden = besserer Platz
+  // (Champion und Runner-Up sind Sonderfälle)
+  const stages = [];
+
+  // 1) Gruppen-Cut (bei 9/10)
+  if (isGroupPhaseComplete()) {
+    const count = n;
+    // sortiert wie Tabelle (Seed-Map liefert Reihenfolge)
+    const sortedBySeed = [...state.players].sort((a,b) => (seedByName.get(a.name) || 999) - (seedByName.get(b.name) || 999));
+
+    if (count === 9) {
+      const cut = sortedBySeed[8];
+      if (cut) stages.push({ stage: 0, label: "Group Cut", names: [cut.name] });
+    }
+    if (count === 10) {
+      const cutA = sortedBySeed[8];
+      const cutB = sortedBySeed[9];
+      const names = [cutA?.name, cutB?.name].filter(Boolean);
+      if (names.length) stages.push({ stage: 0, label: "Group Cut", names });
+    }
+  }
+
+  // 2) Playoff-Eliminations (wenn Playoffs existieren)
+  // Frühe Elims:
+  // lb1/lb2 losers (Elim R1) = gleichzeitig
+  // lb3/lb4 losers (Elim R2) = gleichzeitig
+  // ls loser
+  // lf loser
+  // gf loser (#2)
+  // gf winner (#1)
+  const lb1 = getPlayoffMatch("lb1");
+  const lb2 = getPlayoffMatch("lb2");
+  const lb3 = getPlayoffMatch("lb3");
+  const lb4 = getPlayoffMatch("lb4");
+  const ls  = getPlayoffMatch("ls");
+  const lf  = getPlayoffMatch("lf");
+  const gf  = getPlayoffMatch("gf");
+
+  // Elim R1
+  const elimR1 = [loserOf(lb1)?.name, loserOf(lb2)?.name].filter(Boolean);
+  if (elimR1.length) stages.push({ stage: 1, label: "Elim R1", names: elimR1 });
+
+  // Elim R2
+  const elimR2 = [loserOf(lb3)?.name, loserOf(lb4)?.name].filter(Boolean);
+  if (elimR2.length) stages.push({ stage: 2, label: "Elim R2", names: elimR2 });
+
+  // Elim Semi
+  const elimSemi = loserOf(ls)?.name;
+  if (elimSemi) stages.push({ stage: 3, label: "Elim Semi", names: [elimSemi] });
+
+  // Elim Final (3. Platz)
+  const elimFinal = loserOf(lf)?.name;
+  if (elimFinal) stages.push({ stage: 4, label: "Elim Final", names: [elimFinal] });
+
+  // Runner-up & Champion (nur wenn GF fertig)
+  const champ = winnerOf(gf)?.name;
+  const runner = loserOf(gf)?.name;
+  if (runner) stages.push({ stage: 5, label: "Runner-Up", names: [runner] });
+  if (champ)  stages.push({ stage: 6, label: "Champion", names: [champ] });
+
+  // Alle Namen, die irgendwo auftauchen
+  const seen = new Set(stages.flatMap(s => s.names));
+  // Falls irgendwer noch fehlt (z.B. Turnier läuft), hänge die Restlichen in eine "unknown"-Stage
+  state.players.forEach(p => { if (!seen.has(p.name)) seen.add(p.name); });
+
+  // Jetzt bauen wir die Reihenfolge von oben nach unten:
+  // stage DESC (Champion zuerst), innerhalb Stage: Seed ASC (besserer Seed = besserer Platz)
+  const ordered = [];
+  const stageDesc = [...stages].sort((a,b) => b.stage - a.stage);
+
+  stageDesc.forEach(s => {
+    const sortedNames = [...s.names].sort((na, nb) => (seedByName.get(na) || 999) - (seedByName.get(nb) || 999));
+    sortedNames.forEach(name => ordered.push({
+      name,
+      seed: seedByName.get(name) || null,
+      out: s.label
+    }));
+  });
+
+  // Falls noch jemand fehlt (z.B. weil Playoffs noch nicht berechnet sind), hänge ihn nach Seed ein
+  const missing = state.players
+    .map(p => p.name)
+    .filter(nm => !ordered.some(x => x.name === nm))
+    .sort((a,b) => (seedByName.get(a) || 999) - (seedByName.get(b) || 999));
+
+  missing.forEach(name => ordered.push({ name, seed: seedByName.get(name) || null, out: "TBD" }));
+
+  // Ranks + Punkte
+  const pointsByName = new Map();
+  ordered.forEach((row, idx) => {
+    const rank = idx + 1;
+    const pts = (n - rank + 1) * 100;
+    pointsByName.set(row.name, pts);
+    row.rank = rank;
+    row.points = pts;
+  });
+
+  return { ordered, pointsByName };
+}
+
+// TB-Override: Sieger wird letzter (aber behält Punkte)
+function applyToiletBowlOverride(base) {
+  const tb = getPlayoffMatch("tb");
+  if (!tb || tb.s1 === null || tb.s2 === null) return base;
+
+  const tbWinner = winnerOf(tb)?.name;
+  const tbLoser  = loserOf(tb)?.name;
+  if (!tbWinner || !tbLoser) return base;
+
+  const n = state.players.length;
+
+  // neue Anzeige-Reihenfolge: alle außer TB-Spieler, dann TB-Loser (N-1), TB-Winner (N)
+  const rest = base.ordered.filter(r => r.name !== tbWinner && r.name !== tbLoser);
+
+  const loserRow = base.ordered.find(r => r.name === tbLoser);
+  const winnerRow = base.ordered.find(r => r.name === tbWinner);
+
+  // falls aus irgendeinem Grund nicht vorhanden -> abbrechen
+  if (!loserRow || !winnerRow) return base;
+
+  const newOrdered = [...rest, loserRow, winnerRow];
+
+  // displayRank neu vergeben, points bleiben die bereits berechneten
+  newOrdered.forEach((row, idx) => {
+    row.displayRank = idx + 1;
+  });
+
+  // Letzter muss TB-Winner sein
+  if (newOrdered[newOrdered.length - 1]?.name !== tbWinner) {
+    // Safety: notfalls swap
+    const lastIdx = newOrdered.length - 1;
+    const wIdx = newOrdered.findIndex(r => r.name === tbWinner);
+    if (wIdx >= 0) [newOrdered[wIdx], newOrdered[lastIdx]] = [newOrdered[lastIdx], newOrdered[wIdx]];
+  }
+
+  return { ...base, ordered: newOrdered, tbWinner, tbLoser };
+}
+
+function renderRanking() {
+  const container = document.getElementById("rankingContainer");
+  if (!container) return;
+
+  if (!state.players || state.players.length === 0) {
+    container.innerHTML = `<div style="opacity:.7;">Noch kein Turnier gestartet.</div>`;
+    return;
+  }
+
+  // sicherstellen, dass Gruppen-Stats aktuell sind (wins/diff)
+  renderTable();
+
+  const base = computeBaseRanking();
+  const final = applyToiletBowlOverride(base);
+
+  const n = state.players.length;
+  const gf = getPlayoffMatch("gf");
+  const isComplete = gf && gf.s1 !== null && gf.s2 !== null;
+
+  const note = isComplete
+    ? `Finale Rangliste (inkl. Toilet Bowl Sonderregel).`
+    : `Zwischenstand: Rangliste wird live aus dem aktuellen Stand geschätzt (final erst nach dem Madden Bowl).`;
+
+  let html = `
+    <div class="rank-note">${note}</div>
+    <table style="margin-top:10px;">
+      <tr>
+        <th>#</th>
+        <th>Seed</th>
+        <th>Name</th>
+        <th>Punkte</th>
+        <th>Out</th>
+      </tr>
+  `;
+
+  final.ordered.forEach((r, idx) => {
+    const displayRank = r.displayRank || r.rank || (idx + 1);
+    const isChampion = displayRank === 1 && isComplete;
+    const isLast = displayRank === n && isComplete;
+
+    const tbBadge = (final.tbWinner && r.name === final.tbWinner)
+      ? ` <span class="status-tag tag-live" style="font-size:.55em; padding:2px 6px;">TOILET BOWL SIEGER = LETZTER</span>`
+      : "";
+
+    html += `
+      <tr class="${isChampion ? 'rank-champion' : ''} ${isLast ? 'rank-last' : ''}">
+        <td>${displayRank}</td>
+        <td>${r.seed ?? '-'}</td>
+        <td style="text-align:left; font-weight:700;">${r.name}${tbBadge}</td>
+        <td>${r.points}</td>
+        <td>${r.out}</td>
+      </tr>
+    `;
+  });
+
+  html += `</table>`;
+  container.innerHTML = html;
+}
+
     
     function renderAll() {
       const table = document.getElementById('tableContainer');
@@ -2598,6 +2855,7 @@ function applyLayoutRules() {
         renderPlayoffPicture();
         renderNextGames();
         renderAllPlayoffAdmin();
+        renderRanking();
       }
     }
 
@@ -2637,6 +2895,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
