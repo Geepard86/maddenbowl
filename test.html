@@ -360,6 +360,17 @@
 
     .opponent-row b { color: var(--accent); }
 
+    /* Slot hat Name, aber noch kein Team gewählt -> ROT */
+.draft-row.await-team {
+  border-left-color: var(--nfl-red);
+  background: rgba(213, 10, 10, 0.10);
+}
+
+.draft-row.await-team .name-display {
+  color: var(--nfl-red) !important;
+  font-weight: bold;
+}
+
     /* --- WILDCARD SUMMARY --- */
     .wildcard-summary {
       display: grid;
@@ -745,19 +756,35 @@
     }
 
     function buildPlayerDatalist() {
-      const listId = "playerNameSuggestions";
-      let dl = document.getElementById(listId);
-      if (!dl) {
-        dl = document.createElement("datalist");
-        dl.id = listId;
-        document.body.appendChild(dl);
-      }
-      const names = Array.from(history.players).sort((a,b) => a.localeCompare(b, "de"));
-      dl.innerHTML = names.map(n => `<option value="${n}"></option>`).join("");
+  const listId = "playerNameSuggestions";
+  let dl = document.getElementById(listId);
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = listId;
+    document.body.appendChild(dl);
+  }
 
-      const inp = document.getElementById("nextPlayerName");
-      if (inp) inp.setAttribute("list", listId);
-    }
+  // schon gewählte Namen im aktuellen Draft (Setup-Board)
+  const taken = new Set();
+  const countSel = document.getElementById("playerCount");
+  const count = countSel ? parseInt(countSel.value) : 0;
+
+  for (let i = 0; i < count; i++) {
+    const v = (document.getElementById(`pName${i}`)?.value || "").trim();
+    if (v) taken.add(v);
+  }
+
+  // Namen aus History, aber ohne die bereits vergebenen
+  const names = Array.from(history.players)
+    .filter(n => !taken.has(n))
+    .sort((a,b) => a.localeCompare(b, "de"));
+
+  dl.innerHTML = names.map(n => `<option value="${n}"></option>`).join("");
+
+  const inp = document.getElementById("nextPlayerName");
+  if (inp) inp.setAttribute("list", listId);
+}
+
 
     function getCurrentMatchesNormalized() {
       const out = [];
@@ -1462,8 +1489,11 @@ function getTitleOddsWithTrend(name) {
             const oppName = document.getElementById(`pName${oppSlot}`).value || `P${oppSlot + 1}`;
             const oppTeamId = document.getElementById(`pTeam${oppSlot}`).value;
 
-            const logoUrl = oppTeamId ? `https://static.www.nfl.com/t_q-with-fallback/w_32,h_32/league/api/clubs/logos/${oppTeamId}` : '';
-            const logoHtml = logoUrl ? `<img src="${logoUrl}" style="width:24px; height:24px; object-fit:contain;">` : `<span style="width:24px; display:inline-block"></span>`;
+            const logoUrl = oppTeamId ? `https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${oppTeamId}.png` : '';
+            const logoHtml = logoUrl
+              ? `<img src="${logoUrl}" style="width:24px; height:24px; object-fit:contain;">`
+              : `<span style="width:24px; display:inline-block"></span>`;
+
             const isHome = (match[0] === mySlot);
 
             html += `
@@ -1495,10 +1525,13 @@ function getTitleOddsWithTrend(name) {
       document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
 
       nameDisplay.innerText = name;
-      nameDisplay.style.color = "var(--accent)";
+      nameDisplay.style.color = "var(--nfl-red)";
       nameDisplay.style.fontWeight = "bold";
       hiddenInput.value = name;
-      row.classList.add('assigned');
+
+      // erst mal ROT markieren, bis Team gewählt wurde
+      row.classList.remove('assigned');
+      row.classList.add('await-team');
 
       updateLivePreview();
 
@@ -1513,6 +1546,15 @@ function getTitleOddsWithTrend(name) {
       const name = nameInput.value.trim();
 
       if (!name) { alert("Bitte erst einen Namen eingeben!"); return; }
+      // Duplicate Name verhindern
+const totalSlots = parseInt(document.getElementById('playerCount').value);
+for (let i = 0; i < totalSlots; i++) {
+  const existing = (document.getElementById(`pName${i}`)?.value || "").trim();
+  if (existing && existing.toLowerCase() === name.toLowerCase()) {
+    alert(`Der Name "${name}" ist bereits vergeben.`);
+    return;
+  }
+}
       if (availableSlots.length === 0) { alert("Alle Plätze belegt!"); return; }
 
       const totalSlots = parseInt(document.getElementById('playerCount').value);
@@ -1541,6 +1583,7 @@ function getTitleOddsWithTrend(name) {
         if (counter >= maxSpins) {
           clearInterval(spinInterval);
           finalizeDraw(name);
+          buildPlayerDatalist();
           btn.disabled = false;
         }
       }, 80);
@@ -1560,6 +1603,31 @@ function getTitleOddsWithTrend(name) {
       });
 
       updateLivePreview();
+      // Wenn Name gesetzt & Team gewählt -> Slot wird GRÜN
+document.querySelectorAll('.draft-row').forEach(row => {
+  const id = row.id?.split("-")[1];
+  if (id == null) return;
+
+  const nameVal = document.getElementById(`pName${id}`)?.value || "";
+  const teamVal = document.getElementById(`pTeam${id}`)?.value || "";
+  const nameDisplay = document.getElementById(`pDisplayName${id}`);
+
+  if (nameVal && teamVal) {
+    row.classList.remove("await-team");
+    row.classList.add("assigned");
+    if (nameDisplay) {
+      nameDisplay.style.color = "var(--accent)";
+      nameDisplay.style.fontWeight = "bold";
+    }
+  } else if (nameVal && !teamVal) {
+    row.classList.remove("assigned");
+    row.classList.add("await-team");
+    if (nameDisplay) {
+      nameDisplay.style.color = "var(--nfl-red)";
+      nameDisplay.style.fontWeight = "bold";
+    }
+  }
+});
     }
 
     // =========================================================
@@ -2339,6 +2407,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
