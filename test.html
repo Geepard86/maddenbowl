@@ -599,6 +599,9 @@
     let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
     let availableSlots = [];
     let lastDrawnPlayer = { name: "", slot: null };
+    let titleOddsPrev = null; // Map name -> %
+    let titleOddsNow  = null; // Map name -> %
+
 
     // =========================================================
     // HISTORY / STATS / ODDS
@@ -1029,36 +1032,129 @@ function isInLowerBracket(name) {
   );
 }
 
+function getLiveSeeds() {
+  // Stelle sicher, dass renderTable() schon mal gelaufen ist (played/wins/diff gesetzt)
+  // Sortierung wie in deiner Tabelle: wins -> h2h -> diff
+  const players = [...state.players];
+
+  players.sort((a, b) => {
+    if ((b.wins || 0) !== (a.wins || 0)) return (b.wins || 0) - (a.wins || 0);
+
+    // H2H (wie bei dir)
+    const h2h = state.matches.find(m =>
+      ((m.p1 === a.id && m.p2 === b.id) || (m.p1 === b.id && m.p2 === a.id)) &&
+      m.s1 !== null && m.s2 !== null
+    );
+    if (h2h) {
+      const aS = (h2h.p1 === a.id) ? h2h.s1 : h2h.s2;
+      const bS = (h2h.p1 === b.id) ? h2h.s1 : h2h.s2;
+      if (aS !== bS) return bS - aS;
+    }
+    return (b.diff || 0) - (a.diff || 0);
+  });
+
+  const seedByName = new Map();
+  players.forEach((p, i) => seedByName.set(p.name, i + 1));
+  return seedByName;
+}
+
+function seedFactor(seed, n) {
+  if (!seed || !n || n < 2) return 1.0;
+  const t = (n - seed) / (n - 1);     // 1 für #1, 0 für #n
+  return 0.75 + 0.50 * t;             // #1=1.25, #n=0.75
+}
+
+function teamOVRFactor(player) {
+  const year = state.config.year || "2026";
+  const ovr = (maddenRatings?.[year]?.[player.team] ?? 85);
+  const k = 0.015;                    // 1.5% pro OVR-Punkt
+  return 1 + (ovr - 85) * k;
+}
+
+function formFactor(player) {
+  const played = player.played || 0;
+  if (played === 0) return 1.0;
+
+  const winRate = (player.wins || 0) / played;          // 0..1
+  const diffPerGame = (player.diff || 0) / played;
+
+  const wr = 0.85 + 0.30 * winRate;                     // 0.85..1.15
+  const df = Math.max(0.85, Math.min(1.15, 1 + diffPerGame * 0.01));
+  return wr * df;
+}
+
 function computeTitleOdds() {
-  // Elo inkl. History + current results
-  const elo = computeEloMap();
-  const players = (state.players || []).map(p => p.name);
+  const elo = computeEloMap(); // Map(name -> Elo)
+  const seedByName = getLiveSeeds();
+  const n = state.players.length;
+
+  const playoffsStarted = (state.playoffMatches || []).length > 0;
 
   const weights = {};
   let sum = 0;
 
-  players.forEach(name => {
+  state.players.forEach(p => {
+    const name = p.name;
+
+    // Base = Elo (Longterm)
     let w = Math.max(100, elo.get(name) || 1500);
 
-    // "alive" Näherung: wenn noch in irgendeinem ungespielten Playoff-Match vorkommt ODER Playoffs noch nicht gestartet
-    const playoffsStarted = (state.playoffMatches || []).length > 0;
+    // Alive?
     const stillAlive = !playoffsStarted || (state.playoffMatches || []).some(m =>
       (m.p1?.name === name || m.p2?.name === name) && m.s1 === null
     );
+    if (!stillAlive) w *= 0.01; // stärkeres "raus" als vorher
 
-    if (!stillAlive) w *= 0.05;   // praktisch raus
-    if (isInUpperBracket(name)) w *= 1.15;
-    if (isInLowerBracket(name)) w *= 0.90;
+    // Seed/Standing
+    const seed = seedByName.get(name) || Math.ceil(n / 2);
+    w *= seedFactor(seed, n);
+
+    // Aktuelle Form (wins/diff aus Gruppenphase)
+    w *= formFactor(p);
+
+    // Teamstärke (OVR)
+    w *= teamOVRFactor(p);
+
+    // Bracket Mod (optional etwas stärker als vorher)
+    if (isInUpperBracket(name)) w *= 1.20;
+    if (isInLowerBracket(name)) w *= 0.85;
 
     weights[name] = w;
     sum += w;
   });
 
   const odds = {};
-  players.forEach(name => odds[name] = sum ? (weights[name] / sum) * 100 : 0);
+  state.players.forEach(p => {
+    odds[p.name] = sum ? (weights[p.name] / sum) * 100 : 0;
+  });
+
   return odds;
 }
 
+  function recalcTitleOddsSnapshots() {
+  // vorheriger Stand merken
+  titleOddsPrev = titleOddsNow ? { ...titleOddsNow } : null;
+
+  // neuen Stand berechnen
+  titleOddsNow = computeTitleOdds();
+}
+
+function getTitleOddsDisplay(name) {
+  if (!titleOddsNow) titleOddsNow = computeTitleOdds();
+
+  const now = titleOddsNow[name] ?? 0;
+  const prev = titleOddsPrev ? (titleOddsPrev[name] ?? now) : now;
+
+  const diff = now - prev;
+
+  let arrow = "→";
+  if (diff > 0.8) arrow = "↗";
+  if (diff < -0.8) arrow = "↘";
+
+  return { now, diff, arrow };
+}
+
+    
 function getTitleOddsWithTrend(name) {
   const current = computeTitleOdds();
   const now = current[name] || 0;
@@ -1074,49 +1170,55 @@ function getTitleOddsWithTrend(name) {
   return { now, diff, arrow };
 }
 
+    function renderMatchMeta(homeName, awayName, isFinished) {
+  const H = homeName?.trim() || "";
+  const A = awayName?.trim() || "";
+  if (!H || !A) return "";
 
-    function renderMatchMeta(homeName, awayName) {
-      if (!history.loaded) return "";
-      const H = normName(homeName), A = normName(awayName);
-      if (!H || !A) return "";
+  const odds = computeOddsForMatch(H, A);
+  const qHome = decimalOdds(odds.pHome);
+  const qAway = decimalOdds(odds.pAway);
 
-      const insights = pickBestInsights(H, A);
-      const odds = computeOddsForMatch(H, A);
+  const badges = [
+    `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
+    `O/U ${odds.ouLine}`,
+  ];
 
-      const qHome = decimalOdds(odds.pHome);
-const qAway = decimalOdds(odds.pAway);
+  // ✅ Titelchance nur, wenn Spiel NICHT fertig
+  if (!isFinished) {
+    const tHome = getTitleOddsDisplay(H); // gleich kommt die neue Logik
+    const tAway = getTitleOddsDisplay(A);
 
-const badges = [
-  `Quote: ${H} ${qHome} | ${A} ${qAway}`,
-  `O/U ${odds.ouLine}`,
-];
+    const colorForArrow = (arrow) =>
+      (arrow === "↗") ? "var(--accent)" :
+      (arrow === "↘") ? "var(--nfl-red)" : "#aaa";
 
-// Titelchance für beide
-const tHome = getTitleOddsWithTrend(H);
-const tAway = getTitleOddsWithTrend(A);
+    const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
 
-const colorForArrow = (arrow) =>
-  (arrow === "↗") ? "var(--accent)" :
-  (arrow === "↘") ? "var(--nfl-red)" : "#aaa";
+    badges.push(`🏆 Titelchance: 
+      <b>${H}</b> ${tHome.now.toFixed(1)}% <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>
+      &nbsp;|&nbsp;
+      <b>${A}</b> ${tAway.now.toFixed(1)}% <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>
+    `);
+  }
 
-badges.push(`🏆 Titelchance: 
-  ${H} ${tHome.now.toFixed(1)}% <span style="color:${colorForArrow(tHome.arrow)}; font-weight:bold;">${tHome.arrow} ${(tHome.diff >= 0 ? "+" : "")}${tHome.diff.toFixed(1)}%</span>
-  &nbsp;|&nbsp;
-  ${A} ${tAway.now.toFixed(1)}% <span style="color:${colorForArrow(tAway.arrow)}; font-weight:bold;">${tAway.arrow} ${(tAway.diff >= 0 ? "+" : "")}${tAway.diff.toFixed(1)}%</span>
-`);
+  // Insights (optional)
+  let insights = [];
+  try { insights = getInterestingInsights(H, A, { max: 3 }) || []; } catch(e) {}
+  if (!insights.length) insights = [];
 
+  const badgeHtml = badges.map(b => `<div style="display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid rgba(255,255,255,0.10);background:rgba(0,0,0,0.22);border-radius:999px;font-size:0.72em;line-height:1.2;white-space:nowrap;">${b}</div>`).join("");
 
-      return `
-        <div class="match-meta">
-          <div class="meta-badges">
-            ${badges.map(b => `<span class="badge">${b}</span>`).join("")}
-          </div>
-          <div class="meta-insights">
-            ${insights.length ? insights.map(t => `• ${t}`).join("<br>") : "<span style='opacity:.7'>Noch keine ausreichenden Daten für Insights.</span>"}
-          </div>
-        </div>
-      `;
-    }
+  const insightsHtml = insights.slice(0,3).map(t => `<div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-left:3px solid var(--accent);border-radius:8px;font-size:0.78em;line-height:1.25;">${t}</div>`).join("");
+
+  return `
+    <div style="margin-top:8px;padding:10px 10px 12px 10px;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">${badgeHtml}</div>
+      ${insightsHtml ? `<div style="margin-top:10px;">${insightsHtml}</div>` : ``}
+    </div>
+  `;
+}
+
 
     // =========================================================
     // UI HELPERS / SYNC
@@ -1559,6 +1661,8 @@ badges.push(`🏆 Titelchance:
       _oddsCacheKey = "";
 
       updatePlayoffLogic();
+      // ✅ Titel-Odds Snapshot updaten (damit Trend "seit letztem Ergebnis" stimmt)
+      recalcTitleOddsSnapshots();
       renderTable();
       renderPlayoffPicture();
       renderNextGames();
@@ -2031,6 +2135,7 @@ badges.push(`🏆 Titelchance:
       state.currentView = (state.players && state.players.length > 0) ? 'running' : 'setup';
 
       renderAll();
+      recalcTitleOddsSnapshots();
       updatePlayoffLogic();
       renderAll();
 
@@ -2039,4 +2144,5 @@ badges.push(`🏆 Titelchance:
   </script>
 </body>
 </html>
+
 
