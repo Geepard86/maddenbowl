@@ -2529,6 +2529,7 @@ function applyLayoutRules() {
   const btnGroup = document.getElementById("toggleGroupBtn");
 
   const playoffs = document.getElementById("playoffs");
+  const ranking = document.getElementById("rankingCard");
 
   // --- Vor Gruppenphase Ende: Playoff Schedule gesperrt ---
   if (!complete) {
@@ -2540,6 +2541,7 @@ function applyLayoutRules() {
     playoffs.style.order = "3";
 
     playoffs.classList.remove("hidden");
+    if (ranking) ranking.classList.add("hidden");
 
     // Collapse-Buttons aus + Inhalte immer offen
     btnStandings.classList.add("hidden");
@@ -2561,9 +2563,11 @@ function applyLayoutRules() {
   bracket.style.order = "0";
   playoffs.style.order = "1";
   standingsCard.style.order = "2";
-  group.style.order = "3";
+  if (ranking) ranking.style.order = "3"; 
+  group.style.order = "4";
 
   playoffs.classList.remove("hidden");
+  if (ranking) ranking.classList.remove("hidden");
 
   // Buttons aktivieren
   btnStandings.classList.remove("hidden");
@@ -2895,6 +2899,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
