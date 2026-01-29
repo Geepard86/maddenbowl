@@ -1350,6 +1350,7 @@ function getTitleOddsWithTrend(name) {
             const isTyping = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('score-input');
             if (!isTyping && !isSyncing) {
               state = data;
+              ensureUiState();
               if (state.slots) state.matches = state.slots.flat();
               renderAll();
             }
@@ -2188,6 +2189,7 @@ function isGroupPhaseComplete() {
 state.ui = state.ui || { standingsOpen: true, groupOpen: true };
 
 function toggleSection(which) {
+  ensureUiState();
   if (!state.ui) state.ui = { standingsOpen: true, groupOpen: true };
 
   if (which === "standings") state.ui.standingsOpen = !state.ui.standingsOpen;
@@ -2195,8 +2197,16 @@ function toggleSection(which) {
 
   applyLayoutRules();
 }
-
+    
+function ensureUiState() {
+  if (!state || typeof state !== "object") state = {};
+  if (!state.ui || typeof state.ui !== "object") {
+    state.ui = { standingsOpen: true, groupOpen: true };
+  }
+}
+    
 function applyLayoutRules() {
+  ensureUiState();
   const complete = isGroupPhaseComplete();
 
   const standingsCard = document.getElementById("standingsCard");
@@ -2329,6 +2339,7 @@ function applyLayoutRules() {
   </script>
 </body>
 </html>
+
 
 
 
