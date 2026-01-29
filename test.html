@@ -1405,13 +1405,13 @@ function getTitleOddsWithTrend(name) {
   return { now, diff, arrow };
 }
 
-  function renderMatchMeta(homeName, awayName, isFinished) {
+function renderMatchMeta(homeName, awayName, isFinished) {
   const H = (homeName || "").trim();
   const A = (awayName || "").trim();
   if (!H || !A) return "";
 
   // --- Odds ---
-  const odds = computeOddsForMatch(H, A); // { pHome, pAway, ouLine, ... }
+  const odds = computeOddsForMatch(H, A);
   const qHome = decimalOdds(odds.pHome);
   const qAway = decimalOdds(odds.pAway);
 
@@ -1423,7 +1423,7 @@ function getTitleOddsWithTrend(name) {
 
   // --- Titelchance nur für offene Spiele ---
   if (!isFinished) {
-    const tHome = getTitleOddsDisplay(H); // { now, diff, arrow }
+    const tHome = getTitleOddsDisplay(H);
     const tAway = getTitleOddsDisplay(A);
 
     const colorForArrow = (arrow) =>
@@ -1433,28 +1433,14 @@ function getTitleOddsWithTrend(name) {
     const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
 
     badges.push(
-      `🏆 Titelchance: 
+      `🏆 Titelchance:
         <b>${H}</b> ${tHome.now.toFixed(1)}% <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>
         &nbsp;|&nbsp;
         <b>${A}</b> ${tAway.now.toFixed(1)}% <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>`
     );
   }
 
-  // --- Insights nur für offene Spiele ---
-  let insightsHtml = "";
-
-  if (!isFinished) {
-    let insights = [];
-    try {
-      insights = pickBestInsights(H, A) || [];
-    } catch (e) {
-      insights = [];
-    }
-
-    if (!insights.length) insights = fallbackInsights(H, A);
-    }
-
-  // --- Render HTML ---
+  // --- Render Badges HTML ---
   const badgeHtml = badges
     .filter(Boolean)
     .map(b => `
@@ -1472,7 +1458,18 @@ function getTitleOddsWithTrend(name) {
       ">${b}</div>
     `).join("");
 
-    const insightsHtml = insights
+  // --- Insights nur für offene Spiele (und nur dann erzeugen!) ---
+  let insightsSection = "";
+  if (!isFinished) {
+    let insightsArr = [];
+    try {
+      insightsArr = pickBestInsights(H, A) || [];
+    } catch (e) {
+      insightsArr = [];
+    }
+    if (!insightsArr.length) insightsArr = fallbackInsights(H, A);
+
+    const insightsHtml = insightsArr
       .slice(0, 3)
       .map(t => `
         <div style="
@@ -1487,18 +1484,18 @@ function getTitleOddsWithTrend(name) {
         ">${t}</div>
       `).join("");
 
+    insightsSection = `<div class="meta-insights">${insightsHtml}</div>`;
+  }
+
   return `
-  <div class="match-meta">
-    <div class="meta-badges">
-      ${badgeHtml}
+    <div class="match-meta">
+      <div class="meta-badges">
+        ${badgeHtml}
+      </div>
+      ${insightsSection}
     </div>
-    ${!isFinished ? `<div class="meta-insights">${insightsHtml}</div>` : ``}
-  </div>
-`;
-
+  `;
 }
-
-
 
     // =========================================================
     // UI HELPERS / SYNC
@@ -2906,6 +2903,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
