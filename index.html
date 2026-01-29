@@ -507,16 +507,17 @@
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
             <div>
               <strong style="color:var(--accent);">⚙️ MADDEN SETTINGS</strong><br>
-              • Zeit: 3 Min (Reg.) / 4 Min (Playoffs)<br>
+              • Zeit: 4 Min (Reg.) / 5 Min (Playoffs)<br>
               • Level: Pro | Style: Simulation<br>
-              • Kicking: Classic Meter | Passing: Placement<br>
-              • Wetter: Random
+              • Kicking: Classic | Passing: Classic<br>
+              • Wetter: Random | Broadcast: Random | Accelerated Clock: On
             </div>
             <div>
               <strong style="color:var(--accent);">📜 TURNIER-REGELN</strong><br>
               • Draft: Neueinsteiger > Vorjahresletzte<br>
               • Team-Limit: OVR ≤ 90<br>
               • Trade: Freiwilliger Down-Trade nach 2L
+              • Strafen: Abknien = 10P für den Gegner
             </div>
             <div>
               <strong style="color:var(--accent);">🎮 CONTROLLER HUB</strong><br>
@@ -536,7 +537,7 @@
       <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
         <button class="btn-secondary" onclick="window.print()">PDF Export</button>
         <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
-        <button class="btn-secondary" style="background:#2d3748" onclick="syncData(true)">☁ Cloud Sync</button>
+        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="location.href='hall_of_fame.html'">🏛️ Hall of Fame</button>
         <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
       </div>
 
@@ -2424,7 +2425,7 @@ const ringsHtml = rings > 0
       wcSummaryHtml += `</div>`;
 
       document.getElementById('playoff-picture').innerHTML = `
-        <h2 style="margin-bottom:15px;">NFL Playoff Picture</h2>
+        <h2 style="margin-bottom:15px;">Playoff Picture</h2>
         ${wcSummaryHtml}
         <div class="playoff-grid" style="margin-top:20px;">
           <div class="bracket-row-flow">
@@ -3066,6 +3067,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
