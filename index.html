@@ -1018,40 +1018,52 @@ function showChampionFX(champName) {
   return alive;
 }
 
-function detectAndPlayElimsAndChampion() {
-  const pm = state.playoffMatches || [];
-  if (!pm.length) return;
-
-    // Toilet Bowl Spieler rausfiltern
-  const tb = (state.playoffMatches || []).find(x => x.id === "tb");
-  const tbNames = new Set(
-    [tb?.p1?.name, tb?.p2?.name].filter(Boolean)
+function isEliminationMatchId(id) {
+  return (
+    id === "lb1" || id === "lb2" || id === "lb3" || id === "lb4" ||
+    id === "ls"  || id === "lf"  || id === "gf"
   );
+}
 
-  const alive = computeAliveNames();
-  const all = (state.players || []).map(p => p.name).filter(Boolean);
+function getTbNames() {
+  const tb = (state.playoffMatches || []).find(x => x.id === "tb");
+  return new Set([tb?.p1?.name, tb?.p2?.name].filter(Boolean));
+}
 
-  // Neu eliminierte: nicht alive, aber noch nicht gezeigt
-  const newlyOut = all.filter(name => !alive.has(name) && !_shownElims.has(name));
+// Call this after a score update (we pass the match that just got updated)
+function detectAndPlayElimsAndChampion(lastUpdatedPlayoffMatch = null) {
+  // ---- 1) ELIMINATION FX (only when a true elimination match is finished) ----
+  if (lastUpdatedPlayoffMatch && lastUpdatedPlayoffMatch.id) {
+    const m = lastUpdatedPlayoffMatch;
 
-  // NICHT alles auf einmal “spammen”: pro Ergebnis nur 1 Animation
-  if (newlyOut.length) {
-    const outName = newlyOut[0];
-    _shownElims.add(outName);
-    showEliminationFX(outName);
+    const finished = (m.s1 !== null && m.s2 !== null);
+    const hasBye = (m.p1?.id === -1 || m.p2?.id === -1);
+    const isElim = isEliminationMatchId(m.id);
+
+    if (finished && !hasBye && isElim) {
+      const tbNames = getTbNames();
+
+      const loser = loserOf(m)?.name;
+      // Toilet Bowl rausfiltern
+      if (loser && !tbNames.has(loser) && !_shownElims.has(loser)) {
+        _shownElims.add(loser);
+
+        // kleines Delay, damit das Playoff Picture zuerst rendert (durchgestrichen sichtbar)
+        setTimeout(() => showEliminationFX(loser), 300);
+      }
+    }
   }
 
-  // Champion: GF fertig?
+  // ---- 2) CHAMPION FX (only once when GF finished) ----
   const gf = (state.playoffMatches || []).find(x => x.id === "gf");
   if (gf && gf.s1 !== null && gf.s2 !== null && !_champShown) {
     const champ = winnerOf(gf)?.name;
     if (champ) {
       _champShown = true;
-      showChampionFX(champ);
+      setTimeout(() => showChampionFX(champ), 500);
     }
   }
 }
-
 
     
     // =========================================================
@@ -2571,7 +2583,9 @@ const ringsHtml = rings > 0
       applyLayoutRules();
       renderRanking();
 
-      detectAndPlayElimsAndChampion();
+      const updatedMatch =
+  (type === "playoff") ? state.playoffMatches[idx] : null;
+detectAndPlayElimsAndChampion(updatedMatch);
       
       if (isAdmin) syncData(true);
     }
@@ -3430,6 +3444,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
