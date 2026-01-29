@@ -412,9 +412,9 @@
     }
     @media (max-width: 800px) {
       .match-meta { padding-left: 0; }
-      .badge.wide { flex: 1 1 100%;             /* Mobile: immer ganze Zeile */ }
+      .badge.wide { flex: 0 0 auto; max-width: none; font-size: 0.8em; }
     }
-    .meta-badges { display:flex; flex-wrap:wrap; gap:6px; }
+    .meta-badges { display:flex; flex-wrap:wrap; gap:6px; justify-content: flex-start; }
     .badge {
       border: 1px solid #2d3748;
       background: rgba(0,0,0,0.25);
@@ -2208,6 +2208,7 @@ function getTitleOddsWithTrend(name) {
   </script>
 </body>
 </html>
+
 
 
 
