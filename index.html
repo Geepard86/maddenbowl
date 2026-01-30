@@ -2380,6 +2380,42 @@ if (wcLosers.length > 0) {
   m[5].p1 = null; m[5].p2 = null; m[5].s1 = null; m[5].s2 = null;
 }
 
+      // ------------------------------------------------------
+// CONTENDER ROUND TIMING: wenn >=2 Auto/Bye im Contender-Block,
+// dann alle Contender-Spiele in denselben Timeslot ziehen
+// (Upper Semi us1/us2 + Elim R1 lb1/lb2)
+// ------------------------------------------------------
+const us1 = m.find(x => x.id === "us1") || m[6];
+const us2 = m.find(x => x.id === "us2") || m[7];
+const lb1 = m.find(x => x.id === "lb1") || m[4];
+const lb2 = m.find(x => x.id === "lb2") || m[5];
+
+const isAutoOrEmpty = (match) => {
+  if (!match || !match.p1 || !match.p2) return true;
+  if (match.p1.id === -1 || match.p2.id === -1) return true; // BYE
+  return false;
+};
+
+// nur anfassen, solange keins dieser Matches schon gespielt ist
+const contenderAllUnplayed = [us1, us2, lb1, lb2]
+  .filter(Boolean)
+  .every(x => x.s1 === null && x.s2 === null);
+
+if (contenderAllUnplayed) {
+  const contenderBlock = [us1, us2, lb1, lb2].filter(Boolean);
+  const autoCount = contenderBlock.filter(isAutoOrEmpty).length;
+
+  if (autoCount >= 2) {
+    // Ziel: alles auf den frühesten Offset im Block (i.d.R. us1/us2)
+    const targetOffset = Math.min(...contenderBlock.map(x => x.offset || 0));
+
+    // Upper Semis sind meist schon richtig; wichtig ist v.a. lb1/lb2 nach vorne zu ziehen
+    if (lb1) lb1.offset = targetOffset;
+    if (lb2) lb2.offset = targetOffset;
+  }
+}
+
+
       const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
       const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
 
@@ -3231,6 +3267,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
