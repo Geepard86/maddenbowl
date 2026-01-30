@@ -2293,6 +2293,26 @@ const ringsHtml = rings > 0
       if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
       if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
 
+      // ------------------------------------------------------
+// WILDCARD TIMING: wenn 2 BYEs, dann alle Wildcard-Spiele im gleichen Timeslot
+// ------------------------------------------------------
+const durP = state.config.durP + state.config.durB;
+
+// Default: 2 Spiele jetzt (offset 0), 2 Spiele später (offset durP)
+m[0].offset = 0;
+m[1].offset = 0;
+m[2].offset = durP;
+m[3].offset = durP;
+
+// Wenn 2 Wildcards BYE sind -> es gibt nur 2 echte Games -> beide können sofort laufen
+const wc = [m[0], m[1], m[2], m[3]];
+const byeCount = wc.filter(x => x?.p2?.id === -1).length;
+
+if (byeCount >= 2) {
+  m[2].offset = 0;
+  m[3].offset = 0;
+}
+
 const isBye = (match) => match?.p2 && match.p2.id === -1;
 
 const win = (match) => {
@@ -2382,15 +2402,58 @@ if (wcLosers.length > 0) {
         gfMatch.p2 = win(m[12]); // Elim Final Winner
       }
 
-      const tb = m.find(x => x.id === "tb");
-      if (tb && tb.s1 === null && tb.s2 === null) {
-        const firstElim  = loss(m[4]); // lb1 loser
-        const secondElim = loss(m[5]); // lb2 loser
-        if (firstElim && secondElim) {   // ✅ nur setzen wenn beide existieren
-          tb.p1 = firstElim;
-          tb.p2 = secondElim;
-        }
+      // ------------------------------------------------------
+// TOILET BOWL: darf NIE von BYE gespielt werden
+// => nimm die ersten 2 echten Eliminations-Verlierer (ohne BYE)
+// ------------------------------------------------------
+const tb = m.find(x => x.id === "tb");
+
+const isRealPlayer = (p) => !!(p && p.id !== -1);
+const safeLoser = (match) => {
+  const l = loss(match);
+  return isRealPlayer(l) ? l : null;
+};
+
+function getFirstTwoEliminated() {
+  // Reihenfolge der Eliminations-Spiele (chronologisch)
+  // Elim R1: lb1/lb2
+  // Elim R2: lb3/lb4
+  // Danach: ls (Elim Semi), lf (Elim Final) – nur falls vorher nicht genug echte Elims existieren
+  const elimOrder = ["lb1", "lb2", "lb3", "lb4", "ls", "lf"];
+
+  const out = [];
+  for (const id of elimOrder) {
+    const match = m.find(x => x.id === id);
+    if (!match) continue;
+
+    const l = safeLoser(match);
+    if (l && !out.some(p => p.id === l.id)) out.push(l);
+
+    if (out.length >= 2) break;
   }
+  return out;
+}
+
+if (tb && tb.s1 === null && tb.s2 === null) {
+  // Wenn TB noch leer ist ODER aus Versehen BYE drin wäre -> neu setzen
+  const tbHasBye = (tb.p1 && tb.p1.id === -1) || (tb.p2 && tb.p2.id === -1);
+  const tbIncomplete = !(isRealPlayer(tb.p1) && isRealPlayer(tb.p2));
+
+  if (tbHasBye || tbIncomplete) {
+    const elim2 = getFirstTwoEliminated();
+    if (elim2.length === 2) {
+      tb.p1 = elim2[0]; // 1st Eliminated (echter Spieler)
+      tb.p2 = elim2[1]; // 2nd Eliminated (echter Spieler)
+    } else {
+      // noch nicht genug echte Elims -> TB offen lassen
+      tb.p1 = null;
+      tb.p2 = null;
+      tb.s1 = null;
+      tb.s2 = null;
+    }
+  }
+}
+
     }
 
     function renderPlayoffPicture() {
@@ -2467,7 +2530,7 @@ if (wcLosers.length > 0) {
 </div>
             <div class="bracket-team ${w2 ? 'winner' : ''}">
               ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left', match.id)}
-              <span class="bracket-score">${bye ? "—" : (match.s2 !== null ? match.s2 : '')}</span>>
+              <span class="bracket-score">${bye ? "—" : (match.s2 !== null ? match.s2 : '')}</span>
             </div>
             <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
             <div class="bracket-team ${w1 ? 'winner' : ''}">
@@ -3168,6 +3231,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
