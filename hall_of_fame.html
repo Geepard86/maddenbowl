@@ -814,8 +814,8 @@
           const left  = m.awayPlayer || (m.awayTeam ? `(${m.awayTeam})` : "TBD"); // Away
           const right = m.homePlayer || (m.homeTeam ? `(${m.homeTeam})` : "TBD"); // Home
 
-          const wLeft = done && m.homeScore > m.awayScore;
-          const wRight = done && m.awayScore > m.homeScore;
+          const wLeft  = done && m.awayScore > m.homeScore; // left ist jetzt away
+          const wRight = done && m.homeScore > m.awayScore; // right ist jetzt home
 
           html += `
             <div class="row">
