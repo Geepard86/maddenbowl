@@ -492,7 +492,14 @@
     <div id="live-header">
       <h1>MADDEN BOWL LIVE</h1>
 
-      <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('hall_of_fame.html','_blank')">🏛️ Hall of Fame</button>
+      <div id="hofPublicWrap" style="text-align:center; margin-bottom:10px;">
+  <button class="btn-secondary"
+          style="background:var(--nfl-blue)"
+          onclick="window.open('hall_of_fame.html','_blank')">
+    🏛️ Hall of Fame
+  </button>
+</div>
+
       <div id="nextUp" class="next-games">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
           <small style="color:var(--accent); font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">
@@ -632,6 +639,12 @@
     const BIN_ID = "f3d732f4ad334280c483";
     const API_URL = `https://api.npoint.io/${BIN_ID}`;
     const isAdmin = window.location.search.includes('Altima');
+
+    function toggleHallOfFameButtons() {
+  const pub = document.getElementById("hofPublicWrap");
+  if (pub) pub.style.display = isAdmin ? "none" : "block";
+}
+
 
     // --- HISTORY JSON FILES (place next to HTML or adjust paths) ---
     const HISTORY_SOURCES = [
@@ -3058,6 +3071,7 @@ function renderRanking() {
       state.currentView = (state.players && state.players.length > 0) ? 'running' : 'setup';
 
       renderAll();
+      toggleHallOfFameButtons();
       recalcTitleOddsSnapshots();
       updatePlayoffLogic();
       renderAll();
@@ -3068,4 +3082,5 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
