@@ -55,17 +55,6 @@
   <div class="container">
     <h1>MADDEN BOWL – HALL OF FAME</h1>
 
-    <div class="topbar">
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <span class="chip">📚 Datenquelle: <span class="muted">maddenbowl_YYYY.json (gleiches Verzeichnis)</span></span>
-        <span class="chip">🏆 Ewige Tabelle + Rekorde</span>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        // <button class="btn blue" onclick="location.href='index.html'">← Zur Live-Seite</button>
-        <button class="btn secondary" onclick="reloadAll()">Neu laden</button>
-      </div>
-    </div>
-
     <div class="card" style="margin-bottom:12px;">
       <h2>Navigation</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -88,9 +77,6 @@
           <option value="pts_desc">Gesamtpunkte ↓</option>
           <option value="diff_desc">Blowout ↓</option>
         </select>
-      </div>
-      <div class="hint" style="margin-top:10px;">
-        Tipp: Wenn du willst, kann ich dir auch noch einen Button auf der Live-Seite bauen („Hall of Fame“), der hierher verlinkt.
       </div>
     </div>
 
@@ -444,12 +430,6 @@
     const mostFinals = pickMax(table, x=>x.championships + x.runnerUps);
     if (mostFinals) pushRec("🎭 Most Finals (1st/2nd)", `${mostFinals.name} – ${mostFinals.championships + mostFinals.runnerUps}`, "awards");
 
-    const mostPodiums = pickMax(table, x=>x.podiums);
-    if (mostPodiums) pushRec("🥉 Most Podiums (Top 3)", `${mostPodiums.name} – ${mostPodiums.podiums}`, "awards");
-
-    const bestRank = pickMin(table.filter(x=>x.bestRank!=null), x=>x.bestRank);
-    if (bestRank) pushRec("⭐ Best Ever Finish", `${bestRank.name} – Best Rank #${bestRank.bestRank}`, "awards");
-
     const ironman = pickMax(table, x=>x.games);
     if (ironman) pushRec("🧱 Ironman (Most Games)", `${ironman.name} – ${ironman.games} Games`, "volume");
 
@@ -458,9 +438,6 @@
 
     const mostLosses = pickMax(table, x=>x.losses);
     if (mostLosses) pushRec("💀 Most Losses", `${mostLosses.name} – ${mostLosses.losses} Losses`, "volume");
-
-    const moneyMan = pickMax(table, x=>x.points);
-    if (moneyMan) pushRec("💰 Most Points (Standings)", `${moneyMan.name} – ${moneyMan.points} Punkte`, "volume");
 
     const eliteWin = pickMax(table.filter(x=>x.games>=10), x=>x.winPct);
     if (eliteWin) pushRec("📈 Best Win% (min 10 Games)", `${eliteWin.name} – ${(eliteWin.winPct*100).toFixed(1)}%`, "rate");
