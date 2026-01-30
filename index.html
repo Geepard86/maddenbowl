@@ -492,6 +492,7 @@
     <div id="live-header">
       <h1>MADDEN BOWL LIVE</h1>
 
+      <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('hall_of_fame.html','_blank')">🏛️ Hall of Fame</button>
       <div id="nextUp" class="next-games">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
           <small style="color:var(--accent); font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">
@@ -537,7 +538,7 @@
       <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
         <button class="btn-secondary" onclick="window.print()">PDF Export</button>
         <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
-        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="location.href='hall_of_fame.html'">🏛️ Hall of Fame</button>
+        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('hall_of_fame.html','_blank')">🏛️ Hall of Fame</button>
         <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
       </div>
 
@@ -2229,12 +2230,12 @@ const ringsHtml = rings > 0
   {id:'ub4', phase:'Wildcard', session:'Wildcard', offset: dur},
 
   // ────────────────── Contender Round ─────────────────
+  {id:'lb1', phase:'Elim. R1', session:'Survival Round', offset: dur*3},
+  {id:'lb2', phase:'Elim. R1', session:'Survival Round', offset: dur*3},
   {id:'us1', phase:'Upper Semi', session:'Contender Round', offset: dur*2},
   {id:'us2', phase:'Upper Semi', session:'Contender Round', offset: dur*2},
 
   // ────────────────── Survival Round ──────────────────
-  {id:'lb1', phase:'Elim. R1', session:'Survival Round', offset: dur*3},
-  {id:'lb2', phase:'Elim. R1', session:'Survival Round', offset: dur*3},
   {id:'lb3', phase:'Elim. R2', session:'Survival Round', offset: dur*4},
   {id:'lb4', phase:'Elim. R2', session:'Survival Round', offset: dur*4},
 
@@ -3067,3 +3068,4 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
