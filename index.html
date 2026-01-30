@@ -2328,12 +2328,37 @@ const loss = (match) => {
         m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2];
       }
 
-      if (wcLosers.length >= 2) {
-        m[4].p1 = wcLosers[0]; m[4].p2 = wcLosers[wcLosers.length-1] || wcLosers[1];
-      }
-      if (wcLosers.length >= 4) {
-        m[5].p1 = wcLosers[1]; m[5].p2 = wcLosers[2];
-      }
+// ---- Lower Bracket R1: immer "auffüllen", damit BYE sauber weiterläuft ----
+const padTo = (arr, len, filler) => {
+  const out = [...arr];
+  while (out.length < len) out.push(filler);
+  return out;
+};
+
+// Wenn es weniger als 4 Loser gibt (wegen BYE), füllen wir mit BYE auf.
+// Mapping bleibt wie gedacht: Best vs Worst, 2nd vs 3rd
+const losersPadded = padTo(wcLosers, 4, bye);
+
+// lb1 / lb2 nur setzen, wenn es überhaupt echte Loser gibt
+if (wcLosers.length > 0) {
+  m[4].p1 = losersPadded[0] || null;
+  m[4].p2 = losersPadded[3] || bye;
+
+  // Wenn der zweite Slot komplett nur BYE wäre (z.B. nur 1 Loser), kannst du ihn trotzdem anzeigen
+  // – dein UI zeigt dann AUTO ADVANCE für den echten Spieler.
+  m[5].p1 = losersPadded[1] || null;
+  m[5].p2 = losersPadded[2] || bye;
+
+  // Optional: Falls m[5] nur BYE vs BYE wäre, komplett leeren (damit es nicht “quatschig” wirkt)
+  if (m[5].p1?.id === -1 && m[5].p2?.id === -1) {
+    m[5].p1 = null; m[5].p2 = null;
+    m[5].s1 = null; m[5].s2 = null;
+  }
+} else {
+  // keine Loser vorhanden -> LB R1 komplett leer
+  m[4].p1 = null; m[4].p2 = null; m[4].s1 = null; m[4].s2 = null;
+  m[5].p1 = null; m[5].p2 = null; m[5].s1 = null; m[5].s2 = null;
+}
 
       const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
       const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
@@ -3143,6 +3168,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
