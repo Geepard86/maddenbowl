@@ -811,8 +811,8 @@
           const total = done ? (m.homeScore + m.awayScore) : null;
           const diff = done ? Math.abs(m.homeScore - m.awayScore) : null;
 
-          const left = m.homePlayer || (m.homeTeam ? `(${m.homeTeam})` : "TBD");
-          const right = m.awayPlayer || (m.awayTeam ? `(${m.awayTeam})` : "TBD");
+          const left  = m.awayPlayer || (m.awayTeam ? `(${m.awayTeam})` : "TBD"); // Away
+          const right = m.homePlayer || (m.homeTeam ? `(${m.homeTeam})` : "TBD"); // Home
 
           const wLeft = done && m.homeScore > m.awayScore;
           const wRight = done && m.awayScore > m.homeScore;
