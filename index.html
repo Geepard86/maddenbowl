@@ -2358,11 +2358,32 @@ const ringsHtml = rings > 0
       const totalGroupMinutes = state.slots.length * (state.config.durG + state.config.durB);
       const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
 
-      const getSeed = (player) => {
-        if (!player || player.id === -1) return "";
-        const sorted = [...state.players].sort((a, b) => b.wins - a.wins || b.diff - a.diff);
-        return sorted.findIndex(p => p.id === player.id) + 1;
-      };
+  // ✅ sicherstellen, dass wins/diff aktuell sind
+  renderTable();
+
+  // ✅ Seeds exakt wie in updatePlayoffLogic: wins -> h2h -> diff
+  const s = [...state.players].sort((a,b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+
+    const h2h = state.matches.find(gm =>
+      ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) &&
+      gm.s1 !== null && gm.s2 !== null
+    );
+    if (h2h) {
+      const aS = (h2h.p1 === a.id) ? h2h.s1 : h2h.s2;
+      const bS = (h2h.p1 === b.id) ? h2h.s1 : h2h.s2;
+      if (aS !== bS) return bS - aS;
+    }
+    return (b.diff || 0) - (a.diff || 0);
+  });
+
+  // ✅ Map: playerId -> seed
+  const seedById = new Map(s.map((p, i) => [Number(p.id), i + 1]));
+
+  const getSeed = (player) => {
+    if (!player || player.id === -1) return "";
+    return seedById.get(Number(player.id)) || "";
+  };
 
       const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left', matchId) => {
         if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
@@ -3082,5 +3103,6 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
