@@ -21,8 +21,28 @@
     .btn.secondary{background:var(--gray);font-weight:700;}
     .btn.blue{background:var(--nfl-blue);}
     select,input{background:#0b1119;border:1px solid var(--gray);color:#fff;padding:10px;border-radius:8px;}
-    .grid{display:grid;grid-template-columns:1fr;gap:12px;}
-    @media(min-width:900px){.grid{grid-template-columns:1.05fr 0.95fr;}}
+.grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+
+  /* Mobile: Ewige Tabelle zuerst */
+  grid-template-areas:
+    "alltime"
+    "season";
+}
+
+.season-card{ grid-area: season; }
+.alltime-card{ grid-area: alltime; }
+
+@media(min-width:900px){
+  .grid{
+    grid-template-columns:1.05fr 0.95fr;
+
+    /* Desktop: Saison links, Ewige Tabelle rechts */
+    grid-template-areas: "season alltime";
+  }
+}
     .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;}
     .card h2{margin:0 0 10px;color:var(--accent);text-transform:uppercase;font-size:14px;letter-spacing:1px;}
     .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
@@ -81,7 +101,7 @@
     </div>
 
     <div class="grid">
-      <div class="card">
+      <div class="card season-card">
         <h2>Saison Overview</h2>
         <div id="seasonKpis" class="kpis"></div>
 
@@ -96,7 +116,7 @@
         <div id="tab-records" class="hidden"></div>
       </div>
 
-      <div class="card">
+      <div class="card alltime-card">
         <h2>Ewige Tabelle</h2>
         <div id="alltimeKpis" class="kpis" style="margin-bottom:10px;"></div>
         <div class="tabs">
