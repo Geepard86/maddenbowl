@@ -2426,86 +2426,83 @@ function updatePlayoffLogic() {
     }
   }
 
-  // ======================================================
-  // DYNAMIC TIMING COMPRESSION (Wildcard + BYE-only Rounds)
-  // ======================================================
-  const durP = state.config.durP + state.config.durB;
+// ======================================================
+// DYNAMIC TIMING (keine Overlaps, BYE-only Rounds werden übersprungen)
+// ======================================================
+const durP = state.config.durP + state.config.durB;
 
-  const isRealGame = (match) =>
-    !!(match?.p1 && match?.p2 && match.p1.id !== -1 && match.p2.id !== -1);
+const isRealGame = (match) =>
+  !!(match?.p1 && match?.p2 && match.p1.id !== -1 && match.p2.id !== -1);
 
-  // Wildcard: 2 Slots normal, aber bei >=2 BYE => 1 Slot
-  const wc = [m[0], m[1], m[2], m[3]];
-  const wcByeCount = wc.filter(isBye).length;
-  const wcSlotsUsed = (wcByeCount >= 2) ? 1 : 2;
+const clearMatch = (match) => {
+  if (!match) return;
+  match.p1 = null;
+  match.p2 = null;
+  match.s1 = null;
+  match.s2 = null;
+};
 
-  // Survival R1 & R2: verbrauchen nur Zeit, wenn mind. 1 echtes Spiel existiert
-  const survR1HasRealGame = isRealGame(m[4]) || isRealGame(m[5]);
-  const survR2HasRealGame = isRealGame(m[8]) || isRealGame(m[9]);
+// --- Wildcard: 2 Slots normal, aber bei >=2 BYE => 1 Slot ---
+const wc = [m[0], m[1], m[2], m[3]];
+const wcByeCount = wc.filter(x => x?.p2?.id === -1).length;
+const wcSlotsUsed = (wcByeCount >= 2) ? 1 : 2;
 
-  let slotIdx = 0;
+let slotIdx = 0;
 
-  // --- Wildcard Offsets setzen ---
-  if (wcSlotsUsed === 1) {
-    m[0].offset = 0;
-    m[1].offset = 0;
-    m[2].offset = 0;
-    m[3].offset = 0;
-    slotIdx = 1;
-  } else {
-    m[0].offset = 0;
-    m[1].offset = 0;
-    m[2].offset = durP;
-    m[3].offset = durP;
-    slotIdx = 2;
-  }
-
-  // --- Contender Round (Upper Semi) ---
-  const contenderSlot = slotIdx;
-  m[6].offset = contenderSlot * durP;
-  m[7].offset = contenderSlot * durP;
-
-  // --- Survival Round (Elim R1) ---
-  const survR1Slot = contenderSlot + 1;
-  if (survR1HasRealGame) {
-    m[4].offset = survR1Slot * durP;
-    m[5].offset = survR1Slot * durP;
-    slotIdx = survR1Slot + 1;
-  } else {
-    // BYE-only -> keine zusätzliche Zeit
-    m[4].offset = contenderSlot * durP;
-    m[5].offset = contenderSlot * durP;
-    slotIdx = contenderSlot + 1;
-  }
-
-  // --- Survival Round R2 (Elim R2) ---
-  const survR2Slot = slotIdx;
-  if (survR2HasRealGame) {
-    m[8].offset = survR2Slot * durP;
-    m[9].offset = survR2Slot * durP;
-    slotIdx = survR2Slot + 1;
-  } else {
-    const prevSlot = Math.max(0, slotIdx - 1);
-    m[8].offset = prevSlot * durP;
-    m[9].offset = prevSlot * durP;
-    // slotIdx bleibt
-  }
-
-  // --- Finals ---
-  const finalsSlot = slotIdx;
-  m[10].offset = finalsSlot * durP; // uf
-  m[11].offset = finalsSlot * durP; // ls
-  slotIdx = finalsSlot + 1;
-
-  // --- Judgement Day ---
-  const judgeSlot = slotIdx;
-  m[12].offset = judgeSlot * durP; // lf
-  if (tb) tb.offset = judgeSlot * durP;
-  slotIdx = judgeSlot + 1;
-
-  // --- Madden Bowl ---
-  if (gfMatch) gfMatch.offset = slotIdx * durP;
+// Wildcard Offsets
+if (wcSlotsUsed === 1) {
+  m[0].offset = 0; m[1].offset = 0; m[2].offset = 0; m[3].offset = 0;
+  slotIdx = 1;
+} else {
+  m[0].offset = 0;      m[1].offset = 0;
+  m[2].offset = durP;   m[3].offset = durP;
+  slotIdx = 2;
 }
+
+// Contender Round (Upper Semi) immer NACH Wildcard
+const contenderSlot = slotIdx;
+m[6].offset = contenderSlot * durP;
+m[7].offset = contenderSlot * durP;
+slotIdx = contenderSlot + 1;
+
+// Survival Round R1 (lb1/lb2): nur Slot, wenn mind. 1 echtes Spiel
+const survR1HasReal = isRealGame(m[4]) || isRealGame(m[5]);
+if (survR1HasReal) {
+  m[4].offset = slotIdx * durP;
+  m[5].offset = slotIdx * durP;
+  slotIdx += 1;
+} else {
+  // BYE-only -> komplett überspringen (kein Timeslot, kein Overlap)
+  clearMatch(m[4]);
+  clearMatch(m[5]);
+}
+
+// Survival Round R2 (lb3/lb4): nur Slot, wenn mind. 1 echtes Spiel
+const survR2HasReal = isRealGame(m[8]) || isRealGame(m[9]);
+if (survR2HasReal) {
+  m[8].offset = slotIdx * durP;
+  m[9].offset = slotIdx * durP;
+  slotIdx += 1;
+} else {
+  clearMatch(m[8]);
+  clearMatch(m[9]);
+}
+
+// Finals
+m[10].offset = slotIdx * durP; // uf
+m[11].offset = slotIdx * durP; // ls
+slotIdx += 1;
+
+// Judgement Day
+m[12].offset = slotIdx * durP; // lf
+const tb2 = m.find(x => x.id === "tb");
+if (tb2) tb2.offset = slotIdx * durP;
+slotIdx += 1;
+
+// Madden Bowl
+const gf2 = m.find(x => x.id === "gf");
+if (gf2) gf2.offset = slotIdx * durP;
+
 
 
     function renderPlayoffPicture() {
@@ -3283,4 +3280,5 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
