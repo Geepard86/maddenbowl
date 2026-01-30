@@ -2541,54 +2541,50 @@ const loss = (match) => {
     }
 
     function renderAllPlayoffAdmin() {
-      // group matches already rendered separately
-      if (!state.playoffMatches || state.playoffMatches.length === 0) {
-        document.getElementById('playoffSections').innerHTML = "";
-        return;
-      }
+  // group matches already rendered separately
+  if (!state.playoffMatches || state.playoffMatches.length === 0) {
+    document.getElementById('playoffSections').innerHTML = "";
+    return;
+  }
 
-      const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
-        const offset = match.offset || 0;
-        if (!groups[offset]) groups[offset] = [];
-        groups[offset].push({ match, index: i });
-        return groups;
-      }, {});
+  // Helper (falls noch nicht global vorhanden)
+  const isByeMatch = (match) => match?.p2 && match.p2.id === -1;
 
-      const dur = state.config.durG + state.config.durB;
-      const totalGroupMinutes = state.slots.length * dur;
-      const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
+  const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
+    const offset = match.offset || 0;
+    if (!groups[offset]) groups[offset] = [];
+    groups[offset].push({ match, index: i });
+    return groups;
+  }, {});
 
-      document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
-        .sort((a, b) => parseInt(a) - parseInt(b))
-        .map(offset => {
-          const time = addMinutes(groupEndTime, parseInt(offset));
-          const matchesInSlot = playoffGroups[offset];
-          const roundName =
-  matchesInSlot[0].match.session ||
-  matchesInSlot[0].match.phase ||
-  "Playoff-Phase";
+  const dur = state.config.durG + state.config.durB;
+  const totalGroupMinutes = state.slots.length * dur;
+  const groupEndTime = addMinutes(state.config.start, totalGroupMinutes);
 
+  document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
+    .sort((a, b) => parseInt(a) - parseInt(b))
+    .map(offset => {
+      const time = addMinutes(groupEndTime, parseInt(offset));
+      const matchesInSlot = playoffGroups[offset];
+      const roundName =
+        matchesInSlot[0].match.session ||
+        matchesInSlot[0].match.phase ||
+        "Playoff-Phase";
 
-          let html = `
-            <div class="time-slot">
-              <div class="slot-header">
-                <span>${time} Uhr | ${roundName}</span>
-              </div>`;
+      let html = `
+        <div class="time-slot">
+          <div class="slot-header">
+            <span>${time} Uhr | ${roundName}</span>
+          </div>`;
 
-          matchesInSlot.forEach(({ match, index }) => {
-            const labels = playoffLabels[match.id] || { p1: "TBD", p2: "TBD" };
-            const stadium = (matchesInSlot.findIndex(x => x.index === index) === 0) ? state.config.s1 : state.config.s2;
+      matchesInSlot.forEach(({ match, index }) => {
+        const labels = playoffLabels[match.id] || { p1: "TBD", p2: "TBD" };
+        const stadium =
+          (matchesInSlot.findIndex(x => x.index === index) === 0)
+            ? state.config.s1
+            : state.config.s2;
 
-            html += `
-              <div id="pmatch-${index}" class="match-row ${match.s1 !== null ? 'finished' : ''}">
-                <div class="stadium-tag">${match.phase}<br>${stadium}</div>
-
-                <div class="team-box right">
-                  <span>${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name) : labels.p2}</span>
-                  ${match.p2 ? getLogoHtml(match.p2.team) : ''}
-                </div>
-
-                const bye = isByeMatch(match);
+        const bye = isByeMatch(match);
 
         // Für BYE: keine Score Inputs, stattdessen Badge
         const scoreAreaHtml = bye
@@ -2633,9 +2629,10 @@ const loss = (match) => {
           </div>`;
       });
 
-          return html + `</div>`;
-        }).join('');
-    }
+      return html + `</div>`;
+    }).join('');
+}
+
 
     // =========================================================
     // NEXT GAMES
@@ -3146,6 +3143,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
