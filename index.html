@@ -2271,190 +2271,242 @@ const ringsHtml = rings > 0
 
     }
 
-    function updatePlayoffLogic() {
-      const m = state.playoffMatches;
-      if (!m || m.length === 0) return;
+function updatePlayoffLogic() {
+  const m = state.playoffMatches;
+  if (!m || m.length === 0) return;
 
-      let s = [...state.players].sort((a,b) => {
-        if (b.wins !== a.wins) return b.wins - a.wins;
-        let h2h = state.matches.find(gm => ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) && gm.s1!==null);
-        if (h2h) {
-          let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
-          let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
-          if (aS !== bS) return bS - aS;
-        }
-        return b.diff - a.diff;
-      });
+  // --- Seed Sorting (wie bisher) ---
+  let s = [...state.players].sort((a,b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+    let h2h = state.matches.find(gm => ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) && gm.s1!==null);
+    if (h2h) {
+      let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+      let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+      if (aS !== bS) return bS - aS;
+    }
+    return b.diff - a.diff;
+  });
 
-      const bye = { id: -1, name: "BYE", team: null };
+  const bye = { id: -1, name: "BYE", team: null };
 
-      if (m[0].s1 === null && m[0].s2 === null) { m[0].p1 = s[0]; m[0].p2 = s[7] || bye; }
-      if (m[1].s1 === null && m[1].s2 === null) { m[1].p1 = s[3]; m[1].p2 = s[4] || bye; }
-      if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
-      if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
+  // --- Wildcard Pairings (wie bisher) ---
+  if (m[0].s1 === null && m[0].s2 === null) { m[0].p1 = s[0]; m[0].p2 = s[7] || bye; }
+  if (m[1].s1 === null && m[1].s2 === null) { m[1].p1 = s[3]; m[1].p2 = s[4] || bye; }
+  if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
+  if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
 
-      // ------------------------------------------------------
-// WILDCARD TIMING: wenn 2 BYEs, dann alle Wildcard-Spiele im gleichen Timeslot
-// ------------------------------------------------------
-const durP = state.config.durP + state.config.durB;
+  // Helpers
+  const isBye = (match) => match?.p2 && match.p2.id === -1;
 
-// Default: 2 Spiele jetzt (offset 0), 2 Spiele später (offset durP)
-m[0].offset = 0;
-m[1].offset = 0;
-m[2].offset = durP;
-m[3].offset = durP;
+  const win = (match) => {
+    if (!match) return null;
+    if (isBye(match)) return match.p1; // BYE -> sofort weiter
+    if (match.s1 === null || match.s2 === null) return null;
+    return (match.s1 > match.s2) ? match.p1 : match.p2;
+  };
 
-// Wenn 2 Wildcards BYE sind -> es gibt nur 2 echte Games -> beide können sofort laufen
-const wc = [m[0], m[1], m[2], m[3]];
-const byeCount = wc.filter(x => x?.p2?.id === -1).length;
+  const loss = (match) => {
+    if (!match) return null;
+    if (isBye(match)) return null;     // BYE -> kein Verlierer
+    if (match.s1 === null || match.s2 === null) return null;
+    return (match.s1 > match.s2) ? match.p2 : match.p1;
+  };
 
-if (byeCount >= 2) {
-  m[2].offset = 0;
-  m[3].offset = 0;
-}
+  const sortBySeed = (players) => {
+    const seedOrder = s.map(p => p.id);
+    return players
+      .filter(p => p !== null)
+      .sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
+  };
 
-const isBye = (match) => match?.p2 && match.p2.id === -1;
+  // --- Wildcard Winners/Losers ---
+  const wcWinners = sortBySeed([win(m[0]), win(m[1]), win(m[2]), win(m[3])]);
+  const wcLosers  = sortBySeed([loss(m[0]), loss(m[1]), loss(m[2]), loss(m[3])]);
 
-const win = (match) => {
-  if (!match) return null;
-
-  // ✅ BYE: sofort weiter – ohne Score
-  if (isBye(match)) return match.p1;
-
-  // normales Spiel
-  if (match.s1 === null || match.s2 === null) return null;
-  return (match.s1 > match.s2) ? match.p1 : match.p2;
-};
-
-const loss = (match) => {
-  if (!match) return null;
-
-  // ✅ BYE: kein Verlierer
-  if (isBye(match)) return null;
-
-  if (match.s1 === null || match.s2 === null) return null;
-  return (match.s1 > match.s2) ? match.p2 : match.p1;
-};
-      const sortBySeed = (players) => {
-        const seedOrder = s.map(p => p.id);
-        return players.filter(p => p !== null).sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
-      };
-
-      const wcWinners = sortBySeed([win(m[0]), win(m[1]), win(m[2]), win(m[3])]);
-      const wcLosers  = sortBySeed([loss(m[0]), loss(m[1]), loss(m[2]), loss(m[3])]);
-
-      if (wcWinners.length >= 4) {
-        m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3];
-        m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2];
-      }
-
-// ---- Lower Bracket R1: immer "auffüllen", damit BYE sauber weiterläuft ----
-const padTo = (arr, len, filler) => {
-  const out = [...arr];
-  while (out.length < len) out.push(filler);
-  return out;
-};
-
-// Wenn es weniger als 4 Loser gibt (wegen BYE), füllen wir mit BYE auf.
-// Mapping bleibt wie gedacht: Best vs Worst, 2nd vs 3rd
-const losersPadded = padTo(wcLosers, 4, bye);
-
-// lb1 / lb2 nur setzen, wenn es überhaupt echte Loser gibt
-if (wcLosers.length > 0) {
-  m[4].p1 = losersPadded[0] || null;
-  m[4].p2 = losersPadded[3] || bye;
-
-  // Wenn der zweite Slot komplett nur BYE wäre (z.B. nur 1 Loser), kannst du ihn trotzdem anzeigen
-  // – dein UI zeigt dann AUTO ADVANCE für den echten Spieler.
-  m[5].p1 = losersPadded[1] || null;
-  m[5].p2 = losersPadded[2] || bye;
-
-  // Optional: Falls m[5] nur BYE vs BYE wäre, komplett leeren (damit es nicht “quatschig” wirkt)
-  if (m[5].p1?.id === -1 && m[5].p2?.id === -1) {
-    m[5].p1 = null; m[5].p2 = null;
-    m[5].s1 = null; m[5].s2 = null;
+  // --- Upper Semis (Contender Round) ---
+  if (wcWinners.length >= 4) {
+    m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3];
+    m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2];
   }
-} else {
-  // keine Loser vorhanden -> LB R1 komplett leer
-  m[4].p1 = null; m[4].p2 = null; m[4].s1 = null; m[4].s2 = null;
-  m[5].p1 = null; m[5].p2 = null; m[5].s1 = null; m[5].s2 = null;
-}
 
-      const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
-      const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
+  // --- Lower Bracket R1: auffüllen mit BYE (wie bisher) ---
+  const padTo = (arr, len, filler) => {
+    const out = [...arr];
+    while (out.length < len) out.push(filler);
+    return out;
+  };
 
-      if (divLosers.length >= 2 && elimR1Winners.length >= 2) {
-        m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[1];
-        m[9].p1 = divLosers[1]; m[9].p2 = elimR1Winners[0];
-      }
+  const losersPadded = padTo(wcLosers, 4, bye);
 
-      m[10].p1 = win(m[6]); m[10].p2 = win(m[7]);
+  if (wcLosers.length > 0) {
+    m[4].p1 = losersPadded[0] || null;
+    m[4].p2 = losersPadded[3] || bye;
 
-      const elimR2Winners = sortBySeed([win(m[8]), win(m[9])]);
-      if (elimR2Winners.length >= 2) {
-        m[11].p1 = elimR2Winners[0]; m[11].p2 = elimR2Winners[1];
-      }
+    m[5].p1 = losersPadded[1] || null;
+    m[5].p2 = losersPadded[2] || bye;
 
-      m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]);
-      const gfMatch = m.find(x => x.id === "gf");
-      if (gfMatch) {
-        gfMatch.p1 = win(m[10]); // Upper Final Winner
-        gfMatch.p2 = win(m[12]); // Elim Final Winner
-      }
-
-      // ------------------------------------------------------
-// TOILET BOWL: darf NIE von BYE gespielt werden
-// => nimm die ersten 2 echten Eliminations-Verlierer (ohne BYE)
-// ------------------------------------------------------
-const tb = m.find(x => x.id === "tb");
-
-const isRealPlayer = (p) => !!(p && p.id !== -1);
-const safeLoser = (match) => {
-  const l = loss(match);
-  return isRealPlayer(l) ? l : null;
-};
-
-function getFirstTwoEliminated() {
-  // Reihenfolge der Eliminations-Spiele (chronologisch)
-  // Elim R1: lb1/lb2
-  // Elim R2: lb3/lb4
-  // Danach: ls (Elim Semi), lf (Elim Final) – nur falls vorher nicht genug echte Elims existieren
-  const elimOrder = ["lb1", "lb2", "lb3", "lb4", "ls", "lf"];
-
-  const out = [];
-  for (const id of elimOrder) {
-    const match = m.find(x => x.id === id);
-    if (!match) continue;
-
-    const l = safeLoser(match);
-    if (l && !out.some(p => p.id === l.id)) out.push(l);
-
-    if (out.length >= 2) break;
+    if (m[5].p1?.id === -1 && m[5].p2?.id === -1) {
+      m[5].p1 = null; m[5].p2 = null;
+      m[5].s1 = null; m[5].s2 = null;
+    }
+  } else {
+    m[4].p1 = null; m[4].p2 = null; m[4].s1 = null; m[4].s2 = null;
+    m[5].p1 = null; m[5].p2 = null; m[5].s1 = null; m[5].s2 = null;
   }
-  return out;
-}
 
-if (tb && tb.s1 === null && tb.s2 === null) {
-  // Wenn TB noch leer ist ODER aus Versehen BYE drin wäre -> neu setzen
-  const tbHasBye = (tb.p1 && tb.p1.id === -1) || (tb.p2 && tb.p2.id === -1);
-  const tbIncomplete = !(isRealPlayer(tb.p1) && isRealPlayer(tb.p2));
+  // --- LB R2 Pairings ---
+  const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
+  const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
 
-  if (tbHasBye || tbIncomplete) {
-    const elim2 = getFirstTwoEliminated();
-    if (elim2.length === 2) {
-      tb.p1 = elim2[0]; // 1st Eliminated (echter Spieler)
-      tb.p2 = elim2[1]; // 2nd Eliminated (echter Spieler)
-    } else {
-      // noch nicht genug echte Elims -> TB offen lassen
-      tb.p1 = null;
-      tb.p2 = null;
-      tb.s1 = null;
-      tb.s2 = null;
+  if (divLosers.length >= 2 && elimR1Winners.length >= 2) {
+    m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[1];
+    m[9].p1 = divLosers[1]; m[9].p2 = elimR1Winners[0];
+  }
+
+  // --- Upper Final ---
+  m[10].p1 = win(m[6]);
+  m[10].p2 = win(m[7]);
+
+  // --- Lower Semi ---
+  const elimR2Winners = sortBySeed([win(m[8]), win(m[9])]);
+  if (elimR2Winners.length >= 2) {
+    m[11].p1 = elimR2Winners[0];
+    m[11].p2 = elimR2Winners[1];
+  }
+
+  // --- Elim Final + Grand Final ---
+  m[12].p1 = loss(m[10]);
+  m[12].p2 = win(m[11]);
+
+  const gfMatch = m.find(x => x.id === "gf");
+  if (gfMatch) {
+    gfMatch.p1 = win(m[10]); // Upper Final Winner
+    gfMatch.p2 = win(m[12]); // Elim Final Winner
+  }
+
+  // ------------------------------------------------------
+  // TOILET BOWL: darf NIE von BYE gespielt werden
+  // ------------------------------------------------------
+  const tb = m.find(x => x.id === "tb");
+
+  const isRealPlayer = (p) => !!(p && p.id !== -1);
+  const safeLoser = (match) => {
+    const l = loss(match);
+    return isRealPlayer(l) ? l : null;
+  };
+
+  function getFirstTwoEliminated() {
+    const elimOrder = ["lb1", "lb2", "lb3", "lb4", "ls", "lf"];
+    const out = [];
+    for (const id of elimOrder) {
+      const match = m.find(x => x.id === id);
+      if (!match) continue;
+      const l = safeLoser(match);
+      if (l && !out.some(p => p.id === l.id)) out.push(l);
+      if (out.length >= 2) break;
+    }
+    return out;
+  }
+
+  if (tb && tb.s1 === null && tb.s2 === null) {
+    const tbHasBye = (tb.p1 && tb.p1.id === -1) || (tb.p2 && tb.p2.id === -1);
+    const tbIncomplete = !(isRealPlayer(tb.p1) && isRealPlayer(tb.p2));
+
+    if (tbHasBye || tbIncomplete) {
+      const elim2 = getFirstTwoEliminated();
+      if (elim2.length === 2) {
+        tb.p1 = elim2[0];
+        tb.p2 = elim2[1];
+      } else {
+        tb.p1 = null;
+        tb.p2 = null;
+        tb.s1 = null;
+        tb.s2 = null;
+      }
     }
   }
+
+  // ======================================================
+  // DYNAMIC TIMING COMPRESSION (Wildcard + BYE-only Rounds)
+  // ======================================================
+  const durP = state.config.durP + state.config.durB;
+
+  const isRealGame = (match) =>
+    !!(match?.p1 && match?.p2 && match.p1.id !== -1 && match.p2.id !== -1);
+
+  // Wildcard: 2 Slots normal, aber bei >=2 BYE => 1 Slot
+  const wc = [m[0], m[1], m[2], m[3]];
+  const wcByeCount = wc.filter(isBye).length;
+  const wcSlotsUsed = (wcByeCount >= 2) ? 1 : 2;
+
+  // Survival R1 & R2: verbrauchen nur Zeit, wenn mind. 1 echtes Spiel existiert
+  const survR1HasRealGame = isRealGame(m[4]) || isRealGame(m[5]);
+  const survR2HasRealGame = isRealGame(m[8]) || isRealGame(m[9]);
+
+  let slotIdx = 0;
+
+  // --- Wildcard Offsets setzen ---
+  if (wcSlotsUsed === 1) {
+    m[0].offset = 0;
+    m[1].offset = 0;
+    m[2].offset = 0;
+    m[3].offset = 0;
+    slotIdx = 1;
+  } else {
+    m[0].offset = 0;
+    m[1].offset = 0;
+    m[2].offset = durP;
+    m[3].offset = durP;
+    slotIdx = 2;
+  }
+
+  // --- Contender Round (Upper Semi) ---
+  const contenderSlot = slotIdx;
+  m[6].offset = contenderSlot * durP;
+  m[7].offset = contenderSlot * durP;
+
+  // --- Survival Round (Elim R1) ---
+  const survR1Slot = contenderSlot + 1;
+  if (survR1HasRealGame) {
+    m[4].offset = survR1Slot * durP;
+    m[5].offset = survR1Slot * durP;
+    slotIdx = survR1Slot + 1;
+  } else {
+    // BYE-only -> keine zusätzliche Zeit
+    m[4].offset = contenderSlot * durP;
+    m[5].offset = contenderSlot * durP;
+    slotIdx = contenderSlot + 1;
+  }
+
+  // --- Survival Round R2 (Elim R2) ---
+  const survR2Slot = slotIdx;
+  if (survR2HasRealGame) {
+    m[8].offset = survR2Slot * durP;
+    m[9].offset = survR2Slot * durP;
+    slotIdx = survR2Slot + 1;
+  } else {
+    const prevSlot = Math.max(0, slotIdx - 1);
+    m[8].offset = prevSlot * durP;
+    m[9].offset = prevSlot * durP;
+    // slotIdx bleibt
+  }
+
+  // --- Finals ---
+  const finalsSlot = slotIdx;
+  m[10].offset = finalsSlot * durP; // uf
+  m[11].offset = finalsSlot * durP; // ls
+  slotIdx = finalsSlot + 1;
+
+  // --- Judgement Day ---
+  const judgeSlot = slotIdx;
+  m[12].offset = judgeSlot * durP; // lf
+  if (tb) tb.offset = judgeSlot * durP;
+  slotIdx = judgeSlot + 1;
+
+  // --- Madden Bowl ---
+  if (gfMatch) gfMatch.offset = slotIdx * durP;
 }
 
-    }
 
     function renderPlayoffPicture() {
       const m = state.playoffMatches;
@@ -3231,3 +3283,4 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
