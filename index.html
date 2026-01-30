@@ -1663,9 +1663,14 @@ function exportHistoryJson() {
 }
 
     
-    function isFinished(match) {
-      return match && match.s1 !== null && match.s2 !== null;
-    }
+function isByeMatch(match) {
+  return match?.p2 && match.p2.id === -1;
+}
+
+function isFinished(match) {
+  return !!(match && (isByeMatch(match) || (match.s1 !== null && match.s2 !== null)));
+}
+
     function isOpen(match) {
       return match && match.s1 === null && match.s2 === null;
     }
@@ -2288,16 +2293,28 @@ const ringsHtml = rings > 0
       if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
       if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
 
-      const win = (match) => {
-        if (!match || match.s1 === null) return null;
-        if (match.p2 && match.p2.id === -1) return match.p1;
-        return (match.s1 > match.s2) ? match.p1 : match.p2;
-      };
-      const loss = (match) => {
-        if (!match || match.s1 === null || (match.p2 && match.p2.id === -1)) return null;
-        return (match.s1 > match.s2) ? match.p2 : match.p1;
-      };
+const isBye = (match) => match?.p2 && match.p2.id === -1;
 
+const win = (match) => {
+  if (!match) return null;
+
+  // ✅ BYE: sofort weiter – ohne Score
+  if (isBye(match)) return match.p1;
+
+  // normales Spiel
+  if (match.s1 === null || match.s2 === null) return null;
+  return (match.s1 > match.s2) ? match.p1 : match.p2;
+};
+
+const loss = (match) => {
+  if (!match) return null;
+
+  // ✅ BYE: kein Verlierer
+  if (isBye(match)) return null;
+
+  if (match.s1 === null || match.s2 === null) return null;
+  return (match.s1 > match.s2) ? match.p2 : match.p1;
+};
       const sortBySeed = (players) => {
         const seedOrder = s.map(p => p.id);
         return players.filter(p => p !== null).sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
@@ -2406,7 +2423,8 @@ const ringsHtml = rings > 0
 
       const renderM = (match, idx, placeholderP1, placeholderP2) => {
         if (!match) return "";
-        const active = match.p1 && match.p2 && match.p2.id !== -1 && !isFinished(match);
+        const bye = isByeMatch(match);
+        const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !isFinished(match);
         const time = addMinutes(groupEndTime, match.offset);
         const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
 
@@ -2418,15 +2436,18 @@ const ringsHtml = rings > 0
 
         return `
           <div class="bracket-match ${active ? 'match-active' : ''}">
-            <div class="bracket-match-header"><span>${match.phase} | ${time}</span><span>${stadium}</span></div>
+            <div class="bracket-match-header">
+  <span>${match.phase} | ${time}</span>
+  <span>${bye ? "BYE • AUTO" : stadium}</span>
+</div>
             <div class="bracket-team ${w2 ? 'winner' : ''}">
               ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left', match.id)}
-              <span class="bracket-score">${match.s2 !== null ? match.s2 : ''}</span>
+              <span class="bracket-score">${bye ? "—" : (match.s2 !== null ? match.s2 : '')}</span>>
             </div>
             <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
             <div class="bracket-team ${w1 ? 'winner' : ''}">
               ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left', match.id)}
-              <span class="bracket-score">${match.s1 !== null ? match.s1 : ''}</span>
+              <span class="bracket-score">${bye ? "—" : (match.s1 !== null ? match.s1 : '')}</span>
             </div>
           </div>`;
       };
@@ -2567,28 +2588,50 @@ const ringsHtml = rings > 0
                   ${match.p2 ? getLogoHtml(match.p2.team) : ''}
                 </div>
 
-                <div class="score-area">
-                  <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}"
-                         onchange="setScore('playoff',${index},2,this.value)"
-                         ${(!isAdmin || !isGroupPhaseComplete() || (match.p2 && match.p2.id === -1)) ? 'disabled' : ''}>
-                  <span style="color:var(--accent)">:</span>
-                  <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}"
-                         onchange="setScore('playoff',${index},1,this.value)"
-                         ${(!isAdmin || !isGroupPhaseComplete() || (match.p1 && match.p1.id === -1)) ? 'disabled' : ''}>
-                </div>
+                const bye = isByeMatch(match);
 
-                <div class="team-box">
-                  ${match.p1 ? getLogoHtml(match.p1.team) : ''}
-                  <span>${match.p1 ? match.p1.name : labels.p1}</span>
-                </div>
-                ${(match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1)
-  ? renderMatchMeta(match.p1.name, match.p2.name, (match.s1 !== null && match.s2 !== null))
-  : ""
-}
+        // Für BYE: keine Score Inputs, stattdessen Badge
+        const scoreAreaHtml = bye
+          ? `<div class="score-area">
+               <span class="status-tag tag-next" style="font-size:.65em;">AUTO ADVANCE</span>
+             </div>`
+          : `<div class="score-area">
+               <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}"
+                      onchange="setScore('playoff',${index},2,this.value)"
+                      ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
+               <span style="color:var(--accent)">:</span>
+               <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}"
+                      onchange="setScore('playoff',${index},1,this.value)"
+                      ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
+             </div>`;
 
+        html += `
+          <div id="pmatch-${index}" class="match-row ${isFinished(match) ? 'finished' : ''}">
+            <div class="stadium-tag">${match.phase}<br>${stadium}</div>
 
-              </div>`;
-          });
+            <div class="team-box right">
+              <span>${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name) : labels.p2}</span>
+              ${match.p2 ? getLogoHtml(match.p2.team) : ''}
+            </div>
+
+            ${scoreAreaHtml}
+
+            <div class="team-box">
+              ${match.p1 ? getLogoHtml(match.p1.team) : ''}
+              <span>${match.p1 ? match.p1.name : labels.p1}</span>
+            </div>
+
+            ${
+              (!bye && match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1)
+                ? renderMatchMeta(
+                    match.p1.name,
+                    match.p2.name,
+                    (match.s1 !== null && match.s2 !== null)
+                  )
+                : ""
+            }
+          </div>`;
+      });
 
           return html + `</div>`;
         }).join('');
@@ -3103,6 +3146,7 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
 
 
