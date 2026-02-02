@@ -1,0 +1,400 @@
+{
+  "schemaVersion": 1,
+  "season": 2026,
+  "tournament": {
+    "season": 2026,
+    "players": [
+      {
+        "name": "Markus",
+        "team": "CHI"
+      },
+      {
+        "name": "Lukas",
+        "team": "HOU"
+      },
+      {
+        "name": "Tim",
+        "team": "BAL"
+      },
+      {
+        "name": "Tobi W.",
+        "team": "SEA"
+      },
+      {
+        "name": "Micha",
+        "team": "BUF"
+      },
+      {
+        "name": "Alex",
+        "team": "NE"
+      },
+      {
+        "name": "Tobi F.",
+        "team": "DET"
+      },
+      {
+        "name": "Chris",
+        "team": "LAR"
+      }
+    ],
+    "matches": [
+      {
+        "stage": "group",
+        "homeTeam": "CHI",
+        "awayTeam": "HOU",
+        "homePlayer": "Markus",
+        "awayPlayer": "Lukas",
+        "homeScore": 17,
+        "awayScore": 0
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BUF",
+        "awayTeam": "NE",
+        "homePlayer": "Micha",
+        "awayPlayer": "Alex",
+        "homeScore": 22,
+        "awayScore": 25
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BAL",
+        "awayTeam": "SEA",
+        "homePlayer": "Tim",
+        "awayPlayer": "Tobi W.",
+        "homeScore": 14,
+        "awayScore": 0
+      },
+      {
+        "stage": "group",
+        "homeTeam": "DET",
+        "awayTeam": "LAR",
+        "homePlayer": "Tobi F.",
+        "awayPlayer": "Chris",
+        "homeScore": 14,
+        "awayScore": 16
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "BAL",
+        "homePlayer": "Lukas",
+        "awayPlayer": "Tim",
+        "homeScore": 14,
+        "awayScore": 13
+      },
+      {
+        "stage": "group",
+        "homeTeam": "NE",
+        "awayTeam": "DET",
+        "homePlayer": "Alex",
+        "awayPlayer": "Tobi F.",
+        "homeScore": 27,
+        "awayScore": 32
+      },
+      {
+        "stage": "group",
+        "homeTeam": "SEA",
+        "awayTeam": "CHI",
+        "homePlayer": "Tobi W.",
+        "awayPlayer": "Markus",
+        "homeScore": 20,
+        "awayScore": 21
+      },
+      {
+        "stage": "group",
+        "homeTeam": "LAR",
+        "awayTeam": "BUF",
+        "homePlayer": "Chris",
+        "awayPlayer": "Micha",
+        "homeScore": 3,
+        "awayScore": 22
+      },
+      {
+        "stage": "group",
+        "homeTeam": "CHI",
+        "awayTeam": "BAL",
+        "homePlayer": "Markus",
+        "awayPlayer": "Tim",
+        "homeScore": 13,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BUF",
+        "awayTeam": "DET",
+        "homePlayer": "Micha",
+        "awayPlayer": "Tobi F.",
+        "homeScore": 32,
+        "awayScore": 78
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "SEA",
+        "homePlayer": "Lukas",
+        "awayPlayer": "Tobi W.",
+        "homeScore": 9,
+        "awayScore": 27
+      },
+      {
+        "stage": "group",
+        "homeTeam": "NE",
+        "awayTeam": "LAR",
+        "homePlayer": "Alex",
+        "awayPlayer": "Chris",
+        "homeScore": 28,
+        "awayScore": 14
+      },
+      {
+        "stage": "group",
+        "homeTeam": "CHI",
+        "awayTeam": "BUF",
+        "homePlayer": "Markus",
+        "awayPlayer": "Micha",
+        "homeScore": 20,
+        "awayScore": 15
+      },
+      {
+        "stage": "group",
+        "homeTeam": "HOU",
+        "awayTeam": "NE",
+        "homePlayer": "Lukas",
+        "awayPlayer": "Alex",
+        "homeScore": 16,
+        "awayScore": 31
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BAL",
+        "awayTeam": "DET",
+        "homePlayer": "Tim",
+        "awayPlayer": "Tobi F.",
+        "homeScore": 20,
+        "awayScore": 22
+      },
+      {
+        "stage": "group",
+        "homeTeam": "SEA",
+        "awayTeam": "LAR",
+        "homePlayer": "Tobi W.",
+        "awayPlayer": "Chris",
+        "homeScore": 35,
+        "awayScore": 14
+      },
+      {
+        "stage": "group",
+        "homeTeam": "NE",
+        "awayTeam": "CHI",
+        "homePlayer": "Alex",
+        "awayPlayer": "Markus",
+        "homeScore": 13,
+        "awayScore": 30
+      },
+      {
+        "stage": "group",
+        "homeTeam": "DET",
+        "awayTeam": "HOU",
+        "homePlayer": "Tobi F.",
+        "awayPlayer": "Lukas",
+        "homeScore": 20,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "LAR",
+        "awayTeam": "BAL",
+        "homePlayer": "Chris",
+        "awayPlayer": "Tim",
+        "homeScore": 22,
+        "awayScore": 38
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BUF",
+        "awayTeam": "SEA",
+        "homePlayer": "Micha",
+        "awayPlayer": "Tobi W.",
+        "homeScore": 13,
+        "awayScore": 31
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "DET",
+        "awayTeam": "LAR",
+        "homePlayer": "Tobi F.",
+        "awayPlayer": "Chris",
+        "homeScore": 10,
+        "awayScore": 7
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "SEA",
+        "awayTeam": "NE",
+        "homePlayer": "Tobi W.",
+        "awayPlayer": "Alex",
+        "homeScore": 28,
+        "awayScore": 42
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "CHI",
+        "awayTeam": "BUF",
+        "homePlayer": "Markus",
+        "awayPlayer": "Micha",
+        "homeScore": 49,
+        "awayScore": 0
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "BAL",
+        "awayTeam": "HOU",
+        "homePlayer": "Tim",
+        "awayPlayer": "Lukas",
+        "homeScore": 28,
+        "awayScore": 7
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "SEA",
+        "awayTeam": "LAR",
+        "homePlayer": "Tobi W.",
+        "awayPlayer": "Chris",
+        "homeScore": 24,
+        "awayScore": 21
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "HOU",
+        "awayTeam": "BUF",
+        "homePlayer": "Lukas",
+        "awayPlayer": "Micha",
+        "homeScore": 17,
+        "awayScore": 27
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "DET",
+        "awayTeam": "NE",
+        "homePlayer": "Tobi F.",
+        "awayPlayer": "Alex",
+        "homeScore": 15,
+        "awayScore": 41
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "CHI",
+        "awayTeam": "BAL",
+        "homePlayer": "Markus",
+        "awayPlayer": "Tim",
+        "homeScore": 14,
+        "awayScore": 26
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "DET",
+        "awayTeam": "BUF",
+        "homePlayer": "Tobi F.",
+        "awayPlayer": "Micha",
+        "homeScore": 17,
+        "awayScore": 3
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "CHI",
+        "awayTeam": "SEA",
+        "homePlayer": "Markus",
+        "awayPlayer": "Tobi W.",
+        "homeScore": 9,
+        "awayScore": 22
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "NE",
+        "awayTeam": "BAL",
+        "homePlayer": "Alex",
+        "awayPlayer": "Tim",
+        "homeScore": 14,
+        "awayScore": 35
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "DET",
+        "awayTeam": "SEA",
+        "homePlayer": "Tobi F.",
+        "awayPlayer": "Tobi W.",
+        "homeScore": 20,
+        "awayScore": 17
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "NE",
+        "awayTeam": "DET",
+        "homePlayer": "Alex",
+        "awayPlayer": "Tobi F.",
+        "homeScore": 20,
+        "awayScore": 14
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "LAR",
+        "awayTeam": "HOU",
+        "homePlayer": "Chris",
+        "awayPlayer": "Lukas",
+        "homeScore": 34,
+        "awayScore": 6
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "BAL",
+        "awayTeam": "NE",
+        "homePlayer": "Tim",
+        "awayPlayer": "Alex",
+        "homeScore": 17,
+        "awayScore": 14
+      }
+    ],
+    "standings": [
+      {
+        "rank": 1,
+        "name": "Tim",
+        "points": 800
+      },
+      {
+        "rank": 2,
+        "name": "Alex",
+        "points": 700
+      },
+      {
+        "rank": 3,
+        "name": "Tobi F.",
+        "points": 600
+      },
+      {
+        "rank": 4,
+        "name": "Tobi W.",
+        "points": 500
+      },
+      {
+        "rank": 5,
+        "name": "Markus",
+        "points": 400
+      },
+      {
+        "rank": 6,
+        "name": "Micha",
+        "points": 300
+      },
+      {
+        "rank": 7,
+        "name": "Lukas",
+        "points": 200
+      },
+      {
+        "rank": 8,
+        "name": "Chris",
+        "points": 100
+      }
+    ]
+  }
+}
