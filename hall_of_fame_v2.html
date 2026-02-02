@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MADDEN BOWL – Hall of Fame</title>
+  <link rel="icon" type="image/png" href="maddenbowl.ico" />
+  <style>
+    :root{
+      --nfl-blue:#013369; --nfl-red:#D50A0A;
+      --bg:#0b1119; --card:#161f2c; --slot:#1c2431;
+      --accent:#00ffcc; --gray:#4a5568; --border:#2d3748;
+      --gold: #ffd700; --silver: #c0c0c0; --bronze: #cd7f32;
+    }
+    body{font-family:'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:12px;overflow-x:hidden;}
+    .container{max-width:1400px;margin:0 auto;}
+    h1{margin:10px 0 6px;text-align:center;letter-spacing:2px;text-transform:uppercase;border-bottom:3px solid var(--nfl-red);padding-bottom:6px;}
+    
+    /* Layout */
+    .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+    @media(min-width:1100px){.grid{grid-template-columns:1.1fr 0.9fr;}}
+    
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;}
+    .card h2{margin:0 0 10px;color:var(--accent);text-transform:uppercase;font-size:14px;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center;}
+    
+    /* Tables & Matrix */
+    .table-wrap{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th,td{padding:10px;text-align:center;border-bottom:1px solid var(--border);}
+    th{color:rgba(255,255,255,0.85);text-transform:uppercase;font-size:11px;background:rgba(0,0,0,0.2);}
+    td.name{text-align:left;font-weight:800;color:var(--accent);}
+    
+    .matrix-table td:first-child, .matrix-table th:first-child {
+      position: sticky; left: 0; z-index: 2; background: var(--card); border-right: 2px solid var(--border);
+    }
+
+    /* Tabs */
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
+    .tab{cursor:pointer;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(0,0,0,0.18);font-weight:800;font-size:12px;transition:0.2s;}
+    .tab.active{border-color:var(--accent);background:rgba(0,255,204,0.1);box-shadow:0 0 12px rgba(0,255,204,0.12);}
+    
+    /* Components */
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:15px;}
+    .kpi{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:12px;padding:10px;}
+    .kpi .t{opacity:.8;font-size:11px;text-transform:uppercase;}
+    .kpi .v{font-size:18px;font-weight:900;margin-top:2px;}
+    
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:#232d3d;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;margin:8px 0;}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(0,0,0,0.25);font-size:10px;font-weight:700;}
+    
+    /* Rank Badges */
+    .rank-1{background:var(--gold);color:#000;}
+    .rank-2{background:var(--silver);color:#000;}
+    .rank-3{background:var(--bronze);color:#fff;}
+    
+    .hidden{display:none;}
+    .ok{color:var(--accent);}
+    .bad{color:var(--nfl-red);}
+    .new-record-alert{border-left:4px solid var(--accent);background:rgba(0,255,204,0.05) !important;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MADDEN BOWL – HALL OF FAME</h1>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span class="pill">Saison:</span>
+          <select id="seasonSelect" onchange="renderSeason()" style="background:#0b1119; color:#fff; border:1px solid var(--gray); padding:5px; border-radius:5px;"></select>
+          <button class="tab" onclick="reloadAll()">🔄 Refresh</button>
+        </div>
+        <div class="tabs" style="margin:0;">
+          <div class="tab active" data-tab="standings" onclick="setTab('standings')">Saison</div>
+          <div class="tab" data-tab="mastergrid" onclick="setTab('mastergrid')">Master Grid</div>
+          <div class="tab" data-tab="teamstats" onclick="setTab('teamstats')">NFL Teams</div>
+          <div class="tab" data-tab="coachhistory" onclick="setTab('coachhistory')">Coach History</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="section-left">
+        <div class="card">
+          <h2>Saison Overview <span id="seasonLabel"></span></h2>
+          <div id="seasonKpis" class="kpis"></div>
+          
+          <div id="seasonAwards" style="margin-bottom:15px;"></div>
+
+          <div id="tab-standings">
+            <div class="tabs">
+              <div class="tab active" data-sub="st-table" onclick="setSubTab('st-table')">Tabelle</div>
+              <div class="tab" data-sub="st-stats" onclick="setSubTab('st-stats')">Stats</div>
+              <div class="tab" data-sub="st-matches" onclick="setSubTab('st-matches')">Spiele</div>
+            </div>
+            <div id="sub-st-table"></div>
+            <div id="sub-st-stats" class="hidden"></div>
+            <div id="sub-st-matches" class="hidden"></div>
+          </div>
+
+          <div id="tab-mastergrid" class="hidden"></div>
+          <div id="tab-teamstats" class="hidden"></div>
+          <div id="tab-coachhistory" class="hidden"></div>
+        </div>
+      </div>
+
+      <div class="section-right">
+        <div class="card">
+          <h2>Ewige Bestenliste</h2>
+          <div id="alltimeKpis" class="kpis"></div>
+          
+          <div class="tabs">
+            <div class="tab active" data-tab2="at-table" onclick="setTab2('at-table')">Ewige Tabelle</div>
+            <div class="tab" data-tab2="at-records" onclick="setTab2('at-records')">Rekorde & Meilensteine</div>
+          </div>
+
+          <div id="tab2-at-table"></div>
+          <div id="tab2-at-records" class="hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // CONFIG & STATE
+    // =========================================================
+    const HOF_SOURCES = [
+      "maddenbowl_2022.json",
+      "maddenbowl_2023.json",
+      "maddenbowl_2024.json",
+      "maddenbowl_2025.json",
+      "maddenbowl_2026.json"
+    ];
+
+    let hof = {
+      seasons: [],
+      seasonMap: new Map(),
+      allTime: null,
+      currentSeason: null,
+      activeTab: "standings",
+      activeTab2: "at-table"
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    // =========================================================
+    // DATA LOADING
+    // =========================================================
+    async function loadAll() {
+      const loaded = [];
+      for (const f of HOF_SOURCES) {
+        try {
+          const res = await fetch(f, { cache: "no-store" });
+          if (res.ok) {
+            const json = await res.json();
+            loaded.push(normalizeSeason(json, f));
+          }
+        } catch (e) { console.warn("Fehler beim Laden von", f); }
+      }
+      
+      // Sortiere Saisons absteigend (Neueste zuerst)
+      hof.seasons = loaded.sort((a,b) => b.season - a.season);
+      hof.seasonMap = new Map(hof.seasons.map(s => [s.season, s]));
+      hof.currentSeason = hof.seasons[0]?.season;
+
+      initUI();
+      computeAllTime();
+      renderSeason();
+      renderAllTime();
+    }
+
+    function normalizeSeason(raw, filename) {
+      const t = raw.tournament || raw;
+      const season = Number(raw.season || t.season || filename.replace(/[^0-9]/g, ''));
+      return {
+        season,
+        players: t.players || [],
+        standings: (t.standings || []).sort((a,b) => a.rank - b.rank),
+        matches: t.matches || []
+      };
+    }
+
+    // =========================================================
+    // COMPUTATIONS
+    // =========================================================
+    function seasonPlayerStats(s) {
+      const map = new Map();
+      s.standings.forEach(st => {
+        const pInfo = s.players.find(p => p.name === st.name) || {};
+        map.set(st.name, {
+          name: st.name, team: pInfo.team || "???", rank: st.rank, points: st.points || 0,
+          games: 0, wins: 0, losses: 0, pf: 0, pa: 0, diff: 0
+        });
+      });
+
+      s.matches.forEach(m => {
+        const h = map.get(m.homePlayer);
+        const a = map.get(m.awayPlayer);
+        if (!h || !a || m.homeScore === null) return;
+        
+        h.games++; h.pf += m.homeScore; h.pa += m.awayScore; h.diff += (m.homeScore - m.awayScore);
+        if (m.homeScore > m.awayScore) h.wins++; else h.losses++;
+
+        a.games++; a.pf += m.awayScore; a.pa += m.homeScore; a.diff += (m.awayScore - m.homeScore);
+        if (m.awayScore > m.homeScore) a.wins++; else a.losses++;
+      });
+      return map;
+    }
+
+    function computeAllTime() {
+      const all = new Map();
+      const latestSeason = hof.seasons[0].season;
+      const prevData = new Map();
+
+      hof.seasons.forEach(s => {
+        const stats = seasonPlayerStats(s);
+        stats.forEach(p => {
+          if (!all.has(p.name)) all.set(p.name, { name: p.name, titles: 0, seasons: 0, games: 0, wins: 0, pf: 0, points: 0 });
+          const a = all.get(p.name);
+          a.seasons++; a.games += p.games; a.wins += p.wins; a.pf += p.pf; a.points += p.points;
+          if (p.rank === 1) a.titles++;
+
+          // Stand VOR der neuesten Saison für Rekordvergleich
+          if (s.season !== latestSeason) {
+            if (!prevData.has(p.name)) prevData.set(p.name, { wins: 0, titles: 0, pf: 0 });
+            const old = prevData.get(p.name);
+            old.wins += p.wins; old.titles += p.titles; old.pf += p.pf;
+          }
+        });
+      });
+
+      const table = [...all.values()].sort((a,b) => b.titles - a.titles || b.points - a.points);
+      
+      // Rekord Check
+      const records = [
+        { k: "Meiste Titel", val: Math.max(...table.map(p => p.titles)), key: 'titles' },
+        { k: "Meiste Siege", val: Math.max(...table.map(p => p.wins)), key: 'wins' },
+        { k: "Meiste Punkte (Total)", val: Math.max(...table.map(p => p.points)), key: 'points' }
+      ];
+
+      hof.allTime = { table, records };
+    }
+
+    // =========================================================
+    // RENDERING
+    // =========================================================
+    function renderSeason() {
+      const s = hof.seasonMap.get(hof.currentSeason);
+      if (!s) return;
+      
+      $("seasonLabel").innerText = s.season;
+      const stats = seasonPlayerStats(s);
+      const players = [...stats.values()];
+
+      // Awards
+      const ocoat = players.sort((a,b) => (b.pf/b.games) - (a.pf/a.games))[0];
+      const dcoat = players.sort((a,b) => (a.pa/a.games) - (b.pa/b.games))[0];
+
+      $("seasonAwards").innerHTML = `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="row" style="border-top: 2px solid var(--accent)">
+            <div><small>Offensive Coordinator</small><br><b>${ocoat?.name}</b></div>
+            <div class="ok">${(ocoat?.pf/ocoat?.games).toFixed(1)} PPG</div>
+          </div>
+          <div class="row" style="border-top: 2px solid var(--nfl-red)">
+            <div><small>Defensive Coordinator</small><br><b>${dcoat?.name}</b></div>
+            <div class="ok">${(dcoat?.pa/dcoat?.games).toFixed(1)} PAPG</div>
+          </div>
+        </div>
+      `;
+
+      // Table
+      let html = `<table><tr><th>Rank</th><th>Coach</th><th>Team</th><th>Pkt</th></tr>`;
+      s.standings.forEach(st => {
+        const team = s.players.find(p => p.name === st.name)?.team || "—";
+        const rCls = st.rank <= 3 ? `rank-${st.rank}` : "";
+        html += `<tr><td><span class="pill ${rCls}">${st.rank}</span></td><td class="name">${st.name}</td><td>${team}</td><td>${st.points}</td></tr>`;
+      });
+      $("sub-st-table").innerHTML = html + "</table>";
+    }
+
+    function renderMasterGrid() {
+      const seasons = [...hof.seasons].map(s => s.season).sort();
+      const players = [...new Set(hof.seasons.flatMap(s => s.standings.map(st => st.name)))].sort();
+
+      let html = `<div class="table-wrap"><table class="matrix-table"><tr><th>Coach</th>`;
+      seasons.forEach(s => html += `<th>${s}</th>`);
+      html += `</tr>`;
+
+      players.forEach(p => {
+        html += `<tr><td class="name">${p}</td>`;
+        seasons.forEach(s => {
+          const sData = hof.seasonMap.get(s);
+          const st = sData.standings.find(x => x.name === p);
+          const tm = sData.players.find(x => x.name === p)?.team || "";
+          if (st) {
+            const rCls = st.rank <= 3 ? `rank-${st.rank}` : "";
+            html += `<td><div style="font-size:9px">${tm}</div><span class="pill ${rCls}">#${st.rank}</span></td>`;
+          } else html += `<td class="muted">—</td>`;
+        });
+        html += `</tr>`;
+      });
+      $("tab-mastergrid").innerHTML = html + "</table></div>";
+    }
+
+    function renderTeamStats() {
+      const teams = new Map();
+      hof.seasons.forEach(s => {
+        s.players.forEach(p => {
+          if (!teams.has(p.team)) teams.set(p.team, { name: p.team, picks: 0, wins: 0 });
+          teams.get(p.team).picks++;
+          if (s.standings.find(st => st.rank === 1 && st.name === p.name)) teams.get(p.team).wins++;
+        });
+      });
+      const sorted = [...teams.values()].sort((a,b) => b.picks - a.picks);
+      let html = `<table><tr><th>Team</th><th>Picks</th><th>Titel</th></tr>`;
+      sorted.forEach(t => {
+        html += `<tr><td class="name">${t.name}</td><td>${t.picks}</td><td class="${t.wins>0?'ok':''}">${t.wins}</td></tr>`;
+      });
+      $("tab-teamstats").innerHTML = html + "</table>";
+    }
+
+    function renderAllTime() {
+      const at = hof.allTime;
+      let html = `<table><tr><th>#</th><th>Coach</th><th>🏆</th><th>Pkt</th><th>Win%</th></tr>`;
+      at.table.forEach((p, i) => {
+        const winPct = ((p.wins / p.games) * 100).toFixed(1);
+        html += `<tr><td>${i+1}</td><td class="name">${p.name}</td><td>${p.titles}</td><td>${p.points}</td><td>${winPct}%</td></tr>`;
+      });
+      $("tab2-at-table").innerHTML = html + "</table>";
+
+      // Rekorde & Meilensteine
+      let recHtml = "";
+      at.records.forEach(r => {
+        const holders = at.table.filter(p => p[r.key] === r.val).map(p => p.name).join(", ");
+        recHtml += `<div class="row"><div><b>${r.k}</b><br><small>${holders}</small></div><div class="v">${r.val}</div></div>`;
+      });
+
+      // Dreamteam
+      const combos = new Map();
+      hof.seasons.forEach(s => {
+        const champ = s.standings.find(st => st.rank === 1);
+        if (champ) {
+          const team = s.players.find(p => p.name === champ.name)?.team;
+          const key = `${champ.name} × ${team}`;
+          combos.set(key, (combos.get(key) || 0) + 1);
+        }
+      });
+      const bestCombo = [...combos.entries()].sort((a,b) => b[1] - a[1])[0];
+      if (bestCombo) {
+        recHtml += `<h4 style="color:var(--gold); margin-top:20px;">💍 Legendary Dynasty</h4>`;
+        recHtml += `<div class="row" style="border:1px solid var(--gold)"><div><b>${bestCombo[0]}</b></div><div>${bestCombo[1]} Ringe</div></div>`;
+      }
+
+      $("tab2-at-records").innerHTML = recHtml;
+    }
+
+    // =========================================================
+    // UI CONTROLS
+    // =========================================================
+    function setTab(name) {
+      hof.activeTab = name;
+      document.querySelectorAll("[data-tab]").forEach(el => el.classList.toggle("active", el.dataset.tab === name));
+      $("tab-standings").classList.toggle("hidden", name !== "standings");
+      $("tab-mastergrid").classList.toggle("hidden", name !== "mastergrid");
+      $("tab-teamstats").classList.toggle("hidden", name !== "teamstats");
+      $("tab-coachhistory").classList.toggle("hidden", name !== "coachhistory");
+      if (name === "mastergrid") renderMasterGrid();
+      if (name === "teamstats") renderTeamStats();
+    }
+
+    function setTab2(name) {
+      document.querySelectorAll("[data-tab2]").forEach(el => el.classList.toggle("active", el.dataset.tab2 === name));
+      $("tab2-at-table").classList.toggle("hidden", name !== "at-table");
+      $("tab2-at-records").classList.toggle("hidden", name !== "at-records");
+    }
+
+    function setSubTab(name) {
+      document.querySelectorAll("[data-sub]").forEach(el => el.classList.toggle("active", el.dataset.sub === name));
+      $("sub-st-table").classList.toggle("hidden", name !== "st-table");
+      $("sub-st-stats").classList.toggle("hidden", name !== "st-stats");
+      $("sub-st-matches").classList.toggle("hidden", name !== "st-matches");
+    }
+
+    function initUI() {
+      const sel = $("seasonSelect");
+      sel.innerHTML = hof.seasons.map(s => `<option value="${s.season}">${s.season}</option>`).join("");
+    }
+
+    function reloadAll() { location.reload(); }
+
+    window.onload = loadAll;
+  </script>
+</body>
+</html>
