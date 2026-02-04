@@ -358,7 +358,7 @@
       {
         "rank": 1,
         "name": "Tim",
-        "points": 800
+        "points": 900
       },
       {
         "rank": 2,
@@ -388,12 +388,12 @@
       {
         "rank": 7,
         "name": "Lukas",
-        "points": 200
+        "points": 100
       },
       {
         "rank": 8,
         "name": "Chris",
-        "points": 100
+        "points": 200
       }
     ]
   }
