@@ -2770,9 +2770,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
 
         let stadium = state.config.s1;
         if (m.t === 'g') {
-          const slot = state.slots.find(s => s.includes(m));
-          const matchIndexInSlot = slot ? slot.indexOf(m) : 0;
-          stadium = matchIndexInSlot === 1 ? state.config.s2 : state.config.s1;
+          stadium = (state.matches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
         } else {
           stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
         }
@@ -3231,4 +3229,5 @@ function renderRanking() {
   </script>
 </body>
 </html>
+
 
