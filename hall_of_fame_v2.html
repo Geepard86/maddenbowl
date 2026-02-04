@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MADDEN BOWL – Hall of Fame</title>
-  <link rel="icon" type="image/png" href="maddenbowl.ico" />
   <style>
     :root{
       --nfl-blue:#013369; --nfl-red:#D50A0A;
@@ -16,47 +15,39 @@
     .container{max-width:1400px;margin:0 auto;}
     h1{margin:10px 0 6px;text-align:center;letter-spacing:2px;text-transform:uppercase;border-bottom:3px solid var(--nfl-red);padding-bottom:6px;}
     
-    /* Layout */
     .grid{display:grid;grid-template-columns:1fr;gap:12px;}
-    @media(min-width:1100px){.grid{grid-template-columns:1.1fr 0.9fr;}}
+    @media(min-width:1100px){.grid{grid-template-columns:1fr 1fr;}}
     
     .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;}
-    .card h2{margin:0 0 10px;color:var(--accent);text-transform:uppercase;font-size:14px;letter-spacing:1px;display:flex;justify-content:space-between;align-items:center;}
+    .card h2{margin:0 0 10px;color:var(--accent);text-transform:uppercase;font-size:14px;letter-spacing:1px;display:flex;justify-content:space-between;}
     
-    /* Tables & Matrix */
-    .table-wrap{overflow-x:auto;}
-    table{width:100%;border-collapse:collapse;font-size:13px;}
-    th,td{padding:10px;text-align:center;border-bottom:1px solid var(--border);}
-    th{color:rgba(255,255,255,0.85);text-transform:uppercase;font-size:11px;background:rgba(0,0,0,0.2);}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th,td{padding:8px;text-align:center;border-bottom:1px solid var(--border);}
+    th{color:rgba(255,255,255,0.7);text-transform:uppercase;font-size:10px;background:rgba(0,0,0,0.2);}
     td.name{text-align:left;font-weight:800;color:var(--accent);}
     
-    .matrix-table td:first-child, .matrix-table th:first-child {
-      position: sticky; left: 0; z-index: 2; background: var(--card); border-right: 2px solid var(--border);
-    }
-
-    /* Tabs */
-    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
-    .tab{cursor:pointer;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(0,0,0,0.18);font-weight:800;font-size:12px;transition:0.2s;}
-    .tab.active{border-color:var(--accent);background:rgba(0,255,204,0.1);box-shadow:0 0 12px rgba(0,255,204,0.12);}
+    .tabs{display:flex;gap:5px;flex-wrap:wrap;margin:10px 0;}
+    .tab{cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.18);font-weight:800;font-size:11px;}
+    .tab.active{border-color:var(--accent);background:rgba(0,255,204,0.1);}
     
-    /* Components */
-    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:15px;}
-    .kpi{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:12px;padding:10px;}
-    .kpi .t{opacity:.8;font-size:11px;text-transform:uppercase;}
-    .kpi .v{font-size:18px;font-weight:900;margin-top:2px;}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:15px;}
+    .kpi{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:10px;padding:8px;}
+    .kpi .t{opacity:.7;font-size:10px;text-transform:uppercase;}
+    .kpi .v{font-size:16px;font-weight:900;}
     
-    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:#232d3d;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;margin:8px 0;}
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(0,0,0,0.25);font-size:10px;font-weight:700;}
+    .row{display:flex;justify-content:space-between;align-items:center;background:#232d3d;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;margin:5px 0; font-size: 12px;}
+    .pill{padding:2px 6px;border-radius:999px;border:1px solid var(--border);background:rgba(0,0,0,0.2);font-size:10px;font-weight:700;}
     
-    /* Rank Badges */
     .rank-1{background:var(--gold);color:#000;}
     .rank-2{background:var(--silver);color:#000;}
     .rank-3{background:var(--bronze);color:#fff;}
     
+    .new-record{border-left:4px solid var(--accent);background:rgba(0,255,204,0.08) !important; animation: glow 2s infinite alternate;}
+    @keyframes glow { from { box-shadow: 0 0 5px rgba(0,255,204,0.1); } to { box-shadow: 0 0 15px rgba(0,255,204,0.3); } }
+
     .hidden{display:none;}
-    .ok{color:var(--accent);}
-    .bad{color:var(--nfl-red);}
-    .new-record-alert{border-left:4px solid var(--accent);background:rgba(0,255,204,0.05) !important;}
+    .matrix-wrapper { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+    .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
   </style>
 </head>
 <body>
@@ -66,331 +57,246 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div style="display:flex; gap:10px; align-items:center;">
-          <span class="pill">Saison:</span>
-          <select id="seasonSelect" onchange="renderSeason()" style="background:#0b1119; color:#fff; border:1px solid var(--gray); padding:5px; border-radius:5px;"></select>
-          <button class="tab" onclick="reloadAll()">🔄 Refresh</button>
+          <span class="pill">Ansicht:</span>
+          <div class="tabs" style="margin:0;">
+            <div class="tab active" data-tab="main" onclick="switchMainTab('main')">Dashboard</div>
+            <div class="tab" data-tab="mastergrid" onclick="switchMainTab('mastergrid')">Master Grid</div>
+            <div class="tab" data-tab="coachhistory" onclick="switchMainTab('coachhistory')">Coach History</div>
+            <div class="tab" data-tab="teamstats" onclick="switchMainTab('teamstats')">NFL Franchises</div>
+          </div>
         </div>
-        <div class="tabs" style="margin:0;">
-          <div class="tab active" data-tab="standings" onclick="setTab('standings')">Saison</div>
-          <div class="tab" data-tab="mastergrid" onclick="setTab('mastergrid')">Master Grid</div>
-          <div class="tab" data-tab="teamstats" onclick="setTab('teamstats')">NFL Teams</div>
-          <div class="tab" data-tab="coachhistory" onclick="setTab('coachhistory')">Coach History</div>
-        </div>
+        <select id="seasonSelect" onchange="renderSeason()" style="background:#0b1119; color:#fff; border:1px solid var(--gray); padding:5px; border-radius:5px;"></select>
       </div>
     </div>
 
-    <div class="grid">
-      <div class="section-left">
+    <div id="view-mastergrid" class="card hidden"><h2>Master Grid Matrix</h2><div class="matrix-wrapper" id="gridContent"></div></div>
+    
+    <div id="view-coachhistory" class="card hidden"><h2>Coach Chroniken</h2><div class="history-grid" id="historyContent"></div></div>
+
+    <div id="view-teamstats" class="card hidden"><h2>NFL Team Performance</h2><div id="teamContent"></div></div>
+
+    <div id="view-main" class="grid">
+      <div class="section">
         <div class="card">
-          <h2>Saison Overview <span id="seasonLabel"></span></h2>
+          <h2>Saison <span id="curSeasonTitle"></span> Overview</h2>
           <div id="seasonKpis" class="kpis"></div>
           
-          <div id="seasonAwards" style="margin-bottom:15px;"></div>
+          <div id="seasonAwards" style="margin-bottom:15px; display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>
 
-          <div id="tab-standings">
-            <div class="tabs">
-              <div class="tab active" data-sub="st-table" onclick="setSubTab('st-table')">Tabelle</div>
-              <div class="tab" data-sub="st-stats" onclick="setSubTab('st-stats')">Stats</div>
-              <div class="tab" data-sub="st-matches" onclick="setSubTab('st-matches')">Spiele</div>
-            </div>
-            <div id="sub-st-table"></div>
-            <div id="sub-st-stats" class="hidden"></div>
-            <div id="sub-st-matches" class="hidden"></div>
+          <div class="tabs">
+            <div class="tab active" data-sub="st-table" onclick="setSubTab('st-table')">Tabelle</div>
+            <div class="tab" data-sub="st-stats" onclick="setSubTab('st-stats')">Player Stats</div>
           </div>
-
-          <div id="tab-mastergrid" class="hidden"></div>
-          <div id="tab-teamstats" class="hidden"></div>
-          <div id="tab-coachhistory" class="hidden"></div>
+          <div id="sub-st-table"></div>
+          <div id="sub-st-stats" class="hidden"></div>
         </div>
       </div>
 
-      <div class="section-right">
+      <div class="section">
         <div class="card">
-          <h2>Ewige Bestenliste</h2>
+          <h2>Ewige Rangliste</h2>
           <div id="alltimeKpis" class="kpis"></div>
-          
-          <div class="tabs">
-            <div class="tab active" data-tab2="at-table" onclick="setTab2('at-table')">Ewige Tabelle</div>
-            <div class="tab" data-tab2="at-records" onclick="setTab2('at-records')">Rekorde & Meilensteine</div>
-          </div>
+          <div id="at-table-wrap"></div>
+        </div>
 
-          <div id="tab2-at-table"></div>
-          <div id="tab2-at-records" class="hidden"></div>
+        <div class="card">
+          <h2>All-Time Rekorde & Meilensteine</h2>
+          <div id="at-records-wrap"></div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    // =========================================================
-    // CONFIG & STATE
-    // =========================================================
-    const HOF_SOURCES = [
-      "maddenbowl_2022.json",
-      "maddenbowl_2023.json",
-      "maddenbowl_2024.json",
-      "maddenbowl_2025.json",
-      "maddenbowl_2026.json"
-    ];
+    const HOF_SOURCES = ["maddenbowl_2022.json", "maddenbowl_2023.json", "maddenbowl_2024.json", "maddenbowl_2025.json", "maddenbowl_2026.json"];
+    let hof = { seasons: [], seasonMap: new Map(), allTime: null, latestSeason: null };
 
-    let hof = {
-      seasons: [],
-      seasonMap: new Map(),
-      allTime: null,
-      currentSeason: null,
-      activeTab: "standings",
-      activeTab2: "at-table"
-    };
-
-    const $ = (id) => document.getElementById(id);
-
-    // =========================================================
-    // DATA LOADING
-    // =========================================================
-    async function loadAll() {
+    async function loadData() {
       const loaded = [];
       for (const f of HOF_SOURCES) {
         try {
           const res = await fetch(f, { cache: "no-store" });
-          if (res.ok) {
-            const json = await res.json();
-            loaded.push(normalizeSeason(json, f));
-          }
-        } catch (e) { console.warn("Fehler beim Laden von", f); }
+          if (!res.ok) continue;
+          const json = await res.json();
+          const s = json.tournament || json;
+          loaded.push({
+            season: Number(json.season || s.season),
+            players: s.players || [],
+            standings: s.standings || [],
+            matches: s.matches || []
+          });
+        } catch (e) {}
       }
-      
-      // Sortiere Saisons absteigend (Neueste zuerst)
       hof.seasons = loaded.sort((a,b) => b.season - a.season);
+      hof.latestSeason = hof.seasons[0].season;
       hof.seasonMap = new Map(hof.seasons.map(s => [s.season, s]));
-      hof.currentSeason = hof.seasons[0]?.season;
-
-      initUI();
-      computeAllTime();
-      renderSeason();
+      
+      document.getElementById("seasonSelect").innerHTML = hof.seasons.map(s => `<option value="${s.season}">${s.season}</option>`).join("");
+      
       renderAllTime();
+      renderSeason();
     }
 
-    function normalizeSeason(raw, filename) {
-      const t = raw.tournament || raw;
-      const season = Number(raw.season || t.season || filename.replace(/[^0-9]/g, ''));
-      return {
-        season,
-        players: t.players || [],
-        standings: (t.standings || []).sort((a,b) => a.rank - b.rank),
-        matches: t.matches || []
-      };
-    }
-
-    // =========================================================
-    // COMPUTATIONS
-    // =========================================================
-    function seasonPlayerStats(s) {
-      const map = new Map();
-      s.standings.forEach(st => {
-        const pInfo = s.players.find(p => p.name === st.name) || {};
-        map.set(st.name, {
-          name: st.name, team: pInfo.team || "???", rank: st.rank, points: st.points || 0,
-          games: 0, wins: 0, losses: 0, pf: 0, pa: 0, diff: 0
-        });
-      });
-
+    function getPlayerSeasonStats(s) {
+      const stats = new Map();
+      s.standings.forEach(st => stats.set(st.name, { name:st.name, rank:st.rank, points:st.points, g:0, w:0, l:0, pf:0, pa:0 }));
       s.matches.forEach(m => {
-        const h = map.get(m.homePlayer);
-        const a = map.get(m.awayPlayer);
-        if (!h || !a || m.homeScore === null) return;
-        
-        h.games++; h.pf += m.homeScore; h.pa += m.awayScore; h.diff += (m.homeScore - m.awayScore);
-        if (m.homeScore > m.awayScore) h.wins++; else h.losses++;
-
-        a.games++; a.pf += m.awayScore; a.pa += m.homeScore; a.diff += (m.awayScore - m.homeScore);
-        if (m.awayScore > m.homeScore) a.wins++; else a.losses++;
+        const h = stats.get(m.homePlayer), a = stats.get(m.awayPlayer);
+        if(!h || !a || m.homeScore === null) return;
+        h.g++; h.pf += m.homeScore; h.pa += m.awayScore; if(m.homeScore > m.awayScore) h.w++; else h.l++;
+        a.g++; a.pf += m.awayScore; a.pa += m.homeScore; if(m.awayScore > m.homeScore) a.w++; else a.l++;
       });
-      return map;
+      return stats;
     }
 
-    function computeAllTime() {
-      const all = new Map();
-      const latestSeason = hof.seasons[0].season;
-      const prevData = new Map();
-
-      hof.seasons.forEach(s => {
-        const stats = seasonPlayerStats(s);
-        stats.forEach(p => {
-          if (!all.has(p.name)) all.set(p.name, { name: p.name, titles: 0, seasons: 0, games: 0, wins: 0, pf: 0, points: 0 });
-          const a = all.get(p.name);
-          a.seasons++; a.games += p.games; a.wins += p.wins; a.pf += p.pf; a.points += p.points;
-          if (p.rank === 1) a.titles++;
-
-          // Stand VOR der neuesten Saison für Rekordvergleich
-          if (s.season !== latestSeason) {
-            if (!prevData.has(p.name)) prevData.set(p.name, { wins: 0, titles: 0, pf: 0 });
-            const old = prevData.get(p.name);
-            old.wins += p.wins; old.titles += p.titles; old.pf += p.pf;
-          }
-        });
-      });
-
-      const table = [...all.values()].sort((a,b) => b.titles - a.titles || b.points - a.points);
-      
-      // Rekord Check
-      const records = [
-        { k: "Meiste Titel", val: Math.max(...table.map(p => p.titles)), key: 'titles' },
-        { k: "Meiste Siege", val: Math.max(...table.map(p => p.wins)), key: 'wins' },
-        { k: "Meiste Punkte (Total)", val: Math.max(...table.map(p => p.points)), key: 'points' }
-      ];
-
-      hof.allTime = { table, records };
-    }
-
-    // =========================================================
-    // RENDERING
-    // =========================================================
     function renderSeason() {
-      const s = hof.seasonMap.get(hof.currentSeason);
-      if (!s) return;
+      const sId = Number(document.getElementById("seasonSelect").value);
+      const s = hof.seasonMap.get(sId);
+      document.getElementById("curSeasonTitle").innerText = sId;
       
-      $("seasonLabel").innerText = s.season;
-      const stats = seasonPlayerStats(s);
-      const players = [...stats.values()];
-
+      const statsMap = getPlayerSeasonStats(s);
+      const stats = [...statsMap.values()];
+      
       // Awards
-      const ocoat = players.sort((a,b) => (b.pf/b.games) - (a.pf/a.games))[0];
-      const dcoat = players.sort((a,b) => (a.pa/a.games) - (b.pa/b.games))[0];
-
-      $("seasonAwards").innerHTML = `
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-          <div class="row" style="border-top: 2px solid var(--accent)">
-            <div><small>Offensive Coordinator</small><br><b>${ocoat?.name}</b></div>
-            <div class="ok">${(ocoat?.pf/ocoat?.games).toFixed(1)} PPG</div>
-          </div>
-          <div class="row" style="border-top: 2px solid var(--nfl-red)">
-            <div><small>Defensive Coordinator</small><br><b>${dcoat?.name}</b></div>
-            <div class="ok">${(dcoat?.pa/dcoat?.games).toFixed(1)} PAPG</div>
-          </div>
-        </div>
-      `;
+      const o = stats.sort((a,b) => (b.pf/b.g) - (a.pf/a.g))[0];
+      const d = stats.sort((a,b) => (a.pa/a.g) - (b.pa/b.g))[0];
+      document.getElementById("seasonAwards").innerHTML = `
+        <div class="row" style="border-top:2px solid var(--accent)"><div><b>OCOTY</b><br><small>${o?.name || '?'}</small></div><div>${(o?.pf/o?.g || 0).toFixed(1)}</div></div>
+        <div class="row" style="border-top:2px solid var(--nfl-red)"><div><b>DCOTY</b><br><small>${d?.name || '?'}</small></div><div>${(d?.pa/d?.g || 0).toFixed(1)}</div></div>`;
 
       // Table
-      let html = `<table><tr><th>Rank</th><th>Coach</th><th>Team</th><th>Pkt</th></tr>`;
-      s.standings.forEach(st => {
-        const team = s.players.find(p => p.name === st.name)?.team || "—";
-        const rCls = st.rank <= 3 ? `rank-${st.rank}` : "";
-        html += `<tr><td><span class="pill ${rCls}">${st.rank}</span></td><td class="name">${st.name}</td><td>${team}</td><td>${st.points}</td></tr>`;
+      let html = `<table><tr><th>#</th><th>Coach</th><th>Team</th><th>Pkt</th></tr>`;
+      s.standings.sort((a,b)=>a.rank-b.rank).forEach(st => {
+        const team = s.players.find(p=>p.name===st.name)?.team || "—";
+        html += `<tr><td><span class="pill ${st.rank<=3?'rank-'+st.rank:''}">${st.rank}</span></td><td class="name">${st.name}</td><td>${team}</td><td>${st.points}</td></tr>`;
       });
-      $("sub-st-table").innerHTML = html + "</table>";
-    }
-
-    function renderMasterGrid() {
-      const seasons = [...hof.seasons].map(s => s.season).sort();
-      const players = [...new Set(hof.seasons.flatMap(s => s.standings.map(st => st.name)))].sort();
-
-      let html = `<div class="table-wrap"><table class="matrix-table"><tr><th>Coach</th>`;
-      seasons.forEach(s => html += `<th>${s}</th>`);
-      html += `</tr>`;
-
-      players.forEach(p => {
-        html += `<tr><td class="name">${p}</td>`;
-        seasons.forEach(s => {
-          const sData = hof.seasonMap.get(s);
-          const st = sData.standings.find(x => x.name === p);
-          const tm = sData.players.find(x => x.name === p)?.team || "";
-          if (st) {
-            const rCls = st.rank <= 3 ? `rank-${st.rank}` : "";
-            html += `<td><div style="font-size:9px">${tm}</div><span class="pill ${rCls}">#${st.rank}</span></td>`;
-          } else html += `<td class="muted">—</td>`;
-        });
-        html += `</tr>`;
-      });
-      $("tab-mastergrid").innerHTML = html + "</table></div>";
-    }
-
-    function renderTeamStats() {
-      const teams = new Map();
-      hof.seasons.forEach(s => {
-        s.players.forEach(p => {
-          if (!teams.has(p.team)) teams.set(p.team, { name: p.team, picks: 0, wins: 0 });
-          teams.get(p.team).picks++;
-          if (s.standings.find(st => st.rank === 1 && st.name === p.name)) teams.get(p.team).wins++;
-        });
-      });
-      const sorted = [...teams.values()].sort((a,b) => b.picks - a.picks);
-      let html = `<table><tr><th>Team</th><th>Picks</th><th>Titel</th></tr>`;
-      sorted.forEach(t => {
-        html += `<tr><td class="name">${t.name}</td><td>${t.picks}</td><td class="${t.wins>0?'ok':''}">${t.wins}</td></tr>`;
-      });
-      $("tab-teamstats").innerHTML = html + "</table>";
+      document.getElementById("sub-st-table").innerHTML = html + "</table>";
     }
 
     function renderAllTime() {
-      const at = hof.allTime;
-      let html = `<table><tr><th>#</th><th>Coach</th><th>🏆</th><th>Pkt</th><th>Win%</th></tr>`;
-      at.table.forEach((p, i) => {
-        const winPct = ((p.wins / p.games) * 100).toFixed(1);
-        html += `<tr><td>${i+1}</td><td class="name">${p.name}</td><td>${p.titles}</td><td>${p.points}</td><td>${winPct}%</td></tr>`;
-      });
-      $("tab2-at-table").innerHTML = html + "</table>";
-
-      // Rekorde & Meilensteine
-      let recHtml = "";
-      at.records.forEach(r => {
-        const holders = at.table.filter(p => p[r.key] === r.val).map(p => p.name).join(", ");
-        recHtml += `<div class="row"><div><b>${r.k}</b><br><small>${holders}</small></div><div class="v">${r.val}</div></div>`;
-      });
-
-      // Dreamteam
-      const combos = new Map();
-      hof.seasons.forEach(s => {
-        const champ = s.standings.find(st => st.rank === 1);
-        if (champ) {
-          const team = s.players.find(p => p.name === champ.name)?.team;
-          const key = `${champ.name} × ${team}`;
-          combos.set(key, (combos.get(key) || 0) + 1);
+      const all = new Map();
+      const records = []; // {label, value, holder, isNew}
+      
+      // Helper for records
+      const checkRecord = (label, val, holder, season) => {
+        const existing = records.find(r => r.label === label);
+        const isLatest = (season === hof.latestSeason);
+        if(!existing || val > existing.value) {
+          if(existing) { existing.value = val; existing.holder = holder; existing.isNew = isLatest; }
+          else records.push({label, value: val, holder, isNew: isLatest});
+        } else if (val === existing.value && isLatest) {
+          existing.isNew = true; // Mark as new if reached in latest season
+          if(!existing.holder.includes(holder)) existing.holder += ", " + holder;
         }
+      };
+
+      // Aggregate
+      hof.seasons.slice().reverse().forEach(s => {
+        const sStats = getPlayerSeasonStats(s);
+        sStats.forEach(p => {
+          if(!all.has(p.name)) all.set(p.name, {name:p.name, titles:0, points:0, games:0, wins:0, pf:0});
+          const a = all.get(p.name);
+          a.points += p.points; a.games += p.g; a.wins += p.w; a.pf += p.pf;
+          if(p.rank === 1) a.titles++;
+          
+          checkRecord("Meiste Siege", a.wins, a.name, s.season);
+          checkRecord("Ewige Punkte", a.points, a.name, s.season);
+          checkRecord("Meiste Titel", a.titles, a.name, s.season);
+        });
+
+        // Match Records
+        s.matches.forEach(m => {
+          if(m.homeScore === null) return;
+          checkRecord("Höchster Score (Spiel)", Math.max(m.homeScore, m.awayScore), (m.homeScore > m.awayScore ? m.homePlayer : m.awayPlayer), s.season);
+          checkRecord("Punkte-Feuerwerk (Gesamt)", (m.homeScore + m.awayScore), `${m.homePlayer} vs ${m.awayPlayer}`, s.season);
+        });
       });
-      const bestCombo = [...combos.entries()].sort((a,b) => b[1] - a[1])[0];
-      if (bestCombo) {
-        recHtml += `<h4 style="color:var(--gold); margin-top:20px;">💍 Legendary Dynasty</h4>`;
-        recHtml += `<div class="row" style="border:1px solid var(--gold)"><div><b>${bestCombo[0]}</b></div><div>${bestCombo[1]} Ringe</div></div>`;
-      }
 
-      $("tab2-at-records").innerHTML = recHtml;
+      // Render Table
+      const sorted = [...all.values()].sort((a,b) => b.titles - a.titles || b.points - a.points);
+      let html = `<table><tr><th>#</th><th>Coach</th><th>🏆</th><th>Pkt</th><th>Win%</th></tr>`;
+      sorted.forEach((p, i) => {
+        html += `<tr><td>${i+1}</td><td class="name">${p.name}</td><td>${p.titles}</td><td>${p.points}</td><td>${(p.wins/p.games*100).toFixed(1)}%</td></tr>`;
+      });
+      document.getElementById("at-table-wrap").innerHTML = html + "</table>";
+
+      // Render Records
+      document.getElementById("at-records-wrap").innerHTML = records.map(r => `
+        <div class="row ${r.isNew ? 'new-record' : ''}">
+          <div><b>${r.label}</b><br><small class="muted">${r.holder}</small></div>
+          <div style="font-weight:900; color:${r.isNew ? 'var(--accent)' : 'inherit'}">${r.value} ${r.isNew ? '⭐' : ''}</div>
+        </div>
+      `).join("");
     }
 
-    // =========================================================
-    // UI CONTROLS
-    // =========================================================
-    function setTab(name) {
-      hof.activeTab = name;
-      document.querySelectorAll("[data-tab]").forEach(el => el.classList.toggle("active", el.dataset.tab === name));
-      $("tab-standings").classList.toggle("hidden", name !== "standings");
-      $("tab-mastergrid").classList.toggle("hidden", name !== "mastergrid");
-      $("tab-teamstats").classList.toggle("hidden", name !== "teamstats");
-      $("tab-coachhistory").classList.toggle("hidden", name !== "coachhistory");
-      if (name === "mastergrid") renderMasterGrid();
-      if (name === "teamstats") renderTeamStats();
+    function switchMainTab(tab) {
+      ["main", "mastergrid", "coachhistory", "teamstats"].forEach(t => {
+        document.getElementById("view-"+t).classList.toggle("hidden", t !== tab);
+        document.querySelector(`[data-tab="${t}"]`).classList.toggle("active", t === tab);
+      });
+      if(tab === 'mastergrid') renderGrid();
+      if(tab === 'coachhistory') renderHistory();
+      if(tab === 'teamstats') renderTeams();
     }
 
-    function setTab2(name) {
-      document.querySelectorAll("[data-tab2]").forEach(el => el.classList.toggle("active", el.dataset.tab2 === name));
-      $("tab2-at-table").classList.toggle("hidden", name !== "at-table");
-      $("tab2-at-records").classList.toggle("hidden", name !== "at-records");
+    function renderGrid() {
+      const players = [...new Set(hof.seasons.flatMap(s => s.standings.map(st => st.name)))].sort();
+      const years = [...hof.seasons].map(s => s.season).sort();
+      let h = `<table><tr><th>Coach</th>${years.map(y => `<th>${y}</th>`).join("")}</tr>`;
+      players.forEach(p => {
+        h += `<tr><td class="name">${p}</td>`;
+        years.forEach(y => {
+          const s = hof.seasonMap.get(y);
+          const st = s.standings.find(x => x.name === p);
+          const tm = s.players.find(x => x.name === p)?.team || "";
+          h += st ? `<td><div style="font-size:9px">${tm}</div><span class="pill ${st.rank<=3?'rank-'+st.rank:''}">#${st.rank}</span></td>` : `<td>—</td>`;
+        });
+        h += `</tr>`;
+      });
+      document.getElementById("gridContent").innerHTML = h + "</table>";
     }
 
-    function setSubTab(name) {
-      document.querySelectorAll("[data-sub]").forEach(el => el.classList.toggle("active", el.dataset.sub === name));
-      $("sub-st-table").classList.toggle("hidden", name !== "st-table");
-      $("sub-st-stats").classList.toggle("hidden", name !== "st-stats");
-      $("sub-st-matches").classList.toggle("hidden", name !== "st-matches");
+    function renderHistory() {
+      const coaches = new Map();
+      hof.seasons.slice().reverse().forEach(s => {
+        s.standings.forEach(st => {
+          if(!coaches.has(st.name)) coaches.set(st.name, []);
+          const team = s.players.find(p => p.name === st.name)?.team || "???";
+          coaches.get(st.name).push({y: s.season, t: team, r: st.rank});
+        });
+      });
+      let h = "";
+      [...coaches.keys()].sort().forEach(name => {
+        h += `<div class="card" style="margin-bottom:5px;"><h3>${name}</h3>`;
+        coaches.get(name).reverse().forEach(entry => {
+          h += `<div class="row"><span>${entry.y}: ${entry.t}</span><span class="pill ${entry.r<=3?'rank-'+entry.r:''}">#${entry.r}</span></div>`;
+        });
+        h += `</div>`;
+      });
+      document.getElementById("historyContent").innerHTML = h;
     }
 
-    function initUI() {
-      const sel = $("seasonSelect");
-      sel.innerHTML = hof.seasons.map(s => `<option value="${s.season}">${s.season}</option>`).join("");
+    function renderTeams() {
+      const tMap = new Map();
+      hof.seasons.forEach(s => s.players.forEach(p => {
+        if(!tMap.has(p.team)) tMap.set(p.team, {n:p.team, p:0, w:0});
+        const t = tMap.get(p.team); t.p++;
+        if(s.standings.find(st => st.rank === 1 && st.name === p.name)) t.w++;
+      }));
+      let h = `<table><tr><th>NFL Team</th><th>Picks</th><th>Titel</th></tr>`;
+      [...tMap.values()].sort((a,b)=>b.p-a.p).forEach(t => {
+        h += `<tr><td class="name">${t.n}</td><td>${t.p}</td><td class="ok">${t.w}</td></tr>`;
+      });
+      document.getElementById("teamContent").innerHTML = h + "</table>";
     }
 
-    function reloadAll() { location.reload(); }
+    function setSubTab(n) {
+      document.querySelectorAll("[data-sub]").forEach(el => el.classList.toggle("active", el.dataset.sub === n));
+      document.getElementById("sub-st-table").classList.toggle("hidden", n !== "st-table");
+      document.getElementById("sub-st-stats").classList.toggle("hidden", n !== "st-stats");
+    }
 
-    window.onload = loadAll;
+    window.onload = loadData;
   </script>
 </body>
 </html>
