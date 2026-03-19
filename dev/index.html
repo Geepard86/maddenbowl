@@ -2768,7 +2768,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
         const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;
         const p2 = m.t === 'g' ? state.players[m.p2] : m.p2;
 
-        let stadium = state.config.s1;
+        let stadium = state.config.s2;
         if (m.t === 'g') {
           stadium = (state.matches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
         } else {
