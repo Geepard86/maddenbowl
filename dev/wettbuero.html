@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl — Wettbüro</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<script src="shared.js"></script>
+<style>
+  :root {
+    --nfl-red: #D50A0A;
+    --bg: #0b1119;
+    --card: #161f2c;
+    --accent: #00ffcc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg); color: #eee; padding-bottom: 60px;
+  }
+  header {
+    padding: 16px 18px; border-bottom: 3px solid var(--nfl-red);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 1.15em; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
+  header .balance { color: var(--accent); font-weight: bold; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 16px; }
+  .card {
+    background: var(--card); border-radius: 10px; padding: 16px; margin-bottom: 16px;
+    border: 1px solid #22304333;
+  }
+  h2 { color: var(--accent); font-size: 1em; text-transform: uppercase; margin: 0 0 12px; letter-spacing: 1px; }
+  select, input[type=number], input[type=password], input[type=text] {
+    background: #0e1622; color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
+    padding: 8px 10px; font-size: 1em; width: 100%;
+  }
+  label { font-size: 0.8em; opacity: 0.75; display: block; margin-bottom: 4px; margin-top: 10px; }
+  button {
+    background: var(--nfl-red); color: white; border: none; border-radius: 6px;
+    padding: 10px 16px; font-weight: bold; cursor: pointer; margin-top: 12px; width: 100%;
+  }
+  button.secondary { background: #263449; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .match-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #0e1622; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+  }
+  .match-teams { font-weight: bold; }
+  .match-meta { font-size: 0.75em; color: var(--accent); }
+  .odds-pill {
+    background: #1c2838; border-radius: 20px; padding: 4px 10px; font-size: 0.85em; cursor: pointer;
+    border: 1px solid #2a3a4d;
+  }
+  .odds-pill.selected { border-color: var(--accent); color: var(--accent); }
+  .bet-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .leaderboard-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #22304333; }
+  .leaderboard-row:last-child { border-bottom: none; }
+  .bet-history-row { font-size: 0.85em; padding: 6px 0; border-bottom: 1px solid #22304333; display:flex; justify-content:space-between; }
+  .status-won { color: var(--accent); }
+  .status-lost { color: var(--nfl-red); }
+  .status-open { opacity: 0.6; }
+  .hint { font-size: 0.75em; opacity: 0.6; margin-top: 6px; }
+  .error { color: var(--nfl-red); font-size: 0.85em; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎰 Wettbüro</h1>
+  <span class="balance" id="headerBalance"></span>
+</header>
+
+<div class="wrap" id="app"></div>
+
+<script>
+  let state = null;
+  let history = null;
+  let currentPlayer = sessionStorage.getItem('mb_wettbuero_player') || null;
+  let selectedPick = {}; // matchId -> pickedName
+
+  async function boot() {
+    try {
+      state = await MB.fetchCloudState();
+      MB.ensureWettbuero(state);
+    } catch (e) {
+      document.getElementById('app').innerHTML = `<div class="card error">Konnte Turnierdaten nicht laden. Läuft aktuell ein Turnier? (${e.message})</div>`;
+      return;
+    }
+    if (!history) {
+      const seasons = await MB.loadHistoryFiles();
+      history = MB.buildHistoryIndex(seasons);
+    }
+    render();
+    // Auto-Refresh, aber nicht während jemand tippt
+    setInterval(async () => {
+      const typing = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT');
+      if (typing) return;
+      try {
+        state = await MB.fetchCloudState();
+        MB.ensureWettbuero(state);
+        render();
+      } catch (e) { /* still fine, keep last known state */ }
+    }, 20000);
+  }
+
+  async function persist() {
+    try { await MB.pushCloudState(state); } catch (e) { console.error('Speichern fehlgeschlagen', e); }
+  }
+
+  function render() {
+    const app = document.getElementById('app');
+    const headerBalance = document.getElementById('headerBalance');
+
+    if (!state.players || state.players.length === 0) {
+      app.innerHTML = `<div class="card">Es läuft aktuell kein Turnier. Sobald der Admin ein Turnier gestartet hat, kannst du hier wetten.</div>`;
+      headerBalance.textContent = '';
+      return;
+    }
+
+    if (!currentPlayer || !state.wettbuero.accounts[currentPlayer]) {
+      currentPlayer = null;
+      headerBalance.textContent = '';
+      renderLogin(app);
+      return;
+    }
+
+    const acc = state.wettbuero.accounts[currentPlayer];
+    headerBalance.textContent = `${currentPlayer} · ${acc.balance.toFixed(0)} 🪙`;
+    renderDashboard(app);
+  }
+
+  function renderLogin(app) {
+    const names = state.players.map(p => p.name);
+    app.innerHTML = `
+      <div class="card">
+        <h2>Anmelden</h2>
+        <label for="playerSelect">Spieler</label>
+        <select id="playerSelect">${names.map(n => `<option value="${n}">${n}</option>`).join('')}</select>
+        <label for="pinInput" id="pinLabel">PIN</label>
+        <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="4-6 stellige PIN" />
+        <div id="loginHint" class="hint"></div>
+        <button id="loginBtn">Anmelden / PIN festlegen</button>
+        <div id="loginError" class="error"></div>
+      </div>`;
+
+    const sel = document.getElementById('playerSelect');
+    const hint = document.getElementById('loginHint');
+    const updateHint = () => {
+      const acc = state.wettbuero.accounts[sel.value];
+      hint.textContent = (acc && acc.pin)
+        ? 'PIN eingeben zum Anmelden.'
+        : 'Für diesen Spieler ist noch keine PIN gesetzt — die eingegebene PIN wird jetzt festgelegt.';
+    };
+    sel.onchange = updateHint;
+    updateHint();
+
+    document.getElementById('loginBtn').onclick = async () => {
+      const name = sel.value;
+      const pin = document.getElementById('pinInput').value.trim();
+      const errEl = document.getElementById('loginError');
+      errEl.textContent = '';
+      if (!/^\d{4,6}$/.test(pin)) { errEl.textContent = 'PIN muss 4-6 Ziffern haben.'; return; }
+
+      const acc = state.wettbuero.accounts[name];
+      if (!acc.pin) {
+        acc.pin = pin;
+        await persist();
+      } else if (acc.pin !== pin) {
+        errEl.textContent = 'Falsche PIN.';
+        return;
+      }
+      currentPlayer = name;
+      sessionStorage.setItem('mb_wettbuero_player', name);
+      render();
+    };
+  }
+
+  function logout() {
+    currentPlayer = null;
+    sessionStorage.removeItem('mb_wettbuero_player');
+    render();
+  }
+
+  // Grobe Saison-Wetten-Quoten (Heuristik auf Basis der Titelchancen-Engine)
+  function getSeasonOdds() {
+    const titleOdds = MB.computeTitleOdds(history, state); // name -> % Titelchance
+    const names = state.players.map(p => p.name);
+    const champion = {}, runnerUp = {}, toiletBowl = {};
+
+    let sumT = 0; names.forEach(n => sumT += (titleOdds[n] || 0));
+    names.forEach(n => { champion[n] = MB.decimalOdds((titleOdds[n] || 0) / (sumT || 1)); });
+    // Runner-Up: grobe Näherung über dieselbe Verteilung (keine Konditionierung auf "nicht Champion")
+    names.forEach(n => { runnerUp[n] = MB.decimalOdds((titleOdds[n] || 0) / (sumT || 1)); });
+    // Toilet Bowl: invertierte Gewichtung (schwächere Titelchance = höhere TB-Chance)
+    const inv = {}; let sumInv = 0;
+    names.forEach(n => { const w = Math.max(1, 100 - (titleOdds[n] || 0)); inv[n] = w; sumInv += w; });
+    names.forEach(n => { toiletBowl[n] = MB.decimalOdds(inv[n] / sumInv); });
+
+    return { champion, runnerUp, toiletBowl };
+  }
+
+  function renderDashboard(app) {
+    const acc = state.wettbuero.accounts[currentPlayer];
+    const bettable = MB.getBettableMatches(state, currentPlayer);
+    const seasonOdds = getSeasonOdds();
+    const myBets = state.wettbuero.bets.filter(b => b.player === currentPlayer).sort((a,b) => b.createdAt - a.createdAt);
+    const leaderboard = MB.getWettbuergerLeaderboard(state);
+
+    let html = `
+      <div class="card">
+        <h2>Dein Konto</h2>
+        <div>Kapital: <b style="color:var(--accent)">${acc.balance.toFixed(0)} 🪙</b></div>
+        <div class="hint">Mindesteinsatz pro Spiel: ${state.wettbuero.config.minStake} 🪙 · Jede Runde +${state.wettbuero.config.roundBonus} 🪙 Bonus</div>
+        <button class="secondary" onclick="logout()">Abmelden</button>
+      </div>
+
+      <div class="card">
+        <h2>Nächste Spiele (ohne deine eigenen)</h2>
+        ${bettable.length === 0 ? '<div class="hint">Aktuell keine wettbaren Spiele verfügbar.</div>' : ''}
+        ${bettable.map((m, i) => renderMatchBetCard(m, i, acc)).join('')}
+      </div>
+
+      <div class="card">
+        <h2>Saison-Wetten</h2>
+        ${renderSeasonBetBlock('champion', '🏆 Turniersieger', seasonOdds.champion, acc)}
+        ${renderSeasonBetBlock('runnerUp', '🥈 Zweiter Platz', seasonOdds.runnerUp, acc)}
+        ${renderSeasonBetBlock('toiletBowlWinner', '🚽 Toilet-Bowl-Sieger', seasonOdds.toiletBowl, acc)}
+        <div class="hint">Saison-Quoten sind eine grobe Schätzung und werden erst final abgerechnet, wenn das jeweilige Ergebnis feststeht.</div>
+      </div>
+
+      <div class="card">
+        <h2>Deine Wetten</h2>
+        ${myBets.length === 0 ? '<div class="hint">Noch keine Wetten platziert.</div>' : myBets.map(renderBetHistoryRow).join('')}
+      </div>
+
+      <div class="card">
+        <h2>Wettbüro-Rangliste</h2>
+        ${leaderboard.map((row, i) => `<div class="leaderboard-row"><span>${i+1}. ${row.name}${row.name===currentPlayer?' (du)':''}</span><span>${row.balance.toFixed(0)} 🪙</span></div>`).join('')}
+      </div>
+    `;
+    app.innerHTML = html;
+  }
+
+  function renderMatchBetCard(m, i, acc) {
+    const odds = MB.computeOddsForMatch(history, state, m.homeName, m.awayName);
+    const qHome = MB.decimalOdds(odds.pHome), qAway = MB.decimalOdds(odds.pAway);
+    const inputId = `stake-${m.matchId}`;
+    return `
+      <div class="match-card" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="match-teams">${m.awayName} @ ${m.homeName}</span>
+          <span class="match-meta">${m.time || ''} Uhr</span>
+        </div>
+        <div class="bet-row">
+          <span class="odds-pill" data-match="${m.matchId}" data-pick="${m.awayName}" onclick="pickSide(this)">${m.awayName} ${qAway}</span>
+          <span class="odds-pill" data-match="${m.matchId}" data-pick="${m.homeName}" onclick="pickSide(this)">${m.homeName} ${qHome}</span>
+        </div>
+        <div class="bet-row">
+          <input type="number" id="${inputId}" min="${state.wettbuero.config.minStake}" step="1" placeholder="Einsatz (min. ${state.wettbuero.config.minStake})" />
+          <button style="width:auto; margin-top:0;" onclick="placeMatchBet('${m.matchId}', '${inputId}', ${odds.pHome}, ${odds.pAway}, '${m.homeName}', '${m.awayName}')">Wetten</button>
+        </div>
+      </div>`;
+  }
+
+  function pickSide(el) {
+    const matchId = el.dataset.match;
+    document.querySelectorAll(`.odds-pill[data-match="${matchId}"]`).forEach(x => x.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedPick[matchId] = el.dataset.pick;
+  }
+
+  async function placeMatchBet(matchId, inputId, pHome, pAway, homeName, awayName) {
+    const pick = selectedPick[matchId];
+    if (!pick) { alert('Bitte zuerst eine Seite auswählen.'); return; }
+    const stake = parseFloat(document.getElementById(inputId).value);
+    if (!stake || stake <= 0) { alert('Bitte einen gültigen Einsatz eingeben.'); return; }
+    const oddsSnapshot = parseFloat(MB.decimalOdds(pick === homeName ? pHome : pAway));
+    try {
+      MB.placeBet(state, currentPlayer, { kind: 'match', matchId, pick, stake, oddsSnapshot });
+      await persist();
+      render();
+    } catch (e) { alert(e.message); }
+  }
+
+  function renderSeasonBetBlock(type, label, oddsMap, acc) {
+    const names = state.players.map(p => p.name);
+    const inputId = `season-stake-${type}`;
+    const selectId = `season-pick-${type}`;
+    return `
+      <div style="margin-bottom:14px;">
+        <label>${label}</label>
+        <select id="${selectId}">${names.map(n => `<option value="${n}">${n} (${oddsMap[n] || '-'})</option>`).join('')}</select>
+        <div class="bet-row">
+          <input type="number" id="${inputId}" min="${state.wettbuero.config.minStake}" step="1" placeholder="Einsatz" />
+          <button style="width:auto; margin-top:0;" onclick="placeSeasonBet('${type}', '${selectId}', '${inputId}')">Wetten</button>
+        </div>
+      </div>`;
+  }
+
+  async function placeSeasonBet(type, selectId, inputId) {
+    const pick = document.getElementById(selectId).value;
+    const stake = parseFloat(document.getElementById(inputId).value);
+    if (!stake || stake <= 0) { alert('Bitte einen gültigen Einsatz eingeben.'); return; }
+    const oddsMap = getSeasonOdds()[type === 'champion' ? 'champion' : type === 'runnerUp' ? 'runnerUp' : 'toiletBowl'];
+    const oddsSnapshot = parseFloat(oddsMap[pick] || 3);
+    try {
+      MB.placeBet(state, currentPlayer, { kind: 'season', seasonBetType: type, pick, stake, oddsSnapshot });
+      await persist();
+      render();
+    } catch (e) { alert(e.message); }
+  }
+
+  function renderBetHistoryRow(b) {
+    const statusClass = !b.settled ? 'status-open' : (b.won ? 'status-won' : 'status-lost');
+    const statusText = !b.settled ? 'offen' : (b.won ? `gewonnen +${b.payout.toFixed(0)}` : 'verloren');
+    const label = b.kind === 'match' ? `${b.pick} (Spiel)` : `${b.pick} (${b.seasonBetType})`;
+    return `<div class="bet-history-row"><span>${label} · Einsatz ${b.stake}</span><span class="${statusClass}">${statusText}</span></div>`;
+  }
+
+  boot();
+</script>
+</body>
+</html>

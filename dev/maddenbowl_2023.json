@@ -1,0 +1,265 @@
+{
+  "schemaVersion": 1,
+  "season": 2023,
+  "tournament": {
+    "season": 2023,
+    "players": [
+      {
+        "name": "Tim",
+        "team": "BAL"
+      },
+      {
+        "name": "Alex",
+        "team": "MIA"
+      },
+      {
+        "name": "Micha",
+        "team": "BUF"
+      },
+      {
+        "name": "Martin",
+        "team": "KC"
+      },
+      {
+        "name": "Tobi F.",
+        "team": "TB"
+      },
+      {
+        "name": "Markus",
+        "team": "MIN"
+      },
+      {
+        "name": "Lasse",
+        "team": "DAL"
+      }
+    ],
+    "matches": [
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "BAL",
+        "homeScore": 14,
+        "awayScore": 16
+      },
+      {
+        "stage": "group",
+        "homeTeam": "DAL",
+        "awayTeam": "KC",
+        "homeScore": 6,
+        "awayScore": 24
+      },
+      {
+        "stage": "group",
+        "homeTeam": "TB",
+        "awayTeam": "MIN",
+        "homeScore": 14,
+        "awayScore": 7
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "MIA",
+        "homeScore": 25,
+        "awayScore": 20
+      },
+      {
+        "stage": "group",
+        "homeTeam": "KC",
+        "awayTeam": "TB",
+        "homeScore": 16,
+        "awayScore": 31
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BUF",
+        "awayTeam": "DAL",
+        "homeScore": 22,
+        "awayScore": 14
+      },
+      {
+        "stage": "group",
+        "homeTeam": "TB",
+        "awayTeam": "BUF",
+        "homeScore": 14,
+        "awayScore": 22
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "KC",
+        "homeScore": 16,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BAL",
+        "awayTeam": "MIN",
+        "homeScore": 14,
+        "awayScore": 13
+      },
+      {
+        "stage": "group",
+        "homeTeam": "KC",
+        "awayTeam": "BAL",
+        "homeScore": 14,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BUF",
+        "awayTeam": "MIA",
+        "homeScore": 20,
+        "awayScore": 30
+      },
+      {
+        "stage": "group",
+        "homeTeam": "DAL",
+        "awayTeam": "TB",
+        "homeScore": 7,
+        "awayScore": 25
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BAL",
+        "awayTeam": "BUF",
+        "homeScore": 41,
+        "awayScore": 31
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "KC",
+        "homeScore": 24,
+        "awayScore": 6
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIA",
+        "awayTeam": "DAL",
+        "homeScore": 7,
+        "awayScore": 14
+      },
+      {
+        "stage": "group",
+        "homeTeam": "DAL",
+        "awayTeam": "BAL",
+        "homeScore": 30,
+        "awayScore": 0
+      },
+      {
+        "stage": "group",
+        "homeTeam": "TB",
+        "awayTeam": "MIA",
+        "homeScore": 25,
+        "awayScore": 17
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BUF",
+        "awayTeam": "MIN",
+        "homeScore": 29,
+        "awayScore": 13
+      },
+      {
+        "stage": "group",
+        "homeTeam": "KC",
+        "awayTeam": "BUF",
+        "homeScore": 21,
+        "awayScore": 26
+      },
+      {
+        "stage": "group",
+        "homeTeam": "BAL",
+        "awayTeam": "TB",
+        "homeScore": 14,
+        "awayScore": 29
+      },
+      {
+        "stage": "group",
+        "homeTeam": "MIN",
+        "awayTeam": "DAL",
+        "homeScore": 20,
+        "awayScore": 14
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIN",
+        "awayTeam": "DAL",
+        "homeScore": 10,
+        "awayScore": 3
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIA",
+        "awayTeam": "BAL",
+        "homeScore": 3,
+        "awayScore": 10
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "KC",
+        "awayTeam": "BUF",
+        "homeScore": 10,
+        "awayScore": 3
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "MIN",
+        "awayTeam": "TB",
+        "homeScore": 10,
+        "awayScore": 3
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "KC",
+        "awayTeam": "BAL",
+        "homeScore": 3,
+        "awayScore": 10
+      },
+      {
+        "stage": "playoff",
+        "homeTeam": "BAL",
+        "awayTeam": "MIN",
+        "homeScore": 10,
+        "awayScore": 3
+      }
+    ],
+    "standings": [
+      {
+        "rank": 1,
+        "name": "Tim",
+        "points": 800
+      },
+      {
+        "rank": 2,
+        "name": "Markus",
+        "points": 600
+      },
+      {
+        "rank": 3,
+        "name": "Tobi F.",
+        "points": 500
+      },
+      {
+        "rank": 4,
+        "name": "Martin",
+        "points": 400
+      },
+      {
+        "rank": 5,
+        "name": "Micha",
+        "points": 300
+      },
+      {
+        "rank": 6,
+        "name": "Lasse",
+        "points": 200
+      },
+      {
+        "rank": 7,
+        "name": "Alex",
+        "points": 100
+      }
+    ]
+  }
+}

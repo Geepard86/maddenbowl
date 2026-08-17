@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl — Live-Tracking</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<script src="shared.js"></script>
+<style>
+  :root {
+    --nfl-red: #D50A0A;
+    --bg: #0b1119;
+    --card: #161f2c;
+    --accent: #00ffcc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg); color: #eee; padding-bottom: 60px;
+  }
+  header {
+    padding: 16px 18px; border-bottom: 3px solid var(--nfl-red);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 1.15em; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
+  header .clock { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+  .card { background: var(--card); border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #22304333; }
+  h2 { color: var(--accent); font-size: 1em; text-transform: uppercase; margin: 0 0 12px; letter-spacing: 1px; }
+  .match-card { background: #0e1622; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .match-top { display: flex; justify-content: space-between; align-items: center; }
+  .match-teams { font-weight: bold; font-size: 1.05em; }
+  .match-meta { font-size: 0.75em; color: var(--accent); text-align: right; }
+  .odds-line { font-size: 0.85em; margin-top: 6px; opacity: 0.9; }
+  .facts { margin-top: 8px; font-size: 0.8em; opacity: 0.85; border-left: 2px solid var(--accent); padding-left: 8px; }
+  .facts div { margin-bottom: 2px; }
+  .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .title-name { width: 110px; font-size: 0.9em; }
+  .title-bar-bg { flex: 1; background: #0e1622; border-radius: 6px; overflow: hidden; height: 14px; }
+  .title-bar-fill { background: var(--accent); height: 100%; }
+  .title-pct { width: 50px; text-align: right; font-size: 0.85em; }
+  .tag-live { background: var(--nfl-red); color: white; font-size: 0.65em; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+  th, td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #22304333; }
+  .empty { opacity: 0.6; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📡 Live-Tracking</h1>
+  <span class="clock" id="clock"></span>
+</header>
+
+<div class="wrap" id="app">
+  <div class="card empty">Lade Turnierdaten…</div>
+</div>
+
+<script>
+  let state = null;
+  let history = null;
+
+  function tickClock() {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+  setInterval(tickClock, 1000); tickClock();
+
+  async function boot() {
+    try {
+      state = await MB.fetchCloudState();
+    } catch (e) {
+      document.getElementById('app').innerHTML = `<div class="card empty">Konnte Turnierdaten nicht laden.</div>`;
+      return;
+    }
+    if (!history) {
+      const seasons = await MB.loadHistoryFiles();
+      history = MB.buildHistoryIndex(seasons);
+    }
+    render();
+    setInterval(async () => {
+      try { state = await MB.fetchCloudState(); render(); } catch (e) {}
+    }, 15000);
+  }
+
+  function getUpcomingWithFacts(limit) {
+    const times = MB.computePlayoffTimes(state);
+    const all = [];
+
+    (state.matches || []).forEach(m => {
+      if (MB.isFinished(m)) return;
+      const p1 = state.players[m.p1], p2 = state.players[m.p2];
+      if (!p1 || !p2) return;
+      const slot = state.slots.find(s => s.includes(m));
+      const stadium = (slot && slot.indexOf(m) === 1) ? state.config.s2 : state.config.s1;
+      all.push({ time: MB.getGroupMatchTime(state, m), homeName: p1.name, awayName: p2.name, stadium, phase: 'Regular Season' });
+    });
+
+    (state.playoffMatches || []).forEach(m => {
+      if (MB.isFinished(m) || !m.p1 || !m.p2 || m.p2.id === -1) return;
+      const stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
+      all.push({ time: times.byId[m.id] || times.groupEndTime, homeName: m.p1.name, awayName: m.p2.name, stadium, phase: m.phase });
+    });
+
+    all.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+    return all.slice(0, limit);
+  }
+
+  function renderMatches() {
+    const upcoming = getUpcomingWithFacts(4);
+    if (!upcoming.length) return `<div class="empty">Aktuell keine offenen Spiele.</div>`;
+
+    return upcoming.map((m, i) => {
+      const odds = MB.computeOddsForMatch(history, state, m.homeName, m.awayName);
+      const qHome = MB.decimalOdds(odds.pHome), qAway = MB.decimalOdds(odds.pAway);
+      const facts = MB.pickFlavourFacts(history, state, m.homeName, m.awayName);
+      return `
+        <div class="match-card">
+          <div class="match-top">
+            <span class="match-teams">${m.awayName} @ ${m.homeName} ${i < 2 ? '<span class="tag-live">Next</span>' : ''}</span>
+            <span class="match-meta">${m.phase || ''}<br>${m.time} Uhr · ${m.stadium || ''}</span>
+          </div>
+          <div class="odds-line">Quote: <b>${m.homeName}</b> ${qHome} &nbsp;|&nbsp; <b>${m.awayName}</b> ${qAway} &nbsp;|&nbsp; O/U ${odds.ouLine}</div>
+          ${facts.length ? `<div class="facts">${facts.map(f => `<div>💬 ${f}</div>`).join('')}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  function renderTitleOdds() {
+    if (!state.players || !state.players.length) return '<div class="empty">—</div>';
+    const odds = MB.computeTitleOdds(history, state);
+    const sorted = [...state.players].map(p => ({ name: p.name, pct: odds[p.name] || 0 })).sort((a, b) => b.pct - a.pct);
+    const max = Math.max(...sorted.map(x => x.pct), 1);
+    return sorted.map(x => `
+      <div class="title-row">
+        <span class="title-name">${x.name}</span>
+        <div class="title-bar-bg"><div class="title-bar-fill" style="width:${(x.pct / max * 100).toFixed(0)}%"></div></div>
+        <span class="title-pct">${x.pct.toFixed(1)}%</span>
+      </div>`).join('');
+  }
+
+  function renderStandings() {
+    if (!state.players || !state.players.length) return '<div class="empty">—</div>';
+    const sorted = [...state.players].sort((a, b) => {
+      if ((b.wins||0) !== (a.wins||0)) return (b.wins||0) - (a.wins||0);
+      return (b.diff||0) - (a.diff||0);
+    });
+    let html = `<table><tr><th>#</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+    sorted.forEach((p, i) => {
+      html += `<tr><td>${i+1}</td><td style="text-align:left;font-weight:bold;">${p.name}</td><td>${p.wins||0}-${(p.played||0)-(p.wins||0)}</td><td style="color:${(p.diff||0)>0?'var(--accent)':(p.diff||0)<0?'var(--nfl-red)':'#eee'}">${(p.diff||0)>0?'+':''}${p.diff||0}</td></tr>`;
+    });
+    return html + `</table>`;
+  }
+
+  function render() {
+    const app = document.getElementById('app');
+    if (!state.players || state.players.length === 0) {
+      app.innerHTML = `<div class="card empty">Es läuft aktuell kein Turnier.</div>`;
+      return;
+    }
+    app.innerHTML = `
+      <div class="card"><h2>Aktuelle & kommende Spiele</h2>${renderMatches()}</div>
+      <div class="card"><h2>Titelchancen</h2>${renderTitleOdds()}</div>
+      <div class="card"><h2>Tabelle</h2>${renderStandings()}</div>
+    `;
+  }
+
+  boot();
+</script>
+</body>
+</html>
