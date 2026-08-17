@@ -97,12 +97,55 @@
     return line.trim();
   }
 
+  // ---- Textbereinigung für saubere Aussprache ----
+  // BUGFIX: "17." (Zahl direkt gefolgt von Punkt) wird von deutschen TTS-
+  // Stimmen als Ordinalzahl gelesen ("siebzehnter" statt "siebzehn"). Wir
+  // trennen den Punkt per Leerzeichen ab, das reicht den meisten Engines,
+  // um die Ordinal-Interpretation zu vermeiden — hörbar bleibt es eine
+  // normale Kardinalzahl.
+  function sanitizeForSpeech(text) {
+    return text
+      .replace(/(\d)\.(\s|$)/g, "$1 .$2")   // "17." -> "17 ."
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
   // ---- Web Speech API ----
   let cachedVoice = null;
+  let forcedVoiceName = null;
+  try { forcedVoiceName = localStorage.getItem("mb_tts_voice_name") || null; } catch (e) {}
+
+  function setPreferredVoice(name) {
+    forcedVoiceName = name || null;
+    cachedVoice = null;
+    try {
+      if (name) localStorage.setItem("mb_tts_voice_name", name);
+      else localStorage.removeItem("mb_tts_voice_name");
+    } catch (e) {}
+  }
+
+  function getGermanVoiceCandidates() {
+    if (!("speechSynthesis" in window)) return [];
+    return speechSynthesis.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith("de"));
+  }
+
+  // Bevorzugt hochwertige Online-Neural-Stimmen ("... Online (Natural)"),
+  // die Edge/Chrome unter Windows 11 kostenlos mitbringen — deutlich
+  // natürlicher als die alten lokalen SAPI-Stimmen (z.B. "Hedda"/"Stefan"),
+  // die sonst oft als Default landen.
   function pickGermanVoice() {
     if (cachedVoice) return cachedVoice;
-    const voices = speechSynthesis.getVoices();
-    cachedVoice = voices.find((v) => v.lang && v.lang.startsWith("de")) || voices[0] || null;
+    if (!("speechSynthesis" in window)) return null;
+    const all = speechSynthesis.getVoices();
+    const de = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith("de"));
+
+    if (forcedVoiceName) {
+      const forced = all.find((v) => v.name === forcedVoiceName);
+      if (forced) { cachedVoice = forced; return cachedVoice; }
+    }
+
+    const natural = de.find((v) => /online\s*\(natural\)|natural/i.test(v.name));
+    cachedVoice = natural || de[0] || all[0] || null;
     return cachedVoice;
   }
 
@@ -111,8 +154,9 @@
       console.warn("Web Speech API nicht verfügbar im Browser.");
       return Promise.resolve();
     }
+    const clean = sanitizeForSpeech(text);
     return new Promise((resolve) => {
-      const utter = new SpeechSynthesisUtterance(text);
+      const utter = new SpeechSynthesisUtterance(clean);
       const voice = pickGermanVoice();
       if (voice) utter.voice = voice;
       utter.lang = (voice && voice.lang) || "de-DE";
@@ -124,11 +168,20 @@
     });
   }
 
-  // Stellt sicher, dass Stimmen geladen sind (manche Browser laden sie async nach)
+  // Stellt sicher, dass Stimmen geladen sind (manche Browser laden sie async
+  // nach; Edge liefert dabei manchmal kurzzeitig kaputte "undefined"-Namen —
+  // daher zusätzlich ein kurzer Retry).
   function warmupVoices() {
     if (!("speechSynthesis" in window)) return;
     speechSynthesis.getVoices();
     speechSynthesis.onvoiceschanged = () => { cachedVoice = null; };
+    let tries = 0;
+    const retry = setInterval(() => {
+      tries++;
+      const de = getGermanVoiceCandidates();
+      const hasUsableName = de.some((v) => v.name && !v.name.includes("undefined"));
+      if (hasUsableName || tries > 10) { clearInterval(retry); cachedVoice = null; }
+    }, 400);
   }
 
   // Haupt-Einstiegspunkt: wird nach Score-Eintrag für ein FERTIGES Spiel aufgerufen.
@@ -151,5 +204,8 @@
   }
 
   global.MB = global.MB || {};
-  global.MB.Announcer = { announce, speak, warmupVoices, buildResultLine, buildUpcomingLine };
+  global.MB.Announcer = {
+    announce, speak, warmupVoices, buildResultLine, buildUpcomingLine,
+    setPreferredVoice, getGermanVoiceCandidates, sanitizeForSpeech,
+  };
 })(window);

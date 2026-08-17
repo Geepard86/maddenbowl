@@ -551,6 +551,19 @@
         <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
       </div>
 
+      <div class="card" style="margin-bottom:15px;">
+        <h2>🔊 KI-Ansage — Stimme</h2>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="ttsVoiceSelect" style="flex:1; min-width:220px;"></select>
+          <button class="btn-secondary" onclick="testTtsVoice()">Testen</button>
+          <button class="btn-secondary" onclick="refreshTtsVoiceList()">Liste aktualisieren</button>
+        </div>
+        <div style="font-size:0.8em; opacity:0.7; margin-top:6px;">
+          Stimmen mit "Online (Natural)" im Namen klingen am natürlichsten (kostenlos, kommt von Edge/Chrome unter Windows 11).
+          Falls die Liste leer/komisch aussieht, kurz "Liste aktualisieren" klicken — Browser laden Stimmen manchmal verzögert nach.
+        </div>
+      </div>
+
       <div id="setup-view" class="card">
         <h2>Tournament Setup</h2>
 
@@ -2406,9 +2419,24 @@ function renderRanking() {
       applyLayoutRules();
 
       MB.Announcer.warmupVoices(); // Stimmen für Web Speech API vorladen
+      if (isAdmin) setTimeout(refreshTtsVoiceList, 800); // Liste erst nach kurzem Warmup füllen
 
       setInterval(() => syncData(false), 45000);
     };
+
+    function refreshTtsVoiceList() {
+      const sel = document.getElementById('ttsVoiceSelect');
+      if (!sel) return;
+      const voices = MB.Announcer.getGermanVoiceCandidates();
+      const current = localStorage.getItem('mb_tts_voice_name') || '';
+      sel.innerHTML = '<option value="">(Standard automatisch wählen)</option>' +
+        voices.map(v => `<option value="${v.name}" ${v.name === current ? 'selected' : ''}>${v.name} ${/online\s*\(natural\)|natural/i.test(v.name) ? '⭐' : ''}</option>`).join('');
+      sel.onchange = () => MB.Announcer.setPreferredVoice(sel.value || null);
+    }
+
+    function testTtsVoice() {
+      MB.Announcer.speak('So klingt die aktuell ausgewählte Stimme. Endstand: Tim 24, Alex 17. Was für ein Spiel!');
+    }
   </script>
 </body>
 </html>
