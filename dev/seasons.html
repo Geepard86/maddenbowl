@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl — Saison-Verwaltung</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<style>
+  body { padding: 16px; max-width: 900px; margin: 0 auto; padding-bottom: 60px; }
+  h1 { border-bottom: 3px solid var(--nfl-red); padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+  table.list { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-top: 10px; }
+  table.list th, table.list td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #22304333; }
+  .status-pill { padding: 2px 8px; border-radius: 10px; font-size: 0.75em; text-transform: uppercase; font-weight: bold; }
+  .status-completed { background: #0e3d33; color: var(--accent); }
+  .status-running { background: #3d2e0e; color: #ffcc00; }
+  .status-setup { background: #2a2a2a; color: #aaa; }
+  button { background: var(--nfl-red); color: white; border: none; border-radius: 6px; padding: 8px 14px; font-weight: bold; cursor: pointer; }
+  button.secondary { background: #263449; }
+  button.small { padding: 5px 10px; font-size: 0.8em; margin-right: 6px; }
+  input, select { background: #0e1622; color: #eee; border: 1px solid #2a3a4d; border-radius: 6px; padding: 6px 8px; }
+  .editor { background: #0e1622; border-radius: 10px; padding: 14px; margin-top: 10px; }
+  .editor h3 { margin-top: 0; color: var(--accent); }
+  .row-line { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .row-line span.label { width: 90px; opacity: 0.7; font-size: 0.85em; }
+  .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
+  .team-cell { display: flex; align-items: center; gap: 6px; background: #161f2c; border-radius: 6px; padding: 6px 8px; }
+  .team-cell label { font-size: 0.8em; width: 40px; }
+  .team-cell input { width: 50px; }
+  .hint { font-size: 0.8em; opacity: 0.65; margin: 6px 0; }
+  .not-admin { padding: 40px; text-align: center; opacity: 0.7; }
+</style>
+</head>
+<body>
+
+<div id="app"><div class="not-admin">Lade…</div></div>
+
+<script>
+  const isAdmin = window.location.search.includes('Altima');
+  let tournaments = [];
+  let editingId = null;
+
+  async function boot() {
+    const app = document.getElementById('app');
+    if (!isAdmin) {
+      app.innerHTML = `<div class="not-admin">🔒 Nur für Admins (Link mit <code>?Altima</code> aufrufen).</div>`;
+      return;
+    }
+    app.innerHTML = `
+      <h1>🗂️ Saison-Verwaltung</h1>
+      <div class="card" id="ratingsCard"></div>
+      <div class="card">
+        <h2>Saisons</h2>
+        <div class="hint">Abgeschlossene Saisons erscheinen in der Hall of Fame und fließen in die Quoten-/Flavour-Facts-Historie ein.</div>
+        <table class="list" id="seasonsTable"></table>
+      </div>
+    `;
+    await renderRatingsCard();
+    await loadSeasons();
+  }
+
+  // =========================================================
+  // SAISONEN: LISTE / BEARBEITEN / LÖSCHEN
+  // =========================================================
+  async function loadSeasons() {
+    const sb = MB.getSupabaseClient();
+    const { data, error } = await sb.from('tournaments').select('*').order('year', { ascending: false }).order('created_at', { ascending: false });
+    if (error) { document.getElementById('seasonsTable').innerHTML = `<tr><td>Fehler: ${error.message}</td></tr>`; return; }
+    tournaments = data || [];
+    renderSeasonsTable();
+  }
+
+  function renderSeasonsTable() {
+    const t = document.getElementById('seasonsTable');
+    if (!tournaments.length) { t.innerHTML = `<tr><td>Keine Turniere gefunden.</td></tr>`; return; }
+    t.innerHTML = `
+      <tr><th>Jahr</th><th>Status</th><th></th></tr>
+      ${tournaments.map(row => `
+        <tr>
+          <td>${row.year ?? '—'}</td>
+          <td><span class="status-pill status-${row.status}">${row.status}</span></td>
+          <td>
+            <button class="small secondary" onclick="toggleEdit('${row.id}')">Bearbeiten</button>
+            <button class="small" onclick="deleteSeason('${row.id}', ${row.year})">Löschen</button>
+          </td>
+        </tr>
+        ${editingId === row.id ? `<tr><td colspan="3">${renderEditorPlaceholder(row.id)}</td></tr>` : ''}
+      `).join('')}
+    `;
+    if (editingId) loadEditor(editingId);
+  }
+
+  function renderEditorPlaceholder(id) { return `<div class="editor" id="editor-${id}">Lade Details…</div>`; }
+
+  function toggleEdit(id) {
+    editingId = (editingId === id) ? null : id;
+    renderSeasonsTable();
+  }
+
+  async function deleteSeason(id, year) {
+    if (!confirm(`Saison ${year ?? ''} wirklich UNWIDERRUFLICH löschen? Alle Spieler/Spiele/Wettbüro-Daten dieser Saison werden mitgelöscht.`)) return;
+    const sb = MB.getSupabaseClient();
+    const { error } = await sb.from('tournaments').delete().eq('id', id);
+    if (error) { alert('Löschen fehlgeschlagen: ' + error.message); return; }
+    if (editingId === id) editingId = null;
+    await loadSeasons();
+  }
+
+  async function loadEditor(id) {
+    const sb = MB.getSupabaseClient();
+    const t = tournaments.find(x => x.id === id);
+    const [playersRes, gmRes, pmRes] = await Promise.all([
+      sb.from('players').select('*').eq('tournament_id', id).order('idx'),
+      sb.from('group_matches').select('*').eq('tournament_id', id).order('idx'),
+      sb.from('playoff_matches').select('*').eq('tournament_id', id).order('seq'),
+    ]);
+    const players = playersRes.data || [];
+    const groupMatches = gmRes.data || [];
+    const playoffMatches = pmRes.data || [];
+    const idxToName = new Map(players.map(p => [p.idx, p.name]));
+    const standings = t.final_standings || [];
+
+    const el = document.getElementById(`editor-${id}`);
+    if (!el) return;
+
+    el.innerHTML = `
+      <h3>Turnier bearbeiten</h3>
+      <div class="row-line"><span class="label">Jahr</span><input type="number" id="edit-year-${id}" value="${t.year ?? ''}" style="width:100px;"></div>
+      <div class="row-line"><span class="label">Status</span>
+        <select id="edit-status-${id}">
+          ${['setup','running','completed'].map(s => `<option value="${s}" ${s===t.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+
+      <h4>Spieler</h4>
+      ${players.map(p => `
+        <div class="row-line">
+          <span class="label">#${p.idx}</span>
+          <input type="text" id="edit-pname-${id}-${p.idx}" value="${p.name}" placeholder="Name">
+          <input type="text" id="edit-pteam-${id}-${p.idx}" value="${p.team || ''}" placeholder="Team" style="width:70px;">
+        </div>
+      `).join('') || '<div class="hint">Keine Spieler.</div>'}
+
+      <h4>Gruppenspiele</h4>
+      ${groupMatches.map(m => `
+        <div class="row-line">
+          <span class="label">${idxToName.get(m.p1_idx) || m.p1_idx} vs ${idxToName.get(m.p2_idx) || m.p2_idx}</span>
+          <input type="number" id="edit-gm-${m.id}-s1" value="${m.s1 ?? ''}" style="width:60px;" placeholder="S1">
+          <input type="number" id="edit-gm-${m.id}-s2" value="${m.s2 ?? ''}" style="width:60px;" placeholder="S2">
+        </div>
+      `).join('') || '<div class="hint">Keine Gruppenspiele.</div>'}
+
+      <h4>Playoff-Spiele</h4>
+      ${playoffMatches.map(m => `
+        <div class="row-line">
+          <span class="label">${m.match_key}: ${m.p1_is_bye ? 'BYE' : (idxToName.get(m.p1_idx) || m.p1_idx)} vs ${m.p2_is_bye ? 'BYE' : (idxToName.get(m.p2_idx) || m.p2_idx)}</span>
+          <input type="number" id="edit-pm-${m.id}-s1" value="${m.s1 ?? ''}" style="width:60px;" placeholder="S1">
+          <input type="number" id="edit-pm-${m.id}-s2" value="${m.s2 ?? ''}" style="width:60px;" placeholder="S2">
+        </div>
+      `).join('') || '<div class="hint">Keine Playoff-Spiele.</div>'}
+
+      <h4>Endstand (Hall of Fame)</h4>
+      <div id="standings-rows-${id}">
+        ${standings.map((s, i) => renderStandingRow(id, i, s)).join('')}
+      </div>
+      <button class="small secondary" onclick="addStandingRow('${id}')">+ Zeile</button>
+
+      <div style="margin-top:16px; display:flex; gap:10px;">
+        <button onclick="saveEditor('${id}')">Speichern</button>
+        <button class="secondary" onclick="toggleEdit('${id}')">Schließen</button>
+      </div>
+    `;
+  }
+
+  function renderStandingRow(id, i, s) {
+    return `
+      <div class="row-line" id="standing-row-${id}-${i}">
+        <input type="number" value="${s?.rank ?? i+1}" id="edit-st-${id}-${i}-rank" style="width:60px;" placeholder="Platz">
+        <input type="text" value="${s?.name ?? ''}" id="edit-st-${id}-${i}-name" placeholder="Name">
+        <input type="number" value="${s?.points ?? ''}" id="edit-st-${id}-${i}-points" style="width:80px;" placeholder="Punkte">
+        <button class="small secondary" onclick="document.getElementById('standing-row-${id}-${i}').remove()">✕</button>
+      </div>`;
+  }
+
+  function addStandingRow(id) {
+    const wrap = document.getElementById(`standings-rows-${id}`);
+    const i = wrap.children.length;
+    wrap.insertAdjacentHTML('beforeend', renderStandingRow(id, i, null));
+  }
+
+  async function saveEditor(id) {
+    const sb = MB.getSupabaseClient();
+    const year = parseInt(document.getElementById(`edit-year-${id}`).value) || null;
+    const status = document.getElementById(`edit-status-${id}`).value;
+
+    // Standings einsammeln
+    const wrap = document.getElementById(`standings-rows-${id}`);
+    const standings = [...wrap.children].map(row => {
+      const idxEl = row.id.split('-').pop();
+      const rank = parseInt(document.getElementById(`edit-st-${id}-${idxEl}-rank`)?.value);
+      const name = document.getElementById(`edit-st-${id}-${idxEl}-name`)?.value?.trim();
+      const points = parseInt(document.getElementById(`edit-st-${id}-${idxEl}-points`)?.value);
+      return name ? { rank, name, points } : null;
+    }).filter(Boolean);
+
+    try {
+      const { error: tErr } = await sb.from('tournaments').update({ year, status, final_standings: standings }).eq('id', id);
+      if (tErr) throw tErr;
+
+      const [playersRes, gmRes, pmRes] = await Promise.all([
+        sb.from('players').select('id,idx').eq('tournament_id', id),
+        sb.from('group_matches').select('id').eq('tournament_id', id),
+        sb.from('playoff_matches').select('id').eq('tournament_id', id),
+      ]);
+
+      for (const p of (playersRes.data || [])) {
+        const name = document.getElementById(`edit-pname-${id}-${p.idx}`)?.value?.trim();
+        const team = document.getElementById(`edit-pteam-${id}-${p.idx}`)?.value?.trim();
+        if (name === undefined) continue;
+        const { error } = await sb.from('players').update({ name, team }).eq('id', p.id);
+        if (error) throw error;
+      }
+
+      for (const m of (gmRes.data || [])) {
+        const s1El = document.getElementById(`edit-gm-${m.id}-s1`), s2El = document.getElementById(`edit-gm-${m.id}-s2`);
+        if (!s1El) continue;
+        const s1 = s1El.value === '' ? null : parseInt(s1El.value);
+        const s2 = s2El.value === '' ? null : parseInt(s2El.value);
+        const { error } = await sb.from('group_matches').update({ s1, s2 }).eq('id', m.id);
+        if (error) throw error;
+      }
+
+      for (const m of (pmRes.data || [])) {
+        const s1El = document.getElementById(`edit-pm-${m.id}-s1`), s2El = document.getElementById(`edit-pm-${m.id}-s2`);
+        if (!s1El) continue;
+        const s1 = s1El.value === '' ? null : parseInt(s1El.value);
+        const s2 = s2El.value === '' ? null : parseInt(s2El.value);
+        const { error } = await sb.from('playoff_matches').update({ s1, s2 }).eq('id', m.id);
+        if (error) throw error;
+      }
+
+      alert('Gespeichert.');
+      editingId = null;
+      await loadSeasons();
+    } catch (e) {
+      alert('Speichern fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  // =========================================================
+  // TEAM-RATINGS EDITOR
+  // =========================================================
+  async function renderRatingsCard() {
+    const card = document.getElementById('ratingsCard');
+    const years = await getKnownYears();
+    const defaultYear = years[0] || new Date().getFullYear();
+
+    card.innerHTML = `
+      <h2>🏈 Team-Werte (OVR)</h2>
+      <div class="hint">Beeinflusst die Quoten-Berechnung. Ein Team mit 85 OVR ist "neutral" — höher/niedriger verschiebt die Chancen leicht.</div>
+      <div class="row-line">
+        <span class="label">Jahr</span>
+        <input type="number" id="ratingsYear" value="${defaultYear}" style="width:100px;">
+        <button class="small secondary" onclick="loadRatingsGrid()">Laden</button>
+        <button class="small secondary" onclick="copyFromPreviousYear()">Von Vorjahr kopieren</button>
+      </div>
+      <div class="team-grid" id="teamGrid"></div>
+      <button onclick="saveRatingsGrid()">Speichern</button>
+    `;
+    await loadRatingsGrid();
+  }
+
+  async function getKnownYears() {
+    const sb = MB.getSupabaseClient();
+    const { data } = await sb.from('tournaments').select('year').order('year', { ascending: false });
+    const years = [...new Set((data || []).map(r => r.year).filter(Boolean))];
+    return years;
+  }
+
+  async function loadRatingsGrid() {
+    const year = document.getElementById('ratingsYear').value;
+    const ratings = await MB.loadTeamRatings(year);
+    const grid = document.getElementById('teamGrid');
+    grid.innerHTML = MB.nflTeams.map(t => `
+      <div class="team-cell">
+        <label>${t.id}</label>
+        <input type="number" min="40" max="99" id="rating-${t.id}" value="${ratings[t.id] ?? 85}">
+      </div>
+    `).join('');
+  }
+
+  async function copyFromPreviousYear() {
+    const year = parseInt(document.getElementById('ratingsYear').value);
+    const prevRatings = await MB.loadTeamRatings(year - 1);
+    MB.nflTeams.forEach(t => {
+      const el = document.getElementById(`rating-${t.id}`);
+      if (el) el.value = prevRatings[t.id] ?? 85;
+    });
+  }
+
+  async function saveRatingsGrid() {
+    const year = document.getElementById('ratingsYear').value;
+    const ratings = {};
+    MB.nflTeams.forEach(t => { ratings[t.id] = parseInt(document.getElementById(`rating-${t.id}`).value) || 85; });
+    try {
+      await MB.saveTeamRatings(year, ratings);
+      alert(`Team-Werte für ${year} gespeichert.`);
+    } catch (e) {
+      alert('Speichern fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  boot();
+</script>
+</body>
+</html>

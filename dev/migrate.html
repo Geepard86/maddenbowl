@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl — Migration nach Supabase</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<style>
+  body { padding: 20px; max-width: 700px; margin: 0 auto; }
+  .log { background: #0e1622; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+  .ok { color: var(--accent); }
+  .warn { color: #ffcc00; }
+  .err { color: var(--nfl-red); }
+  button { background: var(--nfl-red); color: white; border: none; border-radius: 6px; padding: 12px 20px; font-weight: bold; cursor: pointer; margin: 10px 0; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+  <h1>📦 Migration: alte Saisons → Supabase</h1>
+  <div class="card">
+    <p>Importiert die lokalen JSON-Backup-Dateien
+      (<code id="fileList"></code>) als <b>abgeschlossene Turniere</b> in Supabase.
+      Läuft im Browser, nicht auf einem Server — einfach diese Seite einmal öffnen
+      und den Button klicken.</p>
+    <p class="warn">⚠️ Läuft idempotent: bereits importierte Jahre (gleiches <code>year</code> mit
+      status <code>completed</code>) werden übersprungen, nicht doppelt angelegt. Trotzdem:
+      am besten nur einmal ausführen und danach das Log kurz gegenchecken.</p>
+    <button id="startBtn" onclick="runMigration()">Migration starten</button>
+    <div class="log" id="log"></div>
+  </div>
+
+<script>
+  document.getElementById('fileList').textContent = MB.HISTORY_SOURCES.join(', ');
+  const logEl = document.getElementById('log');
+  function log(msg, cls) {
+    const line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = msg;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  async function runMigration() {
+    document.getElementById('startBtn').disabled = true;
+    const sb = MB.getSupabaseClient();
+    if (!sb) { log('Supabase-Client konnte nicht initialisiert werden.', 'err'); return; }
+
+    log('Lade lokale JSON-Backups…');
+    let seasons;
+    try {
+      seasons = await MB.loadLocalJsonBackups();
+    } catch (e) {
+      log('Fehler beim Laden der JSON-Dateien: ' + e.message, 'err');
+      return;
+    }
+    log(`${seasons.length} Saison(en) in den lokalen Dateien gefunden.`);
+
+    const { data: existing, error: exErr } = await sb.from('tournaments').select('year').eq('status', 'completed');
+    if (exErr) { log('Konnte bestehende Turniere nicht prüfen: ' + exErr.message, 'err'); return; }
+    const existingYears = new Set((existing || []).map(r => r.year));
+
+    for (const t of seasons) {
+      const year = t.season;
+      if (existingYears.has(year)) {
+        log(`Saison ${year}: bereits in Supabase vorhanden — übersprungen.`, 'warn');
+        continue;
+      }
+
+      log(`Saison ${year}: importiere…`);
+      try {
+        const { data: tRow, error: tErr } = await sb.from('tournaments')
+          .insert({ year, status: 'completed', config: {}, final_standings: t.standings || null })
+          .select().single();
+        if (tErr) throw tErr;
+        const tid = tRow.id;
+
+        const teamToIdx = new Map();
+        const playerRows = (t.players || []).map((p, idx) => {
+          teamToIdx.set(p.team, idx);
+          return { tournament_id: tid, idx, name: p.name, team: p.team, wins: 0, diff: 0, points_for: 0, played: 0 };
+        });
+        if (playerRows.length) {
+          const { error } = await sb.from('players').insert(playerRows);
+          if (error) throw error;
+        }
+
+        const groupRows = [];
+        const playoffRows = [];
+        let gIdx = 0, pSeq = 0;
+        (t.matches || []).forEach(m => {
+          const p1 = teamToIdx.get(m.homeTeam);
+          const p2 = teamToIdx.get(m.awayTeam);
+          if (p1 === undefined || p2 === undefined) return;
+          if (m.stage === 'playoff') {
+            playoffRows.push({
+              tournament_id: tid, match_key: `hist-${pSeq}`, seq: pSeq++, phase: 'Playoff', session: 'Playoff',
+              p1_idx: p1, p2_idx: p2, s1: m.homeScore, s2: m.awayScore,
+            });
+          } else {
+            groupRows.push({
+              tournament_id: tid, idx: gIdx, slot_index: gIdx, slot_position: 0,
+              p1_idx: p1, p2_idx: p2, s1: m.homeScore, s2: m.awayScore,
+            });
+            gIdx++;
+          }
+        });
+
+        if (groupRows.length) { const { error } = await sb.from('group_matches').insert(groupRows); if (error) throw error; }
+        if (playoffRows.length) { const { error } = await sb.from('playoff_matches').insert(playoffRows); if (error) throw error; }
+
+        log(`Saison ${year}: ${playerRows.length} Spieler, ${groupRows.length} Gruppenspiele, ${playoffRows.length} Playoff-Spiele importiert.`, 'ok');
+      } catch (e) {
+        log(`Saison ${year}: FEHLER — ${e.message}`, 'err');
+      }
+    }
+
+    log('Fertig. Bitte kurz in Supabase (Table Editor) gegenchecken.', 'ok');
+    document.getElementById('startBtn').disabled = false;
+  }
+</script>
+</body>
+</html>

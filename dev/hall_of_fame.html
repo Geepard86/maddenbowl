@@ -6,11 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MADDEN BOWL – Hall of Fame</title>
   <link rel="icon" type="image/png" href="maddenbowl.ico" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="shared.js"></script>
   <style>
     :root{
-      --nfl-blue:#013369; --nfl-red:#D50A0A;
-      --bg:#0b1119; --card:#161f2c; --slot:#1c2431;
-      --accent:#00ffcc; --gray:#4a5568; --border:#2d3748;
+      /* Basis-Palette (nfl-blue/red, bg, card, accent, gray) kommt aus styles.css;
+         hier nur die zwei Variablen, die styles.css nicht kennt. */
+      --slot:#1c2431; --border:#2d3748;
     }
     body{font-family:'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:12px;overflow-x:hidden;}
     .container{max-width:1200px;margin:0 auto;}
@@ -142,14 +145,9 @@
     // =========================================================
     // CONFIG
     // =========================================================
-    // Ergänze hier einfach neue Jahre – Dateien müssen im gleichen Ordner liegen:
-    const HOF_SOURCES = [
-      "maddenbowl_2022.json",
-      "maddenbowl_2023.json",
-      "maddenbowl_2024.json",
-      "maddenbowl_2025.json",
-      "maddenbowl_2026.json",
-    ];
+    // HOF_SOURCES/fetchJson: nicht mehr der Laufzeit-Datenpfad (siehe
+    // loadAll() unten) — historische Daten kommen jetzt aus Supabase.
+    // Für die einmalige Migration alter JSON-Dateien siehe migrate.html.
 
     // =========================================================
     // STATE
@@ -168,12 +166,6 @@
     // =========================================================
     // LOAD + NORMALIZE
     // =========================================================
-    async function fetchJson(url) {
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-      return await res.json();
-    }
-
     function normName(s){ return (s || "").trim(); }
 
     function normalizeSeason(raw) {
@@ -225,14 +217,15 @@
     }
 
     async function loadAll() {
-      const out = [];
-      for (const f of HOF_SOURCES) {
-        try {
-          const json = await fetchJson(f);
-          out.push(json);
-        } catch (e) {
-          console.warn("HOF load failed:", f, e);
-        }
+      // Historische Saisons kommen jetzt aus Supabase statt aus lokalen
+      // JSON-Dateien (shared.js: MB.loadHistorySeasons()). normalizeSeason()
+      // ist tolerant genug, dieses Format direkt zu verstehen (kein
+      // ".tournament"-Wrapper nötig).
+      let out = [];
+      try {
+        out = await MB.loadHistorySeasons();
+      } catch (e) {
+        console.warn("HOF Supabase-Load fehlgeschlagen:", e);
       }
       hof.seasons = out
         .map(x => normalizeSeason(x))

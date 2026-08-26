@@ -27,9 +27,6 @@
   // ======================================================================
   // CONFIG
   // ======================================================================
-  const BIN_ID = "f3d732f4ad334280c483";
-  const API_URL = `https://api.npoint.io/${BIN_ID}`;
-
   const HISTORY_SOURCES = [
     "maddenbowl_2022.json",
     "maddenbowl_2023.json",
@@ -98,28 +95,259 @@
   ];
 
   // ======================================================================
-  // CLOUD SYNC  (Bugfix #1: Cache-Busting)
+  // SUPABASE — Backend (ersetzt npoint.io komplett)
+  // -------------------------------------------------------------------------
+  // WICHTIG: fetchCloudState()/pushCloudState() liefern/erwarten weiterhin
+  // exakt dieselbe `state`-Objektform wie vorher (players/matches/slots/
+  // playoffMatches/config/wettbuero) — dadurch mussten index.html,
+  // wettbuero.html und live.html für die Migration NICHT angefasst werden,
+  // nur diese eine Übersetzungsschicht hier.
   // ======================================================================
+  const SUPABASE_URL = "https://ylleuggomnktcjyiowtv.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_MjfieGARdLsBOQha9EgBwQ_LEwFqNRM";
+
+  let _sb = null;
+  function getSupabaseClient() {
+    if (_sb) return _sb;
+    if (!global.supabase || !global.supabase.createClient) {
+      console.error("Supabase-JS-Bibliothek nicht geladen — <script> vor shared.js einbinden.");
+      return null;
+    }
+    _sb = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return _sb;
+  }
+
+  // Merkt sich die ID des aktuell laufenden Turniers, damit Pushes das
+  // richtige Tournament-Row updaten statt jedes Mal ein neues anzulegen.
+  let _currentTournamentId = null;
+
+  function emptyState() {
+    return { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: "setup" };
+  }
+
   async function fetchCloudState() {
-    const bust = Date.now() + "-" + Math.random().toString(36).slice(2);
-    const res = await fetch(`${API_URL}?_=${bust}`, {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache, no-store, must-revalidate", Pragma: "no-cache" },
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error("Supabase-Client nicht verfügbar");
+
+    const { data: tRows, error: tErr } = await sb
+      .from("tournaments").select("*")
+      .in("status", ["setup", "running"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (tErr) throw tErr;
+
+    if (!tRows || !tRows.length) {
+      _currentTournamentId = null;
+      return emptyState();
+    }
+
+    const t = tRows[0];
+    _currentTournamentId = t.id;
+
+    const [playersRes, gmRes, pmRes, accRes, betRes, roundRes] = await Promise.all([
+      sb.from("players").select("*").eq("tournament_id", t.id).order("idx"),
+      sb.from("group_matches").select("*").eq("tournament_id", t.id).order("idx"),
+      sb.from("playoff_matches").select("*").eq("tournament_id", t.id).order("seq"),
+      sb.from("wettbuero_accounts").select("*").eq("tournament_id", t.id),
+      sb.from("wettbuero_bets").select("*").eq("tournament_id", t.id).order("created_at"),
+      sb.from("wettbuero_settled_rounds").select("*").eq("tournament_id", t.id),
+    ]);
+    for (const r of [playersRes, gmRes, pmRes, accRes, betRes, roundRes]) if (r.error) throw r.error;
+
+    const players = (playersRes.data || []).map((r) => ({
+      id: r.idx, name: r.name, team: r.team,
+      wins: r.wins, diff: r.diff, pointsFor: r.points_for, played: r.played,
+    }));
+    const playerByIdx = new Map(players.map((p) => [p.id, p]));
+
+    const matchesRaw = (gmRes.data || []).sort((a, b) => a.idx - b.idx);
+    const matches = matchesRaw.map((r) => ({ p1: r.p1_idx, p2: r.p2_idx, s1: r.s1, s2: r.s2 }));
+
+    // state.slots aus slot_index/slot_position rekonstruieren (die App braucht
+    // dieselben Objekt-Referenzen wie in state.matches, kein Klon!)
+    const slotsMap = new Map();
+    matchesRaw.forEach((r, i) => {
+      if (!slotsMap.has(r.slot_index)) slotsMap.set(r.slot_index, []);
+      slotsMap.get(r.slot_index)[r.slot_position] = matches[i];
     });
-    if (!res.ok) throw new Error("Cloud fetch failed: " + res.status);
-    return res.json();
+    const slots = [...slotsMap.keys()].sort((a, b) => a - b).map((k) => slotsMap.get(k).filter(Boolean));
+
+    const playoffMatches = (pmRes.data || []).map((r) => ({
+      id: r.match_key, phase: r.phase, session: r.session, offset: 0,
+      p1: r.p1_is_bye ? { id: -1, name: "BYE", team: null } : (r.p1_idx != null ? playerByIdx.get(r.p1_idx) || null : null),
+      p2: r.p2_is_bye ? { id: -1, name: "BYE", team: null } : (r.p2_idx != null ? playerByIdx.get(r.p2_idx) || null : null),
+      s1: r.s1, s2: r.s2,
+    }));
+
+    const wettbuero = { config: { startCapital: 100, minStake: 5, roundBonus: 10 }, accounts: {}, bets: [], settledRounds: [] };
+    (accRes.data || []).forEach((r) => { wettbuero.accounts[r.player_name] = { pin: r.pin, balance: Number(r.balance) }; });
+    (betRes.data || []).forEach((r) => {
+      wettbuero.bets.push({
+        id: r.id, player: r.player_name, kind: r.kind, matchId: r.match_id, seasonBetType: r.season_bet_type,
+        pick: r.pick, stake: Number(r.stake), oddsSnapshot: r.odds_snapshot != null ? Number(r.odds_snapshot) : null,
+        settled: r.settled, won: r.won, payout: Number(r.payout), createdAt: new Date(r.created_at).getTime(),
+      });
+    });
+    (roundRes.data || []).forEach((r) => wettbuero.settledRounds.push(r.round_key));
+
+    return {
+      config: t.config || {}, players, matches, slots, playoffMatches, wettbuero,
+      currentView: players.length > 0 ? "running" : "setup",
+    };
   }
 
   async function pushCloudState(state) {
-    return fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify(state),
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-    });
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error("Supabase-Client nicht verfügbar");
+
+    if (!_currentTournamentId) {
+      const { data, error } = await sb.from("tournaments")
+        .insert({ year: state.config?.year ? Number(state.config.year) : null, status: "setup", config: state.config || {} })
+        .select().single();
+      if (error) throw error;
+      _currentTournamentId = data.id;
+    }
+    const tid = _currentTournamentId;
+
+    const status = (state.players && state.players.length > 0) ? "running" : "setup";
+    const { error: tErr } = await sb.from("tournaments")
+      .update({ config: state.config || {}, status, year: state.config?.year ? Number(state.config.year) : null })
+      .eq("id", tid);
+    if (tErr) throw tErr;
+
+    if (state.players && state.players.length) {
+      const rows = state.players.map((p) => ({
+        tournament_id: tid, idx: p.id, name: p.name, team: p.team,
+        wins: p.wins || 0, diff: p.diff || 0, points_for: p.pointsFor || 0, played: p.played || 0,
+      }));
+      const { error } = await sb.from("players").upsert(rows, { onConflict: "tournament_id,idx" });
+      if (error) throw error;
+    }
+
+    if (state.matches && state.matches.length) {
+      const rows = state.matches.map((m, idx) => {
+        const slotIndex = (state.slots || []).findIndex((slot) => slot.includes(m));
+        const slotPosition = slotIndex >= 0 ? state.slots[slotIndex].indexOf(m) : 0;
+        return { tournament_id: tid, idx, slot_index: Math.max(0, slotIndex), slot_position: slotPosition, p1_idx: m.p1, p2_idx: m.p2, s1: m.s1, s2: m.s2 };
+      });
+      const { error } = await sb.from("group_matches").upsert(rows, { onConflict: "tournament_id,idx" });
+      if (error) throw error;
+    }
+
+    if (state.playoffMatches && state.playoffMatches.length) {
+      const rows = state.playoffMatches.map((m, seq) => ({
+        tournament_id: tid, match_key: m.id, seq, phase: m.phase, session: m.session,
+        p1_idx: (m.p1 && m.p1.id !== -1) ? m.p1.id : null, p1_is_bye: !!(m.p1 && m.p1.id === -1),
+        p2_idx: (m.p2 && m.p2.id !== -1) ? m.p2.id : null, p2_is_bye: !!(m.p2 && m.p2.id === -1),
+        s1: m.s1, s2: m.s2,
+      }));
+      const { error } = await sb.from("playoff_matches").upsert(rows, { onConflict: "tournament_id,match_key" });
+      if (error) throw error;
+    }
+
+    if (state.wettbuero) {
+      const accRows = Object.entries(state.wettbuero.accounts || {}).map(([name, acc]) => ({
+        tournament_id: tid, player_name: name, pin: acc.pin, balance: acc.balance,
+      }));
+      if (accRows.length) {
+        const { error } = await sb.from("wettbuero_accounts").upsert(accRows, { onConflict: "tournament_id,player_name" });
+        if (error) throw error;
+      }
+
+      const betRows = (state.wettbuero.bets || []).map((b) => ({
+        id: b.id, tournament_id: tid, player_name: b.player, kind: b.kind,
+        match_id: b.matchId || null, season_bet_type: b.seasonBetType || null, pick: b.pick,
+        stake: b.stake, odds_snapshot: b.oddsSnapshot ?? null, settled: !!b.settled,
+        won: b.won ?? null, payout: b.payout || 0,
+      }));
+      if (betRows.length) {
+        const { error } = await sb.from("wettbuero_bets").upsert(betRows, { onConflict: "id" });
+        if (error) throw error;
+      }
+
+      const roundRows = (state.wettbuero.settledRounds || []).map((rk) => ({ tournament_id: tid, round_key: rk }));
+      if (roundRows.length) {
+        const { error } = await sb.from("wettbuero_settled_rounds").upsert(roundRows, { onConflict: "tournament_id,round_key" });
+        if (error) throw error;
+      }
+    }
   }
 
-  async function loadHistoryFiles() {
+  // "Full Reset" (archivieren): aktuelles Turnier wird NICHT gelöscht,
+  // sondern als 'completed' archiviert (inkl. Endstand) — bleibt für
+  // History/Hall of Fame erhalten, genau wie eine ganz normale vergangene
+  // Saison.
+  async function archiveCurrentTournament(finalStandings) {
+    const sb = getSupabaseClient();
+    if (!sb || !_currentTournamentId) { _currentTournamentId = null; return; }
+    const { error } = await sb.from("tournaments")
+      .update({ status: "completed", final_standings: finalStandings || null })
+      .eq("id", _currentTournamentId);
+    if (error) throw error;
+    _currentTournamentId = null;
+  }
+
+  // "Full Reset" (verwerfen): aktuelles Turnier wird komplett gelöscht
+  // (Spieler/Spiele/Wettbüro-Daten fallen per ON DELETE CASCADE mit weg).
+  // Unwiderruflich — im Gegensatz zu archiveCurrentTournament().
+  async function discardCurrentTournament() {
+    const sb = getSupabaseClient();
+    if (!sb || !_currentTournamentId) { _currentTournamentId = null; return; }
+    const { error } = await sb.from("tournaments").delete().eq("id", _currentTournamentId);
+    if (error) throw error;
+    _currentTournamentId = null;
+  }
+
+  // Historische Saisons jetzt aus Supabase (status='completed') statt aus
+  // lokalen JSON-Dateien. Liefert dieselbe Form wie früher (Array von
+  // {season, players:[{name,team}], matches:[{stage,homeTeam,awayTeam,
+  // homeScore,awayScore}], standings}) — buildHistoryIndex() bleibt unverändert.
+  async function loadHistorySeasons() {
+    const sb = getSupabaseClient();
+    if (!sb) return [];
+
+    const { data: tRows, error: tErr } = await sb
+      .from("tournaments").select("*").eq("status", "completed").order("year");
+    if (tErr) { console.warn("Supabase history load failed:", tErr); return []; }
+
+    const seasons = [];
+    for (const t of tRows || []) {
+      const [playersRes, gmRes, pmRes] = await Promise.all([
+        sb.from("players").select("*").eq("tournament_id", t.id).order("idx"),
+        sb.from("group_matches").select("*").eq("tournament_id", t.id),
+        sb.from("playoff_matches").select("*").eq("tournament_id", t.id),
+      ]);
+      if (playersRes.error || gmRes.error || pmRes.error) continue;
+
+      const idxToTeam = new Map((playersRes.data || []).map((p) => [p.idx, p.team]));
+      const matches = [];
+      (gmRes.data || []).forEach((r) => {
+        if (r.s1 == null || r.s2 == null) return;
+        matches.push({ stage: "group", homeTeam: idxToTeam.get(r.p1_idx), awayTeam: idxToTeam.get(r.p2_idx), homeScore: r.s1, awayScore: r.s2 });
+      });
+      (pmRes.data || []).forEach((r) => {
+        if (r.s1 == null || r.s2 == null || r.p1_is_bye || r.p2_is_bye) return;
+        matches.push({ stage: "playoff", homeTeam: idxToTeam.get(r.p1_idx), awayTeam: idxToTeam.get(r.p2_idx), homeScore: r.s1, awayScore: r.s2 });
+      });
+
+      seasons.push({
+        season: t.year,
+        players: (playersRes.data || []).map((p) => ({ name: p.name, team: p.team })),
+        matches,
+        standings: t.final_standings || [],
+      });
+    }
+    return seasons;
+  }
+
+  async function loadAndBuildHistory() {
+    const seasons = await loadHistorySeasons();
+    return buildHistoryIndex(seasons);
+  }
+
+  // Nur für die einmalige Migration (migrate.html) gedacht: liest die
+  // lokalen JSON-Backup-Dateien (nicht mehr der Laufzeit-Datenpfad).
+  async function loadLocalJsonBackups() {
     const seasonData = [];
     for (const url of HISTORY_SOURCES) {
       try {
@@ -128,7 +356,7 @@
         if (!res.ok) continue;
         seasonData.push(await res.json());
       } catch (e) {
-        console.warn("History load failed:", url, e);
+        console.warn("JSON-Backup-Load fehlgeschlagen:", url, e);
       }
     }
     return seasonData.map((x) => x && x.tournament).filter(Boolean);
@@ -250,6 +478,44 @@
     const slotIdx = (state.slots || []).findIndex((slot) => slot.some((m) => m.p1 === match.p1 && m.p2 === match.p2));
     if (slotIdx < 0) return state.config.start;
     return addMinutes(state.config.start, slotIdx * dG);
+  }
+
+  // EINZIGE Quelle für "welche Spiele stehen als Nächstes an, mit Zeit,
+  // Stadion, Teams" — wird von index.html (Next-Games-Box + KI-Ansage),
+  // wettbuero.html (wettbare Spiele) und live.html (Live-Tracking) gemeinsam
+  // genutzt, statt (wie vorher) an 4 Stellen separat nachgebaut zu werden.
+  function getUpcomingMatches(state, opts = {}) {
+    const { excludePlayerName = null, limit = Infinity } = opts;
+    const times = computePlayoffTimes(state);
+    const all = [];
+
+    (state.matches || []).forEach((m) => {
+      if (isFinished(m)) return;
+      const p1 = state.players[m.p1], p2 = state.players[m.p2];
+      if (!p1 || !p2) return;
+      if (excludePlayerName && (p1.name === excludePlayerName || p2.name === excludePlayerName)) return;
+      const slot = (state.slots || []).find((s) => s.includes(m));
+      const stadium = (slot && slot.indexOf(m) === 1) ? state.config.s2 : state.config.s1;
+      all.push({
+        kind: "group", matchId: `g-${state.matches.indexOf(m)}`,
+        homeName: p1.name, awayName: p2.name, homeTeam: p1.team, awayTeam: p2.team,
+        time: getGroupMatchTime(state, m), stadium, phase: "Regular Season",
+      });
+    });
+
+    (state.playoffMatches || []).forEach((m) => {
+      if (isFinished(m) || !m.p1 || !m.p2 || m.p2.id === -1) return;
+      if (excludePlayerName && (m.p1.name === excludePlayerName || m.p2.name === excludePlayerName)) return;
+      const stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
+      all.push({
+        kind: "playoff", matchId: `p-${m.id}`,
+        homeName: m.p1.name, awayName: m.p2.name, homeTeam: m.p1.team, awayTeam: m.p2.team,
+        time: times.byId[m.id] || times.groupEndTime, stadium, phase: m.phase,
+      });
+    });
+
+    all.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+    return all.slice(0, limit);
   }
 
   // ======================================================================
@@ -522,6 +788,49 @@
     return seedByName;
   }
 
+  // ======================================================================
+  // TEAM-RATINGS (jetzt editierbar über Supabase, statt hartkodiert)
+  // -------------------------------------------------------------------------
+  // `maddenRatings` (oben) dient nur noch als Startwert/Fallback (Baseline
+  // 85 für nicht gepflegte Teams/Jahre). Die tatsächlich genutzten Werte
+  // liegen in der Tabelle `team_ratings` und werden hier gecacht.
+  // ======================================================================
+  let _teamRatingsCache = {}; // Jahr (string) -> { TEAM: ovr }
+
+  async function loadTeamRatings(year) {
+    const key = String(year);
+    const fallback = maddenRatings[key] || {};
+    const sb = getSupabaseClient();
+    if (!sb) { _teamRatingsCache[key] = fallback; return fallback; }
+    try {
+      const { data, error } = await sb.from("team_ratings").select("team,ovr").eq("year", Number(year));
+      if (error) throw error;
+      const merged = { ...fallback };
+      (data || []).forEach((r) => { merged[r.team] = r.ovr; });
+      _teamRatingsCache[key] = merged;
+      return merged;
+    } catch (e) {
+      console.warn("Team-Ratings laden fehlgeschlagen:", e);
+      _teamRatingsCache[key] = fallback;
+      return fallback;
+    }
+  }
+
+  function getTeamRatingsSync(year) {
+    const key = String(year);
+    return _teamRatingsCache[key] || maddenRatings[key] || {};
+  }
+
+  async function saveTeamRatings(year, ratingsMap) {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error("Supabase-Client nicht verfügbar");
+    const rows = Object.entries(ratingsMap).map(([team, ovr]) => ({ year: Number(year), team, ovr: Number(ovr) }));
+    if (!rows.length) return;
+    const { error } = await sb.from("team_ratings").upsert(rows, { onConflict: "year,team" });
+    if (error) throw error;
+    _teamRatingsCache[String(year)] = { ...ratingsMap };
+  }
+
   function seedFactor(seed, n) {
     if (!seed || !n || n < 2) return 1.0;
     const t = (n - seed) / (n - 1);
@@ -529,7 +838,8 @@
   }
   function teamOVRFactor(state, player) {
     const year = state.config.year || "2026";
-    const ovr = (maddenRatings[year] && maddenRatings[year][player.team]) ?? 85;
+    const ratings = getTeamRatingsSync(year);
+    const ovr = ratings[player.team] ?? 85;
     return 1 + (ovr - 85) * 0.015;
   }
   function formFactor(player) {
@@ -719,33 +1029,7 @@
 
   // Nächste 2 Gruppen-/Playoff-Spiele, an denen `playerName` NICHT beteiligt ist.
   function getBettableMatches(state, playerName) {
-    const times = computePlayoffTimes(state);
-    const all = [];
-
-    (state.matches || []).forEach((m) => {
-      if (isFinished(m)) return;
-      const p1 = state.players[m.p1], p2 = state.players[m.p2];
-      if (!p1 || !p2) return;
-      if (p1.name === playerName || p2.name === playerName) return;
-      all.push({
-        kind: "match", matchId: `g-${state.matches.indexOf(m)}`,
-        homeName: p1.name, awayName: p2.name, homeTeam: p1.team, awayTeam: p2.team,
-        time: getGroupMatchTime(state, m),
-      });
-    });
-
-    (state.playoffMatches || []).forEach((m) => {
-      if (isFinished(m) || !m.p1 || !m.p2 || m.p2.id === -1) return;
-      if (m.p1.name === playerName || m.p2.name === playerName) return;
-      all.push({
-        kind: "match", matchId: `p-${m.id}`,
-        homeName: m.p1.name, awayName: m.p2.name, homeTeam: m.p1.team, awayTeam: m.p2.team,
-        time: times.byId[m.id] || times.groupEndTime, phase: m.phase,
-      });
-    });
-
-    all.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
-    return all.slice(0, 2);
+    return getUpcomingMatches(state, { excludePlayerName: playerName, limit: 2 });
   }
 
   function placeBet(state, playerName, bet) {
@@ -756,7 +1040,7 @@
     if (bet.stake > acc.balance) throw new Error("Nicht genug Kapital");
     acc.balance -= bet.stake;
     const rec = {
-      id: `bet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `bet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       player: playerName, settled: false, won: null, payout: 0, createdAt: Date.now(),
       ...bet,
     };
@@ -820,8 +1104,10 @@
   // EXPORT
   // ======================================================================
   global.MB = {
-    BIN_ID, API_URL, HISTORY_SOURCES, nflTeams, maddenRatings, schedules, playoffLabels, PLAYOFF_STRUCTURE,
-    fetchCloudState, pushCloudState, loadHistoryFiles, buildHistoryIndex,
+    HISTORY_SOURCES, nflTeams, maddenRatings, schedules, playoffLabels, PLAYOFF_STRUCTURE,
+    getSupabaseClient, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
+    loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
+    loadHistorySeasons, loadAndBuildHistory, loadLocalJsonBackups, buildHistoryIndex,
     normName, pairKey, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime,
