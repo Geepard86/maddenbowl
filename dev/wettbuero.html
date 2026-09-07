@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl — Wettbüro</title>
+<title>Madden Bowl — Tippspiel</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
+<script src="tipp.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
   /* Seiten-spezifisch: Variablen/Basis-Theme kommen aus styles.css */
@@ -16,7 +17,7 @@
     display: flex; align-items: center; justify-content: space-between;
   }
   header h1 { font-size: 1.15em; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
-  header .balance { color: var(--accent); font-weight: bold; }
+  header .who { color: var(--accent); font-weight: bold; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 16px; }
   select, input[type=number], input[type=password], input[type=text] {
     background: #0e1622; color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
@@ -29,33 +30,30 @@
   }
   button.secondary { background: #263449; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .match-card {
+  .match-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    background: #0e1622; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    background: #0e1622; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; flex-wrap: wrap;
   }
-  .match-teams { font-weight: bold; }
-  .match-meta { font-size: 0.75em; color: var(--accent); }
-  .odds-pill {
-    background: #1c2838; border-radius: 20px; padding: 4px 10px; font-size: 0.85em; cursor: pointer;
-    border: 1px solid #2a3a4d;
-  }
-  .odds-pill.selected { border-color: var(--accent); color: var(--accent); }
-  .bet-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .match-teams { font-weight: bold; font-size: 0.95em; }
+  .pick-result { font-size: 0.8em; }
+  .pick-correct { color: var(--accent); }
+  .pick-wrong { color: var(--nfl-red); }
+  .pick-pending { opacity: 0.6; }
+  .ou-choice { display: flex; gap: 10px; margin-top: 6px; }
+  .ou-choice label { display: flex; align-items: center; gap: 6px; font-size: 0.9em; opacity: 1; margin: 0; flex: 1; background: #0e1622; padding: 8px; border-radius: 6px; }
   .leaderboard-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #22304333; }
   .leaderboard-row:last-child { border-bottom: none; }
-  .bet-history-row { font-size: 0.85em; padding: 6px 0; border-bottom: 1px solid #22304333; display:flex; justify-content:space-between; }
-  .status-won { color: var(--accent); }
-  .status-lost { color: var(--nfl-red); }
-  .status-open { opacity: 0.6; }
+  .leaderboard-row.me { color: var(--accent); font-weight: bold; }
   .hint { font-size: 0.75em; opacity: 0.6; margin-top: 6px; }
   .error { color: var(--nfl-red); font-size: 0.85em; margin-top: 8px; }
+  .points-badge { background: var(--accent); color: #06231d; font-weight: 800; border-radius: 10px; padding: 1px 8px; font-size: 0.75em; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🎰 Wettbüro</h1>
-  <span class="balance" id="headerBalance"></span>
+  <h1>🏈 Tippspiel</h1>
+  <span class="who" id="headerWho"></span>
 </header>
 
 <div class="wrap" id="app"></div>
@@ -63,13 +61,13 @@
 <script>
   let state = null;
   let history = null;
-  let currentPlayer = sessionStorage.getItem('mb_wettbuero_player') || null;
-  let selectedPick = {}; // matchId -> pickedName
+  let currentPlayer = sessionStorage.getItem('mb_tipp_player') || null;
+  let ouLine = null; // Linie des aktuellen Spieltags
 
   async function boot() {
     try {
       state = await MB.fetchCloudState();
-      MB.ensureWettbuero(state);
+      MB.ensureWettbuero(state); // nur für PIN-Login-Accounts, kein Kapital mehr relevant
     } catch (e) {
       document.getElementById('app').innerHTML = `<div class="card error">Konnte Turnierdaten nicht laden. Läuft aktuell ein Turnier? (${e.message})</div>`;
       return;
@@ -78,7 +76,7 @@
       history = await MB.loadAndBuildHistory();
     }
     await MB.loadTeamRatings(state.config?.year || '2026');
-    render();
+    await render();
     // Auto-Refresh, aber nicht während jemand tippt
     setInterval(async () => {
       const typing = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT');
@@ -86,35 +84,35 @@
       try {
         state = await MB.fetchCloudState();
         MB.ensureWettbuero(state);
-        render();
+        await render();
       } catch (e) { /* still fine, keep last known state */ }
     }, 20000);
   }
 
-  async function persist() {
+  async function persistAccounts() {
+    // Nur für neu gesetzte PINs nötig (kein Kapital mehr zu synchronisieren).
     try { await MB.pushCloudState(state); } catch (e) { console.error('Speichern fehlgeschlagen', e); }
   }
 
-  function render() {
+  async function render() {
     const app = document.getElementById('app');
-    const headerBalance = document.getElementById('headerBalance');
+    const headerWho = document.getElementById('headerWho');
 
     if (!state.players || state.players.length === 0) {
-      app.innerHTML = `<div class="card">Es läuft aktuell kein Turnier. Sobald der Admin ein Turnier gestartet hat, kannst du hier wetten.</div>`;
-      headerBalance.textContent = '';
+      app.innerHTML = `<div class="card">Es läuft aktuell kein Turnier. Sobald der Admin eins gestartet hat, kannst du hier tippen.</div>`;
+      headerWho.textContent = '';
       return;
     }
 
     if (!currentPlayer || !state.wettbuero.accounts[currentPlayer]) {
       currentPlayer = null;
-      headerBalance.textContent = '';
+      headerWho.textContent = '';
       renderLogin(app);
       return;
     }
 
-    const acc = state.wettbuero.accounts[currentPlayer];
-    headerBalance.textContent = `${currentPlayer} · ${acc.balance.toFixed(0)} 🪙`;
-    renderDashboard(app);
+    headerWho.textContent = currentPlayer;
+    await renderDashboard(app);
   }
 
   function renderLogin(app) {
@@ -152,157 +150,207 @@
       const acc = state.wettbuero.accounts[name];
       if (!acc.pin) {
         acc.pin = pin;
-        await persist();
+        await persistAccounts();
       } else if (acc.pin !== pin) {
         errEl.textContent = 'Falsche PIN.';
         return;
       }
       currentPlayer = name;
-      sessionStorage.setItem('mb_wettbuero_player', name);
+      sessionStorage.setItem('mb_tipp_player', name);
       render();
     };
   }
 
   function logout() {
     currentPlayer = null;
-    sessionStorage.removeItem('mb_wettbuero_player');
+    sessionStorage.removeItem('mb_tipp_player');
     render();
   }
 
-  // Grobe Saison-Wetten-Quoten (Heuristik auf Basis der Titelchancen-Engine)
-  function getSeasonOdds() {
-    const titleOdds = MB.computeTitleOdds(history, state); // name -> % Titelchance
-    const names = state.players.map(p => p.name);
-    const champion = {}, runnerUp = {}, toiletBowl = {};
+  async function renderDashboard(app) {
+    const tournamentId = MB.getCurrentTournamentId();
+    const myPicks = await MB.Tipp.fetchPicksForPlayer(tournamentId, currentPlayer);
+    const myPicksByKey = new Map(myPicks.map(p => [`${p.kind}:${p.ref_key}`, p.pick]));
 
-    let sumT = 0; names.forEach(n => sumT += (titleOdds[n] || 0));
-    names.forEach(n => { champion[n] = MB.decimalOdds((titleOdds[n] || 0) / (sumT || 1)); });
-    // Runner-Up: grobe Näherung über dieselbe Verteilung (keine Konditionierung auf "nicht Champion")
-    names.forEach(n => { runnerUp[n] = MB.decimalOdds((titleOdds[n] || 0) / (sumT || 1)); });
-    // Toilet Bowl: invertierte Gewichtung (schwächere Titelchance = höhere TB-Chance)
-    const inv = {}; let sumInv = 0;
-    names.forEach(n => { const w = Math.max(1, 100 - (titleOdds[n] || 0)); inv[n] = w; sumInv += w; });
-    names.forEach(n => { toiletBowl[n] = MB.decimalOdds(inv[n] / sumInv); });
+    const seasonOpen = MB.Tipp.seasonPicksOpen(state);
+    const spieltag = MB.Tipp.getCurrentSpieltag(state);
+    const spieltagStatus = spieltag ? MB.Tipp.getSpieltagStatus(spieltag) : null;
+    if (spieltag && spieltagStatus !== 'done') {
+      ouLine = await MB.Tipp.ensureOuLine(tournamentId, spieltag, state, history);
+    }
 
-    return { champion, runnerUp, toiletBowl };
-  }
-
-  function renderDashboard(app) {
-    const acc = state.wettbuero.accounts[currentPlayer];
-    const bettable = MB.getBettableMatches(state, currentPlayer);
-    const seasonOdds = getSeasonOdds();
-    const myBets = state.wettbuero.bets.filter(b => b.player === currentPlayer).sort((a,b) => b.createdAt - a.createdAt);
-    const leaderboard = MB.getWettbuergerLeaderboard(state);
+    const allPicks = await MB.Tipp.fetchAllPicks(tournamentId);
+    const ouLines = await MB.Tipp.fetchAllOuLines(tournamentId);
+    const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
 
     let html = `
       <div class="card">
-        <h2>Dein Konto</h2>
-        <div>Kapital: <b style="color:var(--accent)">${acc.balance.toFixed(0)} 🪙</b></div>
-        <div class="hint">Mindesteinsatz pro Spiel: ${state.wettbuero.config.minStake} 🪙 · Jede Runde +${state.wettbuero.config.roundBonus} 🪙 Bonus</div>
-        <button class="secondary" onclick="logout()">Abmelden</button>
+        <button class="secondary" onclick="logout()">Abmelden (${currentPlayer})</button>
       </div>
 
       <div class="card">
-        <h2>Nächste Spiele (ohne deine eigenen)</h2>
-        ${bettable.length === 0 ? '<div class="hint">Aktuell keine wettbaren Spiele verfügbar.</div>' : ''}
-        ${bettable.map((m, i) => renderMatchBetCard(m, i, acc)).join('')}
+        <h2>🏆 Gesamt-Tipps</h2>
+        ${renderSeasonSection(seasonOpen, myPicksByKey)}
       </div>
 
       <div class="card">
-        <h2>Saison-Wetten</h2>
-        ${renderSeasonBetBlock('champion', '🏆 Turniersieger', seasonOdds.champion, acc)}
-        ${renderSeasonBetBlock('runnerUp', '🥈 Zweiter Platz', seasonOdds.runnerUp, acc)}
-        ${renderSeasonBetBlock('toiletBowlWinner', '🚽 Toilet-Bowl-Sieger', seasonOdds.toiletBowl, acc)}
-        <div class="hint">Saison-Quoten sind eine grobe Schätzung und werden erst final abgerechnet, wenn das jeweilige Ergebnis feststeht.</div>
+        <h2>📅 ${spieltag ? `Spieltag ${spieltag.index}` : 'Spieltag'}</h2>
+        ${renderSpieltagSection(spieltag, spieltagStatus, myPicksByKey)}
       </div>
 
       <div class="card">
-        <h2>Deine Wetten</h2>
-        ${myBets.length === 0 ? '<div class="hint">Noch keine Wetten platziert.</div>' : myBets.map(renderBetHistoryRow).join('')}
-      </div>
-
-      <div class="card">
-        <h2>Wettbüro-Rangliste</h2>
-        ${leaderboard.map((row, i) => `<div class="leaderboard-row"><span>${i+1}. ${row.name}${row.name===currentPlayer?' (du)':''}</span><span>${row.balance.toFixed(0)} 🪙</span></div>`).join('')}
+        <h2>📊 Tippstand</h2>
+        ${renderStandingsTable(standings)}
+        <div class="hint">Sieger-Tipp 1P · Over/Under 2P · Season-Sieger 5P · Zweiter/Toilet-Bowl je 3P. Bei Punktegleichstand entscheidet die Tiebreaker-Schätzung (Gesamtpunkte im Finale).</div>
       </div>
     `;
     app.innerHTML = html;
   }
 
-  function renderMatchBetCard(m, i, acc) {
-    const odds = MB.computeOddsForMatch(history, state, m.homeName, m.awayName);
-    const qHome = MB.decimalOdds(odds.pHome), qAway = MB.decimalOdds(odds.pAway);
-    const inputId = `stake-${m.matchId}`;
-    return `
-      <div class="match-card" style="flex-direction:column; align-items:stretch;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span class="match-teams">${m.awayName} @ ${m.homeName}</span>
-          <span class="match-meta">${m.time || ''} Uhr</span>
-        </div>
-        <div class="bet-row">
-          <span class="odds-pill" data-match="${m.matchId}" data-pick="${m.awayName}" onclick="pickSide(this)">${m.awayName} ${qAway}</span>
-          <span class="odds-pill" data-match="${m.matchId}" data-pick="${m.homeName}" onclick="pickSide(this)">${m.homeName} ${qHome}</span>
-        </div>
-        <div class="bet-row">
-          <input type="number" id="${inputId}" min="${state.wettbuero.config.minStake}" step="1" placeholder="Einsatz (min. ${state.wettbuero.config.minStake})" />
-          <button style="width:auto; margin-top:0;" onclick="placeMatchBet('${m.matchId}', '${inputId}', ${odds.pHome}, ${odds.pAway}, '${m.homeName}', '${m.awayName}')">Wetten</button>
-        </div>
-      </div>`;
-  }
-
-  function pickSide(el) {
-    const matchId = el.dataset.match;
-    document.querySelectorAll(`.odds-pill[data-match="${matchId}"]`).forEach(x => x.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedPick[matchId] = el.dataset.pick;
-  }
-
-  async function placeMatchBet(matchId, inputId, pHome, pAway, homeName, awayName) {
-    const pick = selectedPick[matchId];
-    if (!pick) { alert('Bitte zuerst eine Seite auswählen.'); return; }
-    const stake = parseFloat(document.getElementById(inputId).value);
-    if (!stake || stake <= 0) { alert('Bitte einen gültigen Einsatz eingeben.'); return; }
-    const oddsSnapshot = parseFloat(MB.decimalOdds(pick === homeName ? pHome : pAway));
-    try {
-      MB.placeBet(state, currentPlayer, { kind: 'match', matchId, pick, stake, oddsSnapshot });
-      await persist();
-      render();
-    } catch (e) { alert(e.message); }
-  }
-
-  function renderSeasonBetBlock(type, label, oddsMap, acc) {
+  // ---------------------------------------------------------
+  // GESAMT-TIPPS
+  // ---------------------------------------------------------
+  function renderSeasonSection(open, myPicksByKey) {
     const names = state.players.map(p => p.name);
-    const inputId = `season-stake-${type}`;
-    const selectId = `season-pick-${type}`;
+    if (!open) {
+      const champion = myPicksByKey.get('season:champion');
+      const runnerUp = myPicksByKey.get('season:runnerUp');
+      const tb = myPicksByKey.get('season:toiletBowlWinner');
+      const tie = myPicksByKey.get('tiebreaker:tiebreaker');
+      if (!champion && !runnerUp && !tb) {
+        return `<div class="hint">Fenster ist geschlossen — du hast leider keine Gesamt-Tipps abgegeben.</div>`;
+      }
+      return `
+        <div class="hint">Fenster ist geschlossen. Deine Tipps:</div>
+        <div class="match-row"><span>Turniersieger</span><span>${champion || '—'}</span></div>
+        <div class="match-row"><span>Zweiter Platz</span><span>${runnerUp || '—'}</span></div>
+        <div class="match-row"><span>Toilet-Bowl-Sieger</span><span>${tb || '—'}</span></div>
+        <div class="match-row"><span>Tiebreaker (Finale gesamt)</span><span>${tie || '—'}</span></div>
+      `;
+    }
+
+    const opt = (selectedName) => names.map(n => `<option value="${n}" ${n === selectedName ? 'selected' : ''}>${n}</option>`).join('');
     return `
-      <div style="margin-bottom:14px;">
-        <label>${label}</label>
-        <select id="${selectId}">${names.map(n => `<option value="${n}">${n} (${oddsMap[n] || '-'})</option>`).join('')}</select>
-        <div class="bet-row">
-          <input type="number" id="${inputId}" min="${state.wettbuero.config.minStake}" step="1" placeholder="Einsatz" />
-          <button style="width:auto; margin-top:0;" onclick="placeSeasonBet('${type}', '${selectId}', '${inputId}')">Wetten</button>
-        </div>
-      </div>`;
+      <div class="hint">Offen, bis jeder Spieler mindestens ein Spiel hatte.</div>
+      <label>🏆 Turniersieger (5 Punkte)</label>
+      <select id="seasonChampion">${opt(myPicksByKey.get('season:champion'))}</select>
+      <label>🥈 Zweiter Platz (3 Punkte)</label>
+      <select id="seasonRunnerUp">${opt(myPicksByKey.get('season:runnerUp'))}</select>
+      <label>🚽 Toilet-Bowl-Sieger (3 Punkte)</label>
+      <select id="seasonToiletBowl">${opt(myPicksByKey.get('season:toiletBowlWinner'))}</select>
+      <label>🎯 Tiebreaker: Gesamtpunkte im Finale (nur Sieger, keine Punkte)</label>
+      <input type="number" id="seasonTiebreaker" value="${myPicksByKey.get('tiebreaker:tiebreaker') || ''}" placeholder="z.B. 45">
+      <button onclick="saveSeasonPicks()">Speichern</button>
+    `;
   }
 
-  async function placeSeasonBet(type, selectId, inputId) {
-    const pick = document.getElementById(selectId).value;
-    const stake = parseFloat(document.getElementById(inputId).value);
-    if (!stake || stake <= 0) { alert('Bitte einen gültigen Einsatz eingeben.'); return; }
-    const oddsMap = getSeasonOdds()[type === 'champion' ? 'champion' : type === 'runnerUp' ? 'runnerUp' : 'toiletBowl'];
-    const oddsSnapshot = parseFloat(oddsMap[pick] || 3);
+  async function saveSeasonPicks() {
+    const tid = MB.getCurrentTournamentId();
+    const champion = document.getElementById('seasonChampion').value;
+    const runnerUp = document.getElementById('seasonRunnerUp').value;
+    const toiletBowl = document.getElementById('seasonToiletBowl').value;
+    const tiebreaker = document.getElementById('seasonTiebreaker').value;
+    if (!tiebreaker) { alert('Bitte auch den Tiebreaker ausfüllen.'); return; }
     try {
-      MB.placeBet(state, currentPlayer, { kind: 'season', seasonBetType: type, pick, stake, oddsSnapshot });
-      await persist();
+      await MB.Tipp.savePick(tid, currentPlayer, 'season', 'champion', champion);
+      await MB.Tipp.savePick(tid, currentPlayer, 'season', 'runnerUp', runnerUp);
+      await MB.Tipp.savePick(tid, currentPlayer, 'season', 'toiletBowlWinner', toiletBowl);
+      await MB.Tipp.savePick(tid, currentPlayer, 'tiebreaker', 'tiebreaker', tiebreaker);
+      alert('Gespeichert.');
       render();
-    } catch (e) { alert(e.message); }
+    } catch (e) { alert('Fehler: ' + e.message); }
   }
 
-  function renderBetHistoryRow(b) {
-    const statusClass = !b.settled ? 'status-open' : (b.won ? 'status-won' : 'status-lost');
-    const statusText = !b.settled ? 'offen' : (b.won ? `gewonnen +${b.payout.toFixed(0)}` : 'verloren');
-    const label = b.kind === 'match' ? `${b.pick} (Spiel)` : `${b.pick} (${b.seasonBetType})`;
-    return `<div class="bet-history-row"><span>${label} · Einsatz ${b.stake}</span><span class="${statusClass}">${statusText}</span></div>`;
+  // ---------------------------------------------------------
+  // SPIELTAG-TIPPS
+  // ---------------------------------------------------------
+  function renderSpieltagSection(spieltag, status, myPicksByKey) {
+    if (!spieltag) {
+      return `<div class="hint">Aktuell kein offener Spieltag (Turnier beendet oder noch keine Spiele geplant).</div>`;
+    }
+
+    const matchRows = spieltag.matches.map(m => {
+      const key = `match:${m.matchId}`;
+      const pick = myPicksByKey.get(key);
+      const pickable = MB.Tipp.isMatchPickable(m);
+
+      if (pickable) {
+        return `
+          <div class="match-row" style="flex-direction:column; align-items:stretch;">
+            <div class="match-teams">${m.awayName} @ ${m.homeName}</div>
+            <select id="pick-${m.matchId}">
+              <option value="${m.awayName}" ${pick === m.awayName ? 'selected' : ''}>${m.awayName}</option>
+              <option value="${m.homeName}" ${pick === m.homeName ? 'selected' : ''}>${m.homeName}</option>
+            </select>
+            <div class="hint">sperrt um ${MB.Tipp.formatLockTime(m.kickoff)} Uhr (5 Min. nach Anpfiff ${m.kickoff} Uhr)</div>
+            <button onclick="saveMatchPick('${m.matchId}')" style="margin-top:6px;">Tipp speichern</button>
+          </div>`;
+      }
+
+      let resultHtml;
+      if (m.finished) {
+        const winner = m.s1 > m.s2 ? m.homeName : m.awayName;
+        const correct = pick === winner;
+        resultHtml = pick
+          ? `<span class="pick-result ${correct ? 'pick-correct' : 'pick-wrong'}">${pick} ${correct ? '✅' : '❌'} (${m.s1}:${m.s2})</span>`
+          : `<span class="pick-pending">kein Tipp abgegeben (${m.s1}:${m.s2})</span>`;
+      } else {
+        resultHtml = pick
+          ? `<span class="pick-pending">Tipp: ${pick} (gesperrt, läuft)</span>`
+          : `<span class="pick-pending">gesperrt — kein Tipp abgegeben</span>`;
+      }
+      return `<div class="match-row"><span class="match-teams">${m.awayName} @ ${m.homeName}</span>${resultHtml}</div>`;
+    }).join('');
+
+    const ouKey = `overunder:spieltag-${spieltag.index}`;
+    const ouPick = myPicksByKey.get(ouKey);
+    const ouPickable = MB.Tipp.isSpieltagOuPickable(spieltag);
+    const ouHtml = ouPickable
+      ? `
+        <label>🎯 Over/Under: Gesamtpunkte dieses Spieltags (Linie: ${ouLine ?? '…'})</label>
+        <div class="ou-choice">
+          <label><input type="radio" name="ou" value="over" ${ouPick === 'over' ? 'checked' : ''}> Over</label>
+          <label><input type="radio" name="ou" value="under" ${ouPick === 'under' ? 'checked' : ''}> Under</label>
+        </div>
+        <button onclick="saveOuPick(${spieltag.index})">Over/Under speichern</button>
+      `
+      : `<div class="match-row"><span>Over/Under (Linie ${ouLine ?? '?'})</span><span>${ouPick || '—'}</span></div>`;
+
+    return `
+      <div class="hint">Tipp auf den Sieger jedes Spiels (auch deine eigenen!) — jedes Spiel sperrt einzeln, 5 Minuten nach seinem geplanten Anpfiff.</div>
+      ${matchRows}
+      ${ouHtml}
+    `;
+  }
+
+  async function saveMatchPick(matchId) {
+    const tid = MB.getCurrentTournamentId();
+    const val = document.getElementById(`pick-${matchId}`).value;
+    try {
+      await MB.Tipp.savePick(tid, currentPlayer, 'match', matchId, val);
+      render();
+    } catch (e) { alert('Fehler: ' + e.message); }
+  }
+
+  async function saveOuPick(spieltagIndex) {
+    const tid = MB.getCurrentTournamentId();
+    const ouChoice = document.querySelector('input[name="ou"]:checked');
+    if (!ouChoice) { alert('Bitte Over oder Under auswählen.'); return; }
+    try {
+      await MB.Tipp.savePick(tid, currentPlayer, 'overunder', `spieltag-${spieltagIndex}`, ouChoice.value);
+      render();
+    } catch (e) { alert('Fehler: ' + e.message); }
+  }
+
+  // ---------------------------------------------------------
+  // TIPPSTAND
+  // ---------------------------------------------------------
+  function renderStandingsTable(standings) {
+    return standings.map((row, i) => `
+      <div class="leaderboard-row ${row.name === currentPlayer ? 'me' : ''}">
+        <span>${i + 1}. ${row.name}${row.name === currentPlayer ? ' (du)' : ''}</span>
+        <span class="points-badge">${row.points} P</span>
+      </div>`).join('');
   }
 
   boot();

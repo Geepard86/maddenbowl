@@ -3,10 +3,22 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl — Live-Tracking</title>
+<title>Madden Bowl — Turnierblog</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
+
+<!-- PWA: "Zum Home-Bildschirm hinzufügen" (iOS/Android) -->
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Madden Bowl">
+<meta name="theme-color" content="#0b1119">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
+<script src="records.js"></script>
+<script src="tipp.js"></script>
+<script src="blog.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
   /* Seiten-spezifisch: Variablen/Basis-Theme kommen aus styles.css */
@@ -34,12 +46,42 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
   th, td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #22304333; }
   .empty { opacity: 0.6; font-size: 0.9em; }
+  .meme-preview-slot { width: 130px; height: 130px; border-radius: 8px; overflow: hidden; background: #000; flex-shrink: 0; }
+  .meme-preview-slot img, .meme-preview-slot canvas { width: 100%; height: 100%; object-fit: cover; }
+  input, select {
+    background: #0e1622; color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
+    padding: 8px 10px; font-size: 0.9em; width: 100%; box-sizing: border-box;
+  }
+  button {
+    background: var(--nfl-red); color: white; border: none; border-radius: 6px;
+    padding: 8px 14px; font-weight: bold; cursor: pointer;
+  }
+  /* Blog / Ticker */
+  .ticker { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+  .ticker-card {
+    background: #0e1622; border-radius: 8px; padding: 10px 12px; flex: 1 1 45%; min-width: 150px;
+    font-size: 0.82em;
+  }
+  .ticker-card .tk-label { font-size: 0.7em; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .ticker-card .tk-teams { font-weight: bold; }
+  .ticker-card .tk-meta { opacity: 0.7; font-size: 0.85em; margin-top: 2px; }
+  .view-toggle { display: flex; justify-content: center; margin: 14px 0; }
+  .view-toggle button { width: auto; }
+  .article-card { background: var(--card); border-radius: 10px; padding: 16px; margin-bottom: 14px; border: 1px solid #22304333; }
+  .article-title { font-weight: 800; font-size: 1.05em; margin-bottom: 6px; }
+  .article-body { font-size: 0.92em; line-height: 1.5; opacity: 0.92; white-space: pre-line; }
+  .article-time { font-size: 0.72em; opacity: 0.5; margin-top: 8px; }
+  .article-media img { width: 100%; border-radius: 8px; margin-top: 10px; }
+  .article-media audio { width: 100%; margin-top: 10px; }
+  .bracket-session { margin-bottom: 14px; }
+  .bracket-session h3 { color: var(--accent); font-size: 0.85em; text-transform: uppercase; margin: 0 0 6px; }
+  .bracket-row { display: flex; justify-content: space-between; font-size: 0.88em; padding: 5px 0; border-bottom: 1px solid #22304333; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>📡 Live-Tracking</h1>
+  <h1>📰 Madden Bowl Blog</h1>
   <span class="clock" id="clock"></span>
 </header>
 
@@ -48,8 +90,12 @@
 </div>
 
 <script>
+  const isAdmin = window.location.search.includes('Altima');
   let state = null;
   let history = null;
+  let recordMoments = []; // { id, type, payload, provider, imageUrl, canvasEl, loading, error }
+  let articles = [];
+  let viewMode = 'blog'; // 'blog' | 'full'
 
   function tickClock() {
     document.getElementById('clock').textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -67,10 +113,180 @@
       history = await MB.loadAndBuildHistory();
     }
     await MB.loadTeamRatings(state.config?.year || '2026');
+    await refreshArticles();
+    if (isAdmin) await refreshRecordMoments();
     render();
     setInterval(async () => {
-      try { state = await MB.fetchCloudState(); render(); } catch (e) {}
+      try {
+        state = await MB.fetchCloudState();
+        await refreshArticles();
+        if (isAdmin) await refreshRecordMoments();
+        render();
+      } catch (e) {}
     }, 15000);
+  }
+
+  async function refreshArticles() {
+    const tid = MB.getCurrentTournamentId();
+    articles = await MB.Blog.fetchArticles(tid, 50);
+  }
+
+  function timeAgo(dateStr) {
+    const diffMin = Math.round((Date.now() - new Date(dateStr).getTime()) / 60000);
+    if (diffMin < 1) return 'gerade eben';
+    if (diffMin < 60) return `vor ${diffMin} Min.`;
+    const diffH = Math.round(diffMin / 60);
+    if (diffH < 24) return `vor ${diffH} Std.`;
+    return new Date(dateStr).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  }
+
+  // =========================================================
+  // REKORD-MOMENTE (nur im Admin-Modus, ?Altima) — kommen aus Supabase
+  // (von index.html/laptop dorthin geschrieben), hier auf dem Handy
+  // direkt teilbar. Meme-Anbieter/Zugangsdaten sind pro Gerät getrennt
+  // (eigenes localStorage), unabhängig vom Admin-Laptop.
+  // =========================================================
+  async function refreshRecordMoments() {
+    const tid = MB.getCurrentTournamentId();
+    const fresh = await MB.Records.fetchRecordMoments(tid);
+    const knownIds = new Set(recordMoments.map(e => e.id));
+    fresh.forEach(row => {
+      if (knownIds.has(row.id)) return;
+      const entry = { id: row.id, record: row.payload, provider: getMemeProvider(), imageUrl: null, canvasEl: null, loading: true, error: null };
+      recordMoments.unshift(entry);
+      generateMomentVisual(entry).then(render);
+    });
+    // Von woanders (z.B. index.html) ausgeblendete Momente auch hier entfernen
+    const freshIds = new Set(fresh.map(r => r.id));
+    recordMoments = recordMoments.filter(e => freshIds.has(e.id));
+  }
+
+  function getMemeProvider() { return localStorage.getItem('mb_meme_provider') || 'canvas'; }
+  function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); render(); }
+
+  async function generateMomentVisual(entry) {
+    entry.loading = true; entry.error = null;
+    if (entry.provider === 'imgflip') {
+      const settings = MB.Records.getImgflipSettings();
+      if (!settings.username || !settings.password) {
+        entry.error = 'Imgflip nicht eingerichtet (siehe oben).';
+        entry.loading = false;
+        return;
+      }
+      try {
+        const result = await MB.Records.generateImgflipMeme(entry.record, settings);
+        entry.imageUrl = result.url;
+      } catch (e) {
+        entry.error = 'Imgflip-Fehler: ' + e.message;
+      }
+    } else {
+      const styleId = MB.Records.MEME_STYLES[Math.floor(Math.random() * MB.Records.MEME_STYLES.length)].id;
+      entry.styleId = styleId;
+      entry.canvasEl = MB.Records.renderMemeCanvas(entry.record, styleId);
+    }
+    entry.loading = false;
+  }
+
+  async function rerollMoment(i) {
+    const entry = recordMoments[i];
+    entry.provider = getMemeProvider();
+    render();
+    await generateMomentVisual(entry);
+    render();
+  }
+
+  async function shareMoment(i) {
+    const entry = recordMoments[i];
+    const tournamentId = MB.getCurrentTournamentId();
+    let mediaUrl = null;
+
+    if (entry.provider === 'imgflip' && entry.imageUrl) {
+      const result = await MB.Records.shareOrOpenRemoteImage(entry.imageUrl, `madden-bowl-${entry.record.type}.jpg`);
+      if (result === 'opened') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde in einem neuen Tab geöffnet.');
+      mediaUrl = entry.imageUrl;
+    } else if (entry.canvasEl) {
+      const fresh = MB.Records.renderMemeCanvas(entry.record, entry.styleId);
+      const result = await MB.Records.shareOrDownloadMeme(fresh, `madden-bowl-${entry.record.type}.png`);
+      if (result === 'downloaded') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde heruntergeladen.');
+      try { mediaUrl = await MB.Records.uploadMemeToStorage(fresh, tournamentId, entry.record.type); } catch (e) { console.warn('Meme-Upload für Blog fehlgeschlagen:', e); }
+    }
+
+    if (mediaUrl) {
+      const article = MB.Blog.buildRecordArticle(entry.record);
+      article.media_url = mediaUrl; article.media_type = 'image';
+      MB.Blog.pushArticle(tournamentId, article);
+      await refreshArticles();
+    }
+  }
+
+  async function dismissMoment(i) {
+    const entry = recordMoments[i];
+    await MB.Records.dismissRecordMoment(entry.id);
+    recordMoments.splice(i, 1);
+    render();
+  }
+
+  function renderRecordMoments() {
+    const provider = getMemeProvider();
+    const imgflipSettings = MB.Records.getImgflipSettings();
+
+    let html = `
+      <select onchange="setMemeProvider(this.value)" style="margin-bottom:10px;">
+        <option value="canvas" ${provider !== 'imgflip' ? 'selected' : ''}>🎨 Eigene Grafik</option>
+        <option value="imgflip" ${provider === 'imgflip' ? 'selected' : ''}>🖼️ Imgflip (echte Vorlagen)</option>
+      </select>`;
+
+    if (provider === 'imgflip') {
+      html += `
+        <div style="margin-bottom:12px;">
+          <input type="text" id="imgflipUser" value="${imgflipSettings.username || ''}" placeholder="Imgflip-Username" style="margin-bottom:6px;">
+          <input type="password" id="imgflipPass" value="${imgflipSettings.password || ''}" placeholder="Imgflip-Passwort" style="margin-bottom:6px;">
+          <button class="btn-secondary" style="width:auto;" onclick="MB.Records.setImgflipSettings({username:document.getElementById('imgflipUser').value.trim(),password:document.getElementById('imgflipPass').value.trim()}); alert('Gespeichert.');">Speichern</button>
+        </div>`;
+    }
+
+    if (!recordMoments.length) {
+      html += `<div class="empty">Noch keine Rekord-Momente in dieser Session.</div>`;
+      return html;
+    }
+
+    recordMoments.forEach((entry, i) => {
+      const info = MB.Records.RECORD_TYPES[entry.record.type] || { label: entry.record.type, emoji: '🏈' };
+      let bodyHtml;
+      if (entry.loading) {
+        bodyHtml = `<div class="empty">Wird generiert…</div>`;
+      } else if (entry.error) {
+        bodyHtml = `<div class="empty" style="color:var(--nfl-red);">${entry.error}</div>`;
+      } else {
+        bodyHtml = `
+          <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+            <div class="meme-preview-slot" id="momentPreview-${i}"></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-self:center;">
+              <button class="btn-secondary" style="width:auto;" onclick="rerollMoment(${i})">🔁</button>
+              <button style="width:auto;" onclick="shareMoment(${i})">📱 Teilen</button>
+              <button class="btn-secondary" style="width:auto;" onclick="dismissMoment(${i})">✕</button>
+            </div>
+          </div>`;
+      }
+      html += `<div class="match-card"><div style="font-weight:bold; margin-bottom:8px;">${info.emoji} ${info.label}</div>${bodyHtml}</div>`;
+    });
+
+    return html;
+  }
+
+  function attachRecordMomentPreviews() {
+    recordMoments.forEach((entry, i) => {
+      const slot = document.getElementById(`momentPreview-${i}`);
+      if (!slot) return;
+      slot.innerHTML = '';
+      if (entry.provider === 'imgflip' && entry.imageUrl) {
+        const img = document.createElement('img');
+        img.src = entry.imageUrl;
+        slot.appendChild(img);
+      } else if (entry.canvasEl) {
+        slot.appendChild(entry.canvasEl);
+      }
+    });
   }
 
   // Zentral aus shared.js (MB.getUpcomingMatches) — dieselbe Quelle wie
@@ -125,17 +341,136 @@
     return html + `</table>`;
   }
 
-  function render() {
+  // =========================================================
+  // TICKER (immer sichtbar): nächste 2 Spiele + letzte 2 Ergebnisse
+  // =========================================================
+  function getLastResults(limit) {
+    const all = MB.getCurrentMatchesNormalized(state);
+    return all.slice(-limit).reverse();
+  }
+
+  function renderTicker() {
+    const upcoming = MB.getUpcomingMatches(state, { limit: 2 });
+    const last = getLastResults(2);
+
+    const upcomingHtml = upcoming.length
+      ? upcoming.map(m => `
+          <div class="ticker-card">
+            <div class="tk-label">Als Nächstes</div>
+            <div class="tk-teams">${m.awayName} @ ${m.homeName}</div>
+            <div class="tk-meta">${m.time || ''} Uhr</div>
+          </div>`).join('')
+      : `<div class="ticker-card"><div class="tk-label">Als Nächstes</div><div class="tk-meta">Keine offenen Spiele</div></div>`;
+
+    const lastHtml = last.length
+      ? last.map(m => `
+          <div class="ticker-card">
+            <div class="tk-label">Ergebnis</div>
+            <div class="tk-teams">${m.homePlayer} ${m.homeScore}:${m.awayScore} ${m.awayPlayer}</div>
+          </div>`).join('')
+      : `<div class="ticker-card"><div class="tk-label">Ergebnis</div><div class="tk-meta">Noch keine Spiele</div></div>`;
+
+    return `<div class="ticker">${upcomingHtml}${lastHtml}</div>`;
+  }
+
+  // =========================================================
+  // VOLLANSICHT: Tabelle + Gruppenspielplan + Playoff-Bracket
+  // (rein lesend, keine Admin-Funktionen)
+  // =========================================================
+  function renderGroupSchedule() {
+    if (!state.matches || !state.matches.length) return '<div class="empty">Noch kein Spielplan.</div>';
+    return state.matches.map(m => {
+      const p1 = state.players[m.p1], p2 = state.players[m.p2];
+      if (!p1 || !p2) return '';
+      const played = m.s1 != null && m.s2 != null;
+      const time = MB.getGroupMatchTime(state, m);
+      return `<div class="bracket-row"><span>${p1.name} vs ${p2.name}</span><span>${played ? `${m.s1}:${m.s2}` : `${time} Uhr`}</span></div>`;
+    }).join('');
+  }
+
+  function renderBracket() {
+    if (!state.playoffMatches || !state.playoffMatches.length) return '<div class="empty">Playoffs noch nicht gestartet.</div>';
+    const times = MB.computePlayoffTimes(state);
+    return MB.PLAYOFF_STRUCTURE.map(slotDef => {
+      const rows = slotDef.ids.map(id => {
+        const m = MB.getPlayoffMatch(state, id);
+        const label = MB.playoffLabels[id] || {};
+        const p1Name = m?.p1 ? (m.p1.id === -1 ? 'Freilos' : m.p1.name) : (label.p1 || 'TBD');
+        const p2Name = m?.p2 ? (m.p2.id === -1 ? 'Freilos' : m.p2.name) : (label.p2 || 'TBD');
+        const played = m && m.s1 != null && m.s2 != null;
+        const right = played ? `${m.s1}:${m.s2}` : `${times.byId[id] || times.groupEndTime} Uhr`;
+        return `<div class="bracket-row"><span>${p1Name} vs ${p2Name}</span><span>${right}</span></div>`;
+      }).join('');
+      return `<div class="bracket-session"><h3>${slotDef.session}</h3>${rows}</div>`;
+    }).join('');
+  }
+
+  async function renderTippStandingsHtml() {
+    const tid = MB.getCurrentTournamentId();
+    if (!tid) return '<div class="empty">Kein Turnier aktiv.</div>';
+    const allPicks = await MB.Tipp.fetchAllPicks(tid);
+    const ouLines = await MB.Tipp.fetchAllOuLines(tid);
+    const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
+    if (!standings.length) return '<div class="empty">Noch keine Tipps abgegeben.</div>';
+    return standings.map((row, i) => `<div class="bracket-row"><span>${i + 1}. ${row.name}</span><span>${row.points} P</span></div>`).join('');
+  }
+
+  async function renderFullView() {
+    return `
+      <div class="card"><h2>Aktuelle & kommende Spiele</h2>${renderMatches()}</div>
+      <div class="card"><h2>🏈 Tippstand</h2>${await renderTippStandingsHtml()}
+        <div class="hint" style="margin-top:8px;">Mittippen: <a href="wettbuero.html" style="color:var(--accent);">wettbuero.html</a></div>
+      </div>
+      <div class="card"><h2>Tabelle</h2>${renderStandings()}</div>
+      <div class="card"><h2>Gruppenspielplan</h2>${renderGroupSchedule()}</div>
+      <div class="card"><h2>Playoff Picture</h2>${renderBracket()}</div>
+      <div class="card"><h2>Titelchancen</h2>${renderTitleOdds()}</div>
+    `;
+  }
+
+  // =========================================================
+  // ARTIKEL-FEED (Turnierblog)
+  // =========================================================
+  function renderArticleFeed() {
+    if (!articles.length) {
+      return `<div class="card empty">Noch keine Artikel — die ersten erscheinen, sobald das Turnier läuft.</div>`;
+    }
+    return articles.map(a => `
+      <div class="article-card">
+        <div class="article-title">${a.title}</div>
+        <div class="article-body">${a.body}</div>
+        ${a.media_type === 'audio' ? `<div class="article-media"><audio controls src="${a.media_url}"></audio></div>` : ''}
+        ${a.media_type === 'image' ? `<div class="article-media"><img src="${a.media_url}"></div>` : ''}
+        <div class="article-time">${timeAgo(a.created_at)}</div>
+      </div>`).join('');
+  }
+
+  function toggleView() {
+    viewMode = viewMode === 'blog' ? 'full' : 'blog';
+    render();
+  }
+
+  function toggleView() {
+    viewMode = viewMode === 'blog' ? 'full' : 'blog';
+    render();
+  }
+
+  async function render() {
     const app = document.getElementById('app');
     if (!state.players || state.players.length === 0) {
       app.innerHTML = `<div class="card empty">Es läuft aktuell kein Turnier.</div>`;
       return;
     }
+    const mainContent = viewMode === 'full' ? await renderFullView() : renderArticleFeed();
     app.innerHTML = `
-      <div class="card"><h2>Aktuelle & kommende Spiele</h2>${renderMatches()}</div>
-      <div class="card"><h2>Titelchancen</h2>${renderTitleOdds()}</div>
-      <div class="card"><h2>Tabelle</h2>${renderStandings()}</div>
+      ${isAdmin ? `<div class="card"><h2>🏆 Rekord-Momente (Admin)</h2>${renderRecordMoments()}</div>` : ''}
+      ${renderTicker()}
+      <div class="view-toggle">
+        <button class="btn-secondary" onclick="toggleView()">${viewMode === 'blog' ? '📊 Volle Turnieransicht' : '📰 Zurück zum Blog'}</button>
+      </div>
+      ${mainContent}
     `;
+    if (isAdmin) attachRecordMomentPreviews();
   }
 
   boot();

@@ -8,6 +8,9 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="shared.js"></script>
   <script src="announcer.js"></script>
+  <script src="music.js"></script>
+  <script src="records.js"></script>
+  <script src="blog.js"></script>
 
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -86,15 +89,22 @@
       </div>
 
       <div class="card" style="margin-bottom:15px;">
-        <h2>🔊 KI-Ansage — Stimme</h2>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <select id="ttsVoiceSelect" style="flex:1; min-width:220px;"></select>
-          <button class="btn-secondary" onclick="testTtsVoice()">Testen</button>
-          <button class="btn-secondary" onclick="refreshTtsVoiceList()">Liste aktualisieren</button>
-        </div>
-        <div style="font-size:0.8em; opacity:0.7; margin-top:6px;">
-          Stimmen mit "Online (Natural)" im Namen klingen am natürlichsten (kostenlos, kommt von Edge/Chrome unter Windows 11).
-          Falls die Liste leer/komisch aussieht, kurz "Liste aktualisieren" klicken — Browser laden Stimmen manchmal verzögert nach.
+        <h2>🎙️ Ansage-Engine</h2>
+        <div id="ttsSettingsPanel"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:15px;">
+        <h2>🎵 Song-Momente</h2>
+        <div id="songMomentsPanel"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:15px;">
+        <h2>🏆 Rekord-Momente</h2>
+        <div id="recordMomentsPanel">
+          <div class="hint" style="font-size:0.85em; opacity:0.7;">
+            Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore,
+            Allzeit-/Turnier-Klatsche, Siegesserie) — komplett kostenlos, kein API-Key nötig.
+          </div>
         </div>
       </div>
 
@@ -918,7 +928,7 @@ document.querySelectorAll('.draft-row').forEach(row => {
       renderPlayerInputs();
     }
 
-    function startTournament() {
+    async function startTournament() {
       const count = parseInt(document.getElementById('playerCount').value);
 
       state.config = {
@@ -948,7 +958,12 @@ document.querySelectorAll('.draft-row').forEach(row => {
 
       renderAll();
       save();
-      if (isAdmin) syncData(true);
+      if (isAdmin) {
+        await syncData(true); // Tournament-ID entsteht hier (siehe MB.pushCloudState)
+        // Turnierblog: Kickoff-Artikel, sobald wir die frische Tournament-ID haben.
+        MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state));
+        progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
+      }
     }
 
     function changeTeam(pid, tid) {
@@ -1123,12 +1138,41 @@ const ringsHtml = rings > 0
           upcoming: getNextUnplayedMatches(1)
         });
 
-        // Wettbüro: laufende Wetten auf dieses Match automatisch abrechnen.
-        const winnerName = match.s1 > match.s2 ? homeName : awayName;
-        const matchId = (type === 'group') ? `g-${idx}` : `p-${match.id}`;
-        MB.settleMatchBets(state, matchId, winnerName);
-        MB.settleSeasonBets(state);
+        // Tippspiel: Punkte werden live aus den Tipps + Ergebnissen berechnet
+        // (MB.Tipp.computeTippStandings), kein Abrechnungsschritt nötig.
+
+        // Rekord-Momente & Memes: komplett kostenlos, immer aktiv. Werden
+        // nach Supabase gepusht, damit sie auch auf live.html?Altima (z.B.
+        // am Handy) sichtbar sind. Ein Blog-Artikel dafür entsteht erst,
+        // wenn der Admin das Meme tatsächlich TEILT (siehe shareMeme()) —
+        // das ist unser "freigegeben"-Moment, inkl. eingebettetem Bild.
+        const newRecords = MB.Records.detectRecords(state, history, { homeName, awayName, homeScore: match.s1, awayScore: match.s2 });
+        newRecords.forEach(r => {
+          addSessionRecord(r);
+          MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
+        });
+
+        // Finaleinzug / neuer Champion: an den Bracket-Zustand gebunden,
+        // nicht an dieses einzelne Spiel — daher eigene Prüfung, nur einmal
+        // pro Turnier feuernd (siehe milestoneRecordFlags).
+        const milestoneRecords = MB.Records.detectMilestoneRecords(state, milestoneRecordFlags);
+        milestoneRecords.forEach(r => {
+          milestoneRecordFlags[r.type] = true;
+          addSessionRecord(r);
+          MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
+          const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r) : MB.Blog.buildChampionArticle(r);
+          MB.Blog.pushArticle(MB.getCurrentTournamentId(), article);
+        });
+
+        // Turnierblog: alle 3 Spiele ein Zwischenstand-Artikel.
+        if (MB.Blog.isProgressArticleDue(state, progressArticlesSoFar)) {
+          const finishedCount = MB.Blog.countFinishedMatches(state);
+          MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildProgressArticle(state, history, finishedCount));
+          progressArticlesSoFar++;
+        }
       }
+
+      if (isAdmin && ttsUnlocked) renderSongMomentsPanel(); // neu erreichte Meilensteine sofort sichtbar machen
 
       if (isAdmin) syncData(true);
     }
@@ -1937,6 +1981,13 @@ function renderRanking() {
       // Team-Ratings für die Quoten-Engine laden (jetzt aus Supabase, editierbar via seasons.html)
       await MB.loadTeamRatings(state.config.year || '2026');
 
+      // Turnierblog: Zähler für "alle 3 Spiele ein Zwischenstand" aus Supabase laden,
+      // damit das nach einem Reload nicht wieder bei 0 anfängt.
+      if (isAdmin) {
+        const tid = MB.getCurrentTournamentId();
+        progressArticlesSoFar = tid ? await MB.Blog.countArticlesByKind(tid, 'progress') : 0;
+      }
+
       renderAll();
       toggleHallOfFameButtons();
       recalcTitleOddsSnapshots();
@@ -1946,10 +1997,419 @@ function renderRanking() {
       applyLayoutRules();
 
       MB.Announcer.warmupVoices(); // Stimmen für Web Speech API vorladen
-      if (isAdmin) setTimeout(refreshTtsVoiceList, 800); // Liste erst nach kurzem Warmup füllen
+      if (isAdmin) setTimeout(renderTtsSettingsPanel, 800); // Panel erst nach kurzem Warmup füllen
+      if (isAdmin) setTimeout(renderSongMomentsPanel, 800);
+      if (isAdmin) setTimeout(renderRecordMomentsPanel, 800);
 
       setInterval(() => syncData(false), 45000);
     };
+
+    // =========================================================
+    // ANSAGE-ENGINE: Browser (kostenlos) vs. ElevenLabs (kostenpflichtig)
+    // -------------------------------------------------------------------------
+    // ElevenLabs-Einstellungen (inkl. API-Key) liegen NUR in localStorage
+    // (dieses Gerät/dieser Browser), NICHT in Supabase — die DB-Policies
+    // sind aktuell offen für jeden mit dem anon-Key, ein bezahlter Key
+    // sollte da nicht landen. Zusätzlich per einfachem Passwort gesperrt,
+    // damit nicht jeder, der kurz am Admin-Gerät sitzt, versehentlich den
+    // API-Key sieht/ändert — das ist KEIN Schutz gegen jemanden mit
+    // Zugriff auf die Browser-Devtools/localStorage auf diesem Gerät.
+    // =========================================================
+    let ttsUnlocked = false;
+
+    async function sha256Hex(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function unlockTtsSettings() {
+      const storedHash = localStorage.getItem('mb_tts_pw_hash');
+      if (!storedHash) {
+        const pw = prompt('Noch kein Passwort für die Ansage-Einstellungen gesetzt.\nNeues Passwort festlegen:');
+        if (!pw) return;
+        localStorage.setItem('mb_tts_pw_hash', await sha256Hex(pw));
+        ttsUnlocked = true;
+      } else {
+        const pw = prompt('Passwort für Ansage-Einstellungen:');
+        if (!pw) return;
+        if (await sha256Hex(pw) !== storedHash) { alert('Falsches Passwort.'); return; }
+        ttsUnlocked = true;
+      }
+      renderTtsSettingsPanel();
+      renderSongMomentsPanel();
+      renderRecordMomentsPanel();
+    }
+
+    function resetTtsPassword() {
+      if (!confirm('Passwort UND gespeicherte ElevenLabs-Einstellungen auf diesem Gerät löschen? (API-Key muss danach neu eingegeben werden)')) return;
+      localStorage.removeItem('mb_tts_pw_hash');
+      localStorage.removeItem('mb_tts_settings');
+      ttsUnlocked = false;
+      renderTtsSettingsPanel();
+      renderSongMomentsPanel();
+      renderRecordMomentsPanel();
+    }
+
+    // =========================================================
+    // SONG-MOMENTE (ElevenLabs Music API) — manuell ausgelöst pro
+    // Meilenstein, nutzt denselben ElevenLabs-Key/Passwort-Gate wie die
+    // Ansage-Engine oben (keine zweite Schlüsselverwaltung nötig).
+    // =========================================================
+    const MUSIC_MILESTONE_LABELS = {
+      regularSeason: 'Regular Season beendet',
+      firstElimination: 'Erstes Ausscheiden',
+      finals: 'Finals stehen fest',
+      champion: 'Turniersieger steht fest',
+    };
+
+    function renderSongMomentsPanel() {
+      const el = document.getElementById('songMomentsPanel');
+      if (!el) return;
+
+      if (!ttsUnlocked) {
+        el.innerHTML = `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren (gleiches Passwort wie Ansage-Engine)</button>`;
+        return;
+      }
+
+      const settings = MB.Announcer.getTtsSettings();
+      if (settings.provider !== 'elevenlabs' || !settings.apiKey) {
+        el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.75;">Erst unter "🎙️ Ansage-Engine" ElevenLabs mit API-Key einrichten — dann erscheinen hier die Song-Optionen.</div>`;
+        return;
+      }
+
+      const reached = MB.Music.detectMilestones(state);
+      const songs = state.songs || {};
+
+      el.innerHTML = Object.keys(MUSIC_MILESTONE_LABELS).map(key => {
+        const isReached = reached.includes(key);
+        const url = songs[key];
+        if (!isReached) {
+          return `<div class="row-line" style="margin-bottom:8px; opacity:0.4;"><span class="label" style="width:180px; display:inline-block;">${MUSIC_MILESTONE_LABELS[key]}</span><span class="hint">noch nicht erreicht</span></div>`;
+        }
+        return `
+          <div style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #22304333;">
+            <div style="font-weight:bold; margin-bottom:6px;">${MUSIC_MILESTONE_LABELS[key]}</div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <select id="songStyle-${key}" style="min-width:200px;">
+                <option value="">🎲 Zufälliger Stil</option>
+                ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}">${s.label}</option>`).join('')}
+              </select>
+              <button class="btn-secondary" onclick="generateMilestoneSong('${key}')">${url ? '🔁 Neu generieren' : '🎵 Song generieren'}</button>
+            </div>
+            ${url ? `<audio controls src="${url}" style="height:32px; margin-top:8px; width:100%;"></audio>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    async function generateMilestoneSong(milestone) {
+      const settings = MB.Announcer.getTtsSettings();
+      const styleId = document.getElementById(`songStyle-${milestone}`).value || null;
+      if (!confirm(`Song für "${MUSIC_MILESTONE_LABELS[milestone]}" generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik).`)) return;
+
+      try {
+        const tournamentId = MB.getCurrentTournamentId();
+        const result = await MB.Music.generateAndStoreSong({
+          apiKey: settings.apiKey, modelId: settings.modelId, milestone, state, history,
+          tournamentId, lengthMs: 60000, styleId,
+        });
+        state.songs = { ...(state.songs || {}), [milestone]: result.url };
+        alert(`Song generiert (Stil: ${result.styleLabel}).`);
+        renderSongMomentsPanel();
+        MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url));
+      } catch (e) {
+        alert('Song-Generierung fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    // =========================================================
+    // REKORD-MOMENTE & MEMES (records.js) — komplett kostenlos, kein
+    // API-Key, kein Passwort-Gate nötig (reines Canvas-Rendering).
+    // =========================================================
+    let sessionRecords = []; // { record, styleId, canvasPreview }
+    let milestoneRecordFlags = {}; // { finals: true, champion: true } — verhindert Mehrfach-Feuern
+    let progressArticlesSoFar = 0; // Anzahl bisheriger Zwischenstand-Artikel (aus Supabase geladen)
+
+    function getMemeProvider() { return localStorage.getItem('mb_meme_provider') || 'canvas'; }
+    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); renderRecordMomentsPanel(); }
+
+    async function addSessionRecord(record) {
+      const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null };
+      sessionRecords.unshift(entry); // neueste zuerst
+      renderRecordMomentsPanel();
+      await regenerateEntryVisual(entry);
+      renderRecordMomentsPanel();
+    }
+
+    async function regenerateEntryVisual(entry) {
+      entry.loading = true; entry.error = null;
+      if (entry.provider === 'imgflip') {
+        const settings = MB.Records.getImgflipSettings();
+        if (!settings.username || !settings.password) {
+          entry.error = 'Imgflip nicht eingerichtet (siehe oben).';
+          entry.loading = false;
+          return;
+        }
+        try {
+          const result = await MB.Records.generateImgflipMeme(entry.record, settings);
+          entry.imageUrl = result.url;
+        } catch (e) {
+          entry.error = 'Imgflip-Fehler: ' + e.message;
+        }
+      } else {
+        const styleId = MB.Records.MEME_STYLES[Math.floor(Math.random() * MB.Records.MEME_STYLES.length)].id;
+        const canvas = MB.Records.renderMemeCanvas(entry.record, styleId);
+        canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.style.objectFit = 'cover';
+        entry.styleId = styleId;
+        entry.canvasPreview = canvas;
+      }
+      entry.loading = false;
+    }
+
+    function renderRecordMomentsPanel() {
+      const el = document.getElementById('recordMomentsPanel');
+      if (!el) return;
+      const provider = getMemeProvider();
+      const imgflipSettings = MB.Records.getImgflipSettings();
+
+      let html = `
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:4px;">Meme-Stil</label>
+          <select onchange="setMemeProvider(this.value)">
+            <option value="canvas" ${provider !== 'imgflip' ? 'selected' : ''}>🎨 Eigene Grafik (kostenlos, kein Account)</option>
+            <option value="imgflip" ${provider === 'imgflip' ? 'selected' : ''}>🖼️ Imgflip — echte Meme-Vorlagen (kostenlos, Account nötig)</option>
+          </select>
+        </div>`;
+
+      if (provider === 'imgflip') {
+        if (!ttsUnlocked) {
+          html += `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren, um Imgflip-Zugangsdaten einzugeben</button>`;
+        } else {
+          html += `
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">Imgflip-Benutzername</label>
+              <input type="text" id="imgflipUser" value="${imgflipSettings.username || ''}" placeholder="dein-imgflip-username">
+              <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">Imgflip-Passwort</label>
+              <input type="password" id="imgflipPass" value="${imgflipSettings.password || ''}" placeholder="Passwort">
+              <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:4px;">
+                Kostenloser Account auf imgflip.com/signup — am besten einen separaten, nicht deinen privaten.
+              </div>
+              <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
+            </div>`;
+        }
+      }
+
+      if (!sessionRecords.length) {
+        html += `<div class="hint" style="font-size:0.85em; opacity:0.7;">
+          Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore, Allzeit-/Turnier-Klatsche,
+          Siegesserie, Überraschung, Abgeschossen, Shootout, Finaleinzug, neuer Champion) — auch am Handy über
+          live.html?Altima sichtbar.
+        </div>`;
+        el.innerHTML = html;
+        return;
+      }
+
+      el.innerHTML = html;
+      sessionRecords.forEach((entry, i) => {
+        const info = MB.Records.RECORD_TYPES[entry.record.type];
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #22304333;';
+
+        let bodyHtml;
+        if (entry.loading) {
+          bodyHtml = `<div class="hint">Wird generiert…</div>`;
+        } else if (entry.error) {
+          bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div><button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="rerenderMeme(${i})">🔁 Erneut versuchen</button>`;
+        } else {
+          bodyHtml = `
+            <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+              <div class="meme-preview-slot" style="width:150px; height:150px; border-radius:8px; overflow:hidden; background:#000; flex-shrink:0;"></div>
+              <div style="flex:1; min-width:180px;">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${i})">🔁 Anderes Motiv</button>
+                  <button style="width:auto;" onclick="shareMeme(${i})">📱 Teilen</button>
+                </div>
+              </div>
+            </div>`;
+        }
+
+        wrap.innerHTML = `<div style="font-weight:bold; margin-bottom:8px;">${info.emoji} ${info.label}</div>${bodyHtml}`;
+        el.appendChild(wrap);
+
+        const slot = wrap.querySelector('.meme-preview-slot');
+        if (slot) {
+          if (entry.provider === 'imgflip' && entry.imageUrl) {
+            const img = document.createElement('img');
+            img.src = entry.imageUrl;
+            img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+            slot.appendChild(img);
+          } else if (entry.canvasPreview) {
+            slot.appendChild(entry.canvasPreview);
+          }
+        }
+      });
+    }
+
+    function saveImgflipSettings() {
+      MB.Records.setImgflipSettings({
+        username: document.getElementById('imgflipUser').value.trim(),
+        password: document.getElementById('imgflipPass').value.trim(),
+      });
+      alert('Gespeichert.');
+    }
+
+    async function rerenderMeme(i) {
+      const entry = sessionRecords[i];
+      entry.provider = getMemeProvider();
+      renderRecordMomentsPanel();
+      await regenerateEntryVisual(entry);
+      renderRecordMomentsPanel();
+    }
+
+    async function shareMeme(i) {
+      const entry = sessionRecords[i];
+      const tournamentId = MB.getCurrentTournamentId();
+      let mediaUrl = null;
+
+      if (entry.provider === 'imgflip' && entry.imageUrl) {
+        const result = await MB.Records.shareOrOpenRemoteImage(entry.imageUrl, `madden-bowl-${entry.record.type}.jpg`);
+        if (result === 'opened') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde in einem neuen Tab geöffnet, dort manuell speichern/teilen.');
+        mediaUrl = entry.imageUrl; // schon dauerhaft bei imgflip gehostet
+      } else if (entry.canvasPreview) {
+        const canvas = MB.Records.renderMemeCanvas(entry.record, entry.styleId); // frisch in voller Auflösung
+        const result = await MB.Records.shareOrDownloadMeme(canvas, `madden-bowl-${entry.record.type}.png`);
+        if (result === 'downloaded') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde stattdessen heruntergeladen, kannst du manuell in WhatsApp anhängen.');
+        try { mediaUrl = await MB.Records.uploadMemeToStorage(canvas, tournamentId, entry.record.type); } catch (e) { console.warn('Meme-Upload für Blog fehlgeschlagen:', e); }
+      }
+
+      // Turnierblog: Teilen = "freigegeben" -> jetzt erst entsteht der Blog-Artikel, inkl. Bild.
+      if (mediaUrl) {
+        const article = MB.Blog.buildRecordArticle(entry.record);
+        article.media_url = mediaUrl; article.media_type = 'image';
+        MB.Blog.pushArticle(tournamentId, article);
+      }
+    }
+
+    function renderTtsSettingsPanel() {
+      const el = document.getElementById('ttsSettingsPanel');
+      if (!el) return;
+      const settings = MB.Announcer.getTtsSettings();
+
+      if (!ttsUnlocked) {
+        el.innerHTML = `
+          <div style="font-size:0.85em; opacity:0.75; margin-bottom:10px;">
+            Aktuell: <b>${settings.provider === 'elevenlabs' ? 'ElevenLabs (kostenpflichtig)' : 'Browser (kostenlos)'}</b>
+          </div>
+          <button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren zum Bearbeiten</button>`;
+        return;
+      }
+
+      el.innerHTML = `
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+          <select id="ttsProvider" onchange="onTtsProviderChange()">
+            <option value="browser" ${settings.provider !== 'elevenlabs' ? 'selected' : ''}>Browser (kostenlos)</option>
+            <option value="elevenlabs" ${settings.provider === 'elevenlabs' ? 'selected' : ''}>ElevenLabs (kostenpflichtig)</option>
+          </select>
+        </div>
+
+        <div id="browserVoiceFields" style="${settings.provider === 'elevenlabs' ? 'display:none;' : ''}">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <select id="ttsVoiceSelect" style="flex:1; min-width:220px;"></select>
+            <button class="btn-secondary" onclick="testTtsVoice()">Testen</button>
+            <button class="btn-secondary" onclick="refreshTtsVoiceList()">Liste aktualisieren</button>
+          </div>
+          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-top:6px;">
+            Stimmen mit "Online (Natural)" im Namen klingen am natürlichsten (kostenlos, kommt von Edge/Chrome unter Windows 11).
+          </div>
+        </div>
+
+        <div id="elevenLabsFields" style="${settings.provider === 'elevenlabs' ? '' : 'display:none;'}">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">API-Key</label>
+          <input type="password" id="elApiKey" value="${settings.apiKey || ''}" placeholder="sk_..." style="width:100%;">
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">Modell</label>
+          <select id="elModel" style="width:100%;">
+            <option value="eleven_multilingual_v2" ${(!settings.modelId || settings.modelId === 'eleven_multilingual_v2') ? 'selected' : ''}>Multilingual v2 (empfohlen — beste Qualität, für unseren Fall schnell genug)</option>
+            <option value="eleven_flash_v2_5" ${settings.modelId === 'eleven_flash_v2_5' ? 'selected' : ''}>Flash v2.5 (schneller & günstiger, etwas weniger ausdrucksstark)</option>
+            <option value="eleven_v3" ${settings.modelId === 'eleven_v3' ? 'selected' : ''}>Eleven v3 (experimentell, sehr ausdrucksstark, weniger stabil)</option>
+          </select>
+
+          <div style="margin-top:10px;">
+            <button class="btn-secondary" onclick="loadElevenLabsVoices()">Stimmen laden</button>
+          </div>
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:10px 0 4px;">Stimme für Ergebnis-Ansage</label>
+          <select id="elVoiceResult" style="width:100%;">
+            <option value="${settings.voiceIdResult || ''}">${settings.voiceIdResult ? '(gespeichert) ' + settings.voiceIdResult : '– zuerst Stimmen laden –'}</option>
+          </select>
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:10px 0 4px;">Stimme für Vorschau-Ansage</label>
+          <select id="elVoicePreview" style="width:100%;">
+            <option value="${settings.voiceIdPreview || ''}">${settings.voiceIdPreview ? '(gespeichert) ' + settings.voiceIdPreview : '– zuerst Stimmen laden –'}</option>
+          </select>
+
+          <div style="margin-top:10px; display:flex; gap:10px;">
+            <button class="btn-secondary" onclick="testElevenLabsVoices()">Testen</button>
+          </div>
+
+          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-top:8px;">
+            Nur beide Stimmen gesetzt → Zwei-Stimmen-Übergabe (Ergebnis → Vorschau).
+            Nur eine gesetzt → diese eine liest alles vor.
+          </div>
+        </div>
+
+        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button onclick="saveTtsSettings()">Speichern</button>
+          <button class="btn-secondary" onclick="resetTtsPassword()">Passwort zurücksetzen</button>
+        </div>
+        <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:8px;">
+          Gilt nur für dieses Gerät/diesen Browser — wird nicht mit Supabase synchronisiert.
+        </div>
+      `;
+
+      refreshTtsVoiceList();
+    }
+
+    function onTtsProviderChange() {
+      const provider = document.getElementById('ttsProvider').value;
+      document.getElementById('browserVoiceFields').style.display = provider === 'elevenlabs' ? 'none' : '';
+      document.getElementById('elevenLabsFields').style.display = provider === 'elevenlabs' ? '' : 'none';
+    }
+
+    async function loadElevenLabsVoices() {
+      const key = document.getElementById('elApiKey').value.trim();
+      if (!key) { alert('Bitte zuerst API-Key eingeben.'); return; }
+      try {
+        const voices = await MB.Announcer.fetchElevenLabsVoices(key);
+        const opts = voices.map(v => `<option value="${v.voice_id}">${v.name}</option>`).join('');
+        document.getElementById('elVoiceResult').innerHTML = opts;
+        document.getElementById('elVoicePreview').innerHTML = opts;
+      } catch (e) {
+        alert('Stimmen laden fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    function saveTtsSettings() {
+      const provider = document.getElementById('ttsProvider').value;
+      const settings = { provider };
+      if (provider === 'elevenlabs') {
+        settings.apiKey = document.getElementById('elApiKey').value.trim();
+        settings.modelId = document.getElementById('elModel').value;
+        settings.voiceIdResult = document.getElementById('elVoiceResult').value || null;
+        settings.voiceIdPreview = document.getElementById('elVoicePreview').value || null;
+      }
+      MB.Announcer.setTtsSettings(settings);
+      alert('Gespeichert.');
+      renderSongMomentsPanel();
+    }
+
+    async function testElevenLabsVoices() {
+      saveTtsSettings();
+      await MB.Announcer.announce({
+        state, history, homeName: 'Tim', awayName: 'Alex', homeScore: 24, awayScore: 17,
+        stadium: 'Test-Stadion',
+        upcoming: [{ homeName: 'Markus', awayName: 'Lukas', time: '20:00', stadium: 'Test-Stadion 2' }],
+      });
+    }
 
     function refreshTtsVoiceList() {
       const sel = document.getElementById('ttsVoiceSelect');

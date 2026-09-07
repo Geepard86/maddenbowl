@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="styles.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
+<script src="blog.js"></script>
 <style>
   body { padding: 16px; max-width: 900px; margin: 0 auto; padding-bottom: 60px; }
   h1 { border-bottom: 3px solid var(--nfl-red); padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
@@ -48,9 +49,18 @@
       app.innerHTML = `<div class="not-admin">🔒 Nur für Admins (Link mit <code>?Altima</code> aufrufen).</div>`;
       return;
     }
+    // Löst als Nebeneffekt MB.getCurrentTournamentId() aus (wird für den
+    // Blog-Rückblick-Button gebraucht, siehe renderRetroCard).
+    try { await MB.fetchCloudState(); } catch (e) { /* egal, Retro-Button zeigt dann "kein aktives Turnier" */ }
+
     app.innerHTML = `
       <h1>🗂️ Saison-Verwaltung</h1>
       <div class="card" id="ratingsCard"></div>
+      <div class="card">
+        <h2>✍️ Artikel verfassen</h2>
+        <div class="hint">Freier Editor für redaktionelle Blog-Beiträge (Rückblicke, Ankündigungen, alles) — landet direkt im Turnierblog (live.html). Zwei Entwürfe sind schon vorausgefüllt.</div>
+        <div id="composerCard"></div>
+      </div>
       <div class="card">
         <h2>Saisons</h2>
         <div class="hint">Abgeschlossene Saisons erscheinen in der Hall of Fame und fließen in die Quoten-/Flavour-Facts-Historie ein.</div>
@@ -58,7 +68,85 @@
       </div>
     `;
     await renderRatingsCard();
+    renderComposerCard();
     await loadSeasons();
+  }
+
+  // =========================================================
+  // ARTIKEL-EDITOR (frei, für redaktionelle Beiträge)
+  // =========================================================
+  const draftArticles = [
+    {
+      title: "Fünf Seasons Madden Bowl – und was bleibt",
+      body: `Fünf Seasons, vier Champions und jede Menge Spiele, die inzwischen ihre eigene kleine Geschichte erzählen. Der Madden Bowl hat sich vom Turnier unter Freunden zu einem Wettbewerb mit Hall of Fame, ewiger Tabelle und inzwischen durchaus ernstzunehmender Rekordliste entwickelt.
+
+Die Saison 2026 hatte dabei noch einmal alles, was dieses Turnier ausmacht. Tim verlor in der Gruppenphase überraschend 13:14 gegen Lukas – und gewann am Ende trotzdem den Titel. Im Finale setzte er sich mit 17:14 gegen Alex durch und holte damit nach 2023 seinen zweiten Madden-Bowl-Ring.
+
+Auch Markus lieferte 2026 seine ganz eigene Bewerbung für die Geschichtsbücher ab. Gegen Micha gewann er im Playoff unglaubliche 49:0 – bis heute der deutlichste Sieg des Turniers. Wenig später war für den Titelverteidiger allerdings gegen Tim Schluss.
+
+Und dann war da noch Tobi F., der Micha mit 78:32 besiegte. 110 Punkte in einem Spiel: Auch das ist Madden Bowl-Geschichte.
+
+Alex wiederum erreichte nach seinem Titel 2024 erneut das Finale und wurde 2026 Runner-up. Vier verschiedene Teams in vier Seasons – Miami, San Francisco, Green Bay und New England – und trotzdem immer wieder mitten im Titelrennen.
+
+Was also bleibt nach fünf Seasons? Vor allem die Erkenntnis, dass beim Madden Bowl eigentlich nichts sicher ist. Außer vielleicht, dass irgendjemand irgendwann ein völlig absurdes Ergebnis produziert.
+
+2027 kann kommen.`,
+    },
+    {
+      title: "Madden Bowl 2027 – jetzt wird mitgetippt",
+      body: `Der Madden Bowl geht in die nächste Runde. Und diesmal bleibt es nicht beim Zuschauen.
+
+Ab dem Start des Madden Bowl 2027 gibt es hier regelmäßig neue Artikel rund um das Turnier – mit Spielberichten, Zwischenständen, Rekorden und allem, was sonst noch passiert, wenn acht Spieler versuchen, sich gegenseitig vom Thron zu stoßen.
+
+Nach fünf Seasons gibt es schließlich einiges aufzuarbeiten. Tim geht als amtierender Champion ins neue Turnier, Alex als Runner-up und Markus mit der Erinnerung an seinen 49:0-Auftritt. Wer daraus einen klaren Favoriten ableiten kann, darf es gerne versuchen.
+
+Denn genau dafür gibt es 2027 erstmals den Tippmodus. Wer gewinnt? Wer überrascht? Wer schafft es ins Finale? Jetzt kann man nicht nur hinterher klugscheißen, sondern vorher.
+
+Auch abseits des Spielfelds wächst der Madden Bowl weiter: Eigener Merch ist inzwischen ebenfalls am Start – mit Designs rund um die Spieler, Champions und die Geschichten der vergangenen Seasons.
+
+Der Countdown läuft also. Neue Saison, neue Tipps, neue Rekorde und vermutlich wieder mindestens ein Ergebnis, das niemand vorher kommen sah.
+
+Madden Bowl 2027 – wir sind dabei.`,
+    },
+  ];
+  let activeDraftIndex = 0;
+
+  function renderComposerCard() {
+    const el = document.getElementById('composerCard');
+    const tid = MB.getCurrentTournamentId();
+    el.innerHTML = `
+      <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+        ${draftArticles.map((d, i) => `<button class="small ${i === activeDraftIndex ? '' : 'secondary'}" onclick="loadDraft(${i})">Entwurf ${i + 1}</button>`).join('')}
+        <button class="small secondary" onclick="loadDraft(-1)">Leer</button>
+      </div>
+      <label>Titel</label>
+      <input type="text" id="articleTitle" value="${activeDraftIndex >= 0 ? draftArticles[activeDraftIndex].title : ''}">
+      <label>Text</label>
+      <textarea id="articleBody" rows="14" style="width:100%; box-sizing:border-box; background:#0e1622; color:#eee; border:1px solid #2a3a4d; border-radius:6px; padding:8px; font-family:inherit;">${activeDraftIndex >= 0 ? draftArticles[activeDraftIndex].body : ''}</textarea>
+      <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+        <button class="small" ${tid ? '' : 'disabled'} onclick="publishArticle()">Im Blog veröffentlichen</button>
+      </div>
+      ${!tid ? '<div class="hint">Kein aktives Turnier — erst eins starten, dann lässt sich der Artikel dort veröffentlichen. Der Text bleibt hier stehen, bis du auf ein anderes Gerät/einen anderen Tab wechselst.</div>' : ''}
+    `;
+  }
+
+  function loadDraft(i) {
+    activeDraftIndex = i;
+    renderComposerCard();
+  }
+
+  async function publishArticle() {
+    const tid = MB.getCurrentTournamentId();
+    if (!tid) { alert('Kein aktives Turnier.'); return; }
+    const title = document.getElementById('articleTitle').value.trim();
+    const body = document.getElementById('articleBody').value.trim();
+    if (!title || !body) { alert('Titel und Text dürfen nicht leer sein.'); return; }
+    try {
+      await MB.Blog.pushArticle(tid, { kind: 'kickoff', title, body });
+      alert('Veröffentlicht — erscheint jetzt im Turnierblog (live.html).');
+    } catch (e) {
+      alert('Fehlgeschlagen: ' + e.message);
+    }
   }
 
   // =========================================================

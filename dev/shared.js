@@ -120,6 +120,7 @@
   // Merkt sich die ID des aktuell laufenden Turniers, damit Pushes das
   // richtige Tournament-Row updaten statt jedes Mal ein neues anzulegen.
   let _currentTournamentId = null;
+  function getCurrentTournamentId() { return _currentTournamentId; }
 
   function emptyState() {
     return { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: "setup" };
@@ -144,15 +145,16 @@
     const t = tRows[0];
     _currentTournamentId = t.id;
 
-    const [playersRes, gmRes, pmRes, accRes, betRes, roundRes] = await Promise.all([
+    // wettbuero_bets/wettbuero_settled_rounds werden nicht mehr abgefragt —
+    // das Kapital-Wettbüro ist durch das Tippspiel (tipp.js/tipp_picks) ersetzt.
+    // wettbuero_accounts bleibt für den PIN-Login des Tippspiels erhalten.
+    const [playersRes, gmRes, pmRes, accRes] = await Promise.all([
       sb.from("players").select("*").eq("tournament_id", t.id).order("idx"),
       sb.from("group_matches").select("*").eq("tournament_id", t.id).order("idx"),
       sb.from("playoff_matches").select("*").eq("tournament_id", t.id).order("seq"),
       sb.from("wettbuero_accounts").select("*").eq("tournament_id", t.id),
-      sb.from("wettbuero_bets").select("*").eq("tournament_id", t.id).order("created_at"),
-      sb.from("wettbuero_settled_rounds").select("*").eq("tournament_id", t.id),
     ]);
-    for (const r of [playersRes, gmRes, pmRes, accRes, betRes, roundRes]) if (r.error) throw r.error;
+    for (const r of [playersRes, gmRes, pmRes, accRes]) if (r.error) throw r.error;
 
     const players = (playersRes.data || []).map((r) => ({
       id: r.idx, name: r.name, team: r.team,
@@ -179,20 +181,17 @@
       s1: r.s1, s2: r.s2,
     }));
 
-    const wettbuero = { config: { startCapital: 100, minStake: 5, roundBonus: 10 }, accounts: {}, bets: [], settledRounds: [] };
+    // "wettbuero" trägt hier nur noch die Login-Accounts (Name -> PIN).
+    // balance/bets/settledRounds sind Altlasten, bleiben der Vollständigkeit
+    // halber im Objekt (falls irgendwo noch gelesen), werden aber nicht
+    // mehr befüllt/persistiert.
+    const wettbuero = { accounts: {}, bets: [], settledRounds: [] };
     (accRes.data || []).forEach((r) => { wettbuero.accounts[r.player_name] = { pin: r.pin, balance: Number(r.balance) }; });
-    (betRes.data || []).forEach((r) => {
-      wettbuero.bets.push({
-        id: r.id, player: r.player_name, kind: r.kind, matchId: r.match_id, seasonBetType: r.season_bet_type,
-        pick: r.pick, stake: Number(r.stake), oddsSnapshot: r.odds_snapshot != null ? Number(r.odds_snapshot) : null,
-        settled: r.settled, won: r.won, payout: Number(r.payout), createdAt: new Date(r.created_at).getTime(),
-      });
-    });
-    (roundRes.data || []).forEach((r) => wettbuero.settledRounds.push(r.round_key));
 
     return {
       config: t.config || {}, players, matches, slots, playoffMatches, wettbuero,
       currentView: players.length > 0 ? "running" : "setup",
+      songs: t.songs || {},
     };
   }
 
@@ -245,29 +244,14 @@
       if (error) throw error;
     }
 
+    // Nur noch Login-Accounts (PIN) synchronisieren — bets/settledRounds
+    // gehören zum abgelösten Kapital-Wettbüro und werden nicht mehr geschrieben.
     if (state.wettbuero) {
       const accRows = Object.entries(state.wettbuero.accounts || {}).map(([name, acc]) => ({
         tournament_id: tid, player_name: name, pin: acc.pin, balance: acc.balance,
       }));
       if (accRows.length) {
         const { error } = await sb.from("wettbuero_accounts").upsert(accRows, { onConflict: "tournament_id,player_name" });
-        if (error) throw error;
-      }
-
-      const betRows = (state.wettbuero.bets || []).map((b) => ({
-        id: b.id, tournament_id: tid, player_name: b.player, kind: b.kind,
-        match_id: b.matchId || null, season_bet_type: b.seasonBetType || null, pick: b.pick,
-        stake: b.stake, odds_snapshot: b.oddsSnapshot ?? null, settled: !!b.settled,
-        won: b.won ?? null, payout: b.payout || 0,
-      }));
-      if (betRows.length) {
-        const { error } = await sb.from("wettbuero_bets").upsert(betRows, { onConflict: "id" });
-        if (error) throw error;
-      }
-
-      const roundRows = (state.wettbuero.settledRounds || []).map((rk) => ({ tournament_id: tid, round_key: rk }));
-      if (roundRows.length) {
-        const { error } = await sb.from("wettbuero_settled_rounds").upsert(roundRows, { onConflict: "tournament_id,round_key" });
         if (error) throw error;
       }
     }
@@ -1010,94 +994,19 @@
   // ======================================================================
   // WETTBÜRO-ENGINE
   // ======================================================================
+  // Wird nur noch für den PIN-Login (Spieler-Identität) im Tippspiel
+  // gebraucht. `balance`/`bets`/`settledRounds` sind Altlasten aus dem
+  // früheren Kapital-Wettbüro und werden nicht mehr ausgewertet.
   function ensureWettbuero(state) {
     if (!state.wettbuero) {
-      state.wettbuero = {
-        config: { startCapital: 100, minStake: 5, roundBonus: 10 },
-        accounts: {},   // name -> { pin, balance }
-        bets: [],       // { id, player, kind:'match'|'season', matchId?, seasonBetType?, pick, stake, oddsSnapshot, settled, won, payout, createdAt }
-        settledRounds: [], // Liste bereits ausgezahlter round-bonus "runden" (round key)
-      };
+      state.wettbuero = { accounts: {} }; // name -> { pin } — balance/bets sind Altlasten, nicht mehr genutzt
     }
     (state.players || []).forEach((p) => {
       if (!state.wettbuero.accounts[p.name]) {
-        state.wettbuero.accounts[p.name] = { pin: null, balance: state.wettbuero.config.startCapital };
+        state.wettbuero.accounts[p.name] = { pin: null, balance: 0 };
       }
     });
     return state.wettbuero;
-  }
-
-  // Nächste 2 Gruppen-/Playoff-Spiele, an denen `playerName` NICHT beteiligt ist.
-  function getBettableMatches(state, playerName) {
-    return getUpcomingMatches(state, { excludePlayerName: playerName, limit: 2 });
-  }
-
-  function placeBet(state, playerName, bet) {
-    const wb = ensureWettbuero(state);
-    const acc = wb.accounts[playerName];
-    if (!acc) throw new Error("Unbekannter Spieler");
-    if (bet.stake < wb.config.minStake) throw new Error(`Mindesteinsatz: ${wb.config.minStake}`);
-    if (bet.stake > acc.balance) throw new Error("Nicht genug Kapital");
-    acc.balance -= bet.stake;
-    const rec = {
-      id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `bet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      player: playerName, settled: false, won: null, payout: 0, createdAt: Date.now(),
-      ...bet,
-    };
-    wb.bets.push(rec);
-    return rec;
-  }
-
-  // Settlement für ein beendetes Match (matchId im Format "g-<idx>" oder "p-<id>")
-  function settleMatchBets(state, matchId, winnerName) {
-    const wb = ensureWettbuero(state);
-    wb.bets.forEach((b) => {
-      if (b.settled || b.kind !== "match" || b.matchId !== matchId) return;
-      b.settled = true;
-      b.won = b.pick === winnerName;
-      if (b.won) {
-        b.payout = Math.round(b.stake * (b.oddsSnapshot || 2) * 100) / 100;
-        wb.accounts[b.player].balance += b.payout;
-      } else {
-        b.payout = 0;
-      }
-    });
-  }
-
-  // Settlement für Saison-Wetten (Sieger / Zweiter / Toilet Bowl Sieger etc.)
-  function settleSeasonBets(state) {
-    const wb = ensureWettbuero(state);
-    const final = computeFinalRanking(state);
-    const champion = final.ordered.find((r) => r.rank === 1 || r.displayRank === 1 && !final.tbWinner)?.name
-      || final.ordered[0]?.name;
-    const runnerUp = final.ordered[1]?.name;
-    const toiletBowlWinner = final.tbWinner;
-
-    const resultByType = { champion, runnerUp, toiletBowlWinner };
-
-    wb.bets.forEach((b) => {
-      if (b.settled || b.kind !== "season") return;
-      const actual = resultByType[b.seasonBetType];
-      if (!actual) return; // noch nicht final
-      b.settled = true;
-      b.won = b.pick === actual;
-      b.payout = b.won ? Math.round(b.stake * (b.oddsSnapshot || 3) * 100) / 100 : 0;
-      if (b.won) wb.accounts[b.player].balance += b.payout;
-    });
-  }
-
-  function grantRoundBonus(state, roundKey) {
-    const wb = ensureWettbuero(state);
-    if (wb.settledRounds.includes(roundKey)) return;
-    wb.settledRounds.push(roundKey);
-    Object.values(wb.accounts).forEach((acc) => { acc.balance += wb.config.roundBonus; });
-  }
-
-  function getWettbuergerLeaderboard(state) {
-    const wb = ensureWettbuero(state);
-    return Object.entries(wb.accounts)
-      .map(([name, acc]) => ({ name, balance: Math.round(acc.balance * 100) / 100 }))
-      .sort((a, b) => b.balance - a.balance);
   }
 
   // ======================================================================
@@ -1105,7 +1014,7 @@
   // ======================================================================
   global.MB = {
     HISTORY_SOURCES, nflTeams, maddenRatings, schedules, playoffLabels, PLAYOFF_STRUCTURE,
-    getSupabaseClient, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
+    getSupabaseClient, getCurrentTournamentId, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
     loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
     loadHistorySeasons, loadAndBuildHistory, loadLocalJsonBackups, buildHistoryIndex,
     normName, pairKey, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
@@ -1115,6 +1024,6 @@
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,
     normalCdf, getPpgEstimate, seedFactor, teamOVRFactor, formFactor,
     computeBaseRanking, getGroupSeedsFinal, applyToiletBowlOverride, computeFinalRanking,
-    ensureWettbuero, getBettableMatches, placeBet, settleMatchBets, settleSeasonBets, grantRoundBonus, getWettbuergerLeaderboard,
+    ensureWettbuero,
   };
 })(window);
