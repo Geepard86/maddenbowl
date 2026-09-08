@@ -294,14 +294,16 @@
       .from("tournaments").select("*").eq("status", "completed").order("year");
     if (tErr) { console.warn("Supabase history load failed:", tErr); return []; }
 
-    const seasons = [];
-    for (const t of tRows || []) {
+    // Alle Saisons PARALLEL laden statt nacheinander — bei vielen
+    // archivierten Test-Turnieren sonst spürbar langsam (jede Saison sonst
+    // ein eigener sequenzieller Roundtrip).
+    const seasonPromises = (tRows || []).map(async (t) => {
       const [playersRes, gmRes, pmRes] = await Promise.all([
         sb.from("players").select("*").eq("tournament_id", t.id).order("idx"),
         sb.from("group_matches").select("*").eq("tournament_id", t.id),
         sb.from("playoff_matches").select("*").eq("tournament_id", t.id),
       ]);
-      if (playersRes.error || gmRes.error || pmRes.error) continue;
+      if (playersRes.error || gmRes.error || pmRes.error) return null;
 
       const idxToTeam = new Map((playersRes.data || []).map((p) => [p.idx, p.team]));
       const matches = [];
@@ -314,14 +316,16 @@
         matches.push({ stage: "playoff", homeTeam: idxToTeam.get(r.p1_idx), awayTeam: idxToTeam.get(r.p2_idx), homeScore: r.s1, awayScore: r.s2 });
       });
 
-      seasons.push({
+      return {
         season: t.year,
         players: (playersRes.data || []).map((p) => ({ name: p.name, team: p.team })),
         matches,
         standings: t.final_standings || [],
-      });
-    }
-    return seasons;
+      };
+    });
+
+    const results = await Promise.all(seasonPromises);
+    return results.filter(Boolean);
   }
 
   async function loadAndBuildHistory() {

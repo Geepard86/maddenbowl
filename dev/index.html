@@ -1100,10 +1100,20 @@ const ringsHtml = rings > 0
       else match.s2 = v;
 
       save();
-
-      // invalidate odds cache
       _oddsCacheKey = "";
 
+      // BUGFIX: Rendering (+ alles Nachgelagerte: Ansage, Rekorde, Sync) auf
+      // den nächsten Tick verschieben. Grund: onchange feuert oft GENAU in
+      // dem Moment, in dem der Browser per Tab zum nächsten Score-Feld
+      // (Heim/Auswärts desselben Spiels) springt. Ein SOFORTIGER kompletter
+      // DOM-Rebuild (renderGroupMatches() ersetzt via innerHTML alle Zeilen)
+      // reißt dabei das Zielfeld unter dem Tab-Sprung weg — der Sprung geht
+      // ins Leere, das zweite Feld bekommt nie einen Wert. Mit
+      // setTimeout(...,0) läuft der native Fokuswechsel zuerst zu Ende.
+      setTimeout(() => finishScoreUpdate(type, idx, match, wasFinished), 0);
+    }
+
+    function finishScoreUpdate(type, idx, match, wasFinished) {
       updatePlayoffLogic();
       // BUGFIX (Zeit-Engine): Playoff-Offsets bye-bereinigt neu berechnen,
       // NACHDEM updatePlayoffLogic() die Spieler den Matches zugeordnet hat.
@@ -2194,6 +2204,8 @@ function renderRanking() {
                 Kostenloser Account auf imgflip.com/signup — am besten einen separaten, nicht deinen privaten.
               </div>
               <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
+              <button style="margin-top:8px;" onclick="testImgflip()">Testen</button>
+              <div id="imgflipTestResult" style="margin-top:8px;"></div>
             </div>`;
         }
       }
@@ -2255,6 +2267,23 @@ function renderRanking() {
         password: document.getElementById('imgflipPass').value.trim(),
       });
       alert('Gespeichert.');
+    }
+
+    async function testImgflip() {
+      saveImgflipSettings();
+      const resultEl = document.getElementById('imgflipTestResult');
+      resultEl.innerHTML = '<div class="hint">Teste Verbindung…</div>';
+      const settings = MB.Records.getImgflipSettings();
+      const testRecord = { type: 'allTimeHigh', player: 'Tim', opponent: 'Alex', value: 42 };
+      try {
+        const result = await MB.Records.generateImgflipMeme(testRecord, settings);
+        resultEl.innerHTML = `
+          <div class="hint" style="color:var(--accent);">✅ Funktioniert! Vorlage: ${result.templateId}</div>
+          <img src="${result.url}" style="max-width:200px; border-radius:8px; margin-top:6px; display:block;">
+        `;
+      } catch (e) {
+        resultEl.innerHTML = `<div class="hint" style="color:var(--nfl-red);">❌ ${e.message}</div>`;
+      }
     }
 
     async function rerenderMeme(i) {
