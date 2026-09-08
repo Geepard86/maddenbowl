@@ -22,14 +22,74 @@
 <link rel="stylesheet" href="styles.css" />
 <style>
   /* Seiten-spezifisch: Variablen/Basis-Theme kommen aus styles.css */
+  * { box-sizing: border-box; }
   body { padding-bottom: 60px; }
   header {
-    padding: 16px 18px; border-bottom: 3px solid var(--nfl-red);
+    padding: 18px 20px; border-bottom: 1px solid #22304366;
     display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, rgba(213,10,10,0.08), transparent);
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(6px);
   }
-  header h1 { font-size: 1.15em; margin: 0; letter-spacing: 1px; text-transform: uppercase; }
-  header .clock { color: var(--accent); font-variant-numeric: tabular-nums; }
+  header h1 {
+    font-size: 1.1em; margin: 0; letter-spacing: 0.5px; text-transform: uppercase;
+    background: linear-gradient(90deg, #fff, var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header .clock { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 0.9em; opacity: 0.9; }
   .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+
+  /* Modernere Karten-Basis */
+  .card {
+    border: 1px solid #22304340;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+  .card h2 { display: flex; align-items: center; gap: 8px; }
+
+  /* HUB: Schnellzugriff-Kacheln (Spielplan/Tippspiel/Shop/Rückblicke) */
+  .hub-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 16px;
+  }
+  .hub-card {
+    background: linear-gradient(160deg, #161f2c, #10161f);
+    border: 1px solid #22304355; border-radius: 12px;
+    padding: 12px 6px; text-align: center; text-decoration: none; color: #eee;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .hub-card:active { transform: scale(0.96); }
+  .hub-card:hover { border-color: var(--accent); box-shadow: 0 4px 14px rgba(0,255,204,0.12); }
+  .hub-icon { font-size: 1.5em; line-height: 1; margin-bottom: 2px; }
+  .hub-title { font-size: 0.72em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px; }
+  .hub-sub { font-size: 0.62em; opacity: 0.55; }
+
+  /* CURRENT / NEXT — prominente Boxen statt schmalem Ticker */
+  .cn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .cn-box {
+    background: var(--card); border-radius: 12px; padding: 12px 14px;
+    border: 1px solid #22304355; box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+  .cn-box.live { border-color: rgba(213,10,10,0.5); }
+  .cn-label {
+    font-size: 0.68em; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.65;
+    display: flex; align-items: center; gap: 5px; margin-bottom: 8px;
+  }
+  .cn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--nfl-red); display: inline-block; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+  .cn-match { font-size: 0.88em; margin-bottom: 8px; }
+  .cn-match:last-child { margin-bottom: 0; }
+  .cn-teams { font-weight: 700; }
+  .cn-meta { font-size: 0.78em; opacity: 0.6; }
+  .cn-empty { font-size: 0.82em; opacity: 0.5; }
+
+  /* Skeleton-Loading */
+  .skeleton-line {
+    height: 12px; border-radius: 6px; margin: 6px 0;
+    background: linear-gradient(90deg, #182231 25%, #22304355 50%, #182231 75%);
+    background-size: 200% 100%; animation: shimmer 1.3s infinite;
+  }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
   .match-card { background: #0e1622; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
   .match-top { display: flex; justify-content: space-between; align-items: center; }
   .match-teams { font-weight: bold; font-size: 1.05em; }
@@ -55,19 +115,18 @@
   button {
     background: var(--nfl-red); color: white; border: none; border-radius: 6px;
     padding: 8px 14px; font-weight: bold; cursor: pointer;
+    transition: filter 0.15s ease, transform 0.1s ease;
   }
-  /* Blog / Ticker */
-  .ticker { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
-  .ticker-card {
-    background: #0e1622; border-radius: 8px; padding: 10px 12px; flex: 1 1 45%; min-width: 150px;
-    font-size: 0.82em;
-  }
-  .ticker-card .tk-label { font-size: 0.7em; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-  .ticker-card .tk-teams { font-weight: bold; }
-  .ticker-card .tk-meta { opacity: 0.7; font-size: 0.85em; margin-top: 2px; }
+  button:active { transform: scale(0.97); }
+  button:hover { filter: brightness(1.1); }
   .view-toggle { display: flex; justify-content: center; margin: 14px 0; }
   .view-toggle button { width: auto; }
-  .article-card { background: var(--card); border-radius: 10px; padding: 16px; margin-bottom: 14px; border: 1px solid #22304333; }
+  .article-card {
+    background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 14px;
+    border: 1px solid #22304340; box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    transition: border-color 0.2s ease;
+  }
+  .article-card:hover { border-color: #22304380; }
   .article-title { font-weight: 800; font-size: 1.05em; margin-bottom: 6px; }
   .article-body { font-size: 0.92em; line-height: 1.5; opacity: 0.92; white-space: pre-line; }
   .article-time { font-size: 0.72em; opacity: 0.5; margin-top: 8px; }
@@ -76,6 +135,13 @@
   .bracket-session { margin-bottom: 14px; }
   .bracket-session h3 { color: var(--accent); font-size: 0.85em; text-transform: uppercase; margin: 0 0 6px; }
   .bracket-row { display: flex; justify-content: space-between; font-size: 0.88em; padding: 5px 0; border-bottom: 1px solid #22304333; }
+
+  @media (max-width: 420px) {
+    .hub-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .hub-title { font-size: 0.62em; }
+    .hub-sub { display: none; }
+    .cn-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -85,9 +151,7 @@
   <span class="clock" id="clock"></span>
 </header>
 
-<div class="wrap" id="app">
-  <div class="card empty">Lade Turnierdaten…</div>
-</div>
+<div class="wrap" id="app"></div>
 
 <script>
   const isAdmin = window.location.search.includes('Altima');
@@ -95,12 +159,66 @@
   let history = null;
   let recordMoments = []; // { id, type, payload, provider, imageUrl, canvasEl, loading, error }
   let articles = [];
-  let viewMode = 'blog'; // 'blog' | 'full'
+  // ?view=full erlaubt einen direkten Link/Tab, der sofort in der
+  // Vollansicht startet (z.B. vom "📋 Spielplan"-Hub-Kachel-Link aus).
+  let viewMode = new URLSearchParams(location.search).get('view') === 'full' ? 'full' : 'blog';
 
   function tickClock() {
     document.getElementById('clock').textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
   setInterval(tickClock, 1000); tickClock();
+
+  // =========================================================
+  // HUB: Schnellzugriff-Kacheln, immer sichtbar (auch vor dem Laden)
+  // =========================================================
+  function renderHubGrid() {
+    return `
+      <div class="hub-grid">
+        <a class="hub-card" href="live.html?view=full" target="_blank">
+          <div class="hub-icon">📋</div>
+          <div class="hub-title">Spielplan</div>
+          <div class="hub-sub">Tabelle & Bracket</div>
+        </a>
+        <a class="hub-card" href="wettbuero.html">
+          <div class="hub-icon">🎯</div>
+          <div class="hub-title">Tippspiel</div>
+          <div class="hub-sub">Mittippen</div>
+        </a>
+        <a class="hub-card" href="shop.html" target="_blank">
+          <div class="hub-icon">🛍️</div>
+          <div class="hub-title">Fan-Shop</div>
+          <div class="hub-sub">Merch</div>
+        </a>
+        <a class="hub-card" href="#articleFeed" onclick="scrollToFeed()">
+          <div class="hub-icon">📜</div>
+          <div class="hub-title">Rückblick</div>
+          <div class="hub-sub">Ältere Artikel</div>
+        </a>
+      </div>`;
+  }
+
+  function scrollToFeed() {
+    if (viewMode !== 'blog') { viewMode = 'blog'; render(); }
+    setTimeout(() => document.getElementById('articleFeed')?.scrollIntoView({ behavior: 'smooth' }), 50);
+  }
+
+  // Sofort sichtbare Grundstruktur (Hub + Platzhalter), bevor überhaupt
+  // Daten geladen sind — kein nacktes "Lade..." mehr.
+  function renderShell() {
+    document.getElementById('app').innerHTML = `
+      ${renderHubGrid()}
+      <div class="cn-grid">
+        <div class="cn-box"><div class="cn-label">Läuft gerade</div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div></div>
+        <div class="cn-box"><div class="cn-label">Als Nächstes</div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div></div>
+      </div>
+      <div class="card">
+        <div class="skeleton-line" style="width:50%"></div>
+        <div class="skeleton-line" style="width:90%"></div>
+        <div class="skeleton-line" style="width:70%"></div>
+      </div>
+    `;
+  }
+  renderShell();
 
   async function boot() {
     try {
@@ -365,35 +483,52 @@
   }
 
   // =========================================================
-  // TICKER (immer sichtbar): nächste 2 Spiele + letzte 2 Ergebnisse
+  // CURRENT / NEXT — "läuft gerade" (Anpfiff schon vorbei, kein Ergebnis
+  // eingetragen) vs. "als Nächstes" (Anpfiff noch nicht erreicht)
   // =========================================================
   function getLastResults(limit) {
     const all = MB.getCurrentMatchesNormalized(state);
     return all.slice(-limit).reverse();
   }
 
-  function renderTicker() {
-    const upcoming = MB.getUpcomingMatches(state, { limit: 2 });
-    const last = getLastResults(2);
+  function nowTimeStr() {
+    const d = new Date();
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+  }
 
-    const upcomingHtml = upcoming.length
-      ? upcoming.map(m => `
-          <div class="ticker-card">
-            <div class="tk-label">Als Nächstes</div>
-            <div class="tk-teams">${m.awayName} @ ${m.homeName}</div>
-            <div class="tk-meta">${m.time || ''} Uhr</div>
+  function renderCurrentNext() {
+    const upcoming = MB.getUpcomingMatches(state, { limit: 6 });
+    const now = nowTimeStr();
+    const live = upcoming.filter(m => m.time && m.time <= now).slice(0, 2);
+    const next = upcoming.filter(m => !m.time || m.time > now).slice(0, 2);
+
+    const liveHtml = live.length
+      ? live.map(m => `
+          <div class="cn-match">
+            <div class="cn-teams">${m.awayName} @ ${m.homeName}</div>
+            <div class="cn-meta">seit ${m.time} Uhr</div>
           </div>`).join('')
-      : `<div class="ticker-card"><div class="tk-label">Als Nächstes</div><div class="tk-meta">Keine offenen Spiele</div></div>`;
+      : `<div class="cn-empty">Gerade läuft nichts.</div>`;
 
-    const lastHtml = last.length
-      ? last.map(m => `
-          <div class="ticker-card">
-            <div class="tk-label">Ergebnis</div>
-            <div class="tk-teams">${m.homePlayer} ${m.homeScore}:${m.awayScore} ${m.awayPlayer}</div>
+    const nextHtml = next.length
+      ? next.map(m => `
+          <div class="cn-match">
+            <div class="cn-teams">${m.awayName} @ ${m.homeName}</div>
+            <div class="cn-meta">${m.time || '?'} Uhr</div>
           </div>`).join('')
-      : `<div class="ticker-card"><div class="tk-label">Ergebnis</div><div class="tk-meta">Noch keine Spiele</div></div>`;
+      : `<div class="cn-empty">Keine weiteren Spiele geplant.</div>`;
 
-    return `<div class="ticker">${upcomingHtml}${lastHtml}</div>`;
+    return `
+      <div class="cn-grid">
+        <div class="cn-box ${live.length ? 'live' : ''}">
+          <div class="cn-label">${live.length ? '<span class="cn-dot"></span>' : ''}Läuft gerade</div>
+          ${liveHtml}
+        </div>
+        <div class="cn-box">
+          <div class="cn-label">Als Nächstes</div>
+          ${nextHtml}
+        </div>
+      </div>`;
   }
 
   // =========================================================
@@ -456,16 +591,16 @@
   // =========================================================
   function renderArticleFeed() {
     if (!articles.length) {
-      return `<div class="card empty">Noch keine Artikel — die ersten erscheinen, sobald das Turnier läuft.</div>`;
+      return `<div id="articleFeed" class="card empty">Noch keine Artikel — die ersten erscheinen, sobald das Turnier läuft.</div>`;
     }
-    return articles.map(a => `
+    return `<div id="articleFeed">` + articles.map(a => `
       <div class="article-card">
         <div class="article-title">${a.title}</div>
         <div class="article-body">${a.body}</div>
         ${a.media_type === 'audio' ? `<div class="article-media"><audio controls src="${a.media_url}"></audio></div>` : ''}
         ${a.media_type === 'image' ? `<div class="article-media"><img src="${a.media_url}"></div>` : ''}
         <div class="article-time">${timeAgo(a.created_at)}</div>
-      </div>`).join('');
+      </div>`).join('') + `</div>`;
   }
 
   function toggleView() {
@@ -476,13 +611,14 @@
   async function render() {
     const app = document.getElementById('app');
     if (!state.players || state.players.length === 0) {
-      app.innerHTML = `<div class="card empty">Es läuft aktuell kein Turnier.</div>`;
+      app.innerHTML = `${renderHubGrid()}<div class="card empty">Es läuft aktuell kein Turnier.</div>`;
       return;
     }
     const mainContent = viewMode === 'full' ? await renderFullView() : renderArticleFeed();
     app.innerHTML = `
+      ${renderHubGrid()}
       ${isAdmin ? `<div class="card"><h2>🏆 Rekord-Momente (Admin)</h2>${renderRecordMoments()}</div>` : ''}
-      ${renderTicker()}
+      ${renderCurrentNext()}
       <div class="view-toggle">
         <button class="btn-secondary" onclick="toggleView()">${viewMode === 'blog' ? '📊 Volle Turnieransicht' : '📰 Zurück zum Blog'}</button>
       </div>

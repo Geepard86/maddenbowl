@@ -12,7 +12,8 @@ tipp.js               ← NEU: Tippspiel-Engine (ersetzt das Kapital-Wettbüro)
 styles.css            ← zentrales Theme/CSS (vorher inline in index.html)
 index.html            ← Turnier-Admin/Anzeige
 wettbuero.html         ← Login + Wetten pro Spieler
-live.html              ← NEU: Turnierblog (Ticker, Artikel-Feed, Vollansicht) + PWA-installierbar
+live.html              ← Turnierblog (Hub-Kacheln, Current/Next, Artikel-Feed, Vollansicht) + PWA-installierbar
+shop.html               ← NEU: Fan-Shop (Spreadshop-Einbindung)
 hall_of_fame.html       ← Hall of Fame — liest aus Supabase
 seasons.html            ← Saisons auflisten/bearbeiten/löschen + Team-Werte pflegen
 migrate.html            ← einmalig: importiert alte JSON-Saisons nach Supabase
@@ -456,23 +457,52 @@ unverändert.
 
 ## Neu: Turnierblog & PWA (`live.html` ohne `?Altima`)
 
-`live.html` ist jetzt ein echter Turnierblog statt einer reinen
-Live-Tracking-Tabelle:
+`live.html` ist jetzt ein echter Turnierblog mit modernerem, "App-artigem"
+Aufbau statt einer reinen Live-Tracking-Tabelle:
 
-- **Ticker oben** (immer sichtbar): nächste 2 Spiele + letzte 2 Ergebnisse,
-  kompakt.
+- **Hub-Kacheln oben** (immer sofort sichtbar, auch bevor Daten geladen
+  sind): 📋 Spielplan (öffnet die Vollansicht in einem neuen Tab, siehe
+  unten), 🎯 Tippspiel (Link zu `wettbuero.html`), 🛍️ Fan-Shop (Link zu
+  `shop.html`), 📜 Rückblick (springt zum Artikel-Feed).
+- **"Läuft gerade" / "Als Nächstes"**-Boxen: unterscheidet automatisch
+  anhand des Zeitplans, ob ein Spiel schon angepfiffen sein müsste (aber
+  noch kein Ergebnis eingetragen ist) oder erst noch bevorsteht — kein
+  Admin-Eingriff nötig, rein zeitbasiert wie beim Tippspiel-Sperrmechanismus.
+- **Skeleton-Loading**: die Seite zeigt Hub + Platzhalter-Boxen sofort an,
+  noch während die echten Daten im Hintergrund laden — kein nacktes
+  "Lade Turnierdaten…" mehr.
 - **"📊 Volle Turnieransicht"**-Umschalter: klappt Tabelle, kompletten
   Gruppenspielplan, Playoff Picture (als Liste, nicht als grafischer
-  Bracket — siehe Einschränkung unten) und Titelchancen auf. Alles rein
-  lesend, keine Admin-Funktionen.
+  Bracket — siehe Einschränkung unten), Tippstand und Titelchancen auf.
+  Alles rein lesend, keine Admin-Funktionen. Direkt aufrufbar über
+  `live.html?view=full` (das macht die 📋-Hub-Kachel, ideal zum Öffnen in
+  einem zweiten Tab/Fenster).
 - **Artikel-Feed** darunter: automatisch generierte Blog-Artikel
-  (`blog.js`) zu Turnierstart, alle 3 Spiele ein Zwischenstand, Finale,
-  neuer Champion — sowie **geteilte** Songs (mit eingebettetem
+  (`blog.js`, jetzt mit mehreren Formulierungs-Varianten und etwas Witz,
+  siehe eigener Abschnitt) zu Turnierstart, alle 3 Spiele ein Zwischenstand,
+  Finale, neuer Champion — sowie **geteilte** Songs (mit eingebettetem
   Audio-Player) und Memes (mit eingebettetem Bild). "Geteilt" ist hier
   bewusst der Freigabe-Moment: ein Song erscheint im Blog erst, wenn er im
   Admin-Panel generiert wurde; ein Meme-Artikel entsteht erst, wenn der
   Admin tatsächlich "Teilen" klickt (nicht schon bei jeder Erkennung) —
   sonst würde der Blog mit jedem kleinen Rekord vollgespammt.
+
+### Fan-Shop (`shop.html`, Spreadshop-Einbindung)
+Eigene, separate Seite (nicht direkt in `live.html` eingebettet), damit das
+recht schwere Spreadshop-Drittanbieter-Skript nicht die Ladezeit des Blogs
+selbst belastet. Nutzt genau die Einbindung, die Spreadshop für den Shop
+"maddenbowl" vorgibt (`spread_shop_config` + `shopclient.nocache.js`).
+
+**Bitte einmal gegenchecken**: der Skript-Pfad enthielt in der Vorlage ein
+Copy-Paste-Artefakt (ein Markdown-Link, der zwei unterschiedliche
+Shop-Domains vermischt hat — `maddenbowl.myspreadshop.de` und
+`tima-merch.myspreadshop.de`). Ich hab mich für `maddenbowl.myspreadshop.de`
+entschieden (konsistent mit `shopName`/`prefix`/dem sichtbaren Link), kann
+das von hier aus aber nicht gegen euren echten Spreadshop-Account
+verifizieren — falls der Shop auf `shop.html` leer bleibt, liegt's
+vermutlich genau daran; dann bitte den echten Skript-Pfad aus eurem
+Spreadshop-Adminbereich (Einbindungscode) einmal gegenprüfen und in
+`shop.html` (das `<script src="...">`) korrigieren.
 
 ### Einschränkung: Playoff Picture als Liste, nicht als Grafik
 Die hübsche, mehrspaltige Bracket-Grafik aus `index.html` ist eng mit dem
@@ -487,7 +517,7 @@ Safari (iOS) → Teilen-Symbol → "Zum Home-Bildschirm" → landet als eigene
 Kachel, startet ohne Browser-Leiste. **Kein Push bei geschlossener
 App** (das bräuchte einen Server-Baustein, siehe unten) — aber solange die
 Seite offen ist, aktualisiert sie sich weiterhin automatisch alle 15
-Sekunden (Ticker, Artikel, Rekord-Momente).
+Sekunden (Boxen, Artikel, Rekord-Momente).
 
 ### Zu Push-Benachrichtigungen (bewusst zurückgestellt)
 Echte Push-Zustellung bei geschlossener Seite bräuchte einen
@@ -503,18 +533,14 @@ umzuwerfen.
 Imgflip-Memes werden direkt verlinkt, die liegen schon dauerhaft bei
 imgflip.com).
 
-### Rückblick-Artikel für den Blog-Start
-`seasons.html?Altima` → Karte "📜 Blog-Rückblick" → "Vorschau generieren"
-zeigt einen Artikel, der alle bisherigen (abgeschlossenen) Saisons
-zusammenfasst — bisherige Champions, Rekord-Halter bei Titeln, Allzeit-
-Highscore, größte Klatsche aller Zeiten. **Komplett datenbasiert** aus der
-History-Engine (nicht hartkodiert) — ich konnte das von hier aus nicht
-gegen deine echte Supabase-Datenbank testen (kein Netzwerkzugriff aus
-meiner Sandbox dorthin), daher lieber ein Generator-Button als vorgefertigter
-Text. "Im Blog veröffentlichen" braucht ein aktives Turnier (der Artikel
-hängt an dessen `tournament_id`) — am besten direkt nach dem Start des
-nächsten Turniers einmal klicken, dann erscheint er als einer der ersten
-Blog-Einträge.
+### Redaktionelle Artikel & Rückblick
+`seasons.html?Altima` → Karte "✍️ Artikel verfassen": freier Editor mit
+zwei fertigen, faktengeprüften Entwürfen (5-Jahre-Rückblick + Kickoff-
+Ankündigung 2027) — Titel/Text frei editierbar, "Im Blog veröffentlichen"
+braucht ein aktives Turnier (der Artikel hängt an dessen `tournament_id`).
+Für alles Weitere (neue Rückblicke, Sonderartikel) einfach "Leer" wählen
+und selbst schreiben, oder mir hier im Chat einen Text generieren lassen
+und reinkopieren.
 
 ## Kurzer Test-Vorschlag
 

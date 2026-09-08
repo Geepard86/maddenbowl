@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl — Fan-Shop</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="stylesheet" href="styles.css" />
+<style>
+  body { padding: 16px; }
+  header { padding: 12px 4px 16px; border-bottom: 1px solid #22304366; margin-bottom: 16px; max-width: 900px; margin-left: auto; margin-right: auto; }
+  header h1 { margin: 0; font-size: 1.15em; text-transform: uppercase; letter-spacing: 0.5px; }
+  header a { color: var(--accent); font-size: 0.85em; text-decoration: none; }
+  #myShop { max-width: 900px; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛍️ Madden Bowl Fan-Shop</h1>
+  <div style="margin-top:6px;"><a href="live.html">← Zurück zum Turnierblog</a></div>
+</header>
+
+<!-- Spreadshop-Einbindung. WICHTIG: baseId ("myShop") muss exakt zur ID
+     dieses div passen, sonst rendert der Shop nichts hinein. -->
+<div id="myShop">
+  <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
+</div>
+<script>
+  var spread_shop_config = {
+    shopName: 'maddenbowl',
+    locale: 'de_DE',
+    prefix: 'https://maddenbowl.myspreadshop.de',
+    baseId: 'myShop'
+  };
+</script>
+<script type="text/javascript"
+        src="https://maddenbowl.myspreadshop.de/shopfiles/shopclient/shopclient.nocache.js">
+</script>
+
+</body>
+</html>
