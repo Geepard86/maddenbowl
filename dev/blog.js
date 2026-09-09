@@ -207,6 +207,37 @@
     return data;
   }
 
+  // Manuell verfasster Beitrag durch den Admin (siehe seasons.html/index.html
+  // "Blog verwalten") — eigene kind, damit man ihn im Feed optisch/technisch
+  // von den automatisch generierten Artikeln unterscheiden könnte.
+  async function pushManualArticle(tournamentId, { title, body }) {
+    return pushArticle(tournamentId, { kind: "manual", title, body });
+  }
+
+  // Nachträgliches Bearbeiten (Titel/Text/Bild) eines bestehenden Artikels.
+  // `patch` enthält nur die Felder, die geändert werden sollen.
+  async function updateArticle(articleId, patch) {
+    const sb = MB.getSupabaseClient();
+    if (!sb || !articleId) return null;
+    const allowed = {};
+    if (patch.title !== undefined) allowed.title = patch.title;
+    if (patch.body !== undefined) allowed.body = patch.body;
+    if (patch.media_url !== undefined) allowed.media_url = patch.media_url;
+    if (patch.media_type !== undefined) allowed.media_type = patch.media_type;
+    const { data, error } = await sb.from("blog_articles")
+      .update(allowed).eq("id", articleId).select().single();
+    if (error) { console.warn("Artikel konnte nicht aktualisiert werden:", error); return null; }
+    return data;
+  }
+
+  async function deleteArticle(articleId) {
+    const sb = MB.getSupabaseClient();
+    if (!sb || !articleId) return false;
+    const { error } = await sb.from("blog_articles").delete().eq("id", articleId);
+    if (error) { console.warn("Artikel konnte nicht gelöscht werden:", error); return false; }
+    return true;
+  }
+
   async function fetchArticles(tournamentId, limit) {
     const sb = MB.getSupabaseClient();
     if (!sb || !tournamentId) return [];
@@ -245,6 +276,6 @@
   global.MB = global.MB || {};
   global.MB.Blog = {
     buildKickoffArticle, buildRetrospectiveArticle, buildProgressArticle, buildRecordArticle, buildSongArticle, buildFinalsArticle, buildChampionArticle,
-    pushArticle, fetchArticles, countArticlesByKind, countFinishedMatches, isProgressArticleDue,
+    pushArticle, pushManualArticle, updateArticle, deleteArticle, fetchArticles, countArticlesByKind, countFinishedMatches, isProgressArticleDue,
   };
 })(window);

@@ -159,6 +159,8 @@
   let history = null;
   let recordMoments = []; // { id, type, payload, provider, imageUrl, canvasEl, loading, error }
   let articles = [];
+  let editingArticleId = null; // Admin: Artikel-ID, die gerade inline bearbeitet wird
+  let composingArticle = false; // Admin: "+ Neuer Beitrag"-Formular offen?
   // ?view=full erlaubt einen direkten Link/Tab, der sofort in der
   // Vollansicht startet (z.B. vom "📋 Spielplan"-Hub-Kachel-Link aus).
   let viewMode = new URLSearchParams(location.search).get('view') === 'full' ? 'full' : 'blog';
@@ -588,19 +590,96 @@
 
   // =========================================================
   // ARTIKEL-FEED (Turnierblog)
+  // -------------------------------------------------------
+  // Im Admin-Modus (?Altima) kann hier zusätzlich manuell ein Beitrag
+  // verfasst sowie jeder bestehende Artikel bearbeitet oder gelöscht werden
+  // (siehe submitNewArticle/saveArticleEdit/deleteArticleConfirm unten).
   // =========================================================
-  function renderArticleFeed() {
-    if (!articles.length) {
-      return `<div id="articleFeed" class="card empty">Noch keine Artikel — die ersten erscheinen, sobald das Turnier läuft.</div>`;
+  function renderComposeBox() {
+    if (!isAdmin) return '';
+    if (!composingArticle) {
+      return `<div class="card" style="margin-bottom:14px;"><button class="btn-secondary" onclick="composingArticle=true; render();">✍️ Neuer Beitrag</button></div>`;
     }
-    return `<div id="articleFeed">` + articles.map(a => `
+    return `
+      <div class="card" style="margin-bottom:14px;">
+        <div style="font-weight:bold; margin-bottom:8px;">✍️ Neuer Beitrag</div>
+        <input type="text" id="newArticleTitle" placeholder="Titel" style="width:100%; box-sizing:border-box; margin-bottom:8px;">
+        <textarea id="newArticleBody" rows="5" placeholder="Text" style="width:100%; box-sizing:border-box;"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button onclick="submitNewArticle()">Veröffentlichen</button>
+          <button class="btn-secondary" onclick="composingArticle=false; render();">Abbrechen</button>
+        </div>
+      </div>`;
+  }
+
+  function renderArticleFeed() {
+    const compose = renderComposeBox();
+    if (!articles.length) {
+      return compose + `<div id="articleFeed" class="card empty">Noch keine Artikel — die ersten erscheinen, sobald das Turnier läuft.</div>`;
+    }
+    return compose + `<div id="articleFeed">` + articles.map(a => {
+      if (isAdmin && editingArticleId === a.id) {
+        return `
+          <div class="article-card">
+            <input type="text" id="editTitle-${a.id}" value="${String(a.title || '').replace(/"/g, '&quot;')}" style="width:100%; box-sizing:border-box; margin-bottom:8px;">
+            <textarea id="editBody-${a.id}" rows="5" style="width:100%; box-sizing:border-box;">${a.body || ''}</textarea>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button onclick="saveArticleEdit('${a.id}')">Speichern</button>
+              <button class="btn-secondary" onclick="editingArticleId=null; render();">Abbrechen</button>
+            </div>
+          </div>`;
+      }
+      return `
       <div class="article-card">
         <div class="article-title">${a.title}</div>
         <div class="article-body">${a.body}</div>
         ${a.media_type === 'audio' ? `<div class="article-media"><audio controls src="${a.media_url}"></audio></div>` : ''}
         ${a.media_type === 'image' ? `<div class="article-media"><img src="${a.media_url}"></div>` : ''}
         <div class="article-time">${timeAgo(a.created_at)}</div>
-      </div>`).join('') + `</div>`;
+        ${isAdmin ? `
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="btn-secondary" style="width:auto; font-size:0.8em; padding:3px 8px;" onclick="editingArticleId='${a.id}'; render();">✏️ Bearbeiten</button>
+            <button class="btn-secondary" style="width:auto; font-size:0.8em; padding:3px 8px;" onclick="deleteArticleConfirm('${a.id}')">🗑️ Löschen</button>
+          </div>` : ''}
+      </div>`;
+    }).join('') + `</div>`;
+  }
+
+  async function submitNewArticle() {
+    const titleEl = document.getElementById('newArticleTitle');
+    const bodyEl = document.getElementById('newArticleBody');
+    const title = titleEl.value.trim(), body = bodyEl.value.trim();
+    if (!title || !body) { alert('Bitte Titel und Text ausfüllen.'); return; }
+    const tid = MB.getCurrentTournamentId();
+    if (!tid) { alert('Kein aktives Turnier — Artikel kann gerade nicht gespeichert werden.'); return; }
+    const created = await MB.Blog.pushManualArticle(tid, { title, body });
+    if (created) articles.unshift(created);
+    else alert('Speichern fehlgeschlagen — siehe Konsole.');
+    composingArticle = false;
+    render();
+  }
+
+  async function saveArticleEdit(id) {
+    const title = document.getElementById(`editTitle-${id}`).value.trim();
+    const body = document.getElementById(`editBody-${id}`).value.trim();
+    if (!title || !body) { alert('Bitte Titel und Text ausfüllen.'); return; }
+    const updated = await MB.Blog.updateArticle(id, { title, body });
+    if (updated) {
+      const idx = articles.findIndex(a => a.id === id);
+      if (idx >= 0) articles[idx] = updated;
+    } else {
+      alert('Speichern fehlgeschlagen — siehe Konsole.');
+    }
+    editingArticleId = null;
+    render();
+  }
+
+  async function deleteArticleConfirm(id) {
+    if (!confirm('Diesen Artikel wirklich löschen? Das lässt sich nicht rückgängig machen.')) return;
+    const ok = await MB.Blog.deleteArticle(id);
+    if (ok) articles = articles.filter(a => a.id !== id);
+    else alert('Löschen fehlgeschlagen — siehe Konsole.');
+    render();
   }
 
   function toggleView() {

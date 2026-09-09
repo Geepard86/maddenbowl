@@ -152,6 +152,11 @@
             <h2>🎵 Song-Momente</h2>
             <div id="songMomentsPanel"></div>
           </div>
+
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🖼️ Meme-Einstellungen</h2>
+            <div id="memeSettingsPanel"></div>
+          </div>
         </div>
       </div>
 
@@ -2143,6 +2148,7 @@ function renderRanking() {
       MB.Announcer.warmupVoices(); // Stimmen für Web Speech API vorladen
       if (isAdmin) setTimeout(renderTtsSettingsPanel, 800); // Panel erst nach kurzem Warmup füllen
       if (isAdmin) setTimeout(renderSongMomentsPanel, 800);
+      if (isAdmin) setTimeout(renderMemeSettingsPanel, 800);
       if (isAdmin) setTimeout(renderRecordMomentsPanel, 800);
 
       setInterval(() => syncData(false), 45000);
@@ -2181,7 +2187,7 @@ function renderRanking() {
       }
       renderTtsSettingsPanel();
       renderSongMomentsPanel();
-      renderRecordMomentsPanel();
+      renderMemeSettingsPanel();
     }
 
     function resetTtsPassword() {
@@ -2191,7 +2197,7 @@ function renderRanking() {
       ttsUnlocked = false;
       renderTtsSettingsPanel();
       renderSongMomentsPanel();
-      renderRecordMomentsPanel();
+      renderMemeSettingsPanel();
     }
 
     // =========================================================
@@ -2275,7 +2281,7 @@ function renderRanking() {
     let activePopupEntries = []; // aktuell im Meme-Popup angezeigte sessionRecords-Einträge
 
     function getMemeProvider() { return localStorage.getItem('mb_meme_provider') || 'canvas'; }
-    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); refreshMemeViews(); }
+    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); renderMemeSettingsPanel(); }
 
     // Rendert die "🏆 Rekord-Momente"-Karte UND (falls offen) das Popup neu.
     // Alle Stellen, die früher direkt renderRecordMomentsPanel() aufgerufen
@@ -2325,6 +2331,7 @@ function renderRanking() {
             <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
               <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${globalIndex})">🔁 Anderes Motiv</button>
               <button style="width:auto;" onclick="shareMeme(${globalIndex})">📱 Teilen</button>
+              ${memePublishButtonHtml(entry, globalIndex)}
             </div>`;
         }
         return `<div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #22304333; text-align:center;">
@@ -2352,22 +2359,37 @@ function renderRanking() {
     }
 
     async function addSessionRecord(record) {
-      const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null };
+      const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null, published: false };
       sessionRecords.unshift(entry); // neueste zuerst
       refreshMemeViews();
       await regenerateEntryVisual(entry);
       refreshMemeViews();
-
-      // Turnierblog: für "normale" Rekorde (Finals/Champion bekommen weiter
-      // oben schon ihren eigenen Artikel via buildFinalsArticle/
-      // buildChampionArticle) wird der Blog-Eintrag jetzt automatisch
-      // erzeugt, sobald das Meme-Bild fertig ist — nicht mehr erst beim
-      // manuellen Klick auf "Teilen". So landet der Moment im Blog, auch
-      // wenn am Admin-Gerät gerade niemand hinterher aufräumt.
-      if (!entry.error && record.type !== 'finals' && record.type !== 'champion') {
-        await postRecordBlogArticle(entry);
-      }
       return entry;
+    }
+
+    // Finals/Champion-Momente bekommen ihren Blog-Artikel automatisch (siehe
+    // finishScoreUpdate) — dafür hier keinen zweiten, manuellen "Veröffentlichen"-
+    // Button anzeigen, sonst gäbe es doppelte Artikel für denselben Moment.
+    function memePublishButtonHtml(entry, i) {
+      if (entry.record.type === 'finals' || entry.record.type === 'champion') {
+        return `<button style="width:auto;" disabled title="Erscheint automatisch im Blog">📰 Automatisch im Blog</button>`;
+      }
+      if (entry.published) {
+        return `<button style="width:auto;" disabled>✅ Im Blog</button>`;
+      }
+      return `<button style="width:auto;" onclick="publishRecordToBlog(${i})">📰 Im Blog veröffentlichen</button>`;
+    }
+
+    // Wird über den 📰-Button im Popup (oder in der Rekord-Momente-Karte)
+    // ausgelöst — Finals/Champion-Artikel entstehen weiterhin automatisch
+    // (siehe finishScoreUpdate), für "normale" Rekorde ist das hier jetzt
+    // der EINZIGE Weg, wie ein Meme im Blog landet.
+    async function publishRecordToBlog(i) {
+      const entry = sessionRecords[i];
+      if (!entry || entry.published || entry.loading || entry.error) return;
+      await postRecordBlogArticle(entry);
+      entry.published = true;
+      refreshMemeViews();
     }
 
     async function postRecordBlogArticle(entry) {
@@ -2413,8 +2435,11 @@ function renderRanking() {
       entry.loading = false;
     }
 
-    function renderRecordMomentsPanel() {
-      const el = document.getElementById('recordMomentsPanel');
+    // Einstellungen (Meme-Stil, Imgflip-Zugangsdaten) — sitzt im eingeklappten
+    // "Ansage/Musik-Einstellungen"-Bereich, NICHT mehr in der immer sichtbaren
+    // Rekord-Momente-Karte (die zeigt nur noch die eigentlichen Meme-Einträge).
+    function renderMemeSettingsPanel() {
+      const el = document.getElementById('memeSettingsPanel');
       if (!el) return;
       const provider = getMemeProvider();
       const imgflipSettings = MB.Records.getImgflipSettings();
@@ -2448,17 +2473,25 @@ function renderRanking() {
         }
       }
 
+      el.innerHTML = html;
+    }
+
+    // Nur noch die Liste der Meme-Einträge — Veröffentlichen-Status inklusive
+    // (siehe publishRecordToBlog()).
+    function renderRecordMomentsPanel() {
+      const el = document.getElementById('recordMomentsPanel');
+      if (!el) return;
+
       if (!sessionRecords.length) {
-        html += `<div class="hint" style="font-size:0.85em; opacity:0.7;">
+        el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.7;">
           Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore, Allzeit-/Turnier-Klatsche,
           Siegesserie, Überraschung, Abgeschossen, Shootout, Finaleinzug, neuer Champion) — auch am Handy über
           live.html?Altima sichtbar.
         </div>`;
-        el.innerHTML = html;
         return;
       }
 
-      el.innerHTML = html;
+      el.innerHTML = '';
       sessionRecords.forEach((entry, i) => {
         const info = MB.Records.RECORD_TYPES[entry.record.type];
         const wrap = document.createElement('div');
@@ -2477,6 +2510,7 @@ function renderRanking() {
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                   <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${i})">🔁 Anderes Motiv</button>
                   <button style="width:auto;" onclick="shareMeme(${i})">📱 Teilen</button>
+                  ${memePublishButtonHtml(entry, i)}
                 </div>
               </div>
             </div>`;
