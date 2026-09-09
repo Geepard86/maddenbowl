@@ -108,6 +108,20 @@
       </div>
     </div>
 
+    <!-- Meme-Vorschläge: erscheinen als Popup direkt nach "Ergebnis speichern",
+         wenn dieses Spiel einen Rekord/besonderen Moment ausgelöst hat, statt
+         nur unten in der "🏆 Rekord-Momente"-Karte zu erscheinen (wo man sie
+         leicht übersieht). Inhalt kommt aus renderMemePopupContent(). -->
+    <div id="memePopupModal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:420px; max-height:80vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2 style="margin:0;">🏆 Neuer Moment!</h2>
+          <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeMemePopup()">✕</button>
+        </div>
+        <div id="memePopupBody"></div>
+      </div>
+    </div>
+
     <div id="admin-panel" class="hidden">
       <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
         <button class="btn-secondary" onclick="window.print()">PDF Export</button>
@@ -117,14 +131,28 @@
         <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
       </div>
 
-      <div class="card" style="margin-bottom:15px;">
-        <h2>🎙️ Ansage-Engine</h2>
-        <div id="ttsSettingsPanel"></div>
-      </div>
+      <!-- Standardmäßig eingeklappt: diese Einstellungen (Ansage-Provider,
+           API-Keys, Song-Generierung) sollen nicht auf dem Beamer zu sehen
+           sein, z.B. während der Auslosung. Der eigentliche API-Key ist
+           zusätzlich per Passwort gesperrt (siehe ttsUnlocked weiter unten) —
+           dieser Ein-/Ausklapper blendet aber schon die ganze Karte (inkl.
+           harmloser Status-Zeile) aus, bis man sie aktiv braucht. -->
+      <div style="margin-bottom:15px;">
+        <button class="btn-secondary" style="width:auto; font-size:0.8em;"
+                onclick="document.getElementById('advancedAudioSettings').classList.toggle('hidden')">
+          ⚙️ Ansage/Musik-Einstellungen ein-/ausblenden
+        </button>
+        <div id="advancedAudioSettings" class="hidden" style="margin-top:10px;">
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🎙️ Ansage-Engine</h2>
+            <div id="ttsSettingsPanel"></div>
+          </div>
 
-      <div class="card" style="margin-bottom:15px;">
-        <h2>🎵 Song-Momente</h2>
-        <div id="songMomentsPanel"></div>
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🎵 Song-Momente</h2>
+            <div id="songMomentsPanel"></div>
+          </div>
+        </div>
       </div>
 
       <div class="card" style="margin-bottom:15px;">
@@ -1243,9 +1271,14 @@ const ringsHtml = rings > 0
 
         // Rekord-Momente & Memes: komplett kostenlos, immer aktiv. Werden
         // nach Supabase gepusht, damit sie auch auf live.html?Altima (z.B.
-        // am Handy) sichtbar sind. Ein Blog-Artikel dafür entsteht erst,
-        // wenn der Admin das Meme tatsächlich TEILT (siehe shareMeme()) —
-        // das ist unser "freigegeben"-Moment, inkl. eingebettetem Bild.
+        // am Handy) sichtbar sind. Der Turnierblog-Artikel für einen
+        // "normalen" Rekord entsteht jetzt automatisch, sobald das Meme-Bild
+        // fertig ist (siehe addSessionRecord/postRecordBlogArticle) — nicht
+        // mehr erst beim manuellen Teilen. Zusätzlich poppt hier direkt nach
+        // dem Speichern ein Vorschau-Popup auf, damit man es nicht erst in
+        // der "🏆 Rekord-Momente"-Karte suchen muss.
+        const recordsBeforePopup = sessionRecords.length;
+
         const newRecords = MB.Records.detectRecords(state, history, { homeName, awayName, homeScore: match.s1, awayScore: match.s2 });
         newRecords.forEach(r => {
           addSessionRecord(r);
@@ -1263,6 +1296,16 @@ const ringsHtml = rings > 0
           const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r) : MB.Blog.buildChampionArticle(r);
           MB.Blog.pushArticle(MB.getCurrentTournamentId(), article);
         });
+
+        // addSessionRecord() unshiftet synchron in sessionRecords (der
+        // eigentliche Bildaufbau läuft danach async weiter) — direkt nach
+        // beiden forEach-Durchläufen stehen alle neuen Einträge also schon
+        // vorne in sessionRecords.
+        const addedCount = sessionRecords.length - recordsBeforePopup;
+        if (addedCount > 0) {
+          activePopupEntries = sessionRecords.slice(0, addedCount);
+          openMemePopup();
+        }
 
         // Turnierblog: alle 3 Spiele ein Zwischenstand-Artikel.
         if (MB.Blog.isProgressArticleDue(state, progressArticlesSoFar)) {
@@ -2229,16 +2272,120 @@ function renderRanking() {
     let sessionRecords = []; // { record, styleId, canvasPreview }
     let milestoneRecordFlags = {}; // { finals: true, champion: true } — verhindert Mehrfach-Feuern
     let progressArticlesSoFar = 0; // Anzahl bisheriger Zwischenstand-Artikel (aus Supabase geladen)
+    let activePopupEntries = []; // aktuell im Meme-Popup angezeigte sessionRecords-Einträge
 
     function getMemeProvider() { return localStorage.getItem('mb_meme_provider') || 'canvas'; }
-    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); renderRecordMomentsPanel(); }
+    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); refreshMemeViews(); }
+
+    // Rendert die "🏆 Rekord-Momente"-Karte UND (falls offen) das Popup neu.
+    // Alle Stellen, die früher direkt renderRecordMomentsPanel() aufgerufen
+    // haben, rufen jetzt das hier auf, damit beide Ansichten synchron bleiben.
+    function refreshMemeViews() {
+      renderRecordMomentsPanel();
+      const modal = document.getElementById('memePopupModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        renderMemePopupContent(activePopupEntries);
+      }
+    }
+
+    function openMemePopup() {
+      document.getElementById('memePopupModal').classList.remove('hidden');
+      renderMemePopupContent(activePopupEntries);
+    }
+
+    function closeMemePopup() {
+      document.getElementById('memePopupModal').classList.add('hidden');
+      activePopupEntries = [];
+    }
+
+    // Baut denselben Karten-Look wie renderRecordMomentsPanel(), aber nur für
+    // die Einträge dieses Speichervorgangs — untereinander im Popup.
+    function renderMemePopupContent(entries) {
+      const el = document.getElementById('memePopupBody');
+      if (!el) return;
+
+      if (!entries.length) {
+        el.innerHTML = `<div class="hint">Kein Meme generiert.</div>`;
+        return;
+      }
+
+      el.innerHTML = entries.map((entry) => {
+        const globalIndex = sessionRecords.indexOf(entry);
+        const info = MB.Records.RECORD_TYPES[entry.record.type];
+        let bodyHtml;
+        if (entry.loading) {
+          bodyHtml = `<div class="hint">Wird generiert…</div>`;
+        } else if (entry.error) {
+          bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div>
+            <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="rerenderMeme(${globalIndex})">🔁 Erneut versuchen</button>`;
+        } else {
+          bodyHtml = `
+            <div class="meme-preview-slot" data-popup-slot="${globalIndex}"
+                 style="width:100%; max-width:260px; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
+            <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
+              <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${globalIndex})">🔁 Anderes Motiv</button>
+              <button style="width:auto;" onclick="shareMeme(${globalIndex})">📱 Teilen</button>
+            </div>`;
+        }
+        return `<div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #22304333; text-align:center;">
+          <div style="font-weight:bold; margin-bottom:8px; font-size:1.05em;">${info.emoji} ${info.label}</div>
+          ${bodyHtml}
+        </div>`;
+      }).join('');
+
+      // Canvas-/Bild-Previews nachträglich einsetzen (innerHTML kann kein
+      // lebendes <canvas>-Element transportieren).
+      entries.forEach((entry) => {
+        if (entry.loading || entry.error) return;
+        const globalIndex = sessionRecords.indexOf(entry);
+        const slot = el.querySelector(`[data-popup-slot="${globalIndex}"]`);
+        if (!slot) return;
+        if (entry.provider === 'imgflip' && entry.imageUrl) {
+          const img = document.createElement('img');
+          img.src = entry.imageUrl;
+          img.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+          slot.appendChild(img);
+        } else if (entry.canvasPreview) {
+          slot.appendChild(entry.canvasPreview);
+        }
+      });
+    }
 
     async function addSessionRecord(record) {
       const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null };
       sessionRecords.unshift(entry); // neueste zuerst
-      renderRecordMomentsPanel();
+      refreshMemeViews();
       await regenerateEntryVisual(entry);
-      renderRecordMomentsPanel();
+      refreshMemeViews();
+
+      // Turnierblog: für "normale" Rekorde (Finals/Champion bekommen weiter
+      // oben schon ihren eigenen Artikel via buildFinalsArticle/
+      // buildChampionArticle) wird der Blog-Eintrag jetzt automatisch
+      // erzeugt, sobald das Meme-Bild fertig ist — nicht mehr erst beim
+      // manuellen Klick auf "Teilen". So landet der Moment im Blog, auch
+      // wenn am Admin-Gerät gerade niemand hinterher aufräumt.
+      if (!entry.error && record.type !== 'finals' && record.type !== 'champion') {
+        await postRecordBlogArticle(entry);
+      }
+      return entry;
+    }
+
+    async function postRecordBlogArticle(entry) {
+      const tournamentId = MB.getCurrentTournamentId();
+      const article = MB.Blog.buildRecordArticle(entry.record);
+      try {
+        if (entry.provider === 'imgflip' && entry.imageUrl) {
+          article.media_url = entry.imageUrl;
+          article.media_type = 'image';
+        } else if (entry.canvasPreview) {
+          const canvas = MB.Records.renderMemeCanvas(entry.record, entry.styleId);
+          article.media_url = await MB.Records.uploadMemeToStorage(canvas, tournamentId, entry.record.type);
+          article.media_type = 'image';
+        }
+      } catch (e) {
+        console.warn('Meme-Upload für Blog fehlgeschlagen, Artikel wird ohne Bild gepostet:', e);
+      }
+      MB.Blog.pushArticle(tournamentId, article);
     }
 
     async function regenerateEntryVisual(entry) {
@@ -2380,32 +2527,24 @@ function renderRanking() {
     async function rerenderMeme(i) {
       const entry = sessionRecords[i];
       entry.provider = getMemeProvider();
-      renderRecordMomentsPanel();
+      refreshMemeViews();
       await regenerateEntryVisual(entry);
-      renderRecordMomentsPanel();
+      refreshMemeViews();
     }
 
+    // Nur noch das EXTERNE Teilen (WhatsApp/Download etc.) — der Blog-Artikel
+    // entsteht jetzt automatisch in addSessionRecord()/postRecordBlogArticle(),
+    // sobald das Meme-Bild fertig ist, unabhängig davon ob hier geteilt wird.
     async function shareMeme(i) {
       const entry = sessionRecords[i];
-      const tournamentId = MB.getCurrentTournamentId();
-      let mediaUrl = null;
 
       if (entry.provider === 'imgflip' && entry.imageUrl) {
         const result = await MB.Records.shareOrOpenRemoteImage(entry.imageUrl, `madden-bowl-${entry.record.type}.jpg`);
         if (result === 'opened') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde in einem neuen Tab geöffnet, dort manuell speichern/teilen.');
-        mediaUrl = entry.imageUrl; // schon dauerhaft bei imgflip gehostet
       } else if (entry.canvasPreview) {
         const canvas = MB.Records.renderMemeCanvas(entry.record, entry.styleId); // frisch in voller Auflösung
         const result = await MB.Records.shareOrDownloadMeme(canvas, `madden-bowl-${entry.record.type}.png`);
         if (result === 'downloaded') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde stattdessen heruntergeladen, kannst du manuell in WhatsApp anhängen.');
-        try { mediaUrl = await MB.Records.uploadMemeToStorage(canvas, tournamentId, entry.record.type); } catch (e) { console.warn('Meme-Upload für Blog fehlgeschlagen:', e); }
-      }
-
-      // Turnierblog: Teilen = "freigegeben" -> jetzt erst entsteht der Blog-Artikel, inkl. Bild.
-      if (mediaUrl) {
-        const article = MB.Blog.buildRecordArticle(entry.record);
-        article.media_url = mediaUrl; article.media_type = 'image';
-        MB.Blog.pushArticle(tournamentId, article);
       }
     }
 
