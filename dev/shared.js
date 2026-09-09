@@ -1023,7 +1023,7 @@
     loadHistorySeasons, loadAndBuildHistory, loadLocalJsonBackups, buildHistoryIndex,
     normName, pairKey, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
-    computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime,
+    computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,
     normalCdf, getPpgEstimate, seedFactor, teamOVRFactor, formFactor,

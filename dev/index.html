@@ -13,6 +13,35 @@
   <script src="blog.js"></script>
 
   <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Speichern-Box für Score-Eingabe: Ergebnis wird erst bei Klick auf den
+       Button (oder Enter) committed, nicht mehr live bei jedem onchange.
+       Verhindert Fokus-Sprünge beim Tabben + doppelte/überlappende
+       Cloud-Pushes (siehe Kommentare bei commitScore()/finishScoreUpdate()). */
+    .score-save-btn {
+      margin-left: 6px;
+      padding: 2px 7px;
+      font-size: 0.85em;
+      line-height: 1.4;
+      border-radius: 5px;
+      border: 1px solid var(--accent, #4ade80);
+      background: transparent;
+      color: var(--accent, #4ade80);
+      cursor: pointer;
+      opacity: 0.55;
+      transition: opacity 0.15s, background 0.15s, color 0.15s;
+    }
+    .score-save-btn.dirty {
+      opacity: 1;
+      background: var(--accent, #4ade80);
+      color: #0b1119;
+      font-weight: bold;
+    }
+    .score-save-btn:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+  </style>
 </head>
 
 <body>
@@ -601,7 +630,7 @@ function isFinished(match) { return MB.isFinished(match); }
 
           if (data && data.players) {
             const isTyping = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('score-input');
-            if (!isTyping && !isSyncing) {
+            if (!isTyping && !isSyncing && unsavedScoreCount === 0) {
               state = data;
               ensureUiState();
               if (state.slots) state.matches = state.slots.flat();
@@ -1060,11 +1089,12 @@ const ringsHtml = rings > 0
                 <span>${p2.name}</span> ${getLogoHtml(p2.team)}
               </div>
               <div class="score-area">
-                <input type="number" class="score-input" value="${m.s2 !== null ? m.s2 : ''}"
-                       onchange="setScore('group',${gIdx},2,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                <input type="number" class="score-input" id="score-group-${gIdx}-away" value="${m.s2 !== null ? m.s2 : ''}"
+                       oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
                 <span style="color:var(--accent)">:</span>
-                <input type="number" class="score-input" value="${m.s1 !== null ? m.s1 : ''}"
-                       onchange="setScore('group',${gIdx},1,this.value)" ${!isAdmin ? 'disabled' : ''}>
+                <input type="number" class="score-input" id="score-group-${gIdx}-home" value="${m.s1 !== null ? m.s1 : ''}"
+                       oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
+                ${isAdmin ? `<button type="button" id="score-group-${gIdx}-save" class="score-save-btn" onclick="commitScore('group',${gIdx})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
               </div>
               <div class="team-box">
                 ${getLogoHtml(p1.team)} <span>${p1.name}</span>
@@ -1088,29 +1118,89 @@ const ringsHtml = rings > 0
       return MB.getUpcomingMatches(state, { limit });
     }
 
-    function setScore(type, idx, p, val) {
-      let v = val === "" ? null : parseInt(val);
+    // =========================================================
+    // SPEICHERN-BOX für Score-Eingabe
+    // -------------------------------------------------------
+    // Vorher (setScore()) hat JEDES einzelne Feld (Heim ODER Auswärts) bei
+    // jedem onchange sofort den kompletten Re-Render + Cloud-Push
+    // ausgelöst. Das hatte zwei Folgebugs:
+    //  1) Der Re-Render (innerHTML-Rebuild der ganzen Matchliste) riss dem
+    //     Nutzer beim Tab-Sprung ins zweite Feld den Fokus weg, bevor er
+    //     dort etwas eintippen konnte.
+    //  2) Zwei schnell hintereinander ausgelöste Cloud-Pushes (einer pro
+    //     Feld) liefen als überlappende async-Requests — kommt die Antwort
+    //     des ÄLTEREN Pushes (nur ein Score gesetzt) NACH der des neueren
+    //     an, überschreibt er den bereits korrekt gespeicherten zweiten
+    //     Score in Supabase wieder mit "leer". Der 45s-Polling-Sync holt
+    //     diesen veralteten Stand dann zurück in die lokale Ansicht.
+    //
+    // Jetzt: Eingaben werden nur lokal gepuffert (Inputs behalten einfach
+    // ihren Wert, es passiert sonst nichts). Committed wird erst explizit
+    // per Klick auf den 💾-Button oder Enter in einem der beiden Felder —
+    // dann werden BEIDE Werte auf einmal übernommen, genau EIN Render und
+    // genau EIN Cloud-Push ausgelöst. Kein Rendern während der Eingabe =
+    // kein Fokusklau, kein doppelter Push = keine Race Condition.
+    // =========================================================
+
+    function scoreInputIds(type, idx) {
+      const prefix = `score-${type}-${idx}`;
+      return { away: `${prefix}-away`, home: `${prefix}-home`, save: `${prefix}-save` };
+    }
+
+    // Zählt offene, ungespeicherte Score-Boxen. Solange > 0, darf der
+    // periodische Cloud-Poll (siehe syncData()) nicht die ganze `state`-
+    // Variable überschreiben — sonst gehen getippte, aber noch nicht per
+    // 💾/Enter bestätigte Werte beim nächsten Poll wieder verloren.
+    let unsavedScoreCount = 0;
+
+    // Markiert die Speichern-Box als "ungespeichert" (visuelles Feedback),
+    // löst aber explizit NICHTS anderes aus — kein Render, kein Push.
+    function markScoreDirty(type, idx) {
+      const { save: saveBtnId } = scoreInputIds(type, idx);
+      const btn = document.getElementById(saveBtnId);
+      if (btn && !btn.classList.contains('dirty')) {
+        btn.classList.add('dirty');
+        unsavedScoreCount++;
+      }
+    }
+
+    function handleScoreKeydown(e, type, idx) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      commitScore(type, idx);
+    }
+
+    function commitScore(type, idx) {
+      const { away, home, save: saveBtnId } = scoreInputIds(type, idx);
+      const awayEl = document.getElementById(away);
+      const homeEl = document.getElementById(home);
+      if (!awayEl || !homeEl) return;
+
       const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
-      if (!targetArray[idx]) return;
-
       const match = targetArray[idx];
-      const wasFinished = isFinished(match);
+      if (!match) return;
 
-      if (p === 1) match.s1 = v;
-      else match.s2 = v;
+      const wasFinished = isFinished(match);
+      const vAway = awayEl.value === "" ? null : parseInt(awayEl.value);
+      const vHome = homeEl.value === "" ? null : parseInt(homeEl.value);
+
+      match.s2 = vAway;
+      match.s1 = vHome;
+
+      const saveBtn = document.getElementById(saveBtnId);
+      if (saveBtn && saveBtn.classList.contains('dirty')) unsavedScoreCount = Math.max(0, unsavedScoreCount - 1);
 
       save();
       _oddsCacheKey = "";
 
-      // BUGFIX: Rendering (+ alles Nachgelagerte: Ansage, Rekorde, Sync) auf
-      // den nächsten Tick verschieben. Grund: onchange feuert oft GENAU in
-      // dem Moment, in dem der Browser per Tab zum nächsten Score-Feld
-      // (Heim/Auswärts desselben Spiels) springt. Ein SOFORTIGER kompletter
-      // DOM-Rebuild (renderGroupMatches() ersetzt via innerHTML alle Zeilen)
-      // reißt dabei das Zielfeld unter dem Tab-Sprung weg — der Sprung geht
-      // ins Leere, das zweite Feld bekommt nie einen Wert. Mit
-      // setTimeout(...,0) läuft der native Fokuswechsel zuerst zu Ende.
-      setTimeout(() => finishScoreUpdate(type, idx, match, wasFinished), 0);
+      // Fokus bewusst VOR dem Re-Render wegnehmen (statt umgekehrt wie
+      // früher) — dann kann der DOM-Rebuild in finishScoreUpdate() kein
+      // aktives Feld mehr "unter dem Cursor wegreißen".
+      if (document.activeElement === awayEl || document.activeElement === homeEl) {
+        document.activeElement.blur();
+      }
+
+      finishScoreUpdate(type, idx, match, wasFinished);
     }
 
     function finishScoreUpdate(type, idx, match, wasFinished) {
@@ -1625,13 +1715,14 @@ if (tb && tb.s1 === null && tb.s2 === null) {
                <span class="status-tag tag-next" style="font-size:.65em;">AUTO ADVANCE</span>
              </div>`
           : `<div class="score-area">
-               <input type="number" class="score-input" value="${match.s2 !== null ? match.s2 : ''}"
-                      onchange="setScore('playoff',${index},2,this.value)"
+               <input type="number" class="score-input" id="score-playoff-${index}-away" value="${match.s2 !== null ? match.s2 : ''}"
+                      oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
                <span style="color:var(--accent)">:</span>
-               <input type="number" class="score-input" value="${match.s1 !== null ? match.s1 : ''}"
-                      onchange="setScore('playoff',${index},1,this.value)"
+               <input type="number" class="score-input" id="score-playoff-${index}-home" value="${match.s1 !== null ? match.s1 : ''}"
+                      oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
+               ${(isAdmin && isGroupPhaseComplete()) ? `<button type="button" id="score-playoff-${index}-save" class="score-save-btn" onclick="commitScore('playoff',${index})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
              </div>`;
 
         html += `

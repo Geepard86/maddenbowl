@@ -266,8 +266,10 @@
     }, 400);
   }
 
-  // Haupt-Einstiegspunkt: wird nach Score-Eintrag für ein FERTIGES Spiel aufgerufen.
-  async function announce({ state, history, homeName, awayName, homeScore, awayScore, homeTeam, awayTeam, stadium, upcoming }) {
+  // Eigentliche Ansage-Logik (vormals der einzige "announce"). Umbenannt zu
+  // _announceNow, weil der öffentliche Einstiegspunkt jetzt announce() weiter
+  // unten ist, der Aufrufe in eine Warteschlange einreiht.
+  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, homeTeam, awayTeam, stadium, upcoming }) {
     if (homeScore === null || awayScore === null || homeScore === undefined || awayScore === undefined) return;
 
     const settings = getTtsSettings();
@@ -306,6 +308,27 @@
     }
 
     if (nextTwo.length) await speakSmart(pick(CLOSING_LINES), { voiceId: singleVoiceId });
+  }
+
+  // ======================================================================
+  // WARTESCHLANGE
+  // -------------------------------------------------------------------------
+  // Wird z.B. in index.html aus finishScoreUpdate() OHNE await aufgerufen.
+  // Wenn kurz hintereinander zwei Spiele fertig werden, laufen dadurch zwei
+  // announce()-Aufrufe parallel. Für die kostenlose Browser-Stimme wäre das
+  // egal (speechSynthesis hat eine eigene interne Warteschlange), aber im
+  // ElevenLabs-Modus spielt jeder Aufruf sein eigenes <audio>-Element ab —
+  // ohne Koordination würden sich zwei Ansagen akustisch überlappen.
+  // Diese Promise-Chain serialisiert alle announce()-Aufrufe (unabhängig
+  // vom TTS-Provider) strikt nacheinander. Ein Fehler in einer Ansage
+  // (z.B. ElevenLabs-HTTP-Fehler) darf die Kette dabei nicht dauerhaft
+  // blockieren, deshalb wird der Fehler hier abgefangen statt durchgereicht.
+  let _announceQueue = Promise.resolve();
+
+  function announce(args) {
+    const run = () => _announceNow(args).catch((e) => console.warn("Ansage fehlgeschlagen:", e));
+    _announceQueue = _announceQueue.then(run, run);
+    return _announceQueue;
   }
 
   global.MB = global.MB || {};
