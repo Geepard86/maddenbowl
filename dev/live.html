@@ -140,7 +140,13 @@
     .hub-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
     .hub-title { font-size: 0.62em; }
     .hub-sub { display: none; }
-    .cn-grid { grid-template-columns: 1fr; }
+    /* Läuft-gerade / Als-Nächstes bleiben auch auf schmalen Screens
+       nebeneinander (spart Höhe) — dafür kompakter statt gestapelt. */
+    .cn-grid { gap: 6px; }
+    .cn-box { padding: 8px 8px; }
+    .cn-label { font-size: 0.62em; margin-bottom: 5px; }
+    .cn-match { font-size: 0.76em; margin-bottom: 5px; }
+    .cn-meta { font-size: 0.7em; }
   }
 
   /* Angepinnter Kopfbereich: Hub-Kacheln + "Aktuelles"-Kachel bleiben beim
@@ -157,11 +163,23 @@
   .aktuelles-card h2 { font-size: 0.95em; margin: 0 0 8px; }
   .tipp-top3 {
     margin-top: 10px; padding-top: 10px; border-top: 1px solid #22304340;
-    font-size: 0.82em; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+    display: flex; align-items: center; gap: 8px;
   }
-  .tipp-top3-label { opacity: 0.65; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.3px; }
-  .tipp-top3-item { white-space: nowrap; }
-  .tipp-top3-item b { color: var(--accent); }
+  .tipp-top3-label {
+    font-size: 0.62em; text-transform: uppercase; opacity: 0.6; letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+  .tipp-top3-row { display: flex; flex: 1; gap: 6px; min-width: 0; }
+  .tipp-top3-item {
+    flex: 1; min-width: 0; text-align: center; background: #0e1622; border-radius: 8px;
+    padding: 5px 3px;
+  }
+  .tipp-top3-item .medal { font-size: 1em; line-height: 1; display: block; }
+  .tipp-top3-item .tname {
+    display: block; font-weight: 700; font-size: 0.74em; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tipp-top3-item .tpts { display: block; color: var(--accent); font-size: 0.68em; }
 
   /* POPUP: "echtes" Playoff-Bracket-Bild */
   .modal-overlay {
@@ -621,10 +639,16 @@
       const ouLines = await MB.Tipp.fetchAllOuLines(tid);
       const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
       if (!standings.length) return '';
+      const medals = ['🥇', '🥈', '🥉'];
       const top3 = standings.slice(0, 3)
-        .map((row, i) => `<span class="tipp-top3-item">${i + 1}. ${row.name} <b>${row.points} P</b></span>`)
+        .map((row, i) => `
+          <div class="tipp-top3-item">
+            <span class="medal">${medals[i]}</span>
+            <span class="tname">${row.name}</span>
+            <span class="tpts">${row.points} P</span>
+          </div>`)
         .join('');
-      return `<div class="tipp-top3"><span class="tipp-top3-label">🎯 Tippspiel</span>${top3}</div>`;
+      return `<div class="tipp-top3"><span class="tipp-top3-label">🎯 Tippspiel</span><div class="tipp-top3-row">${top3}</div></div>`;
     } catch (e) {
       console.warn('Tippspiel-Top3 laden fehlgeschlagen:', e);
       return '';

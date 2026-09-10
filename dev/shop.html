@@ -33,9 +33,41 @@
     prefix: 'https://maddenbowl.myspreadshop.de',
     baseId: 'myShop'
   };
+
+  // FALLBACK: Das offizielle Spreadshop-Widget-Skript ersetzt #myShop nach
+  // dem Laden komplett. Läuft das aus irgendeinem Grund nicht durch (Skript
+  // blockiert/langsam/Fehler — z.B. durch einen Werbeblocker, der Domains
+  // mit "shop" im Namen filtert), bleibt sonst nur der nackte Platzhalter-
+  // Link stehen. Deshalb hier zusätzlich: läuft #myShop nach kurzer Zeit
+  // immer noch unverändert, oder schlägt das Skript direkt fehl (onerror
+  // unten), wird der Shop stattdessen per iframe direkt eingebettet —
+  // so ist er in jedem Fall "in der Seite", nie nur ein Link.
+  var shopEmbedded = false;
+  function embedShopFallback() {
+    if (shopEmbedded) return;
+    shopEmbedded = true;
+    var el = document.getElementById('myShop');
+    if (!el) return;
+    var iframe = document.createElement('iframe');
+    iframe.src = spread_shop_config.prefix;
+    iframe.title = 'Madden Bowl Fan-Shop';
+    iframe.loading = 'lazy';
+    iframe.style.cssText = 'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
+    el.innerHTML = '';
+    el.appendChild(iframe);
+  }
+  var shopFallbackTimer = setTimeout(function () {
+    var el = document.getElementById('myShop');
+    // Wenn das Widget-Skript erfolgreich geladen hat, hat es den
+    // Platzhalter-Link längst ersetzt — dann hier nichts tun.
+    if (el && el.querySelector('a[href="' + spread_shop_config.prefix + '"]')) {
+      embedShopFallback();
+    }
+  }, 4000);
 </script>
 <script type="text/javascript"
-        src="https://maddenbowl.myspreadshop.de/shopfiles/shopclient/shopclient.nocache.js">
+        src="https://maddenbowl.myspreadshop.de/shopfiles/shopclient/shopclient.nocache.js"
+        onerror="clearTimeout(shopFallbackTimer); embedShopFallback();">
 </script>
 
 </body>
