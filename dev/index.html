@@ -1220,6 +1220,19 @@ const ringsHtml = rings > 0
       match.s2 = vAway;
       match.s1 = vHome;
 
+      // Fürs Tippspiel (tipp.js/wettbuero.html): Zeitstempel, wann dieses
+      // Spiel fertig wurde. Dient dort als "echter" Anker fürs nächste Spiel
+      // auf demselben Feld (feste Kickoff-Uhrzeiten passen ja meistens eh
+      // nicht) — wird nur beim ERSTEN Fertigwerden gesetzt, damit eine
+      // spätere Korrektur den Zeitplan nicht künstlich nach hinten schiebt.
+      // Wird ein Ergebnis wieder gelöscht, auch wieder zurücksetzen.
+      const nowFinishedForTimestamp = isFinished(match);
+      if (nowFinishedForTimestamp && !wasFinished) {
+        match.finishedAt = new Date().toISOString();
+      } else if (!nowFinishedForTimestamp) {
+        match.finishedAt = null;
+      }
+
       const saveBtn = document.getElementById(saveBtnId);
       if (saveBtn && saveBtn.classList.contains('dirty')) unsavedScoreCount = Math.max(0, unsavedScoreCount - 1);
 

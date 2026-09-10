@@ -22,7 +22,7 @@
   "use strict";
 
   const SPIELTAG_SIZE = 4;
-  const LOCK_BUFFER_MINUTES = 5; // Tipp-Sperre: 5 Min. nach geplantem Anpfiff
+  const LOCK_BUFFER_MINUTES = 5; // Tipp-Sperre: 5 Min. nachdem das Ergebnis des vorherigen Spiels auf demselben Feld eingetragen wurde
   const POINTS = { match: 1, overunder: 2, champion: 5, runnerUp: 3, toiletBowlWinner: 3 };
 
   // "HH:MM" -> Date von HEUTE mit dieser Uhrzeit (gleiche Konvention wie
@@ -35,55 +35,44 @@
     return d;
   }
 
-  function lockTimeFor(kickoffTimeStr) {
-    const d = timeStrToDate(kickoffTimeStr);
-    d.setMinutes(d.getMinutes() + LOCK_BUFFER_MINUTES);
-    return d;
-  }
-
-  function isPastLockTime(kickoffTimeStr) {
-    return new Date() >= lockTimeFor(kickoffTimeStr);
-  }
-
-  function formatLockTime(kickoffTimeStr) {
-    const d = lockTimeFor(kickoffTimeStr);
-    return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
-  }
-
   // ======================================================================
   // MATCH-HELPER — vereinheitlicht Gruppen-/Playoff-Spiele auf dieselbe Form
   // ======================================================================
-  function getMatchInfo(state, matchId, times) {
+  // `field` (1 oder 2) = welcher der beiden parallelen Fernseher/Konsolen
+  // dieses Spiel spielt — dieselbe Zuordnung wie in shared.js
+  // (getUpcomingMatches): innerhalb eines Gruppen-Slots slot[0] -> Feld 1,
+  // slot[1] -> Feld 2; bei Playoff-Spielen einfach nach Array-Index parität.
+  function getMatchInfo(state, matchId) {
     if (matchId.startsWith("g-")) {
       const idx = parseInt(matchId.slice(2), 10);
       const m = state.matches && state.matches[idx];
       if (!m) return null;
       const p1 = state.players[m.p1], p2 = state.players[m.p2];
       if (!p1 || !p2) return null;
-      const kickoff = MB.getGroupMatchTime(state, m);
-      return { matchId, homeName: p1.name, awayName: p2.name, s1: m.s1, s2: m.s2, finished: m.s1 != null && m.s2 != null, kickoff };
+      const slot = (state.slots || []).find((s) => s.includes(m));
+      const field = slot ? (slot.indexOf(m) === 0 ? 1 : 2) : 1;
+      return { matchId, homeName: p1.name, awayName: p2.name, s1: m.s1, s2: m.s2, finished: m.s1 != null && m.s2 != null, finishedAt: m.finishedAt || null, field };
     }
     if (matchId.startsWith("p-")) {
       const id = matchId.slice(2);
       const m = MB.getPlayoffMatch(state, id);
       if (!m || !m.p1 || !m.p2 || m.p1.id === -1 || m.p2.id === -1) return null;
-      const t = times || MB.computePlayoffTimes(state);
-      const kickoff = t.byId[id] || t.groupEndTime;
-      return { matchId, homeName: m.p1.name, awayName: m.p2.name, s1: m.s1, s2: m.s2, finished: m.s1 != null && m.s2 != null, kickoff };
+      const idx = (state.playoffMatches || []).indexOf(m);
+      const field = (idx % 2 === 0) ? 1 : 2;
+      return { matchId, homeName: m.p1.name, awayName: m.p2.name, s1: m.s1, s2: m.s2, finished: m.s1 != null && m.s2 != null, finishedAt: m.finishedAt || null, field };
     }
     return null;
   }
 
   function getMatchSequence(state) {
-    const times = MB.computePlayoffTimes(state);
     const seq = [];
     (state.matches || []).forEach((m, idx) => {
-      const info = getMatchInfo(state, `g-${idx}`, times);
+      const info = getMatchInfo(state, `g-${idx}`);
       if (info) seq.push(info);
     });
     (state.playoffMatches || []).forEach((m) => {
       if (!m.id || MB.isByeMatch(m)) return;
-      const info = getMatchInfo(state, `p-${m.id}`, times);
+      const info = getMatchInfo(state, `p-${m.id}`);
       if (info) seq.push(info);
     });
     return seq;
@@ -98,27 +87,77 @@
     return spieltage;
   }
 
-  // Ein einzelnes Spiel ist tippbar, solange es noch nicht fertig ist UND
-  // die 5-Minuten-Sperrfrist nach seinem geplanten Anpfiff noch nicht
-  // erreicht ist — unabhängig davon, ob der Admin das Ergebnis schon
-  // eingetragen hat oder nicht (rein zeitbasiert, nicht ergebnisbasiert).
-  function isMatchPickable(matchInfo) {
+  // ======================================================================
+  // ZEIT-/SPERR-ENGINE — feste Kickoff-Uhrzeiten passen erfahrungsgemäß
+  // nicht (Spiele dauern mal länger, mal kürzer). Stattdessen: ein Spiel
+  // "beginnt" auf einem Feld praktisch erst, wenn das Ergebnis des
+  // VORHERIGEN Spiels auf demselben Feld eingetragen wurde — das ist der
+  // einzige verlässliche Zeitpunkt, den wir haben. Gesperrt wird jeweils
+  // LOCK_BUFFER_MINUTES danach. Für das jeweils ERSTE Spiel eines Feldes
+  // gibt's noch kein "vorheriges Ergebnis" — dafür wird ersatzweise die
+  // angekündigte Turnier-Startzeit als grobe Schätzung verwendet.
+  // Liefert eine Map matchId -> { anchorDate, anchorIsReal, lockDate }.
+  function computeFieldSchedule(state) {
+    const seq = getMatchSequence(state);
+    const byField = { 1: [], 2: [] };
+    seq.forEach((info) => byField[info.field].push(info));
+
+    const schedule = new Map();
+    [1, 2].forEach((field) => {
+      let anchor = timeStrToDate(state.config.start);
+      let anchorIsReal = false; // erstes Spiel je Feld: nur eine Schätzung
+      byField[field].forEach((info) => {
+        const lockDate = anchor ? new Date(anchor.getTime() + LOCK_BUFFER_MINUTES * 60000) : null;
+        schedule.set(info.matchId, { anchorDate: anchor, anchorIsReal, lockDate });
+
+        if (info.finishedAt) {
+          anchor = new Date(info.finishedAt);
+          anchorIsReal = true;
+        } else {
+          // Dieses Spiel hat noch kein Ergebnis -> für alles Weitere auf
+          // diesem Feld ist der nächste Ankerzeitpunkt noch unbekannt.
+          anchor = null;
+          anchorIsReal = false;
+        }
+      });
+    });
+    return schedule;
+  }
+
+  function isMatchPickable(matchInfo, schedule) {
     if (!matchInfo || matchInfo.finished) return false;
-    return !isPastLockTime(matchInfo.kickoff);
+    const entry = schedule.get(matchInfo.matchId);
+    if (!entry || !entry.lockDate) return true; // Sperrzeitpunkt noch nicht bekannt -> offen
+    return new Date() < entry.lockDate;
   }
 
-  // Over/Under gilt für den ganzen Spieltag -> sperrt 5 Min. nach dem
-  // FRÜHESTEN Anpfiff im Block (sobald das erste Spiel des Spieltags läuft,
-  // ist Nachjustieren nicht mehr fair).
-  function getSpieltagOuKickoff(spieltag) {
-    if (!spieltag.matches.length) return null;
-    return spieltag.matches.reduce((min, m) => (m.kickoff < min ? m.kickoff : min), spieltag.matches[0].kickoff);
+  function formatLockTime(matchInfo, schedule) {
+    const entry = schedule.get(matchInfo.matchId);
+    if (!entry || !entry.lockDate) {
+      return `sperrt 5 Min., nachdem das vorherige Spiel auf Feld ${matchInfo.field} eingetragen wurde`;
+    }
+    const hhmm = entry.lockDate.getHours().toString().padStart(2, "0") + ":" + entry.lockDate.getMinutes().toString().padStart(2, "0");
+    return entry.anchorIsReal ? `sperrt um ${hhmm} Uhr` : `sperrt ca. ${hhmm} Uhr (geschätzt, Turnierstart)`;
   }
 
-  function isSpieltagOuPickable(spieltag) {
-    const earliest = getSpieltagOuKickoff(spieltag);
-    if (!earliest) return true;
-    return !isPastLockTime(earliest);
+  // Over/Under gilt für den ganzen Spieltag -> sperrt zusammen mit dem
+  // Spiel, das als Erstes in diesem Block "sperrt" (gleiche Logik wie bei
+  // den Einzel-Tipps, nur je Spieltag der früheste lockDate-Wert).
+  function isSpieltagOuPickable(spieltag, schedule) {
+    const lockDates = spieltag.matches
+      .map((m) => schedule.get(m.matchId))
+      .filter((e) => e && e.lockDate)
+      .map((e) => e.lockDate.getTime());
+    if (!lockDates.length) return true; // noch kein Spiel dieses Blocks hat einen bekannten Sperrzeitpunkt
+    return new Date().getTime() < Math.min(...lockDates);
+  }
+
+  function formatSpieltagOuLockTime(spieltag, schedule) {
+    const entries = spieltag.matches.map((m) => schedule.get(m.matchId)).filter((e) => e && e.lockDate);
+    if (!entries.length) return "sperrt, sobald das erste Spiel dieses Spieltags eingetragen wurde";
+    const earliest = entries.reduce((min, e) => (e.lockDate < min.lockDate ? e : min), entries[0]);
+    const hhmm = earliest.lockDate.getHours().toString().padStart(2, "0") + ":" + earliest.lockDate.getMinutes().toString().padStart(2, "0");
+    return earliest.anchorIsReal ? `sperrt um ${hhmm} Uhr` : `sperrt ca. ${hhmm} Uhr (geschätzt)`;
   }
 
   // 'done' = alle Spiele im Block fertig -> ausgewertet, sonst 'active'
@@ -143,6 +182,32 @@
     const played = new Set();
     MB.getCurrentMatchesNormalized(state).forEach((m) => { played.add(m.homePlayer); played.add(m.awayPlayer); });
     return !state.players.every((p) => played.has(p.name));
+  }
+
+  // Zeigt VORAB, wann das Gesamt-Tipps-Fenster voraussichtlich schließt:
+  // sobald der Spieler mit dem spätesten ersten Spiel dieses gespielt hat.
+  // Da wir Kickoff-Zeiten nur noch schätzen (siehe computeFieldSchedule),
+  // ist das eine Schätzung, keine Garantie — wird als "ca." gekennzeichnet,
+  // solange kein Spiel auf dem jeweiligen Feld schon real gestartet ist.
+  function seasonLockPreview(state, schedule) {
+    if (!state.players || !state.players.length) return null;
+    const played = new Set();
+    MB.getCurrentMatchesNormalized(state).forEach((m) => { played.add(m.homePlayer); played.add(m.awayPlayer); });
+    const pending = state.players.filter((p) => !played.has(p.name));
+    if (!pending.length) return null; // Fenster ist schon zu (oder alle haben gespielt)
+
+    const seq = getMatchSequence(state);
+    let latest = null;
+    pending.forEach((p) => {
+      const nextMatch = seq.find((m) => !m.finished && (m.homeName === p.name || m.awayName === p.name));
+      if (!nextMatch) return;
+      const entry = schedule.get(nextMatch.matchId);
+      if (!entry || !entry.anchorDate) return;
+      if (!latest || entry.anchorDate > latest.anchorDate) {
+        latest = { player: p.name, anchorDate: entry.anchorDate, anchorIsReal: entry.anchorIsReal };
+      }
+    });
+    return latest;
   }
 
   function resolveSeasonOutcome(state) {
@@ -277,8 +342,8 @@
   global.MB.Tipp = {
     SPIELTAG_SIZE, LOCK_BUFFER_MINUTES, POINTS,
     getMatchInfo, getMatchSequence, getSpieltage, getSpieltagStatus, getCurrentSpieltag,
-    isMatchPickable, isSpieltagOuPickable, formatLockTime,
-    seasonPicksOpen, resolveSeasonOutcome,
+    computeFieldSchedule, isMatchPickable, isSpieltagOuPickable, formatLockTime, formatSpieltagOuLockTime,
+    seasonPicksOpen, seasonLockPreview, resolveSeasonOutcome,
     savePick, fetchPicksForPlayer, fetchAllPicks, fetchAllOuLines, ensureOuLine,
     computeTippStandings,
   };

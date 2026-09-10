@@ -47,6 +47,35 @@
   .hint { font-size: 0.75em; opacity: 0.6; margin-top: 6px; }
   .error { color: var(--nfl-red); font-size: 0.85em; margin-top: 8px; }
   .points-badge { background: var(--accent); color: #06231d; font-weight: 800; border-radius: 10px; padding: 1px 8px; font-size: 0.75em; }
+
+  /* Team-Kacheln fürs Tippen (statt Dropdown): Name + Record + Quote,
+     tippbar durch Antippen, mit @ dazwischen (Auswärts @ Heim, wie
+     überall sonst auch). */
+  .tile-vs { display: flex; align-items: stretch; gap: 8px; margin-bottom: 4px; }
+  .team-tile {
+    flex: 1; background: #0e1622; border: 2px solid #2a3a4d; border-radius: 8px;
+    padding: 8px 6px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .team-tile.selected { border-color: var(--accent); background: #10241d; }
+  .team-tile.locked { cursor: default; opacity: 0.85; }
+  .team-tile .tile-name { font-weight: bold; font-size: 0.95em; }
+  .team-tile .tile-record { font-size: 0.75em; opacity: 0.7; margin-top: 2px; }
+  .team-tile .tile-odds { font-size: 0.8em; color: var(--accent); margin-top: 2px; }
+  .tile-at { align-self: center; font-size: 0.8em; opacity: 0.6; }
+  .community-tally { font-size: 0.75em; opacity: 0.65; margin: 4px 0 8px; text-align: center; }
+  .match-tile-row { background: #0e1622; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .subtle-save-btn {
+    background: none; border: 1px solid #2a3a4d; color: #9db3c8; width: auto;
+    padding: 3px 10px; font-size: 0.75em; font-weight: normal; margin-top: 4px;
+  }
+  .subtle-save-btn.dirty { border-color: var(--accent); color: var(--accent); }
+  .spieltag-badge { font-size: 0.7em; padding: 1px 8px; border-radius: 8px; margin-left: 8px; }
+  .spieltag-badge.done { background: #263449; opacity: 0.8; }
+  .spieltag-badge.active { background: var(--accent); color: #06231d; font-weight: bold; }
+  .bulk-save-bar {
+    position: sticky; bottom: 0; background: #0b1119; border-top: 1px solid #22304366;
+    padding: 10px 0; margin-top: 10px; z-index: 5;
+  }
 </style>
 </head>
 <body>
@@ -62,7 +91,20 @@
   let state = null;
   let history = null;
   let currentPlayer = sessionStorage.getItem('mb_tipp_player') || null;
-  let ouLine = null; // Linie des aktuellen Spieltags
+  let ouLines = {}; // { spieltagIndex: line }
+
+  // Lokal gehaltene, NOCH NICHT gespeicherte Auswahl (Tippen auf eine Kachel
+  // markiert nur, gespeichert wird erst per Klick — entweder dezent pro
+  // Spiel oder gesammelt über den Button unten). Bleibt über Re-Renders
+  // hinweg erhalten, wird erst nach erfolgreichem Speichern geleert.
+  let pendingMatchPicks = {};   // matchId -> Name
+  let pendingOuPicks = {};      // spieltagIndex -> 'over'|'under'
+  let pendingTiebreaker = null; // string|null
+
+  // Zuletzt vom Server geladene Daten — wird bei jedem echten Reload (Boot,
+  // 20s-Poll) neu gesetzt; Klicks auf Kacheln rendern nur aus diesem Cache
+  // neu, ohne erneut zu laden (kein Flackern, kein Refetch pro Klick).
+  let cache = null;
 
   async function boot() {
     try {
@@ -112,7 +154,8 @@
     }
 
     headerWho.textContent = currentPlayer;
-    await renderDashboard(app);
+    await loadDashboardData();
+    renderDashboardHtml(app);
   }
 
   function renderLogin(app) {
@@ -167,21 +210,218 @@
     render();
   }
 
-  async function renderDashboard(app) {
+  // ---------------------------------------------------------
+  // DATEN LADEN (nur bei echtem Reload — Boot/Poll, NICHT bei Klicks)
+  // ---------------------------------------------------------
+  async function loadDashboardData() {
     const tournamentId = MB.getCurrentTournamentId();
     const myPicks = await MB.Tipp.fetchPicksForPlayer(tournamentId, currentPlayer);
     const myPicksByKey = new Map(myPicks.map(p => [`${p.kind}:${p.ref_key}`, p.pick]));
 
-    const seasonOpen = MB.Tipp.seasonPicksOpen(state);
-    const spieltag = MB.Tipp.getCurrentSpieltag(state);
-    const spieltagStatus = spieltag ? MB.Tipp.getSpieltagStatus(spieltag) : null;
-    if (spieltag && spieltagStatus !== 'done') {
-      ouLine = await MB.Tipp.ensureOuLine(tournamentId, spieltag, state, history);
+    const spieltage = MB.Tipp.getSpieltage(state);
+    const schedule = MB.Tipp.computeFieldSchedule(state);
+
+    // O/U-Linien für alle noch nicht abgeschlossenen Spieltage sicherstellen
+    // (einmalig einfrieren, siehe ensureOuLine) — abgeschlossene Spieltage
+    // haben ihre Linie schon längst.
+    ouLines = await MB.Tipp.fetchAllOuLines(tournamentId);
+    for (const st of spieltage) {
+      if (MB.Tipp.getSpieltagStatus(st) !== 'done' && ouLines[st.index] == null) {
+        ouLines[st.index] = await MB.Tipp.ensureOuLine(tournamentId, st, state, history);
+      }
     }
 
     const allPicks = await MB.Tipp.fetchAllPicks(tournamentId);
-    const ouLines = await MB.Tipp.fetchAllOuLines(tournamentId);
     const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
+
+    cache = { tournamentId, myPicksByKey, spieltage, schedule, allPicks, standings };
+  }
+
+  // ---------------------------------------------------------
+  // GEMEINSAME HELFER
+  // ---------------------------------------------------------
+  function playerRecord(name) {
+    const p = state.players.find(pl => pl.name === name);
+    if (!p) return '';
+    const losses = (p.played || 0) - (p.wins || 0);
+    return `(${p.wins || 0}-${losses})`;
+  }
+
+  function matchOdds(homeName, awayName) {
+    try {
+      const odds = MB.computeOddsForMatch(history, state, homeName, awayName);
+      return { home: MB.decimalOdds(odds.pHome) || '—', away: MB.decimalOdds(odds.pAway) || '—' };
+    } catch (e) { return { home: '—', away: '—' }; }
+  }
+
+  function communityTally(matchId, homeName, awayName) {
+    const counts = {}; counts[homeName] = 0; counts[awayName] = 0;
+    cache.allPicks.forEach(p => {
+      if (p.kind === 'match' && p.ref_key === matchId && (p.pick === homeName || p.pick === awayName)) {
+        counts[p.pick] = (counts[p.pick] || 0) + 1;
+      }
+    });
+    const total = counts[homeName] + counts[awayName];
+    if (!total) return 'Noch keine Community-Tipps.';
+    return `So tippt die Community: ${awayName} ${counts[awayName]} · ${homeName} ${counts[homeName]}`;
+  }
+
+  // ---------------------------------------------------------
+  // EIN MATCH ALS KACHEL-ZEILE (Auswärts links @ Heim rechts)
+  // ---------------------------------------------------------
+  function renderMatchTile(m) {
+    const key = `match:${m.matchId}`;
+    const savedPick = cache.myPicksByKey.get(key);
+    const pending = pendingMatchPicks[m.matchId];
+    const currentPick = pending !== undefined ? pending : savedPick;
+    const pickable = MB.Tipp.isMatchPickable(m, cache.schedule);
+    const odds = matchOdds(m.homeName, m.awayName);
+    const isDirty = pending !== undefined && pending !== savedPick;
+
+    const tile = (name, isHome) => {
+      const selected = currentPick === name;
+      const quote = isHome ? odds.home : odds.away;
+      const cls = `team-tile ${selected ? 'selected' : ''} ${pickable ? '' : 'locked'}`;
+      const click = pickable ? `onclick="selectMatchPick('${m.matchId}','${name}')"` : '';
+      return `<div class="${cls}" ${click}>
+        <div class="tile-name">${name}</div>
+        <div class="tile-record">${playerRecord(name)}</div>
+        <div class="tile-odds">@ ${quote}</div>
+      </div>`;
+    };
+
+    let resultLine = '';
+    if (m.finished) {
+      const winner = m.s1 > m.s2 ? m.homeName : m.awayName;
+      const correct = savedPick === winner;
+      resultLine = savedPick
+        ? `<div class="pick-result ${correct ? 'pick-correct' : 'pick-wrong'}" style="text-align:center; margin-top:4px;">Dein Tipp: ${savedPick} ${correct ? '✅' : '❌'} — Endstand ${m.s1}:${m.s2}</div>`
+        : `<div class="pick-pending" style="text-align:center; margin-top:4px;">Kein Tipp abgegeben — Endstand ${m.s1}:${m.s2}</div>`;
+    } else if (!pickable) {
+      resultLine = `<div class="pick-pending" style="text-align:center; margin-top:4px;">${savedPick ? `Dein Tipp: ${savedPick} (gesperrt, läuft)` : 'Gesperrt — kein Tipp abgegeben'}</div>`;
+    }
+
+    const tiebreakerHtml = (m.matchId === 'p-gf') ? renderTiebreakerBox(m, pickable) : '';
+
+    return `
+      <div class="match-tile-row">
+        <div class="tile-vs">
+          ${tile(m.awayName, false)}
+          <div class="tile-at">@</div>
+          ${tile(m.homeName, true)}
+        </div>
+        <div class="community-tally">${communityTally(m.matchId, m.homeName, m.awayName)}</div>
+        ${resultLine}
+        ${pickable ? `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+            <div class="hint" style="margin-top:4px;">${MB.Tipp.formatLockTime(m, cache.schedule)}</div>
+            <button class="subtle-save-btn ${isDirty ? 'dirty' : ''}" ${currentPick ? '' : 'disabled'} onclick="saveMatchPick('${m.matchId}')">Tipp speichern</button>
+          </div>` : ''}
+        ${tiebreakerHtml}
+      </div>`;
+  }
+
+  // Tiebreaker (Gesamtpunkte im Finale) hängt jetzt direkt am Finale selbst,
+  // statt separat bei den Gesamt-Tipps gesperrt zu werden — sinnvoller
+  // kurz vorher zu schätzen als ganz am Turnierstart.
+  function renderTiebreakerBox(m, pickable) {
+    const savedValue = cache.myPicksByKey.get('tiebreaker:tiebreaker');
+    const value = pendingTiebreaker !== null ? pendingTiebreaker : (savedValue || '');
+    if (!pickable) {
+      return `<div class="hint" style="margin-top:8px; border-top:1px solid #22304333; padding-top:8px;">
+        🎯 Dein Tiebreaker (Gesamtpunkte im Finale): ${savedValue || '—'}
+      </div>`;
+    }
+    const isDirty = pendingTiebreaker !== null && pendingTiebreaker !== (savedValue || '');
+    return `
+      <div style="margin-top:8px; border-top:1px solid #22304333; padding-top:8px;">
+        <label style="margin-top:0;">🎯 Tiebreaker: Gesamtpunkte im Finale (nur bei Punktegleichstand relevant)</label>
+        <input type="number" id="tiebreakerInput" value="${value}" placeholder="z.B. 45" oninput="pendingTiebreaker=this.value">
+        <button class="subtle-save-btn ${isDirty ? 'dirty' : ''}" style="margin-top:6px;" onclick="saveTiebreaker()">Tiebreaker speichern</button>
+      </div>`;
+  }
+
+  // ---------------------------------------------------------
+  // KLICK-HANDLER (rendern NUR aus dem Cache neu, kein Refetch)
+  // ---------------------------------------------------------
+  function selectMatchPick(matchId, name) {
+    pendingMatchPicks[matchId] = name;
+    renderDashboardHtml(document.getElementById('app'));
+  }
+
+  async function saveMatchPick(matchId) {
+    const val = pendingMatchPicks[matchId];
+    if (!val) return;
+    try {
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'match', matchId, val);
+      cache.myPicksByKey.set(`match:${matchId}`, val);
+      delete pendingMatchPicks[matchId];
+      renderDashboardHtml(document.getElementById('app'));
+    } catch (e) { alert('Fehler: ' + e.message); }
+  }
+
+  async function saveTiebreaker() {
+    const el = document.getElementById('tiebreakerInput');
+    const val = el ? el.value.trim() : pendingTiebreaker;
+    if (!val) { alert('Bitte eine Zahl eingeben.'); return; }
+    try {
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'tiebreaker', 'tiebreaker', val);
+      cache.myPicksByKey.set('tiebreaker:tiebreaker', val);
+      pendingTiebreaker = null;
+      renderDashboardHtml(document.getElementById('app'));
+    } catch (e) { alert('Fehler: ' + e.message); }
+  }
+
+  function selectOuPick(spieltagIndex, choice) {
+    pendingOuPicks[spieltagIndex] = choice;
+    renderDashboardHtml(document.getElementById('app'));
+  }
+
+  async function saveOuPick(spieltagIndex) {
+    const val = pendingOuPicks[spieltagIndex];
+    if (!val) return;
+    try {
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'overunder', `spieltag-${spieltagIndex}`, val);
+      cache.myPicksByKey.set(`overunder:spieltag-${spieltagIndex}`, val);
+      delete pendingOuPicks[spieltagIndex];
+      renderDashboardHtml(document.getElementById('app'));
+    } catch (e) { alert('Fehler: ' + e.message); }
+  }
+
+  // Sammel-Speichern: alle aktuell offenen (noch ungespeicherten)
+  // Auswahlen auf einmal wegschreiben — Alternative zum einzelnen,
+  // dezenten "Tipp speichern"-Button pro Spiel/O-U/Tiebreaker.
+  function countPendingSaves() {
+    return Object.keys(pendingMatchPicks).length + Object.keys(pendingOuPicks).length + (pendingTiebreaker !== null ? 1 : 0);
+  }
+
+  async function saveAllPending() {
+    const jobs = [];
+    Object.entries(pendingMatchPicks).forEach(([matchId, val]) => {
+      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'match', matchId, val)
+        .then(() => { cache.myPicksByKey.set(`match:${matchId}`, val); delete pendingMatchPicks[matchId]; }));
+    });
+    Object.entries(pendingOuPicks).forEach(([idx, val]) => {
+      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'overunder', `spieltag-${idx}`, val)
+        .then(() => { cache.myPicksByKey.set(`overunder:spieltag-${idx}`, val); delete pendingOuPicks[idx]; }));
+    });
+    if (pendingTiebreaker !== null) {
+      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'tiebreaker', 'tiebreaker', pendingTiebreaker)
+        .then(() => { cache.myPicksByKey.set('tiebreaker:tiebreaker', pendingTiebreaker); pendingTiebreaker = null; }));
+    }
+    try {
+      await Promise.all(jobs);
+    } catch (e) {
+      alert('Ein Teil konnte nicht gespeichert werden: ' + e.message);
+    }
+    renderDashboardHtml(document.getElementById('app'));
+  }
+
+  // ---------------------------------------------------------
+  // DASHBOARD (rein synchron, arbeitet nur auf `cache` + pending*)
+  // ---------------------------------------------------------
+  function renderDashboardHtml(app) {
+    const seasonOpen = MB.Tipp.seasonPicksOpen(state);
 
     let html = `
       <div class="card">
@@ -190,33 +430,51 @@
 
       <div class="card">
         <h2>🏆 Gesamt-Tipps</h2>
-        ${renderSeasonSection(seasonOpen, myPicksByKey)}
+        ${renderSeasonSection(seasonOpen)}
       </div>
+    `;
 
-      <div class="card">
-        <h2>📅 ${spieltag ? `Spieltag ${spieltag.index}` : 'Spieltag'}</h2>
-        ${renderSpieltagSection(spieltag, spieltagStatus, myPicksByKey)}
-      </div>
+    cache.spieltage.forEach(st => {
+      const status = MB.Tipp.getSpieltagStatus(st);
+      html += `
+        <div class="card">
+          <h2>📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : 'läuft'}</span></h2>
+          ${renderSpieltagSection(st, status)}
+        </div>`;
+    });
 
+    if (!cache.spieltage.length) {
+      html += `<div class="card"><div class="hint">Noch keine Partien terminiert.</div></div>`;
+    }
+
+    html += `
       <div class="card">
         <h2>📊 Tippstand</h2>
-        ${renderStandingsTable(standings)}
+        ${renderStandingsTable(cache.standings)}
         <div class="hint">Sieger-Tipp 1P · Over/Under 2P · Season-Sieger 5P · Zweiter/Toilet-Bowl je 3P. Bei Punktegleichstand entscheidet die Tiebreaker-Schätzung (Gesamtpunkte im Finale).</div>
       </div>
     `;
+
+    const pendingCount = countPendingSaves();
+    html += `
+      <div class="bulk-save-bar">
+        <button onclick="saveAllPending()" ${pendingCount ? '' : 'disabled'}>
+          💾 Alle Tipps speichern${pendingCount ? ` (${pendingCount})` : ''}
+        </button>
+      </div>`;
+
     app.innerHTML = html;
   }
 
   // ---------------------------------------------------------
   // GESAMT-TIPPS
   // ---------------------------------------------------------
-  function renderSeasonSection(open, myPicksByKey) {
+  function renderSeasonSection(open) {
     const names = state.players.map(p => p.name);
     if (!open) {
-      const champion = myPicksByKey.get('season:champion');
-      const runnerUp = myPicksByKey.get('season:runnerUp');
-      const tb = myPicksByKey.get('season:toiletBowlWinner');
-      const tie = myPicksByKey.get('tiebreaker:tiebreaker');
+      const champion = cache.myPicksByKey.get('season:champion');
+      const runnerUp = cache.myPicksByKey.get('season:runnerUp');
+      const tb = cache.myPicksByKey.get('season:toiletBowlWinner');
       if (!champion && !runnerUp && !tb) {
         return `<div class="hint">Fenster ist geschlossen — du hast leider keine Gesamt-Tipps abgegeben.</div>`;
       }
@@ -225,121 +483,77 @@
         <div class="match-row"><span>Turniersieger</span><span>${champion || '—'}</span></div>
         <div class="match-row"><span>Zweiter Platz</span><span>${runnerUp || '—'}</span></div>
         <div class="match-row"><span>Toilet-Bowl-Sieger</span><span>${tb || '—'}</span></div>
-        <div class="match-row"><span>Tiebreaker (Finale gesamt)</span><span>${tie || '—'}</span></div>
+        <div class="hint">🎯 Der Tiebreaker (Gesamtpunkte im Finale) steht jetzt unten direkt beim Finalspiel.</div>
       `;
     }
 
+    const preview = MB.Tipp.seasonLockPreview(state, cache.schedule);
+    const previewHtml = preview
+      ? `<div class="hint">Sperrt voraussichtlich, sobald ${preview.player}s erstes Spiel läuft${preview.anchorIsReal ? ` (ca. ab ${preview.anchorDate.getHours().toString().padStart(2,'0')}:${preview.anchorDate.getMinutes().toString().padStart(2,'0')} Uhr)` : ' (geschätzter Turnierstart, kann noch abweichen)'}.</div>`
+      : `<div class="hint">Offen, bis jeder Spieler mindestens ein Spiel hatte.</div>`;
+
     const opt = (selectedName) => names.map(n => `<option value="${n}" ${n === selectedName ? 'selected' : ''}>${n}</option>`).join('');
     return `
-      <div class="hint">Offen, bis jeder Spieler mindestens ein Spiel hatte.</div>
+      ${previewHtml}
       <label>🏆 Turniersieger (5 Punkte)</label>
-      <select id="seasonChampion">${opt(myPicksByKey.get('season:champion'))}</select>
+      <select id="seasonChampion">${opt(cache.myPicksByKey.get('season:champion'))}</select>
       <label>🥈 Zweiter Platz (3 Punkte)</label>
-      <select id="seasonRunnerUp">${opt(myPicksByKey.get('season:runnerUp'))}</select>
+      <select id="seasonRunnerUp">${opt(cache.myPicksByKey.get('season:runnerUp'))}</select>
       <label>🚽 Toilet-Bowl-Sieger (3 Punkte)</label>
-      <select id="seasonToiletBowl">${opt(myPicksByKey.get('season:toiletBowlWinner'))}</select>
-      <label>🎯 Tiebreaker: Gesamtpunkte im Finale (nur Sieger, keine Punkte)</label>
-      <input type="number" id="seasonTiebreaker" value="${myPicksByKey.get('tiebreaker:tiebreaker') || ''}" placeholder="z.B. 45">
+      <select id="seasonToiletBowl">${opt(cache.myPicksByKey.get('season:toiletBowlWinner'))}</select>
       <button onclick="saveSeasonPicks()">Speichern</button>
+      <div class="hint">🎯 Der Tiebreaker (Gesamtpunkte im Finale) ist weiter unten beim Finalspiel zu finden, sobald es feststeht.</div>
     `;
   }
 
   async function saveSeasonPicks() {
-    const tid = MB.getCurrentTournamentId();
     const champion = document.getElementById('seasonChampion').value;
     const runnerUp = document.getElementById('seasonRunnerUp').value;
     const toiletBowl = document.getElementById('seasonToiletBowl').value;
-    const tiebreaker = document.getElementById('seasonTiebreaker').value;
-    if (!tiebreaker) { alert('Bitte auch den Tiebreaker ausfüllen.'); return; }
     try {
-      await MB.Tipp.savePick(tid, currentPlayer, 'season', 'champion', champion);
-      await MB.Tipp.savePick(tid, currentPlayer, 'season', 'runnerUp', runnerUp);
-      await MB.Tipp.savePick(tid, currentPlayer, 'season', 'toiletBowlWinner', toiletBowl);
-      await MB.Tipp.savePick(tid, currentPlayer, 'tiebreaker', 'tiebreaker', tiebreaker);
-      alert('Gespeichert.');
-      render();
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'season', 'champion', champion);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'season', 'runnerUp', runnerUp);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'season', 'toiletBowlWinner', toiletBowl);
+      cache.myPicksByKey.set('season:champion', champion);
+      cache.myPicksByKey.set('season:runnerUp', runnerUp);
+      cache.myPicksByKey.set('season:toiletBowlWinner', toiletBowl);
+      renderDashboardHtml(document.getElementById('app'));
     } catch (e) { alert('Fehler: ' + e.message); }
   }
 
   // ---------------------------------------------------------
   // SPIELTAG-TIPPS
   // ---------------------------------------------------------
-  function renderSpieltagSection(spieltag, status, myPicksByKey) {
-    if (!spieltag) {
-      return `<div class="hint">Aktuell kein offener Spieltag (Turnier beendet oder noch keine Spiele geplant).</div>`;
-    }
-
-    const matchRows = spieltag.matches.map(m => {
-      const key = `match:${m.matchId}`;
-      const pick = myPicksByKey.get(key);
-      const pickable = MB.Tipp.isMatchPickable(m);
-
-      if (pickable) {
-        return `
-          <div class="match-row" style="flex-direction:column; align-items:stretch;">
-            <div class="match-teams">${m.awayName} @ ${m.homeName}</div>
-            <select id="pick-${m.matchId}">
-              <option value="${m.awayName}" ${pick === m.awayName ? 'selected' : ''}>${m.awayName}</option>
-              <option value="${m.homeName}" ${pick === m.homeName ? 'selected' : ''}>${m.homeName}</option>
-            </select>
-            <div class="hint">sperrt um ${MB.Tipp.formatLockTime(m.kickoff)} Uhr (5 Min. nach Anpfiff ${m.kickoff} Uhr)</div>
-            <button onclick="saveMatchPick('${m.matchId}')" style="margin-top:6px;">Tipp speichern</button>
-          </div>`;
-      }
-
-      let resultHtml;
-      if (m.finished) {
-        const winner = m.s1 > m.s2 ? m.homeName : m.awayName;
-        const correct = pick === winner;
-        resultHtml = pick
-          ? `<span class="pick-result ${correct ? 'pick-correct' : 'pick-wrong'}">${pick} ${correct ? '✅' : '❌'} (${m.s1}:${m.s2})</span>`
-          : `<span class="pick-pending">kein Tipp abgegeben (${m.s1}:${m.s2})</span>`;
-      } else {
-        resultHtml = pick
-          ? `<span class="pick-pending">Tipp: ${pick} (gesperrt, läuft)</span>`
-          : `<span class="pick-pending">gesperrt — kein Tipp abgegeben</span>`;
-      }
-      return `<div class="match-row"><span class="match-teams">${m.awayName} @ ${m.homeName}</span>${resultHtml}</div>`;
-    }).join('');
+  function renderSpieltagSection(spieltag, status) {
+    const matchRows = spieltag.matches.map(renderMatchTile).join('');
 
     const ouKey = `overunder:spieltag-${spieltag.index}`;
-    const ouPick = myPicksByKey.get(ouKey);
-    const ouPickable = MB.Tipp.isSpieltagOuPickable(spieltag);
+    const savedOu = cache.myPicksByKey.get(ouKey);
+    const pendingOu = pendingOuPicks[spieltag.index];
+    const currentOu = pendingOu !== undefined ? pendingOu : savedOu;
+    const ouPickable = MB.Tipp.isSpieltagOuPickable(spieltag, cache.schedule);
+    const line = ouLines[spieltag.index];
+    const isOuDirty = pendingOu !== undefined && pendingOu !== savedOu;
+
     const ouHtml = ouPickable
       ? `
-        <label>🎯 Over/Under: Gesamtpunkte dieses Spieltags (Linie: ${ouLine ?? '…'})</label>
+        <label>🎯 Over/Under: Gesamtpunkte dieses Spieltags (Linie: ${line ?? '…'})</label>
         <div class="ou-choice">
-          <label><input type="radio" name="ou" value="over" ${ouPick === 'over' ? 'checked' : ''}> Over</label>
-          <label><input type="radio" name="ou" value="under" ${ouPick === 'under' ? 'checked' : ''}> Under</label>
+          <label><input type="radio" name="ou-${spieltag.index}" value="over" ${currentOu === 'over' ? 'checked' : ''} onchange="selectOuPick(${spieltag.index},'over')"> Over</label>
+          <label><input type="radio" name="ou-${spieltag.index}" value="under" ${currentOu === 'under' ? 'checked' : ''} onchange="selectOuPick(${spieltag.index},'under')"> Under</label>
         </div>
-        <button onclick="saveOuPick(${spieltag.index})">Over/Under speichern</button>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div class="hint">${MB.Tipp.formatSpieltagOuLockTime(spieltag, cache.schedule)}</div>
+          <button class="subtle-save-btn ${isOuDirty ? 'dirty' : ''}" ${currentOu ? '' : 'disabled'} onclick="saveOuPick(${spieltag.index})">O/U speichern</button>
+        </div>
       `
-      : `<div class="match-row"><span>Over/Under (Linie ${ouLine ?? '?'})</span><span>${ouPick || '—'}</span></div>`;
+      : `<div class="match-row"><span>Over/Under (Linie ${line ?? '?'})</span><span>${savedOu || '—'}</span></div>`;
 
     return `
-      <div class="hint">Tipp auf den Sieger jedes Spiels (auch deine eigenen!) — jedes Spiel sperrt einzeln, 5 Minuten nach seinem geplanten Anpfiff.</div>
+      <div class="hint">Tipp auf den Sieger jedes Spiels (auch deine eigenen!) — sperrt einzeln, 5 Min. nachdem das vorherige Spiel auf demselben Feld eingetragen wurde.</div>
       ${matchRows}
       ${ouHtml}
     `;
-  }
-
-  async function saveMatchPick(matchId) {
-    const tid = MB.getCurrentTournamentId();
-    const val = document.getElementById(`pick-${matchId}`).value;
-    try {
-      await MB.Tipp.savePick(tid, currentPlayer, 'match', matchId, val);
-      render();
-    } catch (e) { alert('Fehler: ' + e.message); }
-  }
-
-  async function saveOuPick(spieltagIndex) {
-    const tid = MB.getCurrentTournamentId();
-    const ouChoice = document.querySelector('input[name="ou"]:checked');
-    if (!ouChoice) { alert('Bitte Over oder Under auswählen.'); return; }
-    try {
-      await MB.Tipp.savePick(tid, currentPlayer, 'overunder', `spieltag-${spieltagIndex}`, ouChoice.value);
-      render();
-    } catch (e) { alert('Fehler: ' + e.message); }
   }
 
   // ---------------------------------------------------------
