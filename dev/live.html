@@ -142,6 +142,59 @@
     .hub-sub { display: none; }
     .cn-grid { grid-template-columns: 1fr; }
   }
+
+  /* Angepinnter Kopfbereich: Hub-Kacheln + "Aktuelles"-Kachel bleiben beim
+     Scrollen sichtbar. --header-h wird per JS auf die tatsächliche
+     Header-Höhe gesetzt (setHeaderHeightVar). */
+  .pinned-top {
+    position: sticky; top: var(--header-h, 58px); z-index: 9;
+    background: #0b1119; padding-top: 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px;
+  }
+  .pinned-top .hub-grid { margin-bottom: 10px; }
+
+  /* AKTUELLES — kompakte Sammel-Kachel: läuft gerade / als Nächstes / Tippspiel-Spitze */
+  .aktuelles-card { margin-bottom: 0; padding: 12px 14px; }
+  .aktuelles-card h2 { font-size: 0.95em; margin: 0 0 8px; }
+  .tipp-top3 {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid #22304340;
+    font-size: 0.82em; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+  }
+  .tipp-top3-label { opacity: 0.65; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.3px; }
+  .tipp-top3-item { white-space: nowrap; }
+  .tipp-top3-item b { color: var(--accent); }
+
+  /* POPUP: "echtes" Playoff-Bracket-Bild */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(4,7,12,0.82);
+    z-index: 100; padding: 24px 10px; overflow-y: auto;
+  }
+  .modal-overlay.open { display: block; }
+  .modal-box {
+    max-width: 1100px; margin: 0 auto; background: var(--card); border: 1px solid #22304355;
+    border-radius: 12px; padding: 16px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .modal-close {
+    position: sticky; top: 0; float: right; width: auto; margin-left: 8px;
+    background: #22304380; padding: 6px 12px; z-index: 2;
+  }
+  .modal-box .playoff-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Eigenständige, in sich geschlossene Bracket-Optik fürs Popup (unabhängig
+     von etwaigen Styles aus styles.css), damit das Bild überall gleich aussieht. */
+  .modal-box .wildcard-summary { display: grid; gap: 8px; margin-bottom: 4px; }
+  .modal-box .bracket-row-flow { display: flex; gap: 14px; min-width: 900px; }
+  .modal-box .bracket-column { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 10px; }
+  .modal-box .column-header { text-align: center; }
+  .modal-box .bracket-title {
+    font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.75;
+    border-bottom: 1px solid #22304355; padding-bottom: 4px;
+  }
+  .modal-box .upper-floor, .modal-box .lower-floor { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .modal-box .bracket-match { background: #0e1622; border-radius: 8px; padding: 8px 10px; border: 1px solid #22304340; }
+  .modal-box .bracket-match.match-active { border-color: var(--accent); }
+  .modal-box .bracket-match-header { display: flex; justify-content: space-between; font-size: 0.62em; opacity: 0.6; margin-bottom: 4px; }
+  .modal-box .bracket-team { display: flex; justify-content: space-between; align-items: center; font-size: 0.8em; padding: 2px 0; }
+  .modal-box .bracket-team.winner { font-weight: 800; color: var(--accent); }
+  .modal-box .bracket-score { font-weight: 700; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -152,6 +205,15 @@
 </header>
 
 <div class="wrap" id="app"></div>
+
+<!-- Popup: das "echte" grafische Playoff-Bracket (wie im Admin-Tool),
+     bei Bedarf aus der textbasierten Playoff-Picture-Karte aufrufbar. -->
+<div class="modal-overlay" id="playoffPictureModal" onclick="if(event.target===this) closePlayoffPictureModal()">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closePlayoffPictureModal()">✕ Schließen</button>
+    <div id="playoffPictureModalContent"></div>
+  </div>
+</div>
 
 <script>
   const isAdmin = window.location.search.includes('Altima');
@@ -170,6 +232,16 @@
   }
   setInterval(tickClock, 1000); tickClock();
 
+  // Angepinnter Kopfbereich (.pinned-top) muss direkt unter dem Header
+  // beginnen — Header-Höhe kann je nach Gerät/Schrift leicht variieren,
+  // daher per JS gemessen statt hart codiert.
+  function setHeaderHeightVar() {
+    const header = document.querySelector('header');
+    if (header) document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+  }
+  window.addEventListener('resize', setHeaderHeightVar);
+  setHeaderHeightVar();
+
   // =========================================================
   // HUB: Schnellzugriff-Kacheln, immer sichtbar (auch vor dem Laden)
   // =========================================================
@@ -186,15 +258,15 @@
           <div class="hub-title">Tippspiel</div>
           <div class="hub-sub">Mittippen</div>
         </a>
-        <a class="hub-card" href="shop.html" target="_blank">
+        <a class="hub-card" href="shop.html">
           <div class="hub-icon">🛍️</div>
           <div class="hub-title">Fan-Shop</div>
           <div class="hub-sub">Merch</div>
         </a>
         <a class="hub-card" href="#articleFeed" onclick="scrollToFeed()">
-          <div class="hub-icon">📜</div>
-          <div class="hub-title">Rückblick</div>
-          <div class="hub-sub">Ältere Artikel</div>
+          <div class="hub-icon">📰</div>
+          <div class="hub-title">Blog</div>
+          <div class="hub-sub">Alle Artikel</div>
         </a>
       </div>`;
   }
@@ -208,10 +280,15 @@
   // Daten geladen sind — kein nacktes "Lade..." mehr.
   function renderShell() {
     document.getElementById('app').innerHTML = `
-      ${renderHubGrid()}
-      <div class="cn-grid">
-        <div class="cn-box"><div class="cn-label">Läuft gerade</div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div></div>
-        <div class="cn-box"><div class="cn-label">Als Nächstes</div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div></div>
+      <div class="pinned-top">
+        ${renderHubGrid()}
+        <div class="card aktuelles-card">
+          <h2>📌 Aktuelles</h2>
+          <div class="cn-grid">
+            <div class="cn-box"><div class="cn-label">Läuft gerade</div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div></div>
+            <div class="cn-box"><div class="cn-label">Als Nächstes</div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:60%"></div></div>
+          </div>
+        </div>
       </div>
       <div class="card">
         <div class="skeleton-line" style="width:50%"></div>
@@ -219,6 +296,7 @@
         <div class="skeleton-line" style="width:70%"></div>
       </div>
     `;
+    setHeaderHeightVar();
   }
   renderShell();
 
@@ -498,7 +576,7 @@
     return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
   }
 
-  function renderCurrentNext() {
+  function renderCurrentNextInner() {
     const upcoming = MB.getUpcomingMatches(state, { limit: 6 });
     const now = nowTimeStr();
     const live = upcoming.filter(m => m.time && m.time <= now).slice(0, 2);
@@ -530,6 +608,38 @@
           <div class="cn-label">Als Nächstes</div>
           ${nextHtml}
         </div>
+      </div>`;
+  }
+
+  // Kompakte Top-3-Zeile fürs Tippspiel, für die angepinnte "Aktuelles"-Kachel.
+  // Nutzt dieselbe Quelle wie die volle Tippstand-Tabelle (MB.Tipp).
+  async function renderTippTop3Html() {
+    const tid = MB.getCurrentTournamentId();
+    if (!tid) return '';
+    try {
+      const allPicks = await MB.Tipp.fetchAllPicks(tid);
+      const ouLines = await MB.Tipp.fetchAllOuLines(tid);
+      const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
+      if (!standings.length) return '';
+      const top3 = standings.slice(0, 3)
+        .map((row, i) => `<span class="tipp-top3-item">${i + 1}. ${row.name} <b>${row.points} P</b></span>`)
+        .join('');
+      return `<div class="tipp-top3"><span class="tipp-top3-label">🎯 Tippspiel</span>${top3}</div>`;
+    } catch (e) {
+      console.warn('Tippspiel-Top3 laden fehlgeschlagen:', e);
+      return '';
+    }
+  }
+
+  // Angepinnte Sammel-Kachel: aktuelle & kommende Spiele + Tippspiel-Spitze,
+  // platzsparend an einem Ort statt über mehrere Karten verteilt.
+  async function renderAktuellesCard() {
+    const top3Html = await renderTippTop3Html();
+    return `
+      <div class="card aktuelles-card">
+        <h2>📌 Aktuelles</h2>
+        ${renderCurrentNextInner()}
+        ${top3Html}
       </div>`;
   }
 
@@ -565,6 +675,100 @@
     }).join('');
   }
 
+  // =========================================================
+  // "ECHTES" PLAYOFF-BRACKET-BILD (Popup) — visuelle Grafik-Variante wie im
+  // Admin-Tool (index.html), hier als eigenständiges, in sich geschlossenes
+  // Markup (siehe .modal-box-Styles) statt der textlichen Zeilenliste aus
+  // renderBracket(). Nutzt nur zentrale MB-Funktionen aus shared.js, damit
+  // Reihenfolge/Seeds/Zeiten exakt mit dem Rest der Seite übereinstimmen.
+  // =========================================================
+  function buildPlayoffPictureHtml() {
+    const m = state.playoffMatches;
+    if (!m || !m.length) return '<div class="empty">Playoffs noch nicht gestartet.</div>';
+
+    const groupEndTime = MB.computePlayoffTimes(state).groupEndTime;
+    const seedByName = MB.getGroupSeedsFinal(state);
+    const playoffLabels = MB.playoffLabels;
+    const getSeed = (player) => (player && player.id !== -1) ? (seedByName.get(player.name) || '') : '';
+
+    const formatPlayer = (player, placeholder, isWinner, isLoser, matchId) => {
+      if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+      if (player.id === -1) return 'BYE';
+      const seed = `<span style="color:${isWinner ? 'var(--accent)' : '#fff'}; font-weight:bold; margin-right:4px;">[${getSeed(player)}]</span>`;
+      const logo = MB.getLogoHtml(player.team);
+      const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+      const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.55; filter:grayscale(1);' : '';
+      return `<span style="${style}">${seed}${player.name} ${logo || ''}</span>`;
+    };
+
+    const renderM = (match, idx, placeholderP1, placeholderP2) => {
+      if (!match) return '';
+      const bye = MB.isByeMatch(match);
+      const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !MB.isFinished(match);
+      const time = MB.addMinutes(groupEndTime, match.offset);
+      const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
+      const hasScore = match.s1 !== null && match.s2 !== null;
+      const w1 = hasScore && match.s1 > match.s2, w2 = hasScore && match.s2 > match.s1;
+      const l1 = hasScore && match.s1 < match.s2, l2 = hasScore && match.s2 < match.s1;
+      return `
+        <div class="bracket-match ${active ? 'match-active' : ''}">
+          <div class="bracket-match-header"><span>${match.phase || ''} | ${time}</span><span>${bye ? 'BYE' : (stadium || '')}</span></div>
+          <div class="bracket-team ${w2 ? 'winner' : ''}"><span>${formatPlayer(match.p2, placeholderP2, w2, l2, match.id)}</span><span class="bracket-score">${bye ? '—' : (match.s2 !== null ? match.s2 : '')}</span></div>
+          <div class="bracket-team ${w1 ? 'winner' : ''}"><span>${formatPlayer(match.p1, placeholderP1, w1, l1, match.id)}</span><span class="bracket-score">${bye ? '—' : (match.s1 !== null ? match.s1 : '')}</span></div>
+        </div>`;
+    };
+
+    let wcSummaryHtml = '<div class="wildcard-summary">';
+    [m[0], m[1], m[2], m[3]].forEach((match, i) => {
+      if (!match || !match.p1) return;
+      wcSummaryHtml += renderM(match, i, 'TBD', 'TBD');
+    });
+    wcSummaryHtml += '</div>';
+
+    const findId = (id) => m.find((x) => x.id === id);
+    const idxOf = (id) => state.playoffMatches.findIndex((x) => x.id === id);
+
+    return `
+      ${wcSummaryHtml}
+      <div class="playoff-grid" style="margin-top:14px;">
+        <div class="bracket-row-flow">
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+            <div class="upper-floor">${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}</div>
+            <div class="lower-floor">${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}</div>
+          </div>
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+            <div class="upper-floor"></div>
+            <div class="lower-floor">${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}</div>
+          </div>
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Finals</div></div>
+            <div class="upper-floor" style="justify-content:center;">${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}</div>
+            <div class="lower-floor" style="justify-content:center;">${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}</div>
+          </div>
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+            <div class="upper-floor"></div>
+            <div class="lower-floor" style="justify-content:center;">${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}${renderM(findId('tb'), idxOf('tb'), playoffLabels.tb.p1, playoffLabels.tb.p2)}</div>
+          </div>
+          <div class="bracket-column" style="margin-left:10px; border-left:2px solid var(--nfl-red); padding-left:12px;">
+            <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+            <div class="upper-floor" style="justify-content:center; height:100%;">${renderM(findId('gf'), idxOf('gf'), playoffLabels.gf.p1, playoffLabels.gf.p2)}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function showPlayoffPictureModal() {
+    document.getElementById('playoffPictureModalContent').innerHTML = buildPlayoffPictureHtml();
+    document.getElementById('playoffPictureModal').classList.add('open');
+  }
+
+  function closePlayoffPictureModal() {
+    document.getElementById('playoffPictureModal').classList.remove('open');
+  }
+
   async function renderTippStandingsHtml() {
     const tid = MB.getCurrentTournamentId();
     if (!tid) return '<div class="empty">Kein Turnier aktiv.</div>';
@@ -583,7 +787,7 @@
       </div>
       <div class="card"><h2>Tabelle</h2>${renderStandings()}</div>
       <div class="card"><h2>Gruppenspielplan</h2>${renderGroupSchedule()}</div>
-      <div class="card"><h2>Playoff Picture</h2>${renderBracket()}</div>
+      <div class="card"><h2>Playoff Picture <button class="btn-secondary" style="width:auto; float:right; font-size:0.7em; padding:4px 10px;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></h2>${renderBracket()}</div>
       <div class="card"><h2>Titelchancen</h2>${renderTitleOdds()}</div>
     `;
   }
@@ -690,19 +894,24 @@
   async function render() {
     const app = document.getElementById('app');
     if (!state.players || state.players.length === 0) {
-      app.innerHTML = `${renderHubGrid()}<div class="card empty">Es läuft aktuell kein Turnier.</div>`;
+      app.innerHTML = `<div class="pinned-top">${renderHubGrid()}</div><div class="card empty">Es läuft aktuell kein Turnier.</div>`;
+      setHeaderHeightVar();
       return;
     }
     const mainContent = viewMode === 'full' ? await renderFullView() : renderArticleFeed();
+    const aktuellesHtml = await renderAktuellesCard();
     app.innerHTML = `
-      ${renderHubGrid()}
+      <div class="pinned-top">
+        ${renderHubGrid()}
+        ${aktuellesHtml}
+      </div>
       ${isAdmin ? `<div class="card"><h2>🏆 Rekord-Momente (Admin)</h2>${renderRecordMoments()}</div>` : ''}
-      ${renderCurrentNext()}
       <div class="view-toggle">
         <button class="btn-secondary" onclick="toggleView()">${viewMode === 'blog' ? '📊 Volle Turnieransicht' : '📰 Zurück zum Blog'}</button>
       </div>
       ${mainContent}
     `;
+    setHeaderHeightVar();
     if (isAdmin) attachRecordMomentPreviews();
   }
 
