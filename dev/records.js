@@ -132,8 +132,10 @@
       records.push({ type: "upset", player: winnerName, opponent: loserName, winnerScore, loserScore });
     }
 
-    // Abgeschossen: Verlierer kam kaum vom Fleck.
-    if (loserScore <= 3) {
+    // Abgeschossen: Verlierer kam kaum vom Fleck — UND der Sieger hat
+    // tatsächlich etwas aufgelegt (sonst wäre auch ein zäher 2:1 ein
+    // "Abschuss", was es offensichtlich nicht ist).
+    if (loserScore <= 3 && winnerScore >= 14) {
       records.push({ type: "shutout", player: winnerName, opponent: loserName, winnerScore, loserScore });
     }
 
@@ -568,7 +570,7 @@
 
     if (!key) return null;
 
-    return { ...record, type: "storyMeme", storyKey: key, player: winner, opponent: loser, score: storyScoreStr(record) };
+    return { ...record, type: "storyMeme", storyKey: key, player: winner, opponent: loser, winner, loser, score: storyScoreStr(record) };
   }
 
   function buildStoryCaptions(record) {
@@ -628,11 +630,89 @@
     if (error) console.warn("Rekord-Moment konnte nicht ausgeblendet werden:", error);
   }
 
+  // ======================================================================
+  // TESTLAUF — erzeugt JEDE hinterlegte Vorlage (klassisch + Story) genau
+  // einmal mit Platzhalter-Daten, statt zufällig eine pro Anlass. So lässt
+  // sich der komplette Pool an einem Stück durchklicken und absegnen,
+  // ohne auf echte Turnierergebnisse warten zu müssen.
+  // ======================================================================
+  const TEST_RECORD_DATA = {
+    allTimeHigh: { player: "Tobi F.", opponent: "Marco", value: 45 },
+    allTimeMargin: { player: "Tobi F.", opponent: "Marco", winnerScore: 42, loserScore: 3 },
+    tournamentMargin: { player: "Tobi F.", opponent: "Marco", winnerScore: 35, loserScore: 10 },
+    winStreak: { player: "Tobi F.", value: 5 },
+    upset: { player: "Jonas", opponent: "Tobi F.", winnerScore: 24, loserScore: 21 },
+    shutout: { player: "Tobi F.", opponent: "Marco", winnerScore: 28, loserScore: 0 },
+    shootout: { player: "Tobi F.", opponent: "Marco", winnerScore: 45, loserScore: 42 },
+    finals: { p1: "Tobi F.", p2: "Marco" },
+    champion: { player: "Tobi F.", opponent: "Marco", winnerScore: 31, loserScore: 24 },
+  };
+
+  const TEST_STORY_DATA = { player: "Tobi F.", opponent: "Marco", winner: "Tobi F.", loser: "Marco", score: "28-24" };
+
+  // Baut die vollständige Job-Liste (Label + Template-ID + fertiger Text),
+  // OHNE schon etwas zu generieren — praktisch auch, um vorher zu sehen,
+  // wie viele Imgflip-Aufrufe ein Testlauf macht.
+  function buildTestMemeJobs() {
+    const jobs = [];
+    Object.entries(IMGFLIP_TEMPLATE_POOLS).forEach(([type, pool]) => {
+      const data = TEST_RECORD_DATA[type] || {};
+      pool.forEach((entry) => {
+        jobs.push({
+          label: `${RECORD_TYPES[type] ? RECORD_TYPES[type].label : type} – ${entry.name}`,
+          filename: `${type}_${entry.name}`.replace(/[^a-z0-9]+/gi, "-"),
+          templateId: entry.id,
+          caption: entry.caption({ ...data, type }),
+        });
+      });
+    });
+    Object.entries(STORY_MEME_TEMPLATES).forEach(([storyKey, pool]) => {
+      pool.forEach((entry) => {
+        jobs.push({
+          label: `Story: ${storyKey} – ${entry.name}`,
+          filename: `story-${storyKey}_${entry.name}`.replace(/[^a-z0-9]+/gi, "-"),
+          templateId: entry.id,
+          caption: entry.caption({ ...TEST_STORY_DATA, storyKey }),
+        });
+      });
+    });
+    return jobs;
+  }
+
+  // Ruft Imgflip NACHEINANDER für jeden Job auf (nicht parallel — schont
+  // das kostenlose Imgflip-Kontingent und vermeidet Rate-Limit-Fehler) und
+  // meldet nach jedem einzelnen Bild den Fortschritt per onProgress, damit
+  // die Oberfläche live mitrendern kann statt am Ende alles auf einmal.
+  async function generateAllTestMemes({ username, password }, onProgress) {
+    if (!username || !password) throw new Error("Imgflip-Zugangsdaten fehlen.");
+    const jobs = buildTestMemeJobs();
+    const results = [];
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
+      let result;
+      try {
+        const body = new URLSearchParams({
+          template_id: String(job.templateId), username, password,
+          text0: job.caption.top, text1: job.caption.bottom,
+        });
+        const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");
+        result = { ...job, url: json.data.url, pageUrl: json.data.page_url, ok: true };
+      } catch (e) {
+        result = { ...job, error: e.message || String(e), ok: false };
+      }
+      results.push(result);
+      if (onProgress) onProgress(result, i + 1, jobs.length);
+    }
+    return results;
+  }
+
   global.MB = global.MB || {};
   global.MB.Records = {
     RECORD_TYPES, MEME_STYLES, IMGFLIP_TEMPLATE_POOLS, MEME_CONTEXT_TAGS, STORY_MEME_TEMPLATES,
     detectRecords, detectMilestoneRecords, buildMemeCaptions, renderMemeCanvas, canvasToBlob,
-    detectStoryMeme, buildStoryCaptions, pickStoryTemplate,
+    detectStoryMeme, buildStoryCaptions, pickStoryTemplate, buildTestMemeJobs, generateAllTestMemes,
     shareOrDownloadMeme, shareOrOpenRemoteImage,
     getImgflipSettings, setImgflipSettings, buildImgflipCaptions, pickImgflipTemplate, generateImgflipMeme,
     pushRecordMoment, fetchRecordMoments, dismissRecordMoment, uploadMemeToStorage,
