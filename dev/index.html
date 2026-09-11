@@ -1296,6 +1296,7 @@ const ringsHtml = rings > 0
                 <input type="number" class="score-input" id="score-group-${gIdx}-home" value="${m.s1 !== null ? m.s1 : ''}"
                        oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
                 ${isAdmin ? `<button type="button" id="score-group-${gIdx}-save" class="score-save-btn" onclick="commitScore('group',${gIdx})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
+                ${(isAdmin && isFinished(m)) ? `<button type="button" class="score-save-btn" onclick="openMemeContextEditorManual('group',${gIdx})" title="Meme generieren">🎭</button>` : ''}
               </div>
               <div class="team-box">
                 ${getLogoHtml(p1.team)} <span>${p1.name}</span>
@@ -1490,12 +1491,20 @@ const ringsHtml = rings > 0
         const addedCount = sessionRecords.length - recordsBeforePopup;
         const autoDetectedEntries = addedCount > 0 ? sessionRecords.slice(0, addedCount) : [];
 
-        // Statt das Popup sofort zu öffnen: erst kurz fragen, ob's zu diesem
-        // Ergebnis eine Story gab (Fehlentscheidung, Ausrede, Comeback, ...).
-        // Nur wenn dort ein Häkchen gesetzt wird, kommt ein zusätzliches
-        // Story-Meme dazu — reines Wegklicken zeigt trotzdem die bereits
-        // automatisch erkannten "klassischen" Rekorde (falls vorhanden).
-        openMemeContextEditor(type, idx, match, autoDetectedEntries);
+        // Reine Rand-Erkennung (Blowout ab 21, knapp bis 3 Punkten) OHNE
+        // Tags — nur um zu wissen, ob sich das Kontext-Popup von selbst
+        // aufdrängt. Passiert nicht bei jedem Spiel, daher ok als Auto-Trigger.
+        let autoStoryPreview = null;
+        try {
+          autoStoryPreview = MB.Records.detectStoryMeme({ homeName, awayName, homeScore: match.s1, awayScore: match.s2, memeContext: {} });
+        } catch (e) {}
+
+        // Normalfall (kein Rekord, kein auffälliger Rand): einfach still
+        // speichern, kein Popup. Auffällige Spiele bekommen den Dialog
+        // automatisch; für alles andere gibt's das 🎭-Icon neben Speichern.
+        if (autoDetectedEntries.length > 0 || autoStoryPreview) {
+          openMemeContextEditor(type, idx, match, autoDetectedEntries);
+        }
 
         // Turnierblog: alle 3 Spiele ein Zwischenstand-Artikel.
         if (MB.Blog.isProgressArticleDue(state, progressArticlesSoFar)) {
@@ -1956,6 +1965,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
                       oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
                ${(isAdmin && isGroupPhaseComplete()) ? `<button type="button" id="score-playoff-${index}-save" class="score-save-btn" onclick="commitScore('playoff',${index})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
+               ${(isAdmin && isFinished(match)) ? `<button type="button" class="score-save-btn" onclick="openMemeContextEditorManual('playoff',${index})" title="Meme generieren">🎭</button>` : ''}
              </div>`;
 
         html += `
@@ -2562,6 +2572,13 @@ function renderRanking() {
       return out;
     }
 
+    function openMemeContextEditorManual(type, idx) {
+      const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
+      const match = targetArray[idx];
+      if (!match || !isFinished(match)) return;
+      openMemeContextEditor(type, idx, match, []);
+    }
+
     // Öffnet den kurzen Checkbox-Dialog nach jedem gespeicherten Ergebnis.
     // autoEntries = bereits automatisch erkannte "klassische" Rekorde (Highscore,
     // Klatsche, Serie, ...) zu genau diesem Speichervorgang — die werden so
@@ -2575,7 +2592,11 @@ function renderRanking() {
       const homeName = type === 'group' ? state.players[match.p1].name : match.p1.name;
       const awayName = type === 'group' ? state.players[match.p2].name : match.p2.name;
       const ctx = { ...defaultMemeContext(), ...(match.memeContext || {}) };
-      summary.textContent = `${homeName} ${match.s1}:${match.s2} ${awayName} — Ergebnis gespeichert. Story markieren (optional)?`;
+      const autoPreview = MB.Records.detectStoryMeme({ homeName, awayName, homeScore: match.s1, awayScore: match.s2, memeContext: {} });
+      const autoHint = autoPreview
+        ? (autoPreview.storyKey === 'blowout' ? '🔥 Automatisch erkannt: großer Blowout. ' : autoPreview.storyKey === 'close' ? '🤏 Automatisch erkannt: hauchdünnes Spiel. ' : '')
+        : '';
+      summary.textContent = `${autoHint}${homeName} ${match.s1}:${match.s2} ${awayName} — Ergebnis gespeichert. Story markieren (optional)?`;
       tagsEl.innerHTML = Object.entries(MB.Records.MEME_CONTEXT_TAGS).map(([key, info]) => `
         <label style="display:flex; align-items:center; gap:7px; padding:8px 9px; border:1px solid rgba(255,255,255,.08); border-radius:8px; background:rgba(255,255,255,.03); cursor:pointer; font-size:.8em;">
           <input type="checkbox" data-meme-tag="${key}" ${ctx[key] ? 'checked' : ''}>

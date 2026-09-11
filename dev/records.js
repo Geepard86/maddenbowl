@@ -350,67 +350,67 @@
   // eines einzigen generischen Textes pro Anlass.
   const IMGFLIP_TEMPLATE_POOLS = {
     allTimeHigh: [
-      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEUER ALLZEIT-HIGHSCORE", bottom: `${r.player}: ${r.value} PUNKTE` }) },
-      { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, als ${r.player}`, bottom: `${r.value} Punkte auflegt` }) },
-      { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} bekommt einen Punkt!`, bottom: `Und noch einen! ${r.value} PUNKTE FÜR ALLE!` }) },
-      { id: 181913649, name: "Drake Hotline Bling", caption: (r) => ({ top: "Der alte Highscore", bottom: `${r.value} Punkte von ${r.player} 🔥` }) },
-      { id: 4087833, name: "Waiting Skeleton", caption: (r) => ({ top: `Warten, bis jemand die ${r.value} Punkte von ${r.player} toppt`, bottom: "..." }) },
+      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEW ALL-TIME HIGH SCORE", bottom: `${r.player}: ${r.value} POINTS` }) },
+      { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, WHEN ${String(r.player || "").toUpperCase()}`, bottom: `DROPS ${r.value} POINTS` }) },
+      { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} GETS A POINT!`, bottom: `AND ANOTHER! ${r.value} POINTS FOR EVERYONE!` }) },
+      { id: 181913649, name: "Drake Hotline Bling", caption: (r) => ({ top: "THE OLD HIGH SCORE", bottom: `${r.value} POINTS BY ${r.player} 🔥` }) },
+      { id: 4087833, name: "Waiting Skeleton", caption: (r) => ({ top: `WAITING FOR SOMEONE TO BEAT ${r.player}'S ${r.value} POINTS`, bottom: "..." }) },
     ],
     allTimeMargin: [
-      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} nach dem ${r.winnerScore}:${r.loserScore}`, bottom: "Ist schon ok, alles im Griff 🔥" }) },
-      { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `nach der ${r.winnerScore}:${r.loserScore}-Demütigung von ${r.opponent}` }) },
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "GRÖSSTE KLATSCHE ALLER ZEITEN", bottom: `${r.player} ${r.winnerScore}:${r.loserScore} ${r.opponent}` }) },
-      { id: 217743513, name: "UNO Draw 25 Cards", caption: (r) => ({ top: `${r.opponent} gegen ${r.player}`, bottom: `zieht ein ${r.winnerScore}:${r.loserScore}` }) },
-      { id: 129242436, name: "Change My Mind", caption: (r) => ({ top: `${r.winnerScore}:${r.loserScore} ist die größte Klatsche aller Zeiten.`, bottom: "Change my mind." }) },
+      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "IT'S FINE, TOTALLY IN CONTROL 🔥" }) },
+      { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `AFTER THE ${r.winnerScore}-${r.loserScore} HUMILIATION OF ${r.opponent}` }) },
+      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "BIGGEST BLOWOUT OF ALL TIME", bottom: `${r.player} ${r.winnerScore}-${r.loserScore} ${r.opponent}` }) },
+      { id: 217743513, name: "UNO Draw 25 Cards", caption: (r) => ({ top: `${r.opponent} vs ${r.player}`, bottom: `DRAWS A ${r.winnerScore}-${r.loserScore}` }) },
+      { id: 129242436, name: "Change My Mind", caption: (r) => ({ top: `${r.winnerScore}-${r.loserScore} IS THE BIGGEST BLOWOUT EVER.`, bottom: "Change my mind." }) },
     ],
     tournamentMargin: [
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "KLATSCHE DES TURNIERS", bottom: `${r.player} ${r.winnerScore}:${r.loserScore} ${r.opponent}` }) },
-      { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `feiert die ${r.winnerScore}:${r.loserScore}-Turnierklatsche gegen ${r.opponent}` }) },
-      { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} gewinnt ${r.winnerScore}:${r.loserScore}`, bottom: "Ich sag ja nur: Rekordklatsche" }) },
-      { id: 161865971, name: "Marked Safe From", caption: (r) => ({ top: `${r.opponent} hat sich safe markiert vor`, bottom: `einer ${r.winnerScore}:${r.loserScore}-Klatsche von ${r.player}` }) },
-      { id: 438680, name: "Batman Slapping Robin", caption: (r) => ({ top: `${r.opponent}: 'War doch nur ein Spiel'`, bottom: `${r.player}: '${r.winnerScore}:${r.loserScore}!'` }) },
+      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "BLOWOUT OF THE TOURNAMENT", bottom: `${r.player} ${r.winnerScore}-${r.loserScore} ${r.opponent}` }) },
+      { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `CELEBRATING THE ${r.winnerScore}-${r.loserScore} BLOWOUT OF ${r.opponent}` }) },
+      { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} WINS ${r.winnerScore}-${r.loserScore}`, bottom: "I'M JUST SAYING: RECORD BLOWOUT" }) },
+      { id: 161865971, name: "Marked Safe From", caption: (r) => ({ top: `${r.opponent} MARKED THEMSELVES SAFE FROM`, bottom: `A ${r.winnerScore}-${r.loserScore} BLOWOUT BY ${r.player}` }) },
+      { id: 438680, name: "Batman Slapping Robin", caption: (r) => ({ top: `${r.opponent}: "IT WAS JUST ONE GAME"`, bottom: `${r.player}: "${r.winnerScore}-${r.loserScore}!"` }) },
     ],
     winStreak: [
-      { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "Ich verliere nicht oft", bottom: `aber wenn, dann nicht gegen ${r.player} (${r.value}x in Folge)` }) },
-      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "SIEGESSERIE", bottom: `${r.player}: ${r.value}x in Folge` }) },
-      { id: 8072285, name: "Doge", caption: (r) => ({ top: `such ${r.player}`, bottom: `much win, ${r.value}x in folge, wow` }) },
-      { id: 252600902, name: "Always Has Been", caption: (r) => ({ top: `Warte, ${r.player} ist seit ${r.value} Spielen ungeschlagen?`, bottom: "Immer schon gewesen" }) },
-      { id: 14371066, name: "Star Wars Yoda", caption: (r) => ({ top: "Gewinnen oder nicht gewinnen", bottom: `${r.value} Siege in Folge für ${r.player}. Kein "versuchen".` }) },
+      { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T LOSE OFTEN", bottom: `BUT WHEN I DO, IT'S NOT TO ${String(r.player || "").toUpperCase()} (${r.value} IN A ROW)` }) },
+      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "WIN STREAK", bottom: `${r.player}: ${r.value} IN A ROW` }) },
+      { id: 8072285, name: "Doge", caption: (r) => ({ top: `such ${r.player}`, bottom: `much win, ${r.value} in a row, wow` }) },
+      { id: 252600902, name: "Always Has Been", caption: (r) => ({ top: `WAIT, ${String(r.player || "").toUpperCase()} IS UNDEFEATED IN ${r.value} GAMES?`, bottom: "ALWAYS HAS BEEN" }) },
+      { id: 14371066, name: "Star Wars Yoda", caption: (r) => ({ top: "WIN, OR WIN NOT", bottom: `${r.value} STRAIGHT WINS FOR ${r.player}. THERE IS NO "TRY".` }) },
     ],
     upset: [
-      { id: 61579, name: "One Does Not Simply", caption: (r) => ({ top: "MAN GEWINNT NICHT EINFACH SO", bottom: `gegen ${r.opponent} — ${r.player} aber schon (${r.winnerScore}:${r.loserScore})` }) },
-      { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, favorisiert,`, bottom: `beim ${r.winnerScore}:${r.loserScore} gegen ${r.player}` }) },
-      { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} schlägt ${r.opponent}`, bottom: "Ich sag ja nur: Überraschung" }) },
-      { id: 102156234, name: "Mocking Spongebob", caption: (r) => ({ top: `${r.opponent} vorher: 'iCh GeWiNNe LoCkEr'`, bottom: `${r.winnerScore}:${r.loserScore} für ${r.player}` }) },
-      { id: 123999232, name: "The Scroll Of Truth", caption: (r) => ({ top: `${r.opponent} war eigentlich gar nicht so gut`, bottom: `wie das ${r.winnerScore}:${r.loserScore} gegen ${r.player} zeigt` }) },
+      { id: 61579, name: "One Does Not Simply", caption: (r) => ({ top: "ONE DOES NOT SIMPLY BEAT", bottom: `${r.opponent} — YET ${r.player} JUST DID (${r.winnerScore}-${r.loserScore})` }) },
+      { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, THE FAVORITE,`, bottom: `AFTER THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player}` }) },
+      { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} BEATS ${r.opponent}`, bottom: "I'M JUST SAYING: UPSET" }) },
+      { id: 102156234, name: "Mocking Spongebob", caption: (r) => ({ top: `${r.opponent} BEFORE THE GAME: "iM wInNiNg tHiS eAsY"`, bottom: `${r.winnerScore}-${r.loserScore} FOR ${r.player}` }) },
+      { id: 123999232, name: "The Scroll Of Truth", caption: (r) => ({ top: `${r.opponent} WASN'T EVEN THAT GOOD`, bottom: `AS THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player} SHOWS` }) },
     ],
     shutout: [
-      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} bei ${r.loserScore} Punkten`, bottom: "Alles im Griff 🔥" }) },
-      { id: 99683372, name: "Sleeping Shaq", caption: (r) => ({ top: `${r.opponent}s Verteidigung`, bottom: `beim ${r.winnerScore}:${r.loserScore} gegen ${r.player}` }) },
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "ABGESCHOSSEN", bottom: `${r.player} ${r.winnerScore}:${r.loserScore} ${r.opponent}` }) },
-      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: `${r.opponent} nach dem ${r.winnerScore}:${r.loserScore}`, bottom: "Alles bestens 🙂" }) },
-      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.opponent, bottom: `kommt gegen ${r.player} nur auf ${r.loserScore} Punkte` }) },
+      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AT ${r.loserScore} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL 🔥" }) },
+      { id: 99683372, name: "Sleeping Shaq", caption: (r) => ({ top: `${r.opponent}'S DEFENSE`, bottom: `DURING THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player}` }) },
+      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "SHUT DOWN", bottom: `${r.player} ${r.winnerScore}-${r.loserScore} ${r.opponent}` }) },
+      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "TOTALLY FINE 🙂" }) },
+      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.opponent, bottom: `ONLY MANAGES ${r.loserScore} POINTS AGAINST ${r.player}` }) },
     ],
     shootout: [
-      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "SHOOTOUT", bottom: `${r.winnerScore}:${r.loserScore} — ${r.player} vs ${r.opponent}` }) },
-      { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} bekommt einen Touchdown!`, bottom: `Und du auch, ${r.opponent}! (${r.winnerScore}:${r.loserScore})` }) },
-      { id: 8072285, name: "Doge", caption: (r) => ({ top: "such offense", bottom: `much ${r.winnerScore}:${r.loserScore}, wow, no defense` }) },
-      { id: 91538330, name: "X, X Everywhere", caption: () => ({ top: "Touchdowns,", bottom: "Touchdowns überall" }) },
-      { id: 124055727, name: "Y'all Got Any More Of That", caption: (r) => ({ top: `${r.player} & ${r.opponent} beim ${r.winnerScore}:${r.loserScore}`, bottom: "Y'all got any more of that offense?" }) },
+      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "SHOOTOUT", bottom: `${r.winnerScore}-${r.loserScore} — ${r.player} VS ${r.opponent}` }) },
+      { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} GETS A TOUCHDOWN!`, bottom: `AND YOU GET ONE TOO, ${r.opponent}! (${r.winnerScore}-${r.loserScore})` }) },
+      { id: 8072285, name: "Doge", caption: (r) => ({ top: "such offense", bottom: `much ${r.winnerScore}-${r.loserScore}, wow, no defense` }) },
+      { id: 91538330, name: "X, X Everywhere", caption: () => ({ top: "TOUCHDOWNS,", bottom: "TOUCHDOWNS EVERYWHERE" }) },
+      { id: 124055727, name: "Y'all Got Any More Of That", caption: (r) => ({ top: `${r.player} & ${r.opponent} AT ${r.winnerScore}-${r.loserScore}`, bottom: "Y'ALL GOT ANY MORE OF THAT OFFENSE?" }) },
     ],
     finals: [
-      { id: 101910402, name: "Who Would Win", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — das Finale ist da` }) },
-      { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — beide wollen den Madden Bowl` }) },
-      { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.p1} vs ${r.p2} im Finale`, bottom: "Ich sag ja nur: Legendär" }) },
-      { id: 110133729, name: "Spiderman Pointing At Spiderman", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — im Finale spiegelgleich` }) },
-      { id: 3218037, name: "This Is Where I'd Put My Trophy If I Had One", caption: (r) => ({ top: `${r.p1} und ${r.p2}`, bottom: "kämpfen um den einzigen Trophäen-Platz" }) },
+      { id: 101910402, name: "Who Would Win", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — THE FINAL IS SET` }) },
+      { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — BOTH WANT THE MADDEN BOWL` }) },
+      { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.p1} VS ${r.p2} IN THE FINAL`, bottom: "I'M JUST SAYING: LEGENDARY" }) },
+      { id: 110133729, name: "Spiderman Pointing At Spiderman", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — MIRROR MATCH IN THE FINAL` }) },
+      { id: 3218037, name: "This Is Where I'd Put My Trophy If I Had One", caption: (r) => ({ top: `${r.p1} AND ${r.p2}`, bottom: "FIGHTING FOR THE ONLY TROPHY SPOT" }) },
     ],
     champion: [
-      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEUER MADDEN BOWL CHAMPION", bottom: r.player }) },
-      { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "Ich verliere nicht oft im Finale", bottom: `aber ${r.player} eben auch nicht (${r.winnerScore}:${r.loserScore})` }) },
-      { id: 29617627, name: "Look At Me", caption: (r) => ({ top: "Schaut mich an", bottom: `ich bin der neue Champion: ${r.player}` }) },
-      { id: 29562797, name: "I'm The Captain Now", caption: (r) => ({ top: "Ich bin jetzt der Captain", bottom: `sagt ${r.player}, frisch gekrönt (${r.winnerScore}:${r.loserScore})` }) },
-      { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `Auf ${r.player}`, bottom: "den neuen Madden Bowl Champion! 🏆" }) },
+      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEW MADDEN BOWL CHAMPION", bottom: r.player }) },
+      { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T LOSE FINALS OFTEN", bottom: `BUT NEITHER DOES ${String(r.player || "").toUpperCase()} (${r.winnerScore}-${r.loserScore})` }) },
+      { id: 29617627, name: "Look At Me", caption: (r) => ({ top: "LOOK AT ME", bottom: `I AM THE NEW CHAMPION: ${r.player}` }) },
+      { id: 29562797, name: "I'm The Captain Now", caption: (r) => ({ top: "I'M THE CAPTAIN NOW", bottom: `SAYS ${r.player}, FRESHLY CROWNED (${r.winnerScore}-${r.loserScore})` }) },
+      { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW MADDEN BOWL CHAMPION! 🏆" }) },
     ],
   };
 
@@ -418,8 +418,8 @@
     if (entry) return entry.caption(record);
     // Fallback (z.B. beim erzwungenen Test mit fester Template-ID ohne Treffer im Pool).
     switch (record.type) {
-      case "allTimeHigh": return { top: "NEUER ALLZEIT-HIGHSCORE", bottom: `${record.player}: ${record.value} PUNKTE` };
-      case "champion": return { top: "NEUER MADDEN BOWL CHAMPION", bottom: `${record.player}` };
+      case "allTimeHigh": return { top: "NEW ALL-TIME HIGH SCORE", bottom: `${record.player}: ${record.value} POINTS` };
+      case "champion": return { top: "NEW MADDEN BOWL CHAMPION", bottom: `${record.player}` };
       default: return { top: "MADDEN BOWL", bottom: "" };
     }
   }
@@ -534,17 +534,18 @@
     return `${w}-${l}`;
   }
 
-  // Wählt die Story-Kategorie NUR aus den vom Admin gesetzten Tags — reine
-  // Zahlenmuster (Punktedifferenz, Außenseitersieg laut Quote) lösen hier
-  // bewusst NICHTS mehr von selbst aus (siehe Kommentar oben).
+  // Wählt die Story-Kategorie primär aus den vom Admin gesetzten Tags.
+  // Zusätzlich: reine Rand-Erkennung (großer Blowout / hauchdünnes Spiel)
+  // wirkt auch OHNE Tag als Auto-Trigger — das betrifft aber nur einen
+  // Bruchteil der Spiele (nicht "jedes Ergebnis"), Tags haben trotzdem
+  // immer Vorrang, wenn zusätzlich noch etwas angehakt wurde.
   function detectStoryMeme(record) {
     if (!record || record.homeScore == null || record.awayScore == null || record.homeScore === record.awayScore) return null;
     const c = record.memeContext || {};
-    if (!Object.keys(MEME_CONTEXT_TAGS).some((k) => c[k])) return null; // kein Häkchen -> kein Story-Meme
 
     const winner = record.homeScore > record.awayScore ? record.homeName : record.awayName;
     const loser = record.homeScore > record.awayScore ? record.awayName : record.homeName;
-    let key = "general", score = 0;
+    let key = null, score = 0;
     const add = (k, pts) => { if (pts > score) { key = k; score = pts; } };
 
     if (c.ref_error) add("ref", 110);
@@ -561,14 +562,11 @@
     if (c.unexpected) add("upset", 90);
     if (c.decision_game) add("decision_game", 82);
 
-    // Bei Gleichstand mehrerer Tags (oder wenn nur Punktemuster übrig bleibt,
-    // aber IMMER erst nachdem mindestens ein Tag gesetzt wurde): Rand als
-    // Tie-Breaker für die Bildauswahl, nicht als eigener Auslöser.
     const margin = Math.abs(record.homeScore - record.awayScore);
-    if (score === 0) {
-      if (margin >= 21) key = "blowout";
-      else if (margin <= 3) key = "close";
-    }
+    if (margin >= 21) add("blowout", 60);
+    else if (margin <= 3) add("close", 55);
+
+    if (!key) return null;
 
     return { ...record, type: "storyMeme", storyKey: key, player: winner, opponent: loser, score: storyScoreStr(record) };
   }
