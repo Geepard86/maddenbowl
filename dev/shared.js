@@ -827,6 +827,56 @@
     return raw * w + 21 * (1 - w);
   }
 
+  // FIX: computeEloMap/moneylineFromProb/decimalOdds fehlten komplett im
+  // Dedupe-Umzug nach shared.js (wurden hier aufgerufen und im MB-Export
+  // gelistet, aber nirgends mehr definiert). Dadurch warf die
+  // `global.MB = {...}`-Zuweisung am Dateiende ein "computeEloMap is not
+  // defined" (ReferenceError) — shared.js brach VOR dem Export ab, `window.MB`
+  // blieb also unvollständig (nur das, was records.js/tipp.js/blog.js/
+  // announcer.js/music.js separat draufsetzen), und jeder MB.*-Aufruf aus
+  // shared.js selbst — inkl. fetchCloudState — fehlte dadurch komplett.
+  function computeEloMap(history, state) {
+    const K = 24;
+    const elo = new Map();
+    const getElo = (name) => (elo.has(name) ? elo.get(name) : 1500);
+
+    const seen = new Set();
+    const allMatches = [];
+    (history.byPlayer || new Map()).forEach((matches) => {
+      matches.forEach((m) => {
+        if (seen.has(m)) return;
+        seen.add(m);
+        allMatches.push(m);
+      });
+    });
+    allMatches.sort((a, b) => (a.season || 0) - (b.season || 0));
+    allMatches.push(...getCurrentMatchesNormalized(state));
+
+    allMatches.forEach((m) => {
+      if (m.homeScore == null || m.awayScore == null) return;
+      const h = m.homePlayer, a = m.awayPlayer;
+      if (!h || !a) return;
+      const Eh = getElo(h), Ea = getElo(a);
+      const expH = 1 / (1 + Math.pow(10, (Ea - Eh) / 400));
+      const resH = m.homeScore > m.awayScore ? 1 : m.homeScore < m.awayScore ? 0 : 0.5;
+      elo.set(h, Eh + K * (resH - expH));
+      elo.set(a, Ea + K * ((1 - resH) - (1 - expH)));
+    });
+
+    (state.players || []).forEach((p) => { if (!elo.has(p.name)) elo.set(p.name, 1500); });
+    return elo;
+  }
+
+  function moneylineFromProb(p) {
+    p = Math.min(0.99, Math.max(0.01, p));
+    return p >= 0.5 ? Math.round((-100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
+  }
+
+  function decimalOdds(p) {
+    p = Math.min(0.99, Math.max(0.01, p));
+    return Math.round((1 / p) * 100) / 100;
+  }
+
   function computeOddsForMatch(history, state, homePlayer, awayPlayer) {
     const elo = computeEloMap(history, state);
     const Eh = elo.get(homePlayer) ?? 1500;
