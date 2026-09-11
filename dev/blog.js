@@ -219,6 +219,11 @@
       "Die erste Saisonhoffnung ist geplatzt. Der Madden Bowl hat seinen ersten Ausgeschiedenen – und natürlich bekommt auch dieser Moment seinen Song.",
     ],
 
+    toiletBowl: [
+      "Die Toilet Bowl ist entschieden – und für die schmerzhafteste Trophäe der Saison gibt es jetzt den passenden Disstrack.",
+      "Der letzte Platz ist vergeben. Wer ihn sich \"verdient\" hat, bekommt dafür keine Blumen, sondern einen Song.",
+    ],
+
     finals: [
       "Das Finale steht. Zwei Spieler sind noch übrig, und jetzt gibt es den Soundtrack für den großen Showdown.",
       "Die letzte Partie der Saison steht fest. Zeit, den Lautstärkeregler hochzudrehen.",
@@ -491,6 +496,7 @@
     const titleLabels = {
       regularSeason: "Die Regular Season ist Geschichte",
       firstElimination: "Der erste Spieler ist raus",
+      toiletBowl: "Die Toilet Bowl ist entschieden",
       finals: "Das Finale steht",
       champion: "Wir haben einen Champion",
     };

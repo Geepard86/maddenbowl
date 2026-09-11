@@ -76,7 +76,8 @@
   }
   .cn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--nfl-red); display: inline-block; animation: pulse 1.6s infinite; }
   @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
-  .cn-match { font-size: 0.88em; margin-bottom: 8px; }
+  .cn-match { font-size: 0.88em; margin-bottom: 8px; cursor: pointer; border-radius: 6px; padding: 2px 4px; margin-left: -4px; margin-right: -4px; transition: background 0.15s ease; }
+  .cn-match:hover { background: #0e162299; }
   .cn-match:last-child { margin-bottom: 0; }
   .cn-teams { font-weight: 700; }
   .cn-meta { font-size: 0.78em; opacity: 0.6; }
@@ -107,7 +108,7 @@
   th, td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #22304333; }
   .empty { opacity: 0.6; font-size: 0.9em; }
   .meme-preview-slot { width: 130px; height: 130px; border-radius: 8px; overflow: hidden; background: #000; flex-shrink: 0; }
-  .meme-preview-slot img, .meme-preview-slot canvas { width: 100%; height: 100%; object-fit: cover; }
+  .meme-preview-slot img, .meme-preview-slot canvas { width: 100%; height: 100%; object-fit: contain; }
   input, select {
     background: #0e1622; color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
     padding: 8px 10px; font-size: 0.9em; width: 100%; box-sizing: border-box;
@@ -119,8 +120,6 @@
   }
   button:active { transform: scale(0.97); }
   button:hover { filter: brightness(1.1); }
-  .view-toggle { display: flex; justify-content: center; margin: 14px 0; }
-  .view-toggle button { width: auto; }
   .article-card {
     background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 14px;
     border: 1px solid #22304340; box-shadow: 0 4px 16px rgba(0,0,0,0.18);
@@ -154,9 +153,8 @@
      Header-Höhe gesetzt (setHeaderHeightVar). */
   .pinned-top {
     position: sticky; top: var(--header-h, 58px); z-index: 9;
-    background: #0b1119; padding-top: 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px;
+    background: #0b1119; padding-top: 10px; padding-bottom: 10px; margin: 0 -16px; padding-left: 16px; padding-right: 16px;
   }
-  .pinned-top .hub-grid { margin-bottom: 10px; }
 
   /* AKTUELLES — kompakte Sammel-Kachel: läuft gerade / als Nächstes / Tippspiel-Spitze */
   .aktuelles-card { margin-bottom: 0; padding: 12px 14px; }
@@ -233,6 +231,14 @@
   </div>
 </div>
 
+<!-- Popup: Quoten/Vergleiche zu einem einzelnen Spiel aus der Aktuelles-Kachel -->
+<div class="modal-overlay" id="matchDetailModal" onclick="if(event.target===this) closeMatchDetailModal()">
+  <div class="modal-box" style="max-width:480px;">
+    <button class="modal-close" onclick="closeMatchDetailModal()">✕ Schließen</button>
+    <div id="matchDetailModalContent"></div>
+  </div>
+</div>
+
 <script>
   const isAdmin = window.location.search.includes('Altima');
   let state = null;
@@ -266,7 +272,7 @@
   function renderHubGrid() {
     return `
       <div class="hub-grid">
-        <a class="hub-card" href="live.html?view=full" target="_blank">
+        <a class="hub-card" href="live.html?view=full">
           <div class="hub-icon">📋</div>
           <div class="hub-title">Spielplan</div>
           <div class="hub-sub">Tabelle & Bracket</div>
@@ -298,8 +304,8 @@
   // Daten geladen sind — kein nacktes "Lade..." mehr.
   function renderShell() {
     document.getElementById('app').innerHTML = `
+      ${renderHubGrid()}
       <div class="pinned-top">
-        ${renderHubGrid()}
         <div class="card aktuelles-card">
           <h2>📌 Aktuelles</h2>
           <div class="cn-grid">
@@ -528,30 +534,30 @@
     });
   }
 
-  // Zentral aus shared.js (MB.getUpcomingMatches) — dieselbe Quelle wie
-  // index.html (Next-Games/Ansage) und wettbuero.html (wettbare Spiele).
-  function getUpcomingWithFacts(limit) {
-    return MB.getUpcomingMatches(state, { limit });
+  // Popup mit Quoten/Vergleichen für ein Spiel aus der Aktuelles-Kachel
+  // (ersetzt die frühere separate "Aktuelle & kommende Spiele"-Karte —
+  // die Kurzinfo steht jetzt direkt in den cn-Boxen, alles Weitere kommt
+  // erst bei Klick, um die Kachel selbst kompakt zu halten).
+  function showMatchDetailModal(idx) {
+    const m = aktuellesModalMatches[idx];
+    if (!m) return;
+    const odds = MB.computeOddsForMatch(history, state, m.homeName, m.awayName);
+    const qHome = MB.decimalOdds(odds.pHome), qAway = MB.decimalOdds(odds.pAway);
+    const facts = MB.pickFlavourFacts(history, state, m.homeName, m.awayName);
+    document.getElementById('matchDetailModalContent').innerHTML = `
+      <div class="match-card" style="margin-bottom:0;">
+        <div class="match-top">
+          <span class="match-teams">${m.awayName} @ ${m.homeName}</span>
+          <span class="match-meta">${m.phase || ''}<br>${m.time} Uhr · ${m.stadium || ''}</span>
+        </div>
+        <div class="odds-line">Quote: <b>${m.homeName}</b> ${qHome} &nbsp;|&nbsp; <b>${m.awayName}</b> ${qAway} &nbsp;|&nbsp; O/U ${odds.ouLine}</div>
+        ${facts.length ? `<div class="facts">${facts.map(f => `<div>💬 ${f}</div>`).join('')}</div>` : ''}
+      </div>`;
+    document.getElementById('matchDetailModal').classList.add('open');
   }
 
-  function renderMatches() {
-    const upcoming = getUpcomingWithFacts(4);
-    if (!upcoming.length) return `<div class="empty">Aktuell keine offenen Spiele.</div>`;
-
-    return upcoming.map((m, i) => {
-      const odds = MB.computeOddsForMatch(history, state, m.homeName, m.awayName);
-      const qHome = MB.decimalOdds(odds.pHome), qAway = MB.decimalOdds(odds.pAway);
-      const facts = MB.pickFlavourFacts(history, state, m.homeName, m.awayName);
-      return `
-        <div class="match-card">
-          <div class="match-top">
-            <span class="match-teams">${m.awayName} @ ${m.homeName} ${i < 2 ? '<span class="tag-live">Next</span>' : ''}</span>
-            <span class="match-meta">${m.phase || ''}<br>${m.time} Uhr · ${m.stadium || ''}</span>
-          </div>
-          <div class="odds-line">Quote: <b>${m.homeName}</b> ${qHome} &nbsp;|&nbsp; <b>${m.awayName}</b> ${qAway} &nbsp;|&nbsp; O/U ${odds.ouLine}</div>
-          ${facts.length ? `<div class="facts">${facts.map(f => `<div>💬 ${f}</div>`).join('')}</div>` : ''}
-        </div>`;
-    }).join('');
+  function closeMatchDetailModal() {
+    document.getElementById('matchDetailModal').classList.remove('open');
   }
 
   function renderTitleOdds() {
@@ -594,26 +600,39 @@
     return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
   }
 
+  // Wird bei jedem Render neu befüllt: die (max. 4) Spiele, die gerade in
+  // den cn-Boxen stehen — per Index aus dem Klick-Handler ansprechbar, damit
+  // das Popup (showMatchDetailModal) weiß, welches Spiel gemeint ist.
+  let aktuellesModalMatches = [];
+
   function renderCurrentNextInner() {
-    const upcoming = MB.getUpcomingMatches(state, { limit: 6 });
+    // WICHTIG: hier ungedeckelt holen (kein limit) und ERST DANACH in
+    // live/next aufteilen. Vorher wurde schon die Quelle auf 6 Spiele
+    // gedeckelt — waren mehr als 6 Spiele überfällig (Anpfiff erreicht,
+    // aber noch kein Ergebnis eingetragen), blieben für "Als Nächstes"
+    // keine Kandidaten mehr übrig, obwohl anderswo auf der Seite (Vollansicht)
+    // durchaus weitere, tatsächlich kommende Spiele auftauchten.
+    const upcoming = MB.getUpcomingMatches(state);
     const now = nowTimeStr();
     const live = upcoming.filter(m => m.time && m.time <= now).slice(0, 2);
     const next = upcoming.filter(m => !m.time || m.time > now).slice(0, 2);
 
-    const liveHtml = live.length
-      ? live.map(m => `
-          <div class="cn-match">
+    aktuellesModalMatches = [...live, ...next];
+    const renderLine = (m, metaLabel) => {
+      const idx = aktuellesModalMatches.indexOf(m);
+      return `
+          <div class="cn-match" onclick="showMatchDetailModal(${idx})">
             <div class="cn-teams">${m.awayName} @ ${m.homeName}</div>
-            <div class="cn-meta">seit ${m.time} Uhr</div>
-          </div>`).join('')
+            <div class="cn-meta">${metaLabel}${m.stadium ? ' · ' + m.stadium : ''}</div>
+          </div>`;
+    };
+
+    const liveHtml = live.length
+      ? live.map(m => renderLine(m, `seit ${m.time} Uhr`)).join('')
       : `<div class="cn-empty">Gerade läuft nichts.</div>`;
 
     const nextHtml = next.length
-      ? next.map(m => `
-          <div class="cn-match">
-            <div class="cn-teams">${m.awayName} @ ${m.homeName}</div>
-            <div class="cn-meta">${m.time || '?'} Uhr</div>
-          </div>`).join('')
+      ? next.map(m => renderLine(m, `${m.time || '?'} Uhr`)).join('')
       : `<div class="cn-empty">Keine weiteren Spiele geplant.</div>`;
 
     return `
@@ -648,7 +667,7 @@
             <span class="tpts">${row.points} P</span>
           </div>`)
         .join('');
-      return `<div class="tipp-top3"><span class="tipp-top3-label">🎯 Tippspiel</span><div class="tipp-top3-row">${top3}</div></div>`;
+      return `<a href="wettbuero.html" style="text-decoration:none; color:inherit; display:block;"><div class="tipp-top3"><span class="tipp-top3-label">🎯 Tippspiel</span><div class="tipp-top3-row">${top3}</div></div></a>`;
     } catch (e) {
       console.warn('Tippspiel-Top3 laden fehlgeschlagen:', e);
       return '';
@@ -793,22 +812,9 @@
     document.getElementById('playoffPictureModal').classList.remove('open');
   }
 
-  async function renderTippStandingsHtml() {
-    const tid = MB.getCurrentTournamentId();
-    if (!tid) return '<div class="empty">Kein Turnier aktiv.</div>';
-    const allPicks = await MB.Tipp.fetchAllPicks(tid);
-    const ouLines = await MB.Tipp.fetchAllOuLines(tid);
-    const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
-    if (!standings.length) return '<div class="empty">Noch keine Tipps abgegeben.</div>';
-    return standings.map((row, i) => `<div class="bracket-row"><span>${i + 1}. ${row.name}</span><span>${row.points} P</span></div>`).join('');
-  }
-
   async function renderFullView() {
     return `
-      <div class="card"><h2>Aktuelle & kommende Spiele</h2>${renderMatches()}</div>
-      <div class="card"><h2>🏈 Tippstand</h2>${await renderTippStandingsHtml()}
-        <div class="hint" style="margin-top:8px;">Mittippen: <a href="wettbuero.html" style="color:var(--accent);">wettbuero.html</a></div>
-      </div>
+      <div style="margin-bottom:12px;"><a href="live.html" style="color:var(--accent); text-decoration:none; font-size:0.85em;">← Zurück zur Live-Seite</a></div>
       <div class="card"><h2>Tabelle</h2>${renderStandings()}</div>
       <div class="card"><h2>Gruppenspielplan</h2>${renderGroupSchedule()}</div>
       <div class="card"><h2>Playoff Picture <button class="btn-secondary" style="width:auto; float:right; font-size:0.7em; padding:4px 10px;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></h2>${renderBracket()}</div>
@@ -910,29 +916,19 @@
     render();
   }
 
-  function toggleView() {
-    viewMode = viewMode === 'blog' ? 'full' : 'blog';
-    render();
-  }
-
   async function render() {
     const app = document.getElementById('app');
     if (!state.players || state.players.length === 0) {
-      app.innerHTML = `<div class="pinned-top">${renderHubGrid()}</div><div class="card empty">Es läuft aktuell kein Turnier.</div>`;
+      app.innerHTML = `${renderHubGrid()}<div class="card empty">Es läuft aktuell kein Turnier.</div>`;
       setHeaderHeightVar();
       return;
     }
     const mainContent = viewMode === 'full' ? await renderFullView() : renderArticleFeed();
     const aktuellesHtml = await renderAktuellesCard();
     app.innerHTML = `
-      <div class="pinned-top">
-        ${renderHubGrid()}
-        ${aktuellesHtml}
-      </div>
+      ${renderHubGrid()}
+      <div class="pinned-top">${aktuellesHtml}</div>
       ${isAdmin ? `<div class="card"><h2>🏆 Rekord-Momente (Admin)</h2>${renderRecordMoments()}</div>` : ''}
-      <div class="view-toggle">
-        <button class="btn-secondary" onclick="toggleView()">${viewMode === 'blog' ? '📊 Volle Turnieransicht' : '📰 Zurück zum Blog'}</button>
-      </div>
       ${mainContent}
     `;
     setHeaderHeightVar();

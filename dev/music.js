@@ -1,11 +1,20 @@
 /* =========================================================================
    MADDEN BOWL — MUSIC (music.js)
    -------------------------------------------------------------------------
-   Generiert an vier Meilensteinen (Regular Season beendet, erstes
-   Ausscheiden, Finals stehen fest, Turniersieger steht fest) einen
-   englischsprachigen Hip-Hop/Rap-Song über die echten Turnier-Fakten via
+   Generiert an fünf Meilensteinen (Regular Season beendet, erstes
+   Ausscheiden, Toilet Bowl entschieden, Finals stehen fest, Turniersieger
+   steht fest) einen Hip-Hop/Rap-Song über die echten Turnier-Fakten via
    ElevenLabs Music API — manuell ausgelöst (kein Auto-Trigger, da Musik
    pro Minute deutlich mehr Credits kostet als Sprache).
+
+   Jeder Meilenstein hat einen eigenen "Modus", der die Textrichtung prägt
+   (siehe MODE_DIRECTIVES): "recap" (reimende Zusammenfassung des bisherigen
+   Turnierverlaufs inkl. Tabelle), "hype" (Hype-Anthem), "brag" (Sieger
+   rappt großspurig aus der Ich-Perspektive) und "diss" (Disstrack für die
+   Toilet-Bowl-Verlierer). Vor dem eigentlichen Generieren lassen sich pro
+   Song Stil, die mitgegebenen Fakten (Text), Sprache, Dauer und ein
+   Testmodus (kein API-Call, keine Credits) anpassen — siehe
+   generateAndStoreSong().
 
    Nutzt denselben ElevenLabs-Key wie announcer.js (MB.Announcer.getTtsSettings()),
    damit nicht zwei getrennte Keys gepflegt werden müssen.
@@ -20,7 +29,8 @@
   // Bewusst lockere Stil-Tags statt starrer Produktionsvorgaben — das
   // Modell darf sich innerhalb des Tags kreativ austoben. Eine Auswahl
   // aktuell gängiger Hip-Hop/Rap-Spielarten, damit nicht jeder Song gleich
-  // klingt.
+  // klingt. Frei für JEDEN Meilenstein wählbar — MILESTONE_META unten legt
+  // nur eine sinnvolle Vorauswahl (defaultStyleId) pro Anlass fest.
   const STYLE_POOL = [
     { id: "trap", label: "Modern Trap", tag: "modern trap hip-hop with hard 808 bass and crisp hi-hats, confident swaggering flow" },
     { id: "drill", label: "Drill", tag: "dark moody drill rap with sliding 808s and tense strings, aggressive commanding delivery" },
@@ -32,14 +42,48 @@
     { id: "pluggnb", label: "PluggnB", tag: "PluggnB style with airy plugg synths and R&B-tinged melodic rap vocals" },
   ];
 
+  // Sprachen, unter denen der Songtext verfasst/vorgetragen werden soll.
+  // "English" bleibt Standard/Vorauswahl (id "en"), lässt sich vor dem
+  // Generieren aber frei umstellen.
+  const LANGUAGE_POOL = [
+    { id: "en", label: "Englisch", name: "English" },
+    { id: "de", label: "Deutsch", name: "German" },
+    { id: "es", label: "Spanisch", name: "Spanish" },
+    { id: "fr", label: "Französisch", name: "French" },
+    { id: "it", label: "Italienisch", name: "Italian" },
+    { id: "pt", label: "Portugiesisch", name: "Portuguese" },
+  ];
+  const DEFAULT_LANGUAGE_ID = "en";
+
+  // Meilenstein-Metadaten: Anzeigename, Text-Modus (siehe MODE_DIRECTIVES)
+  // und eine Stil-Vorauswahl, die zum Anlass passt. Der Modus entscheidet,
+  // wie die Fakten unten in ein Songkonzept übersetzt werden.
+  const MILESTONE_META = {
+    regularSeason: { label: "Regular Season beendet", mode: "recap", defaultStyleId: "conscious" },
+    firstElimination: { label: "Erstes Ausscheiden", mode: "hype", defaultStyleId: "drill" },
+    toiletBowl: { label: "Toilet Bowl entschieden", mode: "diss", defaultStyleId: "drill" },
+    finals: { label: "Finals stehen fest", mode: "hype", defaultStyleId: "trap" },
+    champion: { label: "Turniersieger steht fest", mode: "brag", defaultStyleId: "rage" },
+  };
+  const MILESTONE_ORDER = ["regularSeason", "firstElimination", "toiletBowl", "finals", "champion"];
+
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-  function pickStyle(forcedId) {
+  function pickStyle(forcedId, milestone) {
     if (forcedId) {
       const found = STYLE_POOL.find((s) => s.id === forcedId);
       if (found) return found;
     }
+    const defaultId = MILESTONE_META[milestone] && MILESTONE_META[milestone].defaultStyleId;
+    if (defaultId) {
+      const found = STYLE_POOL.find((s) => s.id === defaultId);
+      if (found) return found;
+    }
     return pick(STYLE_POOL);
+  }
+
+  function pickLanguage(forcedId) {
+    return LANGUAGE_POOL.find((l) => l.id === forcedId) || LANGUAGE_POOL.find((l) => l.id === DEFAULT_LANGUAGE_ID);
   }
 
   // ======================================================================
@@ -60,16 +104,27 @@
     return best;
   }
 
+  // Reimbare Kurzfassung der Abschlusstabelle nach der Regular Season
+  // (Seed-Reihenfolge, Team, Bilanz) — Grundlage für den "recap"-Song.
+  function buildStandingsTable(state, seedByName) {
+    const ranked = [...state.players].sort(
+      (a, b) => (seedByName.get(a.name) || 999) - (seedByName.get(b.name) || 999)
+    );
+    return ranked
+      .map((p) => `#${seedByName.get(p.name) || "?"} ${p.name} (${p.team}) with a record of ${p.wins || 0}-${(p.played || 0) - (p.wins || 0)}`)
+      .join("; ");
+  }
+
   function buildFacts(milestone, state, history) {
     const seedByName = MB.getGroupSeedsFinal(state);
 
     if (milestone === "regularSeason") {
-      const topSeedName = [...seedByName.entries()].find(([, seed]) => seed === 1)?.[0];
-      const topPlayer = state.players.find((p) => p.name === topSeedName);
+      const table = buildStandingsTable(state, seedByName);
       const best = biggestGroupWin(state);
-      let facts = `The regular season of a fantasy football tournament called the Madden Bowl just wrapped up. `;
-      if (topPlayer) facts += `${topPlayer.name}, playing as the ${topPlayer.team}, finished on top of the standings with a record of ${topPlayer.wins}-${(topPlayer.played || 0) - (topPlayer.wins || 0)}. `;
+      let facts = `The regular season of a fantasy football tournament called the Madden Bowl just wrapped up. ` +
+        `Here is the complete final regular-season standings table, from best to worst seed: ${table}. `;
       if (best) facts += `The most dominant win of the season was ${best.winner.name} crushing ${best.loser.name} ${best.winnerScore}-${best.loserScore}. `;
+      facts += `The playoffs are about to begin, seeded exactly in this order.`;
       return facts;
     }
 
@@ -82,6 +137,20 @@
       if (loser) facts += `${loser.name}, playing as the ${loser.team}, is the first one out, `;
       if (winner) facts += `eliminated by ${winner.name} (${winner.team}) with a score of ${eliminatedMatch.s1}-${eliminatedMatch.s2}. `;
       facts += `Their championship run ends here, while everyone else survives another round.`;
+      return facts;
+    }
+
+    if (milestone === "toiletBowl") {
+      const tb = MB.getPlayoffMatch(state, "tb");
+      const winner = MB.winnerOf(tb); // gewinnt das Spiel, landet damit aber auf dem allerletzten Platz
+      const loser = MB.loserOf(tb); // verliert das Spiel, rutscht dadurch in der Tabelle nach oben
+      let facts = `In a fantasy football tournament called the Madden Bowl, the two worst-performing players of the whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. `;
+      if (winner && loser && tb) {
+        facts += `${winner.name} (${winner.team}) beat ${loser.name} (${loser.team}) ${tb.s1}-${tb.s2} in the game itself, ` +
+          `but by the tournament's rules that means ${winner.name} is the one who ends up dead last in the final standings, ` +
+          `while ${loser.name} actually climbs back up the table for losing. `;
+      }
+      facts += `It's the most embarrassing trophy in the Madden Bowl, and everybody knows it.`;
       return facts;
     }
 
@@ -113,16 +182,45 @@
     return "A fantasy football tournament called the Madden Bowl is underway.";
   }
 
-  function buildMusicPrompt(milestone, state, history, styleId) {
-    const style = pickStyle(styleId);
-    const facts = buildFacts(milestone, state, history);
-    const prompt =
-      `${style.tag}. Write and perform an English-language hip-hop track about this real ` +
-      `story from a fantasy football tournament: ${facts} ` +
+  // Textrichtung je Modus — bestimmt WIE (nicht WAS) über die Fakten
+  // gerappt wird. Wird an die Fakten angehängt, bevor der Prompt an die
+  // Music API geht.
+  const MODE_DIRECTIVES = {
+    hype: () =>
       `Make it energetic, confident, and celebratory — a real hype/victory anthem, not a dry ` +
       `news summary. Use the names and the scoreline naturally in the lyrics. You decide the ` +
-      `exact structure, hook, and ad-libs.`;
-    return { prompt, styleLabel: style.label };
+      `exact structure, hook, and ad-libs.`,
+    brag: () =>
+      `Write this from the FIRST-PERSON perspective of the champion themselves ("I", "me", "my") ` +
+      `— cocky, over-the-top, dripping with swagger, like the champion is personally hyping up ` +
+      `their own legendary run and talking down to everyone they beat along the way. Work their ` +
+      `own name and team into the bragging naturally. You decide the exact structure, hook, and ad-libs.`,
+    diss: () =>
+      `Make this a playful DISS TRACK aimed at the two players in the Toilet Bowl and especially ` +
+      `whoever ends up dead last — sharp, cocky trash talk and mockery in the classic rap-battle ` +
+      `tradition. It should sting a little, but stay good-natured, funny, and clearly all in good ` +
+      `sport rather than genuinely mean. Roast the scoreline and the standings. You decide the ` +
+      `exact structure, hook, and ad-libs.`,
+    recap: () =>
+      `This is a RECAP track, not a hype anthem: rap through the story of the tournament so far ` +
+      `like a hype-man sports commentator putting the whole season into rhyme. Walk through the ` +
+      `standings table and the biggest storylines in order, clearly enough that a listener could ` +
+      `follow what happened just from the lyrics — but keep it catchy and rhythmic, not a spoken ` +
+      `list. You decide the exact structure, hook, and ad-libs.`,
+  };
+
+  function buildMusicPrompt(milestone, state, history, styleId, languageId, factsOverride) {
+    const style = pickStyle(styleId, milestone);
+    const language = pickLanguage(languageId);
+    const facts = (factsOverride != null && String(factsOverride).trim() !== "")
+      ? String(factsOverride).trim()
+      : buildFacts(milestone, state, history);
+    const mode = (MILESTONE_META[milestone] && MILESTONE_META[milestone].mode) || "hype";
+    const directive = (MODE_DIRECTIVES[mode] || MODE_DIRECTIVES.hype)();
+    const prompt =
+      `${style.tag}. Write and perform a ${language.name}-language hip-hop track about this real ` +
+      `story from a fantasy football tournament: ${facts} ${directive}`;
+    return { prompt, styleLabel: style.label, languageLabel: language.label, facts, mode };
   }
 
   // ======================================================================
@@ -173,24 +271,63 @@
     if (MB.isGroupPhaseComplete(state)) reached.push("regularSeason");
     const lb1 = MB.getPlayoffMatch(state, "lb1"), lb2 = MB.getPlayoffMatch(state, "lb2");
     if (MB.loserOf(lb1) || MB.loserOf(lb2)) reached.push("firstElimination");
+    const tb = MB.getPlayoffMatch(state, "tb");
+    if (tb && tb.s1 !== null && tb.s2 !== null) reached.push("toiletBowl");
     const gf = MB.getPlayoffMatch(state, "gf");
     if (gf && gf.p1 && gf.p2 && gf.p1.id !== -1 && gf.p2.id !== -1) reached.push("finals");
     if (gf && MB.winnerOf(gf)) reached.push("champion");
     return reached;
   }
 
-  async function generateAndStoreSong({ apiKey, modelId, milestone, state, history, tournamentId, lengthMs, styleId }) {
+  // testMode: true → es wird NICHTS an ElevenLabs geschickt, nichts hochgeladen
+  // und nichts in Supabase gespeichert (kostet also keine Credits). Es kommt
+  // nur der fertig zusammengebaute Prompt/die Fakten zurück, damit man sie vor
+  // dem "scharfen" Generieren gegenlesen kann.
+  //
+  // promptOverride: wird ein bereits fertig zusammengebauter Prompt übergeben
+  // (typischerweise genau der Prompt, der zuvor im Testmodus angezeigt und
+  // ggf. manuell nachjustiert wurde), wird DIESER 1:1 verwendet statt ihn aus
+  // Fakten/Stil/Sprache neu zu bauen — so kommt exakt das bei der Music API
+  // an, was man vorher geprüft hat.
+  async function generateAndStoreSong({ apiKey, modelId, milestone, state, history, tournamentId, lengthMs, styleId, languageId, factsOverride, testMode, promptOverride }) {
+    let prompt, styleLabel, languageLabel, facts;
+    if (promptOverride != null && String(promptOverride).trim() !== "") {
+      prompt = String(promptOverride).trim();
+      const style = pickStyle(styleId, milestone);
+      const language = pickLanguage(languageId);
+      styleLabel = style.label;
+      languageLabel = language.label;
+      facts = factsOverride || "";
+    } else {
+      ({ prompt, styleLabel, languageLabel, facts } = buildMusicPrompt(milestone, state, history, styleId, languageId, factsOverride));
+    }
+
+    if (testMode) {
+      return { testMode: true, prompt, styleLabel, languageLabel, facts };
+    }
     if (!apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
-    const { prompt, styleLabel } = buildMusicPrompt(milestone, state, history, styleId);
     const blob = await generateSong({ apiKey, prompt, lengthMs, modelId });
     const url = await uploadSongToStorage(blob, tournamentId, milestone);
     await saveSongUrl(tournamentId, milestone, url);
-    return { url, styleLabel, prompt };
+    return { url, styleLabel, languageLabel, prompt, facts };
+  }
+
+  // Baut aus einer öffentlichen Supabase-Storage-URL einen echten Download-Link
+  // (statt nur einer Abspiel-URL). Supabase Storage unterstützt dafür den
+  // Query-Parameter "download", der serverseitig Content-Disposition:
+  // attachment setzt — das funktioniert (anders als das HTML "download"-
+  // Attribut) auch bei Cross-Origin-URLs zuverlässig.
+  function buildDownloadUrl(url, filename) {
+    if (!url) return url;
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}download=${encodeURIComponent(filename || "madden-bowl-song.mp3")}`;
   }
 
   global.MB = global.MB || {};
   global.MB.Music = {
-    STYLE_POOL, pickStyle, buildFacts, buildMusicPrompt,
+    STYLE_POOL, LANGUAGE_POOL, DEFAULT_LANGUAGE_ID, MILESTONE_META, MILESTONE_ORDER,
+    pickStyle, pickLanguage, buildFacts, buildMusicPrompt,
     generateSong, uploadSongToStorage, saveSongUrl, detectMilestones, generateAndStoreSong,
+    buildDownloadUrl,
   };
 })(window);

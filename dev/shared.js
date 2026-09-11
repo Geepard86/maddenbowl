@@ -359,6 +359,73 @@
     return A < B ? `${A}|${B}` : `${B}|${A}`;
   }
 
+  // ======================================================================
+  // ZIEHREIHENFOLGE (Draft-Auslosungsreihenfolge)
+  // -------------------------------------------------------------------
+  // Berechnet aus der letzten abgeschlossenen Saison, in welcher Reihenfolge
+  // die Spieler bei der nächsten Auslosung an der Reihe sind:
+  //   1. ToiletBowl-Sieger der Vorsaison (= Vorjahres-Letzter, siehe
+  //      applyToiletBowlOverride) zieht zuerst.
+  //   2. Neulinge (keine Vorjahresdaten) direkt danach, untereinander zufällig.
+  //   3. Übrige Rückkehrer aufsteigend nach Vorjahres-Punkten (schlechter
+  //      zuerst).
+  //   4. Der Titelverteidiger (Vorjahres-Platz 1) zieht als Letztes.
+  // Ohne Historie (z.B. allererstes Turnier) ist die Reihenfolge komplett
+  // zufällig. Gibt eine Liste [{name, reason}] in Ziehreihenfolge zurück —
+  // die Namen entsprechen exakt den übergebenen `names`.
+  // ======================================================================
+  function computeDraftOrder(history, names) {
+    const cleanNames = (names || []).map((n) => normName(n)).filter(Boolean);
+    const seasons = [...((history && history.seasons) || [])].sort((a, b) => (b.season || 0) - (a.season || 0));
+    const lastSeason = seasons[0] || null;
+    const standings = (lastSeason && Array.isArray(lastSeason.standings)) ? lastSeason.standings : [];
+    const byName = new Map(standings.map((s) => [normName(s.name).toLowerCase(), s]));
+    const maxRank = standings.length;
+
+    const shuffle = (arr) => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    const returning = [];
+    const newcomers = [];
+    cleanNames.forEach((name) => {
+      const s = byName.get(name.toLowerCase());
+      if (s) returning.push({ name, rank: Number(s.rank) || maxRank, points: Number(s.points) || 0 });
+      else newcomers.push({ name });
+    });
+
+    returning.sort((a, b) => b.rank - a.rank); // schlechtester Platz zuerst
+    const shuffledNewcomers = shuffle(newcomers);
+    const order = [];
+
+    if (returning.length) {
+      const [worst, ...restReturning] = returning;
+      order.push({
+        name: worst.name,
+        reason: (worst.rank === maxRank && maxRank > 0)
+          ? `ToiletBowl-Sieger ${lastSeason.season} (Platz ${worst.rank})`
+          : `Vorjahresplatz ${worst.rank} (${worst.points} P)`,
+      });
+      shuffledNewcomers.forEach((n) => order.push({ name: n.name, reason: "Neuling" }));
+      restReturning.forEach((r, i) => {
+        const isChamp = i === restReturning.length - 1 && r.rank === 1;
+        order.push({
+          name: r.name,
+          reason: isChamp ? `Titelverteidiger ${lastSeason.season} (${r.points} P)` : `Vorjahresplatz ${r.rank} (${r.points} P)`,
+        });
+      });
+    } else {
+      shuffledNewcomers.forEach((n) => order.push({ name: n.name, reason: "Neuling / keine Vorjahresdaten" }));
+    }
+
+    return order;
+  }
+
   function addMinutes(time, mins) {
     let [h, m] = time.split(":").map(Number);
     let date = new Date();
@@ -653,72 +720,89 @@
     };
   }
 
-  // "Flavour Facts": max. 3 knackige, datenbasierte Fakten zu einem Matchup
+  // "Flavour Facts": datenbasierte, variierte Insights zu einem Matchup.
+  // Auffällige Konstellationen werden bevorzugt; erfunden wird nichts.
   function pickFlavourFacts(history, state, homePlayer, awayPlayer) {
     const H = normName(homePlayer), A = normName(awayPlayer);
-    if (!history.loaded || !H || !A) return [];
+    if (!H || !A) return [];
     const s = computeMatchupStats(history, state, H, A);
-    const facts = [];
+    const h = getPlayerFacts(history, state, H), a = getPlayerFacts(history, state, A);
+    const candidates = [];
+    const add = (text, score = 1) => { if (text) candidates.push({ text, score }); };
+    const one = (v) => Number(v).toFixed(1);
 
     if (s && s.games > 0) {
-      facts.push(`Direktvergleich: ${H} vs ${A} steht bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`);
-      if (s.curGames > 0 && s.curLastWinners.length) {
-        facts.push(`In diesem Turnier gewann zuletzt ${s.curLastWinners[s.curLastWinners.length - 1]}.`);
+      const leader = s.aWins > s.bWins ? H : s.bWins > s.aWins ? A : null;
+      const diff = Math.abs(s.aWins - s.bWins);
+      if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff);
+      else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4);
+
+      if (s.curLastWinners.length) {
+        const recent = s.curLastWinners[s.curLastWinners.length - 1];
+        const streak = s.curLastWinners.slice().reverse().findIndex(x => x !== recent);
+        const n = streak < 0 ? s.curLastWinners.length : streak;
+        add(`Im laufenden Turnier gewann zuletzt ${recent}${n >= 2 ? ` — ${n} direkte Siege in Folge für ${recent}` : ""}.`, 6 + n);
       }
-      if (s.playoff.games >= 1) {
-        facts.push(`Playoff-Bilanz: ${H} vs ${A} ${s.playoff.aWins}:${s.playoff.bWins}.`);
+      if (s.playoff.games >= 2) {
+        if (s.playoff.aWins !== s.playoff.bWins) {
+          const leaderP = s.playoff.aWins > s.playoff.bWins ? H : A;
+          add(`In den Playoffs liegt ${leaderP} im direkten Vergleich vorne: ${s.playoff.aWins}:${s.playoff.bWins}.`, 8);
+        } else add(`In den Playoffs ist das Duell ausgeglichen: ${s.playoff.aWins}:${s.playoff.bWins}.`, 6);
       }
-      if (facts.length < 2) {
-        const avgTotal = s.totals.length ? s.totals.reduce((x, y) => x + y, 0) / s.totals.length : 0;
-        facts.push(`Ø Gesamtpunkte in diesem Duell: ${avgTotal.toFixed(1)}.`);
+      const avgTotal = s.totals.length ? s.totals.reduce((x,y) => x+y, 0) / s.totals.length : 0;
+      if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7);
+      else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7);
+      else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3);
+      const gap = Math.abs(s.aPPG - s.bPPG);
+      if (gap >= 4) {
+        const scorer = s.aPPG > s.bPPG ? H : A, other = scorer === H ? A : H;
+        add(`${scorer} kommt im direkten Vergleich auf ${one(Math.max(s.aPPG, s.bPPG))} Punkte pro Spiel und damit ${one(gap)} mehr als ${other}.`, 7);
       }
-    } else {
-      const h = getPlayerFacts(history, state, H), a = getPlayerFacts(history, state, A);
-      if (h.curGames > 0) facts.push(`${H} im Turnier: ${h.curWins}-${h.curLosses}, Ø ${h.curPPG.toFixed(1)} PPG.`);
-      if (a.curGames > 0) facts.push(`${A} im Turnier: ${a.curWins}-${a.curLosses}, Ø ${a.curPPG.toFixed(1)} PPG.`);
-      if (!facts.length) facts.push("Erstes Duell der beiden — keine Historie vorhanden.");
     }
-    return facts.slice(0, 3);
-  }
 
-  // ======================================================================
-  // QUOTEN-ENGINE (Elo-basiert)
-  // ======================================================================
-  function computeEloMap(history, state) {
-    const elo = new Map();
-    const K = 18;
-    const ensure = (p) => { if (!elo.has(p)) elo.set(p, 1500); };
-    const all = [...history.matches.map((m) => ({ ...m, source: "history" })), ...getCurrentMatchesNormalized(state)];
-    const stageOrder = { group: 0, playoff: 1 };
-    all.sort((a, b) => Number(a.season) - Number(b.season) || (stageOrder[a.stage] || 0) - (stageOrder[b.stage] || 0));
+    const addForm = (name, f) => {
+      if (f.curGames < 2) return;
+      const wr = f.curWins / f.curGames;
+      if (wr >= .75) add(`${name} ist im Turnier stark unterwegs: ${f.curWins}:${f.curLosses}.`, 8);
+      else if (wr <= .25) add(`${name} sucht im Turnier noch den Rhythmus: ${f.curWins}:${f.curLosses}.`, 7);
+      if (f.curAPG != null && f.curAPG <= 18) add(`${name} verteidigt bisher stark und lässt im Schnitt nur ${one(f.curAPG)} Punkte zu.`, 8);
+      else if (f.curPPG != null && f.curPPG >= 28) add(`${name} liefert offensiv ab und kommt auf ${one(f.curPPG)} Punkte pro Spiel.`, 7);
+    };
+    addForm(H, h); addForm(A, a);
 
-    const winProb = (ea, eb) => 1 / (1 + Math.pow(10, (eb - ea) / 400));
-    all.forEach((m) => {
-      const A = m.homePlayer, B = m.awayPlayer;
-      ensure(A); ensure(B);
-      const aScore = m.homeScore, bScore = m.awayScore;
-      if (aScore == null || bScore == null) return;
-      const Ea = elo.get(A), Eb = elo.get(B);
-      const Pa = winProb(Ea, Eb);
-      const Sa = aScore > bScore ? 1 : aScore < bScore ? 0 : 0.5;
-      const mov = Math.abs(aScore - bScore);
-      const movFactor = 1 + Math.min(0.5, mov / 30);
-      const delta = K * movFactor * (Sa - Pa);
-      elo.set(A, Ea + delta);
-      elo.set(B, Eb - delta);
+    const current = getCurrentMatchesNormalized(state);
+    const streakOf = (name) => {
+      const games = current.filter(m => (m.homePlayer === name || m.awayPlayer === name) && m.homeScore != null && m.awayScore != null);
+      let kind = null, n = 0;
+      for (let i = games.length - 1; i >= 0; i--) {
+        const m = games[i], scored = m.homePlayer === name ? m.homeScore : m.awayScore, allowed = m.homePlayer === name ? m.awayScore : m.homeScore;
+        const k = scored > allowed ? 'Sieg' : scored < allowed ? 'Niederlage' : 'Unentschieden';
+        if (kind == null) kind = k; if (k !== kind) break; n++;
+      }
+      return { kind, n };
+    };
+    [H, A].forEach(name => {
+      const st = streakOf(name);
+      if (st.n >= 2 && st.kind === 'Sieg') add(`${name} kommt mit ${st.n} Siegen in Folge in dieses Spiel.`, 11 + st.n);
+      if (st.n >= 2 && st.kind === 'Niederlage') add(`${name} hat zuletzt ${st.n} Spiele in Folge verloren.`, 10 + st.n);
     });
-    return elo;
-  }
 
-  function moneylineFromProb(p) {
-    if (p <= 0 || p >= 1) return null;
-    if (p >= 0.5) return Math.round(-100 * (p / (1 - p)));
-    return Math.round(100 * ((1 - p) / p));
-  }
+    try {
+      const odds = computeOddsForMatch(history, state, H, A);
+      const fav = odds.pHome >= odds.pAway ? H : A, favProb = Math.max(odds.pHome, odds.pAway);
+      if (s && s.games >= 2) {
+        const h2h = fav === H ? s.aWins / s.games : s.bWins / s.games;
+        if (h2h <= .35 && favProb >= .58) add(`Spannender Widerspruch: ${fav} ist laut Modell Favorit, hat im direkten Vergleich aber nur ${Math.round(h2h * 100)}% der Spiele gewonnen.`, 12);
+        else if (h2h >= .65 && favProb < .55) add(`Die Statistik spricht klar für ${fav}: ${Math.round(h2h * 100)}% Siege im direkten Vergleich, obwohl die Quote kaum einen Favoriten ausmacht.`, 11);
+      }
+    } catch (e) {}
 
-  function decimalOdds(p) {
-    if (!p || p <= 0) return null;
-    return Math.max(1.01, 1 / p).toFixed(2);
+    if (!candidates.length) {
+      if (h.curGames > 0) add(`${H} im Turnier: ${h.curWins}:${h.curLosses}, im Schnitt ${one(h.curPPG)} Punkte.`, 2);
+      if (a.curGames > 0) add(`${A} im Turnier: ${a.curWins}:${a.curLosses}, im Schnitt ${one(a.curPPG)} Punkte.`, 2);
+      if (!candidates.length && history.loaded) add("Erstes Duell der beiden — keine gemeinsame Historie vorhanden.", 1);
+    }
+    return candidates.map(x => ({...x, tie: Math.random()})).sort((a,b) => b.score-a.score || b.tie-a.tie).slice(0, Math.min(2, candidates.length)).map(x => x.text);
   }
 
   function normalCdf(x) {
@@ -1021,7 +1105,7 @@
     getSupabaseClient, getCurrentTournamentId, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
     loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
     loadHistorySeasons, loadAndBuildHistory, loadLocalJsonBackups, buildHistoryIndex,
-    normName, pairKey, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
+    normName, pairKey, computeDraftOrder, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,

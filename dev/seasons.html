@@ -57,6 +57,11 @@
       <h1>🗂️ Saison-Verwaltung</h1>
       <div class="card" id="ratingsCard"></div>
       <div class="card">
+        <h2>🎲 Nächstes Turnier vorbereiten</h2>
+        <div class="hint">Spielerliste vorab festlegen — die Ziehreihenfolge für die Live-Auslosung in index.html wird automatisch aus der Vorsaison berechnet (ToiletBowl-Sieger zuerst, dann Neulinge, Titelverteidiger zuletzt) und lässt sich per Drag &amp; Drop anpassen.</div>
+        <div id="draftOrderCard">Lade…</div>
+      </div>
+      <div class="card">
         <h2>✍️ Artikel verfassen</h2>
         <div class="hint">Freier Editor für redaktionelle Blog-Beiträge (Rückblicke, Ankündigungen, alles) — landet direkt im Turnierblog (live.html). Zwei Entwürfe sind schon vorausgefüllt.</div>
         <div id="composerCard"></div>
@@ -68,8 +73,124 @@
       </div>
     `;
     await renderRatingsCard();
+    await renderDraftOrderCard();
     renderComposerCard();
     await loadSeasons();
+  }
+
+  // =========================================================
+  // ZIEHREIHENFOLGE FÜRS NÄCHSTE TURNIER
+  // -------------------------------------------------------------------
+  // Spielerliste + Reihenfolge landen in config.draftOrder des aktuellen
+  // "setup"/"running"-Turniers (siehe MB.pushCloudState) und werden von
+  // index.html beim Öffnen der Live-Auslosung automatisch übernommen.
+  // =========================================================
+  let draftOrderList = []; // [{name, reason}]
+  let draftOrderCloudState = null;
+  let _dragFromIndex = null;
+
+  async function renderDraftOrderCard() {
+    const el = document.getElementById('draftOrderCard');
+    try {
+      draftOrderCloudState = await MB.fetchCloudState();
+    } catch (e) {
+      el.innerHTML = `<div class="hint">Konnte Turnierstatus nicht laden: ${e.message}</div>`;
+      return;
+    }
+    draftOrderList = Array.isArray(draftOrderCloudState.config?.draftOrder)
+      ? draftOrderCloudState.config.draftOrder.map((e) => ({ ...e })) : [];
+    drawDraftOrderCard();
+  }
+
+  function drawDraftOrderCard() {
+    const el = document.getElementById('draftOrderCard');
+    const running = draftOrderCloudState && draftOrderCloudState.players && draftOrderCloudState.players.length > 0;
+
+    const rowsHtml = draftOrderList.length
+      ? draftOrderList.map((entry, i) => `
+          <div class="row-line draft-order-row" draggable="true" data-index="${i}"
+               ondragstart="draftOrderDragStart(event)" ondragover="draftOrderDragOver(event)"
+               ondrop="draftOrderDrop(event)" ondragend="draftOrderDragEnd(event)"
+               style="cursor:grab; background:#161f2c; border-radius:6px; padding:8px 10px; margin-bottom:0;">
+            <span style="width:22px; opacity:0.6; font-weight:bold;">${i + 1}.</span>
+            <span style="flex:1;"><b>${entry.name}</b> <span style="opacity:0.6; font-size:0.85em;">— ${entry.reason || 'manuell'}</span></span>
+            <button class="small secondary" onclick="removeDraftOrderEntry(${i})">✕</button>
+          </div>`).join('')
+      : `<div class="hint">Noch keine Spieler eingetragen.</div>`;
+
+    el.innerHTML = `
+      ${running ? `<div class="hint">⚠️ Es existiert bereits ein Turnier (Setup oder laufend) — Änderungen hier wirken auf genau dieses Turnier.</div>` : ''}
+      <div class="row-line">
+        <input type="text" id="draftOrderNewName" placeholder="Spielername" style="flex:1; min-width:150px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addDraftOrderEntry();}">
+        <button onclick="addDraftOrderEntry()">+ Hinzufügen</button>
+      </div>
+      <div id="draftOrderRows" style="display:flex; flex-direction:column; gap:6px; margin:10px 0;">${rowsHtml}</div>
+      <div class="row-line">
+        <button class="secondary" onclick="recomputeDraftOrder()">🔀 Reihenfolge automatisch berechnen</button>
+        <button onclick="saveDraftOrder()">💾 Speichern</button>
+      </div>
+    `;
+  }
+
+  function addDraftOrderEntry() {
+    const input = document.getElementById('draftOrderNewName');
+    const name = (input.value || '').trim();
+    if (!name) return;
+    if (draftOrderList.some((e) => e.name.toLowerCase() === name.toLowerCase())) { input.value = ''; return; }
+    draftOrderList.push({ name, reason: 'manuell hinzugefügt' });
+    input.value = '';
+    drawDraftOrderCard();
+    document.getElementById('draftOrderNewName').focus();
+  }
+
+  function removeDraftOrderEntry(i) {
+    draftOrderList.splice(i, 1);
+    drawDraftOrderCard();
+  }
+
+  async function recomputeDraftOrder() {
+    const names = draftOrderList.map((e) => e.name);
+    if (!names.length) return;
+    let history;
+    try { history = await MB.loadAndBuildHistory(); }
+    catch (e) { alert('Historie konnte nicht geladen werden: ' + e.message); return; }
+    draftOrderList = MB.computeDraftOrder(history, names);
+    drawDraftOrderCard();
+  }
+
+  async function saveDraftOrder() {
+    if (!draftOrderCloudState) return;
+    const mergedConfig = { ...(draftOrderCloudState.config || {}), draftOrder: draftOrderList };
+    try {
+      await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
+      draftOrderCloudState.config = mergedConfig;
+      alert('Ziehreihenfolge gespeichert — wird beim nächsten Öffnen der Auslosung in index.html automatisch geladen.');
+    } catch (e) {
+      alert('Speichern fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  // ---- Drag & Drop (nativ, keine Library nötig) ----
+  function draftOrderDragStart(ev) {
+    _dragFromIndex = Number(ev.currentTarget.dataset.index);
+    ev.currentTarget.style.opacity = '0.4';
+    ev.dataTransfer.effectAllowed = 'move';
+  }
+  function draftOrderDragOver(ev) {
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+  }
+  function draftOrderDrop(ev) {
+    ev.preventDefault();
+    const toIndex = Number(ev.currentTarget.dataset.index);
+    if (_dragFromIndex === null || _dragFromIndex === toIndex) return;
+    const [moved] = draftOrderList.splice(_dragFromIndex, 1);
+    draftOrderList.splice(toIndex, 0, moved);
+    _dragFromIndex = null;
+    drawDraftOrderCard();
+  }
+  function draftOrderDragEnd(ev) {
+    ev.currentTarget.style.opacity = '1';
   }
 
   // =========================================================
