@@ -2440,6 +2440,7 @@ function renderRanking() {
     // Sprache) nicht verloren geht, bis explizit auf "🔁 Daten neu laden"
     // geklickt wird.
     let songFactsDraft = {};
+    let songLangSelected = {}; // pro Meilenstein gemerkt
 
     function renderSongMomentsPanel() {
       renderSongTestPanel();
@@ -2467,7 +2468,8 @@ function renderRanking() {
           return `<div class="row-line" style="margin-bottom:8px; opacity:0.4;"><span class="label" style="width:180px; display:inline-block;">${MUSIC_MILESTONE_LABELS[key]}</span><span class="hint">noch nicht erreicht</span></div>`;
         }
         if (songFactsDraft[key] == null) {
-          songFactsDraft[key] = MB.Music.buildFacts(key, state, history);
+          songLangSelected[key] = songLangSelected[key] || MB.Music.DEFAULT_LANGUAGE_ID;
+          songFactsDraft[key] = MB.Music.buildFacts(key, state, history, songLangSelected[key]);
         }
         const meta = MB.Music.MILESTONE_META[key];
         return `
@@ -2477,8 +2479,8 @@ function renderRanking() {
               <select id="songStyle-${key}" style="min-width:190px;">
                 ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
               </select>
-              <select id="songLang-${key}" style="min-width:140px;">
-                ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === MB.Music.DEFAULT_LANGUAGE_ID ? 'selected' : ''}>${l.label}</option>`).join('')}
+              <select id="songLang-${key}" style="min-width:140px;" onchange="switchSongLang('${key}', this.value)">
+                ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songLangSelected[key] ? 'selected' : ''}>${l.label}</option>`).join('')}
               </select>
               <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
                 Dauer: <input type="number" id="songLen-${key}" value="60" min="10" max="180" step="5" style="width:60px;"> Sek.
@@ -2514,7 +2516,17 @@ function renderRanking() {
     }
 
     function resetSongFacts(milestone) {
-      songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history);
+      songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history, songLangSelected[milestone]);
+      renderSongMomentsPanel();
+    }
+
+    // Sprachwechsel im echten Song-Panel: Fakten neu (in der neuen Sprache)
+    // laden, sonst bliebe z.B. beim Umschalten auf Deutsch der englische
+    // Text im Feld stehen und würde als factsOverride die Übersetzung
+    // wieder überschreiben.
+    function switchSongLang(milestone, langId) {
+      songLangSelected[milestone] = langId;
+      songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history, langId);
       renderSongMomentsPanel();
     }
 
@@ -2579,6 +2591,7 @@ function renderRanking() {
     }
 
     let songTestSelected = MB.Music.MILESTONE_ORDER[0];
+    let songTestLangSelected = MB.Music.DEFAULT_LANGUAGE_ID;
     let songTestFactsDraft = {};
 
     function renderSongTestPanel() {
@@ -2596,7 +2609,7 @@ function renderRanking() {
       }
 
       const key = songTestSelected;
-      if (songTestFactsDraft[key] == null) songTestFactsDraft[key] = MB.Music.TEST_FACTS[key];
+      if (songTestFactsDraft[key] == null) songTestFactsDraft[key] = MB.Music.getTestFacts(key, songTestLangSelected);
       const meta = MB.Music.MILESTONE_META[key];
 
       el.innerHTML = `
@@ -2612,8 +2625,8 @@ function renderRanking() {
           <select id="songTestStyle" style="min-width:190px;">
             ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
           </select>
-          <select id="songTestLang" style="min-width:140px;">
-            ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === MB.Music.DEFAULT_LANGUAGE_ID ? 'selected' : ''}>${l.label}</option>`).join('')}
+          <select id="songTestLang" style="min-width:140px;" onchange="switchSongTestLang(this.value)">
+            ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songTestLangSelected ? 'selected' : ''}>${l.label}</option>`).join('')}
           </select>
           <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
             Dauer: <input type="number" id="songTestLen" value="30" min="10" max="180" step="5" style="width:60px;"> Sek.
@@ -2641,8 +2654,17 @@ function renderRanking() {
       renderSongTestPanel();
     }
 
+    // Sprachwechsel setzt die Platzhalter-Fakten für den aktuellen Meilenstein
+    // automatisch auf die passende Sprache zurück (sonst blieben z.B. beim
+    // Umschalten auf Deutsch die alten englischen Fakten im Textfeld stehen).
+    function switchSongTestLang(langId) {
+      songTestLangSelected = langId;
+      songTestFactsDraft[songTestSelected] = MB.Music.getTestFacts(songTestSelected, langId);
+      renderSongTestPanel();
+    }
+
     function resetSongTestFacts() {
-      songTestFactsDraft[songTestSelected] = MB.Music.TEST_FACTS[songTestSelected];
+      songTestFactsDraft[songTestSelected] = MB.Music.getTestFacts(songTestSelected, songTestLangSelected);
       renderSongTestPanel();
     }
 
@@ -2653,7 +2675,7 @@ function renderRanking() {
       const facts = document.getElementById('songTestFacts').value;
       songTestFactsDraft[key] = facts; // Editierten Text über Re-Renders hinweg behalten
 
-      const { prompt } = MB.Music.buildMusicPrompt(key, null, null, styleId, languageId, facts || MB.Music.TEST_FACTS[key]);
+      const { prompt } = MB.Music.buildMusicPrompt(key, null, null, styleId, languageId, facts || MB.Music.getTestFacts(key, languageId));
       document.getElementById('songTestPromptPreview').value = prompt;
       document.getElementById('songTestPreview').style.display = 'block';
     }

@@ -426,15 +426,28 @@
     return pick(pool);
   }
 
+  // Schickt Text über 'boxes[]' statt text0/text1 — Imgflip erlaubt jeder
+  // Vorlage eigene gespeicherte Standard-Schrifteinstellungen, und die sind
+  // nicht immer gut lesbar (z.B. bei "Grant Gustin Over Grave" offenbar
+  // dunkler Text, kaum vom Hintergrund zu unterscheiden). Mit 'boxes[]'
+  // erzwingen wir für JEDE Vorlage weiße Schrift mit schwarzem Rand, statt
+  // uns auf die (unbekannten) Vorlagen-Defaults zu verlassen.
+  function buildImgflipBody(username, password, templateId, top, bottom) {
+    const body = new URLSearchParams({ template_id: String(templateId), username, password });
+    [top, bottom].forEach((text, i) => {
+      body.append(`boxes[${i}][text]`, text || "");
+      body.append(`boxes[${i}][color]`, "#FFFFFF");
+      body.append(`boxes[${i}][outline_color]`, "#000000");
+    });
+    return body;
+  }
+
   async function generateImgflipMeme(record, { username, password, templateId } = {}) {
     if (!username || !password) throw new Error("Imgflip-Zugangsdaten fehlen.");
     const entry = record.type === "storyMeme" ? pickStoryTemplate(record, templateId) : pickImgflipTemplate(record.type, templateId);
     const caps = record.type === "storyMeme" ? buildStoryCaptions(record) : buildImgflipCaptions(record, entry.caption ? entry : null);
     const tid = entry.id;
-    const body = new URLSearchParams({
-      template_id: String(tid), username, password,
-      text0: caps.top, text1: caps.bottom,
-    });
+    const body = buildImgflipBody(username, password, tid, caps.top, caps.bottom);
     const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
     const json = await res.json();
     if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");
@@ -724,10 +737,7 @@
       const job = jobs[i];
       let result;
       try {
-        const body = new URLSearchParams({
-          template_id: String(job.templateId), username, password,
-          text0: job.caption.top, text1: job.caption.bottom,
-        });
+        const body = buildImgflipBody(username, password, job.templateId, job.caption.top, job.caption.bottom);
         const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
         const json = await res.json();
         if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");

@@ -48,10 +48,6 @@
   const LANGUAGE_POOL = [
     { id: "en", label: "Englisch", name: "English" },
     { id: "de", label: "Deutsch", name: "German" },
-    { id: "es", label: "Spanisch", name: "Spanish" },
-    { id: "fr", label: "Französisch", name: "French" },
-    { id: "it", label: "Italienisch", name: "Italian" },
-    { id: "pt", label: "Portugiesisch", name: "Portuguese" },
   ];
   const DEFAULT_LANGUAGE_ID = "en";
 
@@ -106,21 +102,31 @@
 
   // Reimbare Kurzfassung der Abschlusstabelle nach der Regular Season
   // (Seed-Reihenfolge, Team, Bilanz) — Grundlage für den "recap"-Song.
-  function buildStandingsTable(state, seedByName) {
+  function buildStandingsTable(state, seedByName, lang) {
     const ranked = [...state.players].sort(
       (a, b) => (seedByName.get(a.name) || 999) - (seedByName.get(b.name) || 999)
     );
     return ranked
-      .map((p) => `#${seedByName.get(p.name) || "?"} ${p.name} (${p.team}) with a record of ${p.wins || 0}-${(p.played || 0) - (p.wins || 0)}`)
+      .map((p) => lang === "de"
+        ? `#${seedByName.get(p.name) || "?"} ${p.name} (${p.team}) mit einer Bilanz von ${p.wins || 0}-${(p.played || 0) - (p.wins || 0)}`
+        : `#${seedByName.get(p.name) || "?"} ${p.name} (${p.team}) with a record of ${p.wins || 0}-${(p.played || 0) - (p.wins || 0)}`)
       .join("; ");
   }
 
-  function buildFacts(milestone, state, history) {
+  function buildFacts(milestone, state, history, languageId) {
     const seedByName = MB.getGroupSeedsFinal(state);
+    const lang = languageId === "de" ? "de" : "en";
 
     if (milestone === "regularSeason") {
-      const table = buildStandingsTable(state, seedByName);
+      const table = buildStandingsTable(state, seedByName, lang);
       const best = biggestGroupWin(state);
+      if (lang === "de") {
+        let facts = `Die Regular Season eines Fantasy-Football-Turniers namens Madden Bowl ist gerade zu Ende gegangen. ` +
+          `Hier die komplette Abschlusstabelle, vom besten zum schlechtesten Seed: ${table}. `;
+        if (best) facts += `Der deutlichste Sieg der Saison war ${best.winner.name}s ${best.winnerScore}:${best.loserScore} gegen ${best.loser.name}. `;
+        facts += `Die Playoffs beginnen gleich, gesetzt genau in dieser Reihenfolge.`;
+        return facts;
+      }
       let facts = `The regular season of a fantasy football tournament called the Madden Bowl just wrapped up. ` +
         `Here is the complete final regular-season standings table, from best to worst seed: ${table}. `;
       if (best) facts += `The most dominant win of the season was ${best.winner.name} crushing ${best.loser.name} ${best.winnerScore}-${best.loserScore}. `;
@@ -133,6 +139,13 @@
       const loser = MB.loserOf(lb1) || MB.loserOf(lb2);
       const eliminatedMatch = MB.loserOf(lb1) ? lb1 : lb2;
       const winner = MB.winnerOf(eliminatedMatch);
+      if (lang === "de") {
+        let facts = `In einem Fantasy-Football-Turnier namens Madden Bowl ist gerade der allererste Spieler aus den Playoffs ausgeschieden. `;
+        if (loser) facts += `${loser.name}, mit den ${loser.team}, ist als Erster raus, `;
+        if (winner) facts += `ausgeschieden gegen ${winner.name} (${winner.team}) mit einem Ergebnis von ${eliminatedMatch.s1}:${eliminatedMatch.s2}. `;
+        facts += `Der Titeltraum endet hier, während alle anderen eine weitere Runde überleben.`;
+        return facts;
+      }
       let facts = `In a fantasy football tournament called the Madden Bowl, the very first player has just been eliminated from the playoffs. `;
       if (loser) facts += `${loser.name}, playing as the ${loser.team}, is the first one out, `;
       if (winner) facts += `eliminated by ${winner.name} (${winner.team}) with a score of ${eliminatedMatch.s1}-${eliminatedMatch.s2}. `;
@@ -144,6 +157,16 @@
       const tb = MB.getPlayoffMatch(state, "tb");
       const winner = MB.winnerOf(tb); // gewinnt das Spiel, landet damit aber auf dem allerletzten Platz
       const loser = MB.loserOf(tb); // verliert das Spiel, rutscht dadurch in der Tabelle nach oben
+      if (lang === "de") {
+        let facts = `In einem Fantasy-Football-Turnier namens Madden Bowl sind gerade die zwei schwächsten Spieler des ganzen Turniers in der "Toilet Bowl" aufeinandergetroffen — einem Spiel, das niemand gewinnen will. `;
+        if (winner && loser && tb) {
+          facts += `${winner.name} (${winner.team}) hat gegen ${loser.name} (${loser.team}) ${tb.s1}:${tb.s2} im Spiel selbst gewonnen, ` +
+            `aber nach den Turnierregeln heißt das, dass ${winner.name} in der Endtabelle ganz unten landet, ` +
+            `während ${loser.name} durch die Niederlage in der Tabelle wieder nach oben klettert. `;
+        }
+        facts += `Es ist die peinlichste Trophäe im Madden Bowl, und das weiß auch jeder.`;
+        return facts;
+      }
       let facts = `In a fantasy football tournament called the Madden Bowl, the two worst-performing players of the whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. `;
       if (winner && loser && tb) {
         facts += `${winner.name} (${winner.team}) beat ${loser.name} (${loser.team}) ${tb.s1}-${tb.s2} in the game itself, ` +
@@ -157,6 +180,17 @@
     if (milestone === "finals") {
       const gf = MB.getPlayoffMatch(state, "gf");
       const p1 = gf?.p1, p2 = gf?.p2;
+      if (lang === "de") {
+        let facts = `Das große Finale eines Fantasy-Football-Turniers namens Madden Bowl, "der Madden Bowl", steht fest. `;
+        if (p1 && p2) {
+          facts += `${p1.name} (${p1.team}) trifft auf ${p2.name} (${p2.team}) um die Meisterschaft. `;
+          try {
+            const flavour = MB.pickFlavourFacts(history, state, p1.name, p2.name);
+            if (flavour && flavour.length) facts += flavour[0] + " ";
+          } catch (e) {}
+        }
+        return facts;
+      }
       let facts = `The grand final of a fantasy football tournament called the Madden Bowl, "The Madden Bowl", is set. `;
       if (p1 && p2) {
         facts += `${p1.name} (${p1.team}) faces off against ${p2.name} (${p2.team}) for the championship. `;
@@ -171,6 +205,14 @@
     if (milestone === "champion") {
       const gf = MB.getPlayoffMatch(state, "gf");
       const champion = MB.winnerOf(gf), runnerUp = MB.loserOf(gf);
+      if (lang === "de") {
+        let facts = `Ein Fantasy-Football-Turnier namens Madden Bowl hat seinen Champion gekrönt. `;
+        if (champion && runnerUp && gf) {
+          facts += `${champion.name}, mit den ${champion.team}, hat das Finale gegen ${runnerUp.name} (${runnerUp.team}) mit einem Endstand von ${Math.max(gf.s1, gf.s2)}:${Math.min(gf.s1, gf.s2)} gewonnen. `;
+          facts += `${champion.name} ist der neue Madden-Bowl-Champion, der beste Spieler des gesamten Turniers.`;
+        }
+        return facts;
+      }
       let facts = `A fantasy football tournament called the Madden Bowl has crowned its champion. `;
       if (champion && runnerUp && gf) {
         facts += `${champion.name}, playing as the ${champion.team}, won the championship game against ${runnerUp.name} (${runnerUp.team}) with a final score of ${Math.max(gf.s1, gf.s2)}-${Math.min(gf.s1, gf.s2)}. `;
@@ -179,7 +221,7 @@
       return facts;
     }
 
-    return "A fantasy football tournament called the Madden Bowl is underway.";
+    return lang === "de" ? "Ein Fantasy-Football-Turnier namens Madden Bowl läuft gerade." : "A fantasy football tournament called the Madden Bowl is underway.";
   }
 
   // Textrichtung je Modus — bestimmt WIE (nicht WAS) über die Fakten
@@ -243,7 +285,7 @@
     const language = pickLanguage(languageId);
     const facts = (factsOverride != null && String(factsOverride).trim() !== "")
       ? String(factsOverride).trim()
-      : buildFacts(milestone, state, history);
+      : buildFacts(milestone, state, history, languageId);
     const mode = (MILESTONE_META[milestone] && MILESTONE_META[milestone].mode) || "hype";
     const isGerman = language.id === "de";
     const directives = isGerman ? MODE_DIRECTIVES_DE : MODE_DIRECTIVES;
@@ -394,6 +436,34 @@
       `the new Madden Bowl champion, the best player of the whole tournament.`,
   };
 
+  const TEST_FACTS_DE = {
+    regularSeason: `Die Regular Season eines Fantasy-Football-Turniers namens Madden Bowl ist gerade zu Ende ` +
+      `gegangen. Hier die komplette Abschlusstabelle, vom besten zum schlechtesten Seed: ` +
+      `#1 Tobi F. (Chiefs) mit einer Bilanz von 5-1; #2 Marco (49ers) mit einer Bilanz von 4-2; ` +
+      `#3 Jonas (Cowboys) mit einer Bilanz von 3-3; #4 Kevin (Eagles) mit einer Bilanz von 3-3; ` +
+      `#5 Nico (Bills) mit einer Bilanz von 2-4; #6 Basti (Ravens) mit einer Bilanz von 1-5. ` +
+      `Der deutlichste Sieg der Saison war Tobi F.s 42:7 gegen Basti. ` +
+      `Die Playoffs beginnen gleich, gesetzt genau in dieser Reihenfolge.`,
+    firstElimination: `In einem Fantasy-Football-Turnier namens Madden Bowl ist gerade der allererste Spieler aus ` +
+      `den Playoffs ausgeschieden. Nico, mit den Bills, ist als Erster raus, ausgeschieden gegen Kevin (Eagles) ` +
+      `mit einem Ergebnis von 24:14. Der Titeltraum endet hier, während alle anderen eine weitere Runde überleben.`,
+    toiletBowl: `In einem Fantasy-Football-Turnier namens Madden Bowl sind gerade die zwei schwächsten Spieler ` +
+      `des ganzen Turniers in der "Toilet Bowl" aufeinandergetroffen — einem Spiel, das niemand gewinnen will. ` +
+      `Basti (Ravens) hat gegen Nico (Bills) 17:13 im Spiel selbst gewonnen, aber nach den Turnierregeln heißt ` +
+      `das, dass Basti in der Endtabelle ganz unten landet, während Nico durch die Niederlage in der Tabelle ` +
+      `wieder nach oben klettert. Es ist die peinlichste Trophäe im Madden Bowl, und das weiß auch jeder.`,
+    finals: `Das große Finale eines Fantasy-Football-Turniers namens Madden Bowl, "der Madden Bowl", steht fest. ` +
+      `Tobi F. (Chiefs) trifft auf Marco (49ers) um die Meisterschaft. Die beiden haben ihre zwei ` +
+      `Regular-Season-Duelle geteilt, das hier ist das Rückspiel, das alles klärt.`,
+    champion: `Ein Fantasy-Football-Turnier namens Madden Bowl hat seinen Champion gekrönt. Tobi F., mit den ` +
+      `Chiefs, hat das Finale gegen Marco (49ers) mit einem Endstand von 31:24 gewonnen. Tobi F. ist der neue ` +
+      `Madden-Bowl-Champion, der beste Spieler des gesamten Turniers.`,
+  };
+
+  function getTestFacts(milestone, languageId) {
+    return (languageId === "de" ? TEST_FACTS_DE[milestone] : TEST_FACTS[milestone]) || TEST_FACTS[milestone];
+  }
+
   // Wie generateAndStoreSong(), aber bewusst OHNE saveSongUrl()-Aufruf —
   // ein Testsong landet also NIE in tournaments.songs und kann daher auch
   // nie versehentlich einen später real erreichten Meilenstein-Song
@@ -408,7 +478,7 @@
       const language = pickLanguage(languageId);
       styleLabel = style.label; languageLabel = language.label; facts = factsOverride || "";
     } else {
-      const effectiveFacts = (factsOverride != null && String(factsOverride).trim() !== "") ? factsOverride : TEST_FACTS[milestone];
+      const effectiveFacts = (factsOverride != null && String(factsOverride).trim() !== "") ? factsOverride : getTestFacts(milestone, languageId);
       ({ prompt, styleLabel, languageLabel, facts } = buildMusicPrompt(milestone, null, null, styleId, languageId, effectiveFacts));
     }
     if (!apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
@@ -419,7 +489,7 @@
 
   global.MB = global.MB || {};
   global.MB.Music = {
-    STYLE_POOL, LANGUAGE_POOL, DEFAULT_LANGUAGE_ID, MILESTONE_META, MILESTONE_ORDER, TEST_FACTS,
+    STYLE_POOL, LANGUAGE_POOL, DEFAULT_LANGUAGE_ID, MILESTONE_META, MILESTONE_ORDER, TEST_FACTS, TEST_FACTS_DE, getTestFacts,
     pickStyle, pickLanguage, buildFacts, buildMusicPrompt,
     generateSong, uploadSongToStorage, saveSongUrl, detectMilestones, generateAndStoreSong, generateTestSong,
     buildDownloadUrl,
