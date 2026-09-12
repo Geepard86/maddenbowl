@@ -187,6 +187,17 @@
             <div id="songMomentsPanel"></div>
           </div>
 
+          <!-- Testet die Song-Engine für JEDEN Meilenstein, unabhängig vom
+               echten Turnierstand — mit Platzhalter-Fakten (TEST_FACTS).
+               "Testweise senden" erzeugt einen ECHTEN Song zum Anhören
+               (kostet Credits), speichert ihn aber NIE als offiziellen
+               Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht
+               oben in "Song-Momente" nicht auf). -->
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🧪 Song-Engine testen</h2>
+            <div id="songTestPanel"></div>
+          </div>
+
           <div class="card" style="margin-bottom:15px;">
             <h2>🖼️ Meme-Einstellungen</h2>
             <div id="memeSettingsPanel"></div>
@@ -2431,6 +2442,7 @@ function renderRanking() {
     let songFactsDraft = {};
 
     function renderSongMomentsPanel() {
+      renderSongTestPanel();
       const el = document.getElementById('songMomentsPanel');
       if (!el) return;
 
@@ -2563,6 +2575,109 @@ function renderRanking() {
         MB.Announcer.announceSong(milestone, result.url, { voiceId: settings.voiceIdResult });
       } catch (e) {
         alert('Song-Generierung fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    let songTestSelected = MB.Music.MILESTONE_ORDER[0];
+    let songTestFactsDraft = {};
+
+    function renderSongTestPanel() {
+      const el = document.getElementById('songTestPanel');
+      if (!el) return;
+
+      if (!ttsUnlocked) {
+        el.innerHTML = `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren (gleiches Passwort wie Ansage-Engine)</button>`;
+        return;
+      }
+      const settings = MB.Announcer.getTtsSettings();
+      if (settings.provider !== 'elevenlabs' || !settings.apiKey) {
+        el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.75;">Erst unter "🎙️ Ansage-Engine" ElevenLabs mit API-Key einrichten — dann geht's hier weiter.</div>`;
+        return;
+      }
+
+      const key = songTestSelected;
+      if (songTestFactsDraft[key] == null) songTestFactsDraft[key] = MB.Music.TEST_FACTS[key];
+      const meta = MB.Music.MILESTONE_META[key];
+
+      el.innerHTML = `
+        <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:10px;">
+          Zum Ausprobieren, egal wie weit das echte Turnier schon ist — mit erfundenen Platzhalter-Namen/-Ergebnissen.
+          "Testweise senden" erzeugt einen echten Song zum Anhören (kostet Credits), speichert ihn aber
+          NICHT als offiziellen Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht oben nicht auf).
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+          <select id="songTestMilestone" style="min-width:190px;" onchange="switchSongTestMilestone(this.value)">
+            ${MB.Music.MILESTONE_ORDER.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${MUSIC_MILESTONE_LABELS[k]}</option>`).join('')}
+          </select>
+          <select id="songTestStyle" style="min-width:190px;">
+            ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
+          </select>
+          <select id="songTestLang" style="min-width:140px;">
+            ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === MB.Music.DEFAULT_LANGUAGE_ID ? 'selected' : ''}>${l.label}</option>`).join('')}
+          </select>
+          <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
+            Dauer: <input type="number" id="songTestLen" value="30" min="10" max="180" step="5" style="width:60px;"> Sek.
+          </label>
+        </div>
+        <textarea id="songTestFacts" rows="4" style="width:100%; font-size:0.82em; box-sizing:border-box;">${songTestFactsDraft[key]}</textarea>
+        <div class="hint" style="font-size:0.75em; opacity:0.65; margin:4px 0 8px;">Platzhalter-Fakten — frei anpassbar, bevor der Prompt gebaut wird.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn-secondary" style="width:auto;" onclick="resetSongTestFacts()">🔁 Platzhalter zurücksetzen</button>
+          <button class="btn-secondary" style="width:auto;" onclick="previewSongTestPrompt()">📝 Prompt anzeigen (kostenlos)</button>
+        </div>
+        <div id="songTestPreview" style="display:none; margin-top:10px; padding:10px; border:1px solid #22304355; border-radius:6px;">
+          <div class="hint" style="font-size:0.78em; opacity:0.7; margin-bottom:6px;">Das hier würde an die Music API gesendet — bei Bedarf direkt nachschärfen:</div>
+          <textarea id="songTestPromptPreview" rows="5" style="width:100%; font-size:0.8em; box-sizing:border-box;"></textarea>
+          <div style="margin-top:8px;">
+            <button class="btn-secondary" style="width:auto;" onclick="sendTestSong()">🚀 Testweise senden (kostet Credits)</button>
+          </div>
+        </div>
+        <div id="songTestResult" style="margin-top:10px;"></div>
+      `;
+    }
+
+    function switchSongTestMilestone(key) {
+      songTestSelected = key;
+      renderSongTestPanel();
+    }
+
+    function resetSongTestFacts() {
+      songTestFactsDraft[songTestSelected] = MB.Music.TEST_FACTS[songTestSelected];
+      renderSongTestPanel();
+    }
+
+    function previewSongTestPrompt() {
+      const key = songTestSelected;
+      const styleId = document.getElementById('songTestStyle').value || null;
+      const languageId = document.getElementById('songTestLang').value || null;
+      const facts = document.getElementById('songTestFacts').value;
+      songTestFactsDraft[key] = facts; // Editierten Text über Re-Renders hinweg behalten
+
+      const { prompt } = MB.Music.buildMusicPrompt(key, null, null, styleId, languageId, facts || MB.Music.TEST_FACTS[key]);
+      document.getElementById('songTestPromptPreview').value = prompt;
+      document.getElementById('songTestPreview').style.display = 'block';
+    }
+
+    async function sendTestSong() {
+      const key = songTestSelected;
+      const settings = MB.Announcer.getTtsSettings();
+      const promptOverride = document.getElementById('songTestPromptPreview').value;
+      const seconds = parseInt(document.getElementById('songTestLen').value, 10) || 30;
+      if (!promptOverride || !promptOverride.trim()) { alert('Erst auf "Prompt anzeigen" klicken.'); return; }
+      if (!confirm(`Testsong für "${MUSIC_MILESTONE_LABELS[key]}" generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s). Wird NICHT als offizieller Song gespeichert.`)) return;
+
+      const resultEl = document.getElementById('songTestResult');
+      resultEl.innerHTML = '<div class="hint">Generiere Testsong…</div>';
+      try {
+        const result = await MB.Music.generateTestSong({
+          apiKey: settings.apiKey, modelId: settings.modelId, milestone: key,
+          tournamentId: MB.getCurrentTournamentId(), lengthMs: seconds * 1000, promptOverride,
+        });
+        resultEl.innerHTML = `
+          <div class="hint" style="color:var(--accent); margin-bottom:6px;">✅ Testsong fertig (nur zum Anhören, nicht gespeichert):</div>
+          <audio controls src="${result.url}" style="width:100%; height:32px;"></audio>`;
+      } catch (e) {
+        resultEl.innerHTML = `<div class="hint" style="color:var(--nfl-red);">❌ ${e.message}</div>`;
       }
     }
 

@@ -323,11 +323,64 @@
     return `${url}${sep}download=${encodeURIComponent(filename || "madden-bowl-song.mp3")}`;
   }
 
+  // Realistische Platzhalter-Fakten pro Meilenstein — unabhängig vom
+  // tatsächlichen Turnierstand, damit sich JEDER Meilenstein jederzeit
+  // testen lässt, auch lange bevor er im echten Turnier eintritt (buildFacts()
+  // oben liefert für nicht erreichte Meilensteine nur einen sehr generischen
+  // Satz ohne Namen/Zahlen, weil die echten Daten schlicht noch fehlen).
+  const TEST_FACTS = {
+    regularSeason: `The regular season of a fantasy football tournament called the Madden Bowl just wrapped up. ` +
+      `Here is the complete final regular-season standings table, from best to worst seed: ` +
+      `#1 Tobi F. (Chiefs) with a record of 5-1; #2 Marco (49ers) with a record of 4-2; ` +
+      `#3 Jonas (Cowboys) with a record of 3-3; #4 Kevin (Eagles) with a record of 3-3; ` +
+      `#5 Nico (Bills) with a record of 2-4; #6 Basti (Ravens) with a record of 1-5. ` +
+      `The most dominant win of the season was Tobi F. crushing Basti 42-7. ` +
+      `The playoffs are about to begin, seeded exactly in this order.`,
+    firstElimination: `In a fantasy football tournament called the Madden Bowl, the very first player has just been ` +
+      `eliminated from the playoffs. Nico, playing as the Bills, is the first one out, eliminated by ` +
+      `Kevin (Eagles) with a score of 24-14. Their championship run ends here, while everyone else ` +
+      `survives another round.`,
+    toiletBowl: `In a fantasy football tournament called the Madden Bowl, the two worst-performing players of the ` +
+      `whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. Basti (Ravens) ` +
+      `beat Nico (Bills) 17-13 in the game itself, but by the tournament's rules that means Basti is the ` +
+      `one who ends up dead last in the final standings, while Nico actually climbs back up the table for ` +
+      `losing. It's the most embarrassing trophy in the Madden Bowl, and everybody knows it.`,
+    finals: `The grand final of a fantasy football tournament called the Madden Bowl, "The Madden Bowl", is set. ` +
+      `Tobi F. (Chiefs) faces off against Marco (49ers) for the championship. The two have split their ` +
+      `two regular-season meetings, and this is the rematch to settle it once and for all.`,
+    champion: `A fantasy football tournament called the Madden Bowl has crowned its champion. Tobi F., playing as ` +
+      `the Chiefs, won the championship game against Marco (49ers) with a final score of 31-24. Tobi F. is ` +
+      `the new Madden Bowl champion, the best player of the whole tournament.`,
+  };
+
+  // Wie generateAndStoreSong(), aber bewusst OHNE saveSongUrl()-Aufruf —
+  // ein Testsong landet also NIE in tournaments.songs und kann daher auch
+  // nie versehentlich einen später real erreichten Meilenstein-Song
+  // überschreiben oder vortäuschen. Facts fallen auf TEST_FACTS zurück,
+  // damit sich JEDER Meilenstein jederzeit testen lässt — unabhängig vom
+  // tatsächlichen Turnierfortschritt. Storage-Pfad ist mit "test-" markiert.
+  async function generateTestSong({ apiKey, modelId, milestone, tournamentId, lengthMs, styleId, languageId, factsOverride, promptOverride }) {
+    let prompt, styleLabel, languageLabel, facts;
+    if (promptOverride != null && String(promptOverride).trim() !== "") {
+      prompt = String(promptOverride).trim();
+      const style = pickStyle(styleId, milestone);
+      const language = pickLanguage(languageId);
+      styleLabel = style.label; languageLabel = language.label; facts = factsOverride || "";
+    } else {
+      const effectiveFacts = (factsOverride != null && String(factsOverride).trim() !== "") ? factsOverride : TEST_FACTS[milestone];
+      ({ prompt, styleLabel, languageLabel, facts } = buildMusicPrompt(milestone, null, null, styleId, languageId, effectiveFacts));
+    }
+    if (!apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
+    const blob = await generateSong({ apiKey, prompt, lengthMs, modelId });
+    const url = await uploadSongToStorage(blob, tournamentId, `test-${milestone}`);
+    return { url, styleLabel, languageLabel, prompt, facts };
+  }
+
   global.MB = global.MB || {};
   global.MB.Music = {
-    STYLE_POOL, LANGUAGE_POOL, DEFAULT_LANGUAGE_ID, MILESTONE_META, MILESTONE_ORDER,
+    STYLE_POOL, LANGUAGE_POOL, DEFAULT_LANGUAGE_ID, MILESTONE_META, MILESTONE_ORDER, TEST_FACTS,
     pickStyle, pickLanguage, buildFacts, buildMusicPrompt,
-    generateSong, uploadSongToStorage, saveSongUrl, detectMilestones, generateAndStoreSong,
+    generateSong, uploadSongToStorage, saveSongUrl, detectMilestones, generateAndStoreSong, generateTestSong,
     buildDownloadUrl,
   };
 })(window);
