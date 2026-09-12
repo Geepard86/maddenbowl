@@ -2629,7 +2629,7 @@ function renderRanking() {
             ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songTestLangSelected ? 'selected' : ''}>${l.label}</option>`).join('')}
           </select>
           <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
-            Dauer: <input type="number" id="songTestLen" value="30" min="10" max="180" step="5" style="width:60px;"> Sek.
+            Dauer: <input type="number" id="songTestLen" value="60" min="10" max="180" step="5" style="width:60px;"> Sek.
           </label>
         </div>
         <textarea id="songTestFacts" rows="4" style="width:100%; font-size:0.82em; box-sizing:border-box;">${songTestFactsDraft[key]}</textarea>
@@ -2684,7 +2684,7 @@ function renderRanking() {
       const key = songTestSelected;
       const settings = MB.Announcer.getTtsSettings();
       const promptOverride = document.getElementById('songTestPromptPreview').value;
-      const seconds = parseInt(document.getElementById('songTestLen').value, 10) || 30;
+      const seconds = parseInt(document.getElementById('songTestLen').value, 10) || 60;
       if (!promptOverride || !promptOverride.trim()) { alert('Erst auf "Prompt anzeigen" klicken.'); return; }
       if (!confirm(`Testsong für "${MUSIC_MILESTONE_LABELS[key]}" generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s). Wird NICHT als offizieller Song gespeichert.`)) return;
 

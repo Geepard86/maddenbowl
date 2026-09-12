@@ -355,11 +355,11 @@
       { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEW ALL-TIME HIGH SCORE", bottom: `${r.player}: ${r.value} POINTS` }) },
       { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, WHEN ${String(r.player || "").toUpperCase()}`, bottom: `DROPS ${r.value} POINTS` }) },
       { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} GETS A POINT!`, bottom: `AND ANOTHER! ${r.value} POINTS FOR EVERYONE!` }) },
-      { id: 181913649, name: "Drake Hotline Bling", caption: (r) => ({ top: "THE OLD HIGH SCORE", bottom: `${r.value} POINTS BY ${r.player} 🔥` }) },
+      { id: 181913649, name: "Drake Hotline Bling", caption: (r) => ({ top: "THE OLD HIGH SCORE", bottom: `${r.value} POINTS BY ${r.player}` }) },
       { id: 4087833, name: "Waiting Skeleton", caption: (r) => ({ top: `WAITING FOR SOMEONE TO BEAT ${r.player}'S ${r.value} POINTS`, bottom: "..." }) },
     ],
     allTimeMargin: [
-      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "IT'S FINE, TOTALLY IN CONTROL 🔥" }) },
+      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "IT'S FINE, TOTALLY IN CONTROL" }) },
       { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `AFTER THE ${r.winnerScore}-${r.loserScore} HUMILIATION OF ${r.opponent}` }) },
       { id: 217743513, name: "UNO Draw 25 Cards", caption: (r) => ({ top: `${r.opponent} vs ${r.player}`, bottom: `DRAWS A ${r.winnerScore}-${r.loserScore}` }) },
       { id: 129242436, name: "Change My Mind", caption: (r) => ({ top: `${r.winnerScore}-${r.loserScore} IS THE BIGGEST BLOWOUT EVER.`, bottom: "Change my mind." }) },
@@ -377,34 +377,34 @@
       { id: 14371066, name: "Star Wars Yoda", caption: (r) => ({ top: "WIN, OR WIN NOT", bottom: `${r.value} STRAIGHT WINS FOR ${r.player}. THERE IS NO "TRY".` }) },
     ],
     upset: [
-      { id: 61579, name: "One Does Not Simply", caption: (r) => ({ top: "ONE DOES NOT SIMPLY BEAT", bottom: `${r.opponent} — YET ${r.player} JUST DID (${r.winnerScore}-${r.loserScore})` }) },
+      { id: 61579, name: "One Does Not Simply", caption: (r) => ({ top: "ONE DOES NOT SIMPLY BEAT", bottom: `${r.opponent} - YET ${r.player} JUST DID (${r.winnerScore}-${r.loserScore})` }) },
       { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, THE FAVORITE,`, bottom: `AFTER THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player}` }) },
       { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} BEATS ${r.opponent}`, bottom: "I'M JUST SAYING: UPSET" }) },
       { id: 102156234, name: "Mocking Spongebob", caption: (r) => ({ top: `${r.opponent} BEFORE THE GAME: "iM wInNiNg tHiS eAsY"`, bottom: `${r.winnerScore}-${r.loserScore} FOR ${r.player}` }) },
       { id: 123999232, name: "The Scroll Of Truth", caption: (r) => ({ top: `${r.opponent} WASN'T EVEN THAT GOOD`, bottom: `AS THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player} SHOWS` }) },
     ],
     shutout: [
-      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AT ${r.loserScore} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL 🔥" }) },
-      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "TOTALLY FINE 🙂" }) },
+      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AT ${r.loserScore} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL" }) },
+      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "TOTALLY FINE" }) },
       { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.opponent, bottom: `ONLY MANAGES ${r.loserScore} POINTS AGAINST ${r.player}` }) },
     ],
     shootout: [
-      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "SHOOTOUT", bottom: `${r.winnerScore}-${r.loserScore} — ${r.player} VS ${r.opponent}` }) },
+      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "SHOOTOUT", bottom: `${r.winnerScore}-${r.loserScore} - ${r.player} VS ${r.opponent}` }) },
       { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} GETS A TOUCHDOWN!`, bottom: `AND YOU GET ONE TOO, ${r.opponent}! (${r.winnerScore}-${r.loserScore})` }) },
       { id: 8072285, name: "Doge", caption: (r) => ({ top: "such offense", bottom: `much ${r.winnerScore}-${r.loserScore}, wow, no defense` }) },
       { id: 91538330, name: "X, X Everywhere", caption: () => ({ top: "TOUCHDOWNS,", bottom: "TOUCHDOWNS EVERYWHERE" }) },
       { id: 124055727, name: "Y'all Got Any More Of That", caption: (r) => ({ top: `${r.player} & ${r.opponent} AT ${r.winnerScore}-${r.loserScore}`, bottom: "Y'ALL GOT ANY MORE OF THAT OFFENSE?" }) },
     ],
     finals: [
-      { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — BOTH WANT THE MADDEN BOWL` }) },
+      { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} - BOTH WANT THE MADDEN BOWL` }) },
       { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.p1} VS ${r.p2} IN THE FINAL`, bottom: "I'M JUST SAYING: LEGENDARY" }) },
-      { id: 110133729, name: "Spiderman Pointing At Spiderman", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — MIRROR MATCH IN THE FINAL` }) },
+      { id: 110133729, name: "Spiderman Pointing At Spiderman", caption: (r) => ({ top: r.p1, bottom: `${r.p2} - MIRROR MATCH IN THE FINAL` }) },
       { id: 3218037, name: "This Is Where I'd Put My Trophy If I Had One", caption: (r) => ({ top: `${r.p1} AND ${r.p2}`, bottom: "FIGHTING FOR THE ONLY TROPHY SPOT" }) },
     ],
     champion: [
       { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T LOSE FINALS OFTEN", bottom: `BUT NEITHER DOES ${String(r.player || "").toUpperCase()} (${r.winnerScore}-${r.loserScore})` }) },
       { id: 29617627, name: "Look At Me", caption: (r) => ({ top: "LOOK AT ME", bottom: `I AM THE NEW CHAMPION: ${r.player}` }) },
-      { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW MADDEN BOWL CHAMPION! 🏆" }) },
+      { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW MADDEN BOWL CHAMPION!" }) },
     ],
   };
 
@@ -426,28 +426,15 @@
     return pick(pool);
   }
 
-  // Schickt Text über 'boxes[]' statt text0/text1 — Imgflip erlaubt jeder
-  // Vorlage eigene gespeicherte Standard-Schrifteinstellungen, und die sind
-  // nicht immer gut lesbar (z.B. bei "Grant Gustin Over Grave" offenbar
-  // dunkler Text, kaum vom Hintergrund zu unterscheiden). Mit 'boxes[]'
-  // erzwingen wir für JEDE Vorlage weiße Schrift mit schwarzem Rand, statt
-  // uns auf die (unbekannten) Vorlagen-Defaults zu verlassen.
-  function buildImgflipBody(username, password, templateId, top, bottom) {
-    const body = new URLSearchParams({ template_id: String(templateId), username, password });
-    [top, bottom].forEach((text, i) => {
-      body.append(`boxes[${i}][text]`, text || "");
-      body.append(`boxes[${i}][color]`, "#FFFFFF");
-      body.append(`boxes[${i}][outline_color]`, "#000000");
-    });
-    return body;
-  }
-
   async function generateImgflipMeme(record, { username, password, templateId } = {}) {
     if (!username || !password) throw new Error("Imgflip-Zugangsdaten fehlen.");
     const entry = record.type === "storyMeme" ? pickStoryTemplate(record, templateId) : pickImgflipTemplate(record.type, templateId);
     const caps = record.type === "storyMeme" ? buildStoryCaptions(record) : buildImgflipCaptions(record, entry.caption ? entry : null);
     const tid = entry.id;
-    const body = buildImgflipBody(username, password, tid, caps.top, caps.bottom);
+    const body = new URLSearchParams({
+      template_id: String(tid), username, password,
+      text0: caps.top, text1: caps.bottom,
+    });
     const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
     const json = await res.json();
     if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");
@@ -504,7 +491,6 @@
       { id: 268827476, name: "NY Giants Fans", caption: (r) => ({ top: `${r.loser} FANS`, bottom: `AFTER THE ${r.score} COLLAPSE` }) },
       { id: 75583105, name: "NFL MEME", caption: (r) => ({ top: `${r.loser} HAD THIS ONE WON`, bottom: `THEN THIS HAPPENED: ${r.score}` }) },
       { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.loser} EARLY IN THE GAME`, bottom: `${r.loser} AFTER THE ${r.score} COLLAPSE` }) },
-      { id: 221578498, name: "Grant Gustin Over Grave", caption: (r) => ({ top: `${r.loser} INTERNALLY`, bottom: `AFTER BLOWING THE LEAD (${r.score})` }) },
     ],
     comeback: [
       { id: 252600902, name: "Always Has Been", caption: (r) => ({ top: `WAIT, ${String(r.winner || "").toUpperCase()} CAME BACK FROM THAT?`, bottom: "ALWAYS HAS BEEN" }) },
@@ -522,7 +508,6 @@
       { id: 577208610, name: "Sad Mahomes", caption: (r) => ({ top: `${r.loser}, THE FAVORITE,`, bottom: `AFTER LOSING TO ${r.winner}` }) },
       { id: 441850935, name: "Patrick Mahomes Thumbs Up", caption: (r) => ({ top: `"YEAH, ${r.winner} GOT ME"`, bottom: `${r.loser}, SURPRISINGLY CHILL ABOUT IT` }) },
       { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.loser} BEFORE KICKOFF`, bottom: `${r.loser} AFTER LOSING TO ${r.winner}` }) },
-      { id: 132596627, name: "NFL Logo", caption: () => ({ top: "WTF", bottom: "" }) },
     ],
     close: [
       { id: 155692896, name: "Screaming", caption: (r) => ({ top: "NO ONE KNEW WHO WAS WINNING", bottom: r.score }) },
@@ -539,7 +524,6 @@
       { id: 61712394, name: "Taking Out the Trash", caption: (r) => ({ top: r.winner, bottom: `TAKING OUT THE TRASH: ${r.loser} (${r.score})` }) },
       { id: 208650053, name: "NFL Tackle", caption: (r) => ({ top: `${r.loser}'S OFFENSE`, bottom: `STOPPED COLD ALL GAME (${r.score})` }) },
       { id: 554081129, name: "NFL Jaguars Out Of Reach", caption: (r) => ({ top: r.loser, bottom: `AT ${r.score}, THIS ONE IS OUT OF REACH` }) },
-      { id: 221578498, name: "Grant Gustin Over Grave", caption: (r) => ({ top: `${r.loser} INTERNALLY`, bottom: `AFTER GETTING BLOWN OUT ${r.score}` }) },
     ],
     hype: [
       { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T ALWAYS TALK TRASH", bottom: `BUT WHEN I DO, I'M ${String(r.winner || "").toUpperCase()}` }) },
@@ -737,7 +721,10 @@
       const job = jobs[i];
       let result;
       try {
-        const body = buildImgflipBody(username, password, job.templateId, job.caption.top, job.caption.bottom);
+        const body = new URLSearchParams({
+          template_id: String(job.templateId), username, password,
+          text0: job.caption.top, text1: job.caption.bottom,
+        });
         const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
         const json = await res.json();
         if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");

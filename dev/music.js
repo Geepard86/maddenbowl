@@ -49,7 +49,7 @@
     { id: "en", label: "Englisch", name: "English" },
     { id: "de", label: "Deutsch", name: "German" },
   ];
-  const DEFAULT_LANGUAGE_ID = "en";
+  const DEFAULT_LANGUAGE_ID = "de";
 
   // Meilenstein-Metadaten: Anzeigename, Text-Modus (siehe MODE_DIRECTIVES)
   // und eine Stil-Vorauswahl, die zum Anlass passt. Der Modus entscheidet,
@@ -283,9 +283,16 @@
   function buildMusicPrompt(milestone, state, history, styleId, languageId, factsOverride) {
     const style = pickStyle(styleId, milestone);
     const language = pickLanguage(languageId);
-    const facts = (factsOverride != null && String(factsOverride).trim() !== "")
+    let facts = (factsOverride != null && String(factsOverride).trim() !== "")
       ? String(factsOverride).trim()
       : buildFacts(milestone, state, history, languageId);
+    // Namen wie "Tobi F." / "Tobi W." werden gesungen genauso falsch
+    // ausgesprochen wie bei der Text-Ansage — dieselbe phonetische
+    // Ersetzung (Tobi Eff / Tobi Weh) hier ebenfalls anwenden, egal ob die
+    // Fakten aus dem echten Turnierstand oder aus Test-/Override-Text kommen.
+    if (global.MB && global.MB.Announcer && typeof global.MB.Announcer.speechName === "function") {
+      facts = global.MB.Announcer.speechName(facts);
+    }
     const mode = (MILESTONE_META[milestone] && MILESTONE_META[milestone].mode) || "hype";
     const isGerman = language.id === "de";
     const directives = isGerman ? MODE_DIRECTIVES_DE : MODE_DIRECTIVES;

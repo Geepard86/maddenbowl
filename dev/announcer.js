@@ -476,6 +476,6 @@
     announce, announceSong, speak, warmupVoices, buildResultLine, buildUpcomingLine,
     setPreferredVoice, getGermanVoiceCandidates, sanitizeForSpeech,
     getTtsSettings, setTtsSettings, fetchElevenLabsVoices, speakElevenLabs, speakSmart,
-    speakSequence, fetchElevenLabsAudioUrl, playAudioUrl,
+    speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
   };
 })(window);
