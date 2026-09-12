@@ -209,6 +209,35 @@
       `list. You decide the exact structure, hook, and ad-libs.`,
   };
 
+  // Deutsche Entsprechung — wird nur verwendet, wenn Sprache=Deutsch gewählt
+  // ist, damit der GANZE Prompt (nicht nur der gewünschte Gesangstext)
+  // konsistent auf Deutsch ist. Der Stil-Tag (STYLE_POOL) bleibt bewusst
+  // Englisch, weil die ElevenLabs-Doku dafür ausdrücklich Englisch empfiehlt
+  // ("Use English language for best result" für Stil-/Genre-Beschreibungen).
+  const MODE_DIRECTIVES_DE = {
+    hype: () =>
+      `Mach den Song energiegeladen, selbstbewusst und feierlich — eine echte Hype-/Siegeshymne, ` +
+      `keine trockene Nachrichtenzusammenfassung. Verwende die Namen und den Spielstand ganz ` +
+      `natürlich im Text. Struktur, Hook und Ad-Libs darfst du frei gestalten.`,
+    brag: () =>
+      `Schreib das Ganze aus der ICH-Perspektive des Champions selbst ("ich", "mein") — großspurig, ` +
+      `übertrieben selbstbewusst, als würde der Champion persönlich seinen legendären Lauf abfeiern ` +
+      `und alle Gegner, die er unterwegs geschlagen hat, herabwürdigen. Bau seinen Namen und sein ` +
+      `Team ganz natürlich mit ein. Struktur, Hook und Ad-Libs darfst du frei gestalten.`,
+    diss: () =>
+      `Mach daraus einen spielerischen DISSTRACK gegen die beiden Spieler in der Toilet Bowl, vor ` +
+      `allem gegen den, der am Ende ganz unten landet — scharfe, selbstbewusste Sprüche und Spott in ` +
+      `klassischer Rap-Battle-Tradition. Es darf ruhig etwas wehtun, soll aber gutmütig, witzig und ` +
+      `klar als Spaß erkennbar bleiben, nicht wirklich gemein. Zieh über den Spielstand und die ` +
+      `Tabelle her. Struktur, Hook und Ad-Libs darfst du frei gestalten.`,
+    recap: () =>
+      `Das hier ist ein RECAP-Track, keine Hype-Hymne: rapp die bisherige Turniergeschichte wie ein ` +
+      `Hype-Man-Sportkommentator, der die ganze Saison in Reime packt. Geh die Tabelle und die ` +
+      `größten Storylines der Reihe nach durch, klar genug, dass man dem Verlauf allein über den ` +
+      `Text folgen kann — aber halt es catchy und rhythmisch, keine gesprochene Liste. Struktur, ` +
+      `Hook und Ad-Libs darfst du frei gestalten.`,
+  };
+
   function buildMusicPrompt(milestone, state, history, styleId, languageId, factsOverride) {
     const style = pickStyle(styleId, milestone);
     const language = pickLanguage(languageId);
@@ -216,10 +245,14 @@
       ? String(factsOverride).trim()
       : buildFacts(milestone, state, history);
     const mode = (MILESTONE_META[milestone] && MILESTONE_META[milestone].mode) || "hype";
-    const directive = (MODE_DIRECTIVES[mode] || MODE_DIRECTIVES.hype)();
-    const prompt =
-      `${style.tag}. Write and perform a ${language.name}-language hip-hop track about this real ` +
-      `story from a fantasy football tournament: ${facts} ${directive}`;
+    const isGerman = language.id === "de";
+    const directives = isGerman ? MODE_DIRECTIVES_DE : MODE_DIRECTIVES;
+    const directive = (directives[mode] || directives.hype)();
+    const prompt = isGerman
+      ? `${style.tag}. Schreibe und performe einen deutschsprachigen Hip-Hop-Track über diese ` +
+        `echte Geschichte aus einem Fantasy-Football-Turnier: ${facts} ${directive}`
+      : `${style.tag}. Write and perform a ${language.name}-language hip-hop track about this real ` +
+        `story from a fantasy football tournament: ${facts} ${directive}`;
     return { prompt, styleLabel: style.label, languageLabel: language.label, facts, mode };
   }
 
@@ -238,8 +271,16 @@
     });
     if (!res.ok) {
       let detail = "";
-      try { detail = (await res.json())?.detail?.message || ""; } catch (e) {}
-      throw new Error(`ElevenLabs Music-Fehler HTTP ${res.status}${detail ? ": " + detail : ""}`);
+      try {
+        const errJson = await res.json();
+        const d = errJson?.detail;
+        if (typeof d === "string") detail = d;
+        else if (Array.isArray(d)) detail = d.map((item) => `${(item.loc || []).join(".")}: ${item.msg || item.message || ""}`).join("; ");
+        else if (d?.message) detail = d.message;
+        else if (errJson?.message) detail = errJson.message;
+        else if (d) detail = JSON.stringify(d).slice(0, 300);
+      } catch (e) {}
+      throw new Error(`ElevenLabs Music-Fehler HTTP ${res.status}${detail ? ": " + detail : " (keine weitere Fehlermeldung vom Server)"}`);
     }
     return res.blob();
   }

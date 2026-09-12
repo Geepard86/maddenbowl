@@ -361,15 +361,12 @@
     allTimeMargin: [
       { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "IT'S FINE, TOTALLY IN CONTROL 🔥" }) },
       { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `AFTER THE ${r.winnerScore}-${r.loserScore} HUMILIATION OF ${r.opponent}` }) },
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "BIGGEST BLOWOUT OF ALL TIME", bottom: `${r.player} ${r.winnerScore}-${r.loserScore} ${r.opponent}` }) },
       { id: 217743513, name: "UNO Draw 25 Cards", caption: (r) => ({ top: `${r.opponent} vs ${r.player}`, bottom: `DRAWS A ${r.winnerScore}-${r.loserScore}` }) },
       { id: 129242436, name: "Change My Mind", caption: (r) => ({ top: `${r.winnerScore}-${r.loserScore} IS THE BIGGEST BLOWOUT EVER.`, bottom: "Change my mind." }) },
     ],
     tournamentMargin: [
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "BLOWOUT OF THE TOURNAMENT", bottom: `${r.player} ${r.winnerScore}-${r.loserScore} ${r.opponent}` }) },
       { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `CELEBRATING THE ${r.winnerScore}-${r.loserScore} BLOWOUT OF ${r.opponent}` }) },
       { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} WINS ${r.winnerScore}-${r.loserScore}`, bottom: "I'M JUST SAYING: RECORD BLOWOUT" }) },
-      { id: 161865971, name: "Marked Safe From", caption: (r) => ({ top: `${r.opponent} MARKED THEMSELVES SAFE FROM`, bottom: `A ${r.winnerScore}-${r.loserScore} BLOWOUT BY ${r.player}` }) },
       { id: 438680, name: "Batman Slapping Robin", caption: (r) => ({ top: `${r.opponent}: "IT WAS JUST ONE GAME"`, bottom: `${r.player}: "${r.winnerScore}-${r.loserScore}!"` }) },
     ],
     winStreak: [
@@ -388,8 +385,6 @@
     ],
     shutout: [
       { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AT ${r.loserScore} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL 🔥" }) },
-      { id: 99683372, name: "Sleeping Shaq", caption: (r) => ({ top: `${r.opponent}'S DEFENSE`, bottom: `DURING THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player}` }) },
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "SHUT DOWN", bottom: `${r.player} ${r.winnerScore}-${r.loserScore} ${r.opponent}` }) },
       { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "TOTALLY FINE 🙂" }) },
       { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.opponent, bottom: `ONLY MANAGES ${r.loserScore} POINTS AGAINST ${r.player}` }) },
     ],
@@ -401,17 +396,14 @@
       { id: 124055727, name: "Y'all Got Any More Of That", caption: (r) => ({ top: `${r.player} & ${r.opponent} AT ${r.winnerScore}-${r.loserScore}`, bottom: "Y'ALL GOT ANY MORE OF THAT OFFENSE?" }) },
     ],
     finals: [
-      { id: 101910402, name: "Who Would Win", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — THE FINAL IS SET` }) },
       { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — BOTH WANT THE MADDEN BOWL` }) },
       { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.p1} VS ${r.p2} IN THE FINAL`, bottom: "I'M JUST SAYING: LEGENDARY" }) },
       { id: 110133729, name: "Spiderman Pointing At Spiderman", caption: (r) => ({ top: r.p1, bottom: `${r.p2} — MIRROR MATCH IN THE FINAL` }) },
       { id: 3218037, name: "This Is Where I'd Put My Trophy If I Had One", caption: (r) => ({ top: `${r.p1} AND ${r.p2}`, bottom: "FIGHTING FOR THE ONLY TROPHY SPOT" }) },
     ],
     champion: [
-      { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEW MADDEN BOWL CHAMPION", bottom: r.player }) },
       { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T LOSE FINALS OFTEN", bottom: `BUT NEITHER DOES ${String(r.player || "").toUpperCase()} (${r.winnerScore}-${r.loserScore})` }) },
       { id: 29617627, name: "Look At Me", caption: (r) => ({ top: "LOOK AT ME", bottom: `I AM THE NEW CHAMPION: ${r.player}` }) },
-      { id: 29562797, name: "I'm The Captain Now", caption: (r) => ({ top: "I'M THE CAPTAIN NOW", bottom: `SAYS ${r.player}, FRESHLY CROWNED (${r.winnerScore}-${r.loserScore})` }) },
       { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW MADDEN BOWL CHAMPION! 🏆" }) },
     ],
   };
@@ -519,7 +511,7 @@
     ],
     close: [
       { id: 155692896, name: "Screaming", caption: (r) => ({ top: "NO ONE KNEW WHO WAS WINNING", bottom: r.score }) },
-      { id: 221578498, name: "Grant Gustin Over Grave", caption: (r) => ({ top: `${r.loser} INTERNALLY`, bottom: `AFTER LOSING BY ONE SCORE (${r.score})` }) },
+      { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: "EVERYONE RELAXED EARLY IN THIS ONE", bottom: `THEN IT CAME DOWN TO ${r.score}` }) },
       { id: 4087833, name: "Waiting Skeleton", caption: () => ({ top: "WAITING FOR THE LAST SECOND", bottom: "TO FIND OUT WHO WON" }) },
       { id: 21900001, name: "NFL Referee", caption: () => ({ top: "NOBODY KNEW WHO WON", bottom: "UNTIL THE VERY LAST SECOND" }) },
       { id: 627432492, name: "NFL Football", caption: (r) => ({ top: r.score, bottom: "CLOSEST GAME OF THE SEASON" }) },
@@ -528,7 +520,6 @@
     ],
     blowout: [
       { id: 203723093, name: "Patrick Mahomes on Ground", caption: (r) => ({ top: r.loser, bottom: `AFTER THE ${r.score}` }) },
-      { id: 188390779, name: "Woman Yelling At Cat", caption: (r) => ({ top: "THEY SAID IT WOULD BE CLOSE", bottom: r.score }) },
       { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: r.loser, bottom: `AFTER THE ${r.score}` }) },
       { id: 19833195, name: "NFL Donkey Punch", caption: (r) => ({ top: r.loser, bottom: `AFTER THE ${r.score}` }) },
       { id: 61712394, name: "Taking Out the Trash", caption: (r) => ({ top: r.winner, bottom: `TAKING OUT THE TRASH: ${r.loser} (${r.score})` }) },
@@ -539,7 +530,6 @@
       { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T ALWAYS TALK TRASH", bottom: `BUT WHEN I DO, I'M ${String(r.winner || "").toUpperCase()}` }) },
       { id: 259237855, name: "Laughing Leo", caption: (r) => ({ top: `${r.winner} AFTER ONE (1) GOOD GAME`, bottom: "THE HYPE:" }) },
       { id: 8072285, name: "Doge", caption: (r) => ({ top: `such ${r.winner}`, bottom: "much hype, one game, wow" }) },
-      { id: 404518781, name: "Dck-riding", caption: (r) => ({ top: "EVERYONE SUDDENLY A FAN OF", bottom: r.winner || "THE WINNER" }) },
       { id: 489157989, name: "Taylor Swift Chiefs Game", caption: (r) => ({ top: "THE HYPE AROUND", bottom: `${r.winner || "THIS GUY"} RIGHT NOW` }) },
       { id: 456538639, name: "Roger Goodell", caption: (r) => ({ top: "LEAGUE OFFICE ISSUING A STATEMENT:", bottom: `"${r.winner || "THAT"} WAS INCREDIBLE"` }) },
       { id: 441850935, name: "Patrick Mahomes Thumbs Up", caption: (r) => ({ top: r.winner || "THE WINNER", bottom: "TOTALLY UNBOTHERED BY THE HYPE" }) },
@@ -552,11 +542,10 @@
     // "Entscheidungsspiel" deckt hier auch Finale/Champion-Momente ab (kein
     // eigener Kontext-Tag dafür — inhaltlich dasselbe: viel steht auf dem Spiel).
     decision_game: [
-      { id: 226297822, name: "Panik Kalm Panik", caption: (r) => ({ top: `${r.winner} BEFORE THE DECISION GAME`, bottom: "DURING / AFTER WINNING IT" }) },
-      { id: 4087833, name: "Waiting Skeleton", caption: () => ({ top: "WAITING FOR THE DECISION GAME", bottom: "TO FINALLY SETTLE IT" }) },
       { id: 272113903, name: "Tom Brady 4th Down", caption: () => ({ top: "THE MADDEN BOWL FINAL,", bottom: "EVERYTHING ON ONE DRIVE" }) },
       { id: 456538639, name: "Roger Goodell", caption: () => ({ top: "THE COMMISSIONER HANDING OVER", bottom: "THE MADDEN BOWL TROPHY" }) },
-      { id: 132596627, name: "NFL Logo", caption: (r) => ({ top: "THE MADDEN BOWL FINAL IS HERE", bottom: `${r.player || r.winner || "THE CHAMPION"} VS ${r.opponent || r.loser || "THE CHALLENGER"}` }) },
+      { id: 132596627, name: "NFL Logo", caption: () => ({ top: "WTF", bottom: "" }) },
+      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ top: "IS THAT YOUR FINAL ANSWER?", bottom: `${r.player || r.winner || "THE CHAMPION"} SAYS YES` }) },
       { id: 627425561, name: "NFL", caption: () => ({ top: "THE FINAL,", bottom: "EXACTLY AS BIG AS IT SOUNDS" }) },
       { id: 627432492, name: "NFL Football", caption: (r) => ({ top: "MADDEN BOWL FINAL", bottom: `${r.player || r.winner || "ONE PLAYER"} WALKS AWAY CHAMPION` }) },
       { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "EVEN THE CHAMPION", bottom: "DIDN'T SEE THAT FINAL COMING" }) },
@@ -565,9 +554,7 @@
       { id: 489157989, name: "Taylor Swift Chiefs Game", caption: () => ({ top: "EVERYONE SUDDENLY WATCHING", bottom: "BECAUSE THE FINAL IS THAT BIG" }) },
     ],
     general: [
-      { id: 115398544, name: "Spongebob Rainbow", caption: (r) => ({ top: "MADDEN BOWL MOMENT:", bottom: r.score }) },
       { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: "WELL, THAT HAPPENED.", bottom: r.score }) },
-      { id: 4087833, name: "Waiting Skeleton", caption: () => ({ top: "MADDEN BOWL,", bottom: "SOMETHING ALWAYS HAPPENS" }) },
       { id: 9340393, name: "NFL", caption: (r) => ({ top: "MADDEN BOWL MOMENT:", bottom: r.score || "" }) },
       { id: 627432492, name: "NFL Football", caption: () => ({ top: "MADDEN BOWL,", bottom: "WEEK AFTER WEEK" }) },
       { id: 627425561, name: "NFL", caption: () => ({ top: "JUST ANOTHER", bottom: "MADDEN BOWL MOMENT" }) },
