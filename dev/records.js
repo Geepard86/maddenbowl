@@ -490,7 +490,8 @@
       { id: 577208610, name: "Sad Mahomes", caption: (r) => ({ top: `${r.loser} WATCHING THE LEAD DISAPPEAR`, bottom: r.score }) },
       { id: 268827476, name: "NY Giants Fans", caption: (r) => ({ top: `${r.loser} FANS`, bottom: `AFTER THE ${r.score} COLLAPSE` }) },
       { id: 75583105, name: "NFL MEME", caption: (r) => ({ top: `${r.loser} HAD THIS ONE WON`, bottom: `THEN THIS HAPPENED: ${r.score}` }) },
-      { id: 627425561, name: "NFL", caption: (r) => ({ top: `${r.loser}'S LEAD`, bottom: `GONE. ${r.score}.` }) },
+      { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.loser} EARLY IN THE GAME`, bottom: `${r.loser} AFTER THE ${r.score} COLLAPSE` }) },
+      { id: 221578498, name: "Grant Gustin Over Grave", caption: (r) => ({ top: `${r.loser} INTERNALLY`, bottom: `AFTER BLOWING THE LEAD (${r.score})` }) },
     ],
     comeback: [
       { id: 252600902, name: "Always Has Been", caption: (r) => ({ top: `WAIT, ${String(r.winner || "").toUpperCase()} CAME BACK FROM THAT?`, bottom: "ALWAYS HAS BEEN" }) },
@@ -505,9 +506,10 @@
       { id: 203723093, name: "Patrick Mahomes on Ground", caption: (r) => ({ top: `THE FAVORITE, ${r.loser},`, bottom: `AFTER LOSING TO ${r.winner} (${r.score})` }) },
       { id: 272113903, name: "Tom Brady 4th Down", caption: (r) => ({ top: "4TH DOWN, EVERYTHING ON THE LINE", bottom: `${r.winner} DELIVERS ANYWAY` }) },
       { id: 268827476, name: "NY Giants Fans", caption: (r) => ({ top: `${r.loser} FANS`, bottom: `NEVER SAW ${r.winner} COMING` }) },
-      { id: 627425561, name: "NFL", caption: (r) => ({ top: `NOBODY EXPECTED ${r.winner} TO WIN THIS`, bottom: r.score }) },
       { id: 577208610, name: "Sad Mahomes", caption: (r) => ({ top: `${r.loser}, THE FAVORITE,`, bottom: `AFTER LOSING TO ${r.winner}` }) },
       { id: 441850935, name: "Patrick Mahomes Thumbs Up", caption: (r) => ({ top: `"YEAH, ${r.winner} GOT ME"`, bottom: `${r.loser}, SURPRISINGLY CHILL ABOUT IT` }) },
+      { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.loser} BEFORE KICKOFF`, bottom: `${r.loser} AFTER LOSING TO ${r.winner}` }) },
+      { id: 132596627, name: "NFL Logo", caption: () => ({ top: "WTF", bottom: "" }) },
     ],
     close: [
       { id: 155692896, name: "Screaming", caption: (r) => ({ top: "NO ONE KNEW WHO WAS WINNING", bottom: r.score }) },
@@ -515,7 +517,6 @@
       { id: 4087833, name: "Waiting Skeleton", caption: () => ({ top: "WAITING FOR THE LAST SECOND", bottom: "TO FIND OUT WHO WON" }) },
       { id: 21900001, name: "NFL Referee", caption: () => ({ top: "NOBODY KNEW WHO WON", bottom: "UNTIL THE VERY LAST SECOND" }) },
       { id: 627432492, name: "NFL Football", caption: (r) => ({ top: r.score, bottom: "CLOSEST GAME OF THE SEASON" }) },
-      { id: 627425561, name: "NFL", caption: () => ({ top: "ONE-SCORE GAME,", bottom: "THE WHOLE WAY THROUGH" }) },
       { id: 363893507, name: "Tom Brady Surprised", caption: (r) => ({ top: `${r.winner}, AFTER THE ${r.score} NAIL-BITER`, bottom: "DIDN'T EXPECT THAT EITHER" }) },
     ],
     blowout: [
@@ -525,6 +526,7 @@
       { id: 61712394, name: "Taking Out the Trash", caption: (r) => ({ top: r.winner, bottom: `TAKING OUT THE TRASH: ${r.loser} (${r.score})` }) },
       { id: 208650053, name: "NFL Tackle", caption: (r) => ({ top: `${r.loser}'S OFFENSE`, bottom: `STOPPED COLD ALL GAME (${r.score})` }) },
       { id: 554081129, name: "NFL Jaguars Out Of Reach", caption: (r) => ({ top: r.loser, bottom: `AT ${r.score}, THIS ONE IS OUT OF REACH` }) },
+      { id: 221578498, name: "Grant Gustin Over Grave", caption: (r) => ({ top: `${r.loser} INTERNALLY`, bottom: `AFTER GETTING BLOWN OUT ${r.score}` }) },
     ],
     hype: [
       { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T ALWAYS TALK TRASH", bottom: `BUT WHEN I DO, I'M ${String(r.winner || "").toUpperCase()}` }) },
@@ -533,7 +535,6 @@
       { id: 489157989, name: "Taylor Swift Chiefs Game", caption: (r) => ({ top: "THE HYPE AROUND", bottom: `${r.winner || "THIS GUY"} RIGHT NOW` }) },
       { id: 456538639, name: "Roger Goodell", caption: (r) => ({ top: "LEAGUE OFFICE ISSUING A STATEMENT:", bottom: `"${r.winner || "THAT"} WAS INCREDIBLE"` }) },
       { id: 441850935, name: "Patrick Mahomes Thumbs Up", caption: (r) => ({ top: r.winner || "THE WINNER", bottom: "TOTALLY UNBOTHERED BY THE HYPE" }) },
-      { id: 627425561, name: "NFL", caption: () => ({ top: "THE HYPE TRAIN", bottom: "HAS LEFT THE STATION" }) },
     ],
     ragequit: [
       { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.loser, bottom: "RAGE QUITS AFTER ONE BAD DRIVE" }) },
@@ -544,9 +545,7 @@
     decision_game: [
       { id: 272113903, name: "Tom Brady 4th Down", caption: () => ({ top: "THE MADDEN BOWL FINAL,", bottom: "EVERYTHING ON ONE DRIVE" }) },
       { id: 456538639, name: "Roger Goodell", caption: () => ({ top: "THE COMMISSIONER HANDING OVER", bottom: "THE MADDEN BOWL TROPHY" }) },
-      { id: 132596627, name: "NFL Logo", caption: () => ({ top: "WTF", bottom: "" }) },
-      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ top: "IS THAT YOUR FINAL ANSWER?", bottom: `${r.player || r.winner || "THE CHAMPION"} SAYS YES` }) },
-      { id: 627425561, name: "NFL", caption: () => ({ top: "THE FINAL,", bottom: "EXACTLY AS BIG AS IT SOUNDS" }) },
+      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ top: "WHO WINS THE MADDEN BOWL FINAL?", bottom: `A) ${r.opponent || "HIM"}   B) ${r.opponent || "HIM"}   C) ${r.opponent || "HIM"}   D) ${r.player || "OBVIOUSLY HIM"}` }) },
       { id: 627432492, name: "NFL Football", caption: (r) => ({ top: "MADDEN BOWL FINAL", bottom: `${r.player || r.winner || "ONE PLAYER"} WALKS AWAY CHAMPION` }) },
       { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "EVEN THE CHAMPION", bottom: "DIDN'T SEE THAT FINAL COMING" }) },
       { id: 127129121, name: "Tom Brady Angry", caption: (r) => ({ top: r.opponent || r.loser || "THE RUNNER-UP", bottom: "AFTER LOSING THE MADDEN BOWL FINAL" }) },
@@ -557,7 +556,6 @@
       { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: "WELL, THAT HAPPENED.", bottom: r.score }) },
       { id: 9340393, name: "NFL", caption: (r) => ({ top: "MADDEN BOWL MOMENT:", bottom: r.score || "" }) },
       { id: 627432492, name: "NFL Football", caption: () => ({ top: "MADDEN BOWL,", bottom: "WEEK AFTER WEEK" }) },
-      { id: 627425561, name: "NFL", caption: () => ({ top: "JUST ANOTHER", bottom: "MADDEN BOWL MOMENT" }) },
       { id: 75583105, name: "NFL MEME", caption: (r) => ({ top: "MADDEN BOWL:", bottom: r.score || "SOMETHING ALWAYS HAPPENS" }) },
       { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "MADDEN BOWL", bottom: "NEVER FAILS TO SURPRISE" }) },
       { id: 127129121, name: "Tom Brady Angry", caption: () => ({ top: "MADDEN BOWL PLAYERS", bottom: "AFTER ANY LOSS AT ALL" }) },

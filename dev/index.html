@@ -2532,7 +2532,7 @@ function renderRanking() {
       try {
         const tournamentId = MB.getCurrentTournamentId();
         const result = await MB.Music.generateAndStoreSong({
-          apiKey: settings.apiKey, modelId: settings.modelId, milestone, state, history,
+          apiKey: settings.apiKey, milestone, state, history, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
           tournamentId, lengthMs: seconds * 1000, styleId, languageId, factsOverride, testMode,
         });
 
@@ -2565,7 +2565,7 @@ function renderRanking() {
       try {
         const tournamentId = MB.getCurrentTournamentId();
         const result = await MB.Music.generateAndStoreSong({
-          apiKey: settings.apiKey, modelId: settings.modelId, milestone, state, history,
+          apiKey: settings.apiKey, milestone, state, history, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
           tournamentId, lengthMs: seconds * 1000, promptOverride,
         });
         state.songs = { ...(state.songs || {}), [milestone]: result.url };
@@ -2670,7 +2670,7 @@ function renderRanking() {
       resultEl.innerHTML = '<div class="hint">Generiere Testsong…</div>';
       try {
         const result = await MB.Music.generateTestSong({
-          apiKey: settings.apiKey, modelId: settings.modelId, milestone: key,
+          apiKey: settings.apiKey, milestone: key, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
           tournamentId: MB.getCurrentTournamentId(), lengthMs: seconds * 1000, promptOverride,
         });
         resultEl.innerHTML = `
