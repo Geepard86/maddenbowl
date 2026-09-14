@@ -552,6 +552,65 @@
   }
 
   // ======================================================================
+  // SPURIOUS CORRELATION
+  // ----------------------------------------------------------------------
+  // Erwartet ein candidate-Objekt aus MB.Spurious.findBestCandidate()/
+  // findCandidates(): { pairKey, mbLabel, mbUnit, germanName, germanUnit,
+  // germanSource, years, mbValues, germanValues, r }.
+  // ======================================================================
+
+  const SPURIOUS_INTROS = [
+    "Manchmal braucht es keinen Grund, nur zwei Zahlenreihen, die zufällig denselben Weg gehen. Genau das ist hier passiert.",
+    "Korrelation ist nicht Kausalität — das hier ist trotzdem zu schön, um es nicht aufzuschreiben.",
+    "Die Datenlage im Madden Bowl ist überschaubar. Genau deshalb lohnt sich ab und zu ein Blick auf Zufälle, die keiner braucht, aber jeder liest.",
+  ];
+
+  const SPURIOUS_CLOSERS = [
+    "Ein ursächlicher Zusammenhang ist hochgradig unwahrscheinlich. Ein Eintrag in der Turnierstatistik ist er trotzdem geworden.",
+    "Nächstes Jahr gibt es neue Zahlen — und damit die Chance auf eine noch absurdere Übereinstimmung.",
+    "Zum Nachlesen und Nachrechnen: die Rohwerte stehen unten in der Tabelle. Viel Spaß beim Kopfschütteln.",
+  ];
+
+  function fmtStatNumber(v) {
+    if (v == null) return "–";
+    if (Math.abs(v) >= 1e6) return v.toLocaleString("de-DE", { maximumFractionDigits: 2 });
+    return v.toLocaleString("de-DE", { maximumFractionDigits: 3 });
+  }
+
+  function buildSpuriousArticle(candidate) {
+    const rStr = candidate.r.toFixed(6);
+    const direction = candidate.r >= 0 ? "im Gleichschritt" : "gegenläufig";
+
+    const tableRows = candidate.years
+      .map((year, i) => {
+        return `<tr><td>${year}</td><td>${fmtStatNumber(candidate.mbValues[i])} ${candidate.mbUnit}</td><td>${fmtStatNumber(candidate.germanValues[i])} ${candidate.germanUnit}</td></tr>`;
+      })
+      .join("");
+
+    const table = `<table style="margin-top:10px;"><tr><th>Jahr</th><th>${candidate.mbLabel}</th><th>${candidate.germanName}</th></tr>${tableRows}</table>`;
+
+    const parts = [
+      pick(SPURIOUS_INTROS),
+      `<strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) bewegen sich über die letzten ${candidate.years.length} Jahre ${direction} — mit einem Korrelationskoeffizienten von <strong>r = ${rStr}</strong>.`,
+      table,
+      `Quelle „${candidate.germanName}“: ${candidate.germanSource}.`,
+      pick(SPURIOUS_CLOSERS),
+    ];
+
+    return {
+      kind: "spurious",
+      title: `📊 Spurious Correlation: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“`,
+      body: paragraphs(parts),
+      data: {
+        pairKey: candidate.pairKey,
+        mbStatKey: candidate.mbStatKey,
+        germanStatId: candidate.germanStatId,
+        r: candidate.r,
+      },
+    };
+  }
+
+  // ======================================================================
   // SUPABASE
   // ======================================================================
 
@@ -569,6 +628,7 @@
         body: article.body,
         media_url: article.media_url || null,
         media_type: article.media_type || null,
+        data: article.data || null,
       })
       .select()
       .single();
@@ -720,6 +780,18 @@
     return g + p;
   }
 
+  // Liefert die Menge bereits in diesem Turnier veröffentlichter
+  // Spurious-Correlation-Paarungen (als "mbStatKey::germanStatId"-Strings),
+  // damit MB.Spurious.findBestCandidate() keine Wiederholung vorschlägt.
+  async function getUsedSpuriousPairKeys(tournamentId) {
+    const articles = await fetchArticles(tournamentId, 200);
+    const out = new Set();
+    (articles || []).forEach((a) => {
+      if (a.kind === "spurious" && a.data && a.data.pairKey) out.add(a.data.pairKey);
+    });
+    return out;
+  }
+
   // Soll jetzt ein neuer Zwischenstands-Artikel erscheinen?
   // Alle 3 fertigen Spiele.
   function isProgressArticleDue(
@@ -746,6 +818,7 @@
     buildSongArticle,
     buildFinalsArticle,
     buildChampionArticle,
+    buildSpuriousArticle,
 
     pushArticle,
     pushManualArticle,
@@ -755,5 +828,6 @@
     countArticlesByKind,
     countFinishedMatches,
     isProgressArticleDue,
+    getUsedSpuriousPairKeys,
   };
 })(window);

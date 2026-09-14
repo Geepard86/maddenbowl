@@ -11,6 +11,7 @@
   <script src="music.js"></script>
   <script src="records.js"></script>
   <script src="blog.js"></script>
+  <script src="spurious.js"></script>
 
   <link rel="stylesheet" href="styles.css">
   <style>
@@ -1531,10 +1532,24 @@ const ringsHtml = rings > 0
         }
 
         // Turnierblog: alle 3 Spiele ein Zwischenstand-Artikel.
-        if (MB.Blog.isProgressArticleDue(state, progressArticlesSoFar)) {
+        const progressDueNow = MB.Blog.isProgressArticleDue(state, progressArticlesSoFar);
+        if (progressDueNow) {
           const finishedCount = MB.Blog.countFinishedMatches(state);
           MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildProgressArticle(state, history, finishedCount));
           progressArticlesSoFar++;
+        }
+
+        // Spurious Correlations (spurious.js): bei JEDEM gespeicherten
+        // Ergebnis prüfen, ob eine Madden-Bowl-Kennzahl aus der Historie
+        // zufällig stark mit einer der 101 hinterlegten deutschen
+        // Jahres-Statistiken korreliert. Läuft bewusst NICHT, wenn in
+        // diesem Speichervorgang bereits automatisch ein anderer Artikel
+        // entsteht (Finale/Champion/Zwischenstand) — sonst wirkt der Blog
+        // überladen — und nicht, solange schon ein unveröffentlichter
+        // Vorschlag in den Rekord-Momenten liegt. Läuft async im
+        // Hintergrund, blockiert also nichts.
+        if (milestoneRecords.length === 0 && !progressDueNow) {
+          maybeOfferSpuriousCorrelation();
         }
       }
 
@@ -2793,6 +2808,99 @@ function renderRanking() {
     async function saveMemeContext() { await finalizeMemeContext(true); }
     async function skipMemeContext() { await finalizeMemeContext(false); }
 
+    // =========================================================
+    // SPURIOUS CORRELATIONS (spurious.js) — Tyler-Vigen-Style
+    // Schein-Korrelationen zwischen einer Madden-Bowl-Saison-Kennzahl und
+    // einer der 101 hinterlegten deutschen Jahres-Statistiken. Läuft bei
+    // jedem gespeicherten Ergebnis im Hintergrund mit (siehe
+    // finishScoreUpdate) und hängt sich — genau wie Memes — als eigener
+    // Eintrag an sessionRecords/activePopupEntries an, erkennbar an
+    // entry.isSpurious === true (entry.record bleibt dabei unbesetzt).
+    // =========================================================
+
+    async function addSessionSpuriousCandidate(candidate) {
+      const entry = { isSpurious: true, candidate, canvasPreview: null, loading: true, error: null, published: false };
+      sessionRecords.unshift(entry);
+      refreshMemeViews();
+      try {
+        const canvas = MB.Spurious.renderChartCanvas(candidate);
+        canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.style.objectFit = 'contain';
+        entry.canvasPreview = canvas;
+      } catch (e) {
+        entry.error = 'Grafik konnte nicht erzeugt werden: ' + e.message;
+      }
+      entry.loading = false;
+      refreshMemeViews();
+      return entry;
+    }
+
+    // Wird aus finishScoreUpdate() aufgerufen — läuft async im Hintergrund,
+    // blockiert also nie das Speichern eines Ergebnisses selbst.
+    async function maybeOfferSpuriousCorrelation() {
+      try {
+        if (!MB.Spurious) return; // spurious.js nicht geladen
+        const tournamentId = MB.getCurrentTournamentId();
+        if (!tournamentId) return;
+
+        // Schon ein unveröffentlichter Vorschlag offen? Nicht noch einen
+        // draufsatteln, sonst häufen sich unbeantwortete Kandidaten an.
+        if (sessionRecords.some((e) => e.isSpurious && !e.published)) return;
+
+        const used = await MB.Blog.getUsedSpuriousPairKeys(tournamentId);
+        const candidate = await MB.Spurious.findBestCandidate(used);
+        if (!candidate) return;
+
+        // Erneut prüfen (der obige await kostet Zeit — in der Zwischenzeit
+        // könnte längst ein anderer Vorschlag aufgetaucht sein).
+        if (sessionRecords.some((e) => e.isSpurious && !e.published)) return;
+
+        const entry = await addSessionSpuriousCandidate(candidate);
+
+        const popupModal = document.getElementById('memePopupModal');
+        if (popupModal && !popupModal.classList.contains('hidden')) {
+          // Popup ist schon offen (z.B. wegen eines Meme-Rekords aus
+          // demselben Speichervorgang) — Eintrag einfach mit reinhängen.
+          activePopupEntries = [entry, ...activePopupEntries];
+          refreshMemeViews();
+        } else if (!pendingMemeContext) {
+          // Kein Meme-Kontext-Dialog wartet gerade auf eine Antwort —
+          // Popup direkt mit nur diesem einen Eintrag öffnen.
+          activePopupEntries = [entry];
+          openMemePopup();
+        }
+        // Andernfalls (Kontext-Dialog offen): Eintrag liegt bereit in der
+        // immer sichtbaren "🏆 Rekord-Momente"-Karte, kein zusätzliches
+        // Popup wird erzwungen.
+      } catch (e) {
+        console.warn('Spurious-Correlation-Check fehlgeschlagen:', e);
+      }
+    }
+
+    async function publishSpuriousToBlog(i) {
+      const entry = sessionRecords[i];
+      if (!entry || !entry.isSpurious || entry.published || entry.loading || entry.error) return;
+      const tournamentId = MB.getCurrentTournamentId();
+      const article = MB.Blog.buildSpuriousArticle(entry.candidate);
+      try {
+        const canvas = entry.canvasPreview || MB.Spurious.renderChartCanvas(entry.candidate);
+        article.media_url = await MB.Records.uploadMemeToStorage(canvas, tournamentId, 'spurious');
+        article.media_type = 'image';
+      } catch (e) {
+        console.warn('Spurious-Chart-Upload fehlgeschlagen, Artikel wird ohne Bild gepostet:', e);
+      }
+      await MB.Blog.pushArticle(tournamentId, article);
+      entry.published = true;
+      refreshMemeViews();
+    }
+
+    function dismissSpurious(i) {
+      const entry = sessionRecords[i];
+      if (!entry) return;
+      sessionRecords = sessionRecords.filter((e) => e !== entry);
+      activePopupEntries = activePopupEntries.filter((e) => e !== entry);
+      refreshMemeViews();
+    }
+
     // Rendert die "🏆 Rekord-Momente"-Karte UND (falls offen) das Popup neu.
     // Alle Stellen, die früher direkt renderRecordMomentsPanel() aufgerufen
     // haben, rufen jetzt das hier auf, damit beide Ansichten synchron bleiben.
@@ -2827,6 +2935,9 @@ function renderRanking() {
 
       el.innerHTML = entries.map((entry) => {
         const globalIndex = sessionRecords.indexOf(entry);
+
+        if (entry.isSpurious) return renderSpuriousCardHtml(entry, globalIndex);
+
         const info = MB.Records.RECORD_TYPES[entry.record.type];
         let bodyHtml;
         if (entry.loading) {
@@ -2857,7 +2968,9 @@ function renderRanking() {
         const globalIndex = sessionRecords.indexOf(entry);
         const slot = el.querySelector(`[data-popup-slot="${globalIndex}"]`);
         if (!slot) return;
-        if (entry.provider === 'imgflip' && entry.imageUrl) {
+        if (entry.isSpurious) {
+          if (entry.canvasPreview) slot.appendChild(entry.canvasPreview);
+        } else if (entry.provider === 'imgflip' && entry.imageUrl) {
           const img = document.createElement('img');
           img.src = entry.imageUrl;
           img.style.cssText = 'width:100%; height:100%; object-fit:contain;';
@@ -2866,6 +2979,36 @@ function renderRanking() {
           slot.appendChild(entry.canvasPreview);
         }
       });
+    }
+
+    // Gemeinsame Karten-HTML für einen Spurious-Correlation-Eintrag —
+    // wird sowohl vom Popup als auch von der "🏆 Rekord-Momente"-Karte
+    // benutzt (siehe renderMemePopupContent/renderRecordMomentsPanel).
+    function renderSpuriousCardHtml(entry, globalIndex) {
+      const c = entry.candidate;
+      let bodyHtml;
+      if (entry.loading) {
+        bodyHtml = `<div class="hint">Wird berechnet…</div>`;
+      } else if (entry.error) {
+        bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div>`;
+      } else {
+        bodyHtml = `
+          <div style="font-size:0.8em; opacity:0.8; margin-bottom:8px;">
+            ${c.mbLabel} korreliert mit „${c.germanName}“ (r = ${c.r.toFixed(3)})
+          </div>
+          <div class="meme-preview-slot" data-popup-slot="${globalIndex}"
+               style="width:100%; max-width:340px; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
+          <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
+            ${entry.published
+              ? `<button style="width:auto;" disabled>✅ Im Blog</button>`
+              : `<button style="width:auto;" onclick="publishSpuriousToBlog(${globalIndex})">📰 Im Blog veröffentlichen</button>
+                 <button class="btn-secondary" style="width:auto;" onclick="dismissSpurious(${globalIndex})">🙈 Verwerfen</button>`}
+          </div>`;
+      }
+      return `<div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #22304333; text-align:center;">
+        <div style="font-weight:bold; margin-bottom:8px; font-size:1.05em;">📊 Spurious Correlation</div>
+        ${bodyHtml}
+      </div>`;
     }
 
     async function addSessionRecord(record) {
@@ -3004,9 +3147,18 @@ function renderRanking() {
 
       el.innerHTML = '';
       sessionRecords.forEach((entry, i) => {
-        const info = MB.Records.RECORD_TYPES[entry.record.type];
         const wrap = document.createElement('div');
         wrap.style.cssText = 'margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #22304333;';
+
+        if (entry.isSpurious) {
+          wrap.innerHTML = renderSpuriousCardHtml(entry, i);
+          el.appendChild(wrap);
+          const slot = wrap.querySelector('.meme-preview-slot');
+          if (slot && !entry.loading && !entry.error && entry.canvasPreview) slot.appendChild(entry.canvasPreview);
+          return;
+        }
+
+        const info = MB.Records.RECORD_TYPES[entry.record.type];
 
         let bodyHtml;
         if (entry.loading) {
