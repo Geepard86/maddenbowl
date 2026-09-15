@@ -224,6 +224,19 @@
   const MATCH_THRESHOLD = 0.9; // |r| ab hier gilt als "passt gut"
   const MIN_POINTS = 4;
 
+  // Verhindert degenerierte "Treffer" zwischen zwei Reihen, die im Kern nur
+  // zwischen zwei Plateaus springen (z.B. 27,27,35,35 gegen 37.8,37.8,37.7,
+  // 37.7) — das ergibt zwar mathematisch fast immer |r| nahe ±1, ist aber
+  // nur ein Artefakt der wenigen Datenpunkte und keine "wilde", organisch
+  // wirkende Korrelation im Vigen-Sinn. Bei n Punkten werden mindestens
+  // min(3, n) unterschiedliche Werte verlangt — schließt starre Stufen-
+  // funktionen (nur 2 verschiedene Werte) aus, ohne echte Varianz zu
+  // bestrafen.
+  function hasEnoughVariety(values) {
+    const distinct = new Set(values.map((v) => Math.round(v * 1e6) / 1e6));
+    return distinct.size >= Math.min(3, values.length);
+  }
+
   function findCandidates(seasonList, excludePairKeys, opts) {
     opts = opts || {};
     const threshold = opts.threshold != null ? opts.threshold : MATCH_THRESHOLD;
@@ -244,6 +257,7 @@
       const recentSeries = series.slice(-n); // die letzten n archivierten Saisons
       const recentYears = years.slice(-n); // die letzten n Jahre der Statistik-Reihe
       const xs = recentSeries.map((s) => s.value);
+      if (!hasEnoughVariety(xs)) return; // Kennzahl selbst zu eintönig (z.B. quasi konstante Spieleanzahl)
       const xLabels = recentSeries.map((s, i) => `Saison ${s.seasonLabel} → ${recentYears[i]}`);
 
       GERMAN_STATS.forEach((gs) => {
@@ -252,6 +266,7 @@
         if (exclude.has(pairKey)) return;
 
         const ys = recentYears.map((y) => gs.values[y]);
+        if (!hasEnoughVariety(ys)) return; // deutsche Statistik über den Zeitraum quasi unverändert
         const r = pearson(xs, ys);
         if (r == null || Math.abs(r) < threshold) return;
 
@@ -360,12 +375,14 @@
 
       PLAYER_STAT_DEFS.forEach((def) => {
         const xs = series[def.key];
+        if (!hasEnoughVariety(xs)) return;
         GERMAN_STATS.forEach((gs) => {
           if (recentYears.some((y) => gs.values[y] == null)) return;
           const pairKey = "player::" + player + "::" + def.key + "::" + gs.id;
           if (exclude.has(pairKey)) return;
 
           const ys = recentYears.map((y) => gs.values[y]);
+          if (!hasEnoughVariety(ys)) return;
           const r = pearson(xs, ys);
           if (r == null || Math.abs(r) < threshold) return;
 

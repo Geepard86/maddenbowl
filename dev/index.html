@@ -2974,7 +2974,11 @@ function renderRanking() {
       }
       const saved = await MB.Blog.pushArticle(tournamentId, article);
       if (!saved) {
-        alert('Der Artikel konnte nicht gespeichert werden. Vermutlich fehlt noch die "data"-Spalte aus supabase-schema-update-7.sql — bitte einmal im Supabase-SQL-Editor ausführen und dann erneut versuchen.');
+        const err = MB.Blog.getLastPushArticleError && MB.Blog.getLastPushArticleError();
+        const detail = err
+          ? `${err.message || err.code || ''}${err.hint ? '\n\nHinweis: ' + err.hint : ''}${err.details ? '\n\nDetails: ' + err.details : ''}`
+          : 'Unbekannter Fehler (siehe Browser-Konsole).';
+        alert('Der Artikel konnte nicht gespeichert werden:\n\n' + detail);
         return;
       }
       entry.published = true;

@@ -635,6 +635,8 @@
   // SUPABASE
   // ======================================================================
 
+  let lastPushArticleError = null; // Diagnose-Hilfe für publishSpuriousToBlog() u.ä., siehe getLastPushArticleError()
+
   async function pushArticle(tournamentId, article) {
     const sb = MB.getSupabaseClient();
 
@@ -659,10 +661,19 @@
         "Artikel konnte nicht gespeichert werden:",
         error
       );
+      lastPushArticleError = error;
       return null;
     }
 
+    lastPushArticleError = null;
     return data;
+  }
+
+  // Liefert das zuletzt bei pushArticle() aufgetretene Supabase-/Postgres-
+  // Fehlerobjekt (oder null), damit Aufrufer bei einem Fehlschlag den
+  // TATSÄCHLICHEN Grund anzeigen können statt nur zu raten.
+  function getLastPushArticleError() {
+    return lastPushArticleError;
   }
 
   // Manuell verfasster Beitrag durch den Admin.
@@ -842,6 +853,7 @@
     buildSpuriousArticle,
 
     pushArticle,
+    getLastPushArticleError,
     pushManualArticle,
     updateArticle,
     deleteArticle,
