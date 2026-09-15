@@ -23,12 +23,20 @@
     "SCHLUSS IN",
   ];
   const WIN_PHRASES = [
-    "{winner} zieht das Ding und schlägt {loser}.",
-    "{winner} behält die Nerven und holt sich den Sieg gegen {loser}.",
-    "Am Ende hat {winner} die besseren Antworten und lässt {loser} hinter sich.",
-    "{winner} macht den Sack zu — {loser} muss sich geschlagen geben.",
-    "Das geht an {winner}: stark gespielt gegen {loser}.",
-    "{winner} hat heute den längeren Atem und setzt sich gegen {loser} durch.",
+    "{winner} setzt sich mit {winnerScore} zu {loserScore} gegen {loser} durch.",
+    "{winner} gewinnt mit {winnerScore} zu {loserScore} gegen {loser}.",
+    "{winner} schlägt {loser} mit {winnerScore} zu {loserScore}.",
+    "Am Ende steht es {winnerScore} zu {loserScore} für {winner} gegen {loser}.",
+    "{winner} behält mit {winnerScore} zu {loserScore} gegen {loser} die Oberhand.",
+    "{winner} macht die Partie mit {winnerScore} zu {loserScore} gegen {loser} klar.",
+  ];
+  // Bewusst aus der Verlierer-Perspektive formuliert - sorgt zusammen mit
+  // WIN_PHRASES für mehr Abwechslung, statt immer nur den Sieger zu betonen.
+  const LOSE_PHRASES = [
+    "{loser} muss sich {winner} mit {loserScore} zu {winnerScore} geschlagen geben.",
+    "Für {loser} reicht es nicht - {winner} gewinnt mit {winnerScore} zu {loserScore}.",
+    "{loser} verliert mit {loserScore} zu {winnerScore} gegen {winner}.",
+    "Am Ende zieht {loser} gegen {winner} mit {loserScore} zu {winnerScore} den Kürzeren.",
   ];
   const CLOSE_GAME_PHRASES = [
     "Das war eng bis zum Schluss.",
@@ -155,21 +163,20 @@
   // Reihenfolge, in der Preview-Fakt-Typen bevorzugt werden (Anforderung 14).
   // Darf sich verschieben, wenn das natürlicher klingt - wichtig ist nur,
   // dass bereits verwendete Typen (usedFactTypes) ausgeschlossen werden.
-  const UPCOMING_FACT_PRIORITY = ["odds", "directComparison", "averagePoints", "playoffFact", "form", "other"];
-
-  function formatOddsForSpeech(p) {
-    return MB.decimalOdds(p).toFixed(2).replace(".", ",");
-  }
-
   function buildOddsFact(history, state, homeName, awayName) {
     try {
       const odds = MB.computeOddsForMatch(history, state, homeName, awayName);
       const favIsHome = odds.pHome >= odds.pAway;
       const favName = speechName(favIsHome ? homeName : awayName);
       const dogName = speechName(favIsHome ? awayName : homeName);
-      const favQuote = formatOddsForSpeech(favIsHome ? odds.pHome : odds.pAway);
-      const dogQuote = formatOddsForSpeech(favIsHome ? odds.pAway : odds.pHome);
-      return { type: "odds", text: `Die Wettquoten sehen ${favName} bei ${favQuote} und ${dogName} bei ${dogQuote}.` };
+      // Rohe Zahl reicht - sanitizeForSpeech() schreibt die Nachkommastellen
+      // beim Sprechen komplett aus (siehe dort), damit z.B. "1,39" nicht
+      // buchstabiert als "eins drei neun" vorgelesen wird.
+      const favQuote = MB.decimalOdds(favIsHome ? odds.pHome : odds.pAway).toFixed(2);
+      const dogQuote = MB.decimalOdds(favIsHome ? odds.pAway : odds.pHome).toFixed(2);
+      // Score in der Größenordnung der übrigen Fakten (siehe shared.js/add()),
+      // damit die Quote nicht per starrer Prioritätsregel jedes Mal gewinnt.
+      return { type: "odds", text: `Die Wettquoten sehen ${favName} bei ${favQuote} und ${dogName} bei ${dogQuote}.`, score: 9 };
     } catch (e) { return null; }
   }
 
@@ -177,7 +184,11 @@
   // anderen Typ verbraucht wurde (Anforderungen 3, 15, 16). Holt sich dafür
   // ALLE getypten Kandidaten aus shared.js (nicht nur die Top 2 wie die
   // Anzeige-Variante pickFlavourFacts), damit bei einer Typ-Kollision noch
-  // Alternativen übrig sind.
+  // Alternativen übrig sind. Auswahl ist score-gewichtet-zufällig statt
+  // starr nach fester Prioritätsliste (sonst gewinnen die Wettquoten, die
+  // praktisch immer verfügbar sind, jedes einzelne Mal - Anforderung 14
+  // erlaubt das ausdrücklich: "Priorisierung darf angepasst werden, sofern
+  // dadurch die Ausgabe natürlicher wird").
   function pickUpcomingFact(history, state, homeName, awayName, usedFactTypes) {
     const used = usedFactTypes || new Set();
     const candidates = [];
@@ -190,11 +201,9 @@
     const available = candidates.filter((f) => !used.has(f.type));
     if (!available.length) return null;
 
-    available.sort((a, b) => {
-      const pa = UPCOMING_FACT_PRIORITY.indexOf(a.type), pb = UPCOMING_FACT_PRIORITY.indexOf(b.type);
-      return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
-    });
-    return available[0];
+    const withJitter = available.map((f) => ({ f, key: (f.score || 5) + Math.random() * 6 }));
+    withJitter.sort((a, b) => b.key - a.key);
+    return withJitter[0].f;
   }
 
   // Kommentator: berichtet AUSSCHLIESSLICH über das gerade abgeschlossene
@@ -203,8 +212,7 @@
   // erlaubte Rückfall-Fakt (Anforderung 12) - niemals allgemeine
   // Preview-Fakten des kommenden Spiels. Gibt zusätzlich zurück, welcher(r)
   // Fakt-Typ verbraucht wurde, damit der Moderator ihn nicht doppelt nennt.
-  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds }) {
-    const { home, away } = speechNames(homeName, awayName);
+  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId }) {
     const winnerRaw = homeScore > awayScore ? homeName : awayName;
     const loserRaw = homeScore > awayScore ? awayName : homeName;
     const winner = speechName(winnerRaw), loser = speechName(loserRaw);
@@ -215,25 +223,35 @@
     const names = getSpeakerNames();
 
     let line = `${pick(OPENERS_RESULT)} ${stadium || "Stadion"}! `;
-    // UI-Konvention: Heim@Auswärts = zweiter Name ist das Heimteam.
-    // Gesprochen wird daher zuerst der Auswärtsname, dann der Heimname.
-    line += `Endstand: ${away} ${awayScore}, ${home} ${homeScore}. `;
-    line += fmt(pick(WIN_PHRASES), { winner, loser }) + " ";
+    // Ergebnis UND Sieger/Verlierer in EINEM Satz (nicht mehr getrennt als
+    // "Endstand: ..." + "X schlägt Y" - das klang doppelt gemoppelt). Mix aus
+    // Sieger- und Verlierer-Perspektive für mehr Abwechslung.
+    line += fmt(pick([...WIN_PHRASES, ...LOSE_PHRASES]), { winner, loser, winnerScore, loserScore }) + " ";
 
-    if (margin <= 3) line += pick(CLOSE_GAME_PHRASES) + " ";
-    else if (margin >= 21) line += pick(BLOWOUT_PHRASES) + " ";
+    // Nicht JEDES enge/deutliche Spiel bekommt zusätzlich noch eine
+    // Farbkommentar-Zeile - sonst klingt jede Ansage gleich lang/gleich
+    // aufgebaut. Manchmal reicht der reine Ergebnissatz.
+    if (margin <= 3 && Math.random() < 0.7) line += pick(CLOSE_GAME_PHRASES) + " ";
+    else if (margin >= 21 && Math.random() < 0.7) line += pick(BLOWOUT_PHRASES) + " ";
 
     let impactUsed = false;
     try {
-      const impacts = MB.getAnnouncerResultImpacts(history, state, winnerRaw, loserRaw, prevSeeds) || [];
+      const impacts = MB.getAnnouncerResultImpacts(history, state, winnerRaw, loserRaw, prevSeeds, { matchKind, matchId }) || [];
       if (impacts.length) {
-        line += impacts[0].text + " ";
-        usedFactTypes.add(impacts[0].type);
-        impactUsed = true;
+        const top = impacts[0];
+        // Ausscheiden/Tabellensprung sind echte News und werden immer
+        // genannt; Titelchancen sind reine Kür und dürfen auch mal wegfallen
+        // (siehe auch die 50%-Hürde dafür schon in shared.js).
+        const important = top.type === "eliminationImpact" || top.type === "tableImpact";
+        if (important || Math.random() < 0.65) {
+          line += top.text + " ";
+          usedFactTypes.add(top.type);
+          impactUsed = true;
+        }
       }
     } catch (e) {}
 
-    if (!impactUsed) {
+    if (!impactUsed && Math.random() < 0.65) {
       try {
         const typed = MB.pickFlavourFactsTyped(history, state, homeName, awayName) || [];
         const directCompare = typed.find((f) => f.type === "directComparison");
@@ -254,6 +272,20 @@
   // nicht vom Kommentator verwendet wurde (Anforderungen 9, 15, 16). Übergibt
   // nie zurück an den Kommentator (Anforderung 20) und endet ohne generische
   // Schlussfloskel (Anforderung 22).
+  // Mehrere Varianten für den Einstieg in die Vorschau, statt immer exakt
+  // demselben Satzbau - "{away}"/"{home}" halten die UI-Konvention ein
+  // (erster Name = Auswärts, zweiter = Heim).
+  const UPCOMING_LEAD_INS = [
+    "Als Nächstes spielt {away} bei {home}",
+    "Weiter geht's mit {away} bei {home}",
+    "Die nächste Partie: {away} bei {home}",
+    "Dann kommt {away} bei {home}",
+    "Als Nächstes duellieren sich {away} und {home}",
+  ];
+  // Gelegentlicher kleiner Konnektor vor dem Fakt, statt immer nahtlos
+  // anzuschließen - rein für Abwechslung, meistens bleibt es aber leer.
+  const FACT_CONNECTORS = ["", "", "", "Dazu: ", "Außerdem: "];
+
   function buildUpcomingLine({ state, history, homeName, awayName, time, stadium, stadiumPreposition, usedFactTypes }) {
     const { home, away } = speechNames(homeName, awayName);
     const names = getSpeakerNames();
@@ -261,16 +293,26 @@
 
     const handoffIn = pick(HANDOFF_IN_PHRASES)(names);
     let line = handoffIn ? `${handoffIn} ` : "";
-    // UI-Konvention: erster Name = Auswärts, zweiter Name = Heim.
-    line += `Als Nächstes spielt ${away} bei ${home}`;
-    if (time) line += `, Anpfiff ${time} Uhr`;
+    line += fmt(pick(UPCOMING_LEAD_INS), { away, home });
+    if (time) line += `, Anpfiff ${formatTimeForSpeech(time)}`;
     if (stadium) line += `, ${stadiumPhrase(stadium, stadiumPreposition)}`;
     line += ". ";
 
     const fact = pickUpcomingFact(history, state, homeName, awayName, used);
     if (fact) {
-      line += naturalizeFact(fact.text) + " ";
+      line += pick(FACT_CONNECTORS) + naturalizeFact(fact.text) + " ";
       used.add(fact.type);
+
+      // Selten einen zweiten (anders typisierten) Fakt nachschieben, wenn
+      // noch einer übrig ist - klingt dann etwas kompletter, ohne dass es
+      // jedes Mal passiert.
+      if (Math.random() < 0.2) {
+        const second = pickUpcomingFact(history, state, homeName, awayName, used);
+        if (second) {
+          line += "Und: " + naturalizeFact(second.text) + " ";
+          used.add(second.type);
+        }
+      }
     }
 
     return line.trim();
@@ -282,19 +324,60 @@
   // trennen den Punkt per Leerzeichen ab, das reicht den meisten Engines,
   // um die Ordinal-Interpretation zu vermeiden — hörbar bleibt es eine
   // normale Kardinalzahl.
+  // Deutsche Zahlwörter 0-99 - für die Sprachausgabe von Dezimalzahlen
+  // (Anforderungen 23/24/25). Viele TTS-Stimmen lesen "1,39" buchstabiert als
+  // "eins Komma drei neun" statt "eins Komma neununddreißig" - deshalb
+  // werden Dezimalzahlen hier vor der Sprachausgabe komplett ausgeschrieben,
+  // statt nur den Punkt durch ein Komma zu ersetzen.
+  const ONES_DE = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun"];
+  const TEENS_DE = ["zehn", "elf", "zwölf", "dreizehn", "vierzehn", "fünfzehn", "sechzehn", "siebzehn", "achtzehn", "neunzehn"];
+  const TENS_DE = ["", "", "zwanzig", "dreißig", "vierzig", "fünfzig", "sechzig", "siebzig", "achtzig", "neunzig"];
+
+  function numberWordsDE(n) {
+    n = Math.round(n);
+    if (n < 0) return `minus ${numberWordsDE(-n)}`;
+    if (n < 10) return ONES_DE[n];
+    if (n < 20) return TEENS_DE[n - 10];
+    if (n < 100) {
+      const t = Math.floor(n / 10), o = n % 10;
+      return o === 0 ? TENS_DE[t] : `${ONES_DE[o]}und${TENS_DE[t]}`;
+    }
+    // Kommt bei Quoten/Statistiken in der Praxis nicht vor - normale
+    // Ziffernaussprache ist hier ein akzeptabler Rückfall.
+    return String(n);
+  }
+
+  function digitsWordsDE(digitsStr) {
+    return digitsStr.split("").map((d) => ONES_DE[parseInt(d, 10)]).join(" ");
+  }
+
   function sanitizeForSpeech(text) {
     return text
-      // Dezimalzahlen für deutsche TTS (Anforderungen 23/24) - NUR hier im
+      // Dezimalzahlen für deutsche TTS (Anforderungen 23/24/25) - NUR hier im
       // Sprachpfad, nicht in shared.js/one(), damit die sichtbaren
       // Insight-Texte auf index.html/live.html/music.js unverändert bleiben.
-      // Reihenfolge wichtig: erst "42.0" -> "42" (keine unnötige
-      // Nachkommastelle bei Ganzzahlen), danach erst verbleibende echte
-      // Dezimalzahlen "17.5" -> "17,5" (Komma statt Punkt).
-      .replace(/(\d+)\.0\b/g, "$1")
-      .replace(/(\d+)\.(\d+)/g, "$1,$2")
+      // "42.0"/"42,0" -> "zweiundvierzig" (keine unnötige Nachkommastelle).
+      // Nachkommastellen werden EINZELN gesprochen ("1,39" -> "eins Komma
+      // drei neun"), nicht als zusammengesetzte Zahl ("neununddreißig") -
+      // das ist die gewünschte/übliche Sprechweise für Quoten & Co.
+      .replace(/(\d+)[.,](\d+)/g, (_, intPart, fracPart) => {
+        if (/^0+$/.test(fracPart)) return numberWordsDE(parseInt(intPart, 10));
+        return `${numberWordsDE(parseInt(intPart, 10))} Komma ${digitsWordsDE(fracPart)}`;
+      })
       .replace(/(\d)\.(\s|$)/g, "$1 .$2")   // "17." -> "17 ." (Ordinalzahl-Fix)
       .replace(/\s{2,}/g, " ")
       .trim();
+  }
+
+  // "20:00" -> "20 Uhr" / "20:15" -> "20 Uhr 15" (Anforderung 23-nah): die
+  // App speichert Uhrzeiten als "HH:MM", aber der Doppelpunkt wird von
+  // manchen TTS-Stimmen unsauber gelesen. Ganz ohne Satzzeichen ausschreiben
+  // ist die zuverlässigste Variante.
+  function formatTimeForSpeech(time) {
+    if (!time || typeof time !== "string" || !time.includes(":")) return time || "";
+    const [h, m] = time.split(":").map((x) => parseInt(x, 10));
+    if (Number.isNaN(h)) return time;
+    return (!m ? `${h} Uhr` : `${h} Uhr ${m}`);
   }
 
   // ======================================================================
@@ -491,7 +574,7 @@
   // Eigentliche Ansage-Logik (vormals der einzige "announce"). Umbenannt zu
   // _announceNow, weil der öffentliche Einstiegspunkt jetzt announce() weiter
   // unten ist, der Aufrufe in eine Warteschlange einreiht.
-  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, upcoming, prevSeeds }) {
+  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, upcoming, prevSeeds, matchKind, matchId }) {
     if (homeScore === null || awayScore === null || homeScore === undefined || awayScore === undefined) return;
 
     const settings = getTtsSettings();
@@ -501,7 +584,7 @@
     // (Anforderung 20: nur der Kommentator übergibt) und liefert zurück,
     // welche(r) Fakt-Typ(en) dabei verbraucht wurden, damit der Moderator
     // nicht denselben Typ nochmal nennt (Anforderungen 3, 15, 16).
-    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds });
+    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId });
     const nextMatch = (upcoming || [])[0] || null;
 
     const buildPreviewLine = () => buildUpcomingLine({

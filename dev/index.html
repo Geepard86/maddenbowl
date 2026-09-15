@@ -1521,6 +1521,13 @@ const ringsHtml = rings > 0
           // Announcer-Tabellen-Impact - `state` selbst enthält an dieser
           // Stelle schon den neuen Stand (siehe tableRankPrev/-Now oben).
           prevSeeds: tableRankPrev,
+          // "group" vs "playoff" + Match-ID (z.B. "lb1") - damit der
+          // Announcer zwischen "Playoff-Chancen verpasst" (Gruppenphase) und
+          // "raus aus dem Turnier" (K.o.-Niederlage im Bracket) unterscheiden
+          // kann, statt in den Playoffs fälschlich von "Playoffs verpasst"
+          // zu sprechen.
+          matchKind: type,
+          matchId: (type === 'playoff') ? match.id : null,
           upcoming: upcomingWithPrep,
         });
 

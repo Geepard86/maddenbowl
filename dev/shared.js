@@ -832,27 +832,71 @@
   // prevSeeds (optional): Map<Name, Platzierung> VOR diesem Spiel, z.B. aus
   // MB.getLiveSeeds(state), das der Aufrufer VOR dem Score-Commit einmal
   // eingefroren haben muss (die Tabelle in `state` ist zu diesem Zeitpunkt
-  // bereits mit dem neuen Ergebnis aktualisiert). Ohne prevSeeds wird kein
-  // tableImpact geliefert (lieber kein Fakt als ein geratener).
-  function getAnnouncerResultImpacts(history, state, winnerName, loserName, prevSeeds) {
-    const impacts = [];
+  // bereits mit dem neuen Ergebnis aktualisiert). Ohne prevSeeds wird weder
+  // tableImpact noch die Gruppenphase-eliminationImpact geliefert (lieber
+  // kein Fakt als ein geratener).
+  //
+  // ctx.matchKind ("group"|"playoff") + ctx.matchId (z.B. "lb1") sagen, ob es
+  // gerade ein Gruppen- oder ein Playoff-Spiel war. Wichtig, weil "Playoff-
+  // Chancen verpasst" (Gruppenphase) und "raus aus dem Turnier" (K.o. in den
+  // Playoffs) zwei völlig verschiedene Aussagen sind.
+  //
+  // Priorität: eliminationImpact > tableImpact > titleImpact. Playoff-Feld
+  // ist in diesem Turnierformat immer 8 Plätze groß (siehe renderTable()-
+  // Markierung "row-eliminated" für 9/10 Spieler); erst wenn die Gruppenphase
+  // komplett durch ist, gilt ein Platz außerhalb der Top 8 als endgültig
+  // verpasst - vorher könnten weitere Gruppenspiele die Reihenfolge noch
+  // drehen, und "ausgeschieden" wäre verfrüht.
+  const PLAYOFF_SPOTS = 8;
 
-    if (prevSeeds && prevSeeds.size) {
-      const nowSeeds = getLiveSeeds(state);
-      const prevW = prevSeeds.get(winnerName), prevL = prevSeeds.get(loserName);
-      const nowW = nowSeeds.get(winnerName), nowL = nowSeeds.get(loserName);
-      if (prevW != null && prevL != null && nowW != null && nowL != null && prevW > prevL && nowW < nowL) {
-        impacts.push({ type: "tableImpact", text: `Damit zieht ${winnerName} in der Tabelle an ${loserName} vorbei.` });
+  // Echte K.o.-Spiele im Doppel-Elimination-Bracket (siehe initPlayoffs() /
+  // elimOrder in index.html): wer hier verliert, ist raus aus dem Turnier.
+  // ub1-ub4 (Wildcard) und us1/us2 (Upper Semi) sind KEINE K.o.-Spiele - der
+  // Verlierer rutscht dort nur ins Lower Bracket und spielt weiter. "gf"
+  // (Finale) und "tb" (Platzierungsspiel) haben eigene Ansagen/Artikel
+  // andernorts in der App und werden hier bewusst nicht mit "ausgeschieden"
+  // kommentiert.
+  const PLAYOFF_ELIMINATION_MATCH_IDS = new Set(["lb1", "lb2", "lb3", "lb4", "ls", "lf"]);
+
+  function getAnnouncerResultImpacts(history, state, winnerName, loserName, prevSeeds, ctx = {}) {
+    const { matchKind, matchId } = ctx;
+    const impacts = [];
+    const nowSeeds = (prevSeeds && prevSeeds.size) ? getLiveSeeds(state) : null;
+
+    if (matchKind === "playoff") {
+      if (matchId && PLAYOFF_ELIMINATION_MATCH_IDS.has(matchId)) {
+        impacts.push({ type: "eliminationImpact", text: `Damit ist ${loserName} raus aus dem Turnier.` });
+      }
+    } else {
+      if (nowSeeds && (state.players || []).length > PLAYOFF_SPOTS && isGroupPhaseComplete(state)) {
+        const prevL = prevSeeds.get(loserName), nowL = nowSeeds.get(loserName);
+        if (prevL != null && nowL != null && nowL > PLAYOFF_SPOTS && prevL <= PLAYOFF_SPOTS) {
+          impacts.push({ type: "eliminationImpact", text: `Damit ist ${loserName} aus dem Rennen um die Playoffs.` });
+        }
+      }
+
+      if (nowSeeds) {
+        const prevW = prevSeeds.get(winnerName), prevL = prevSeeds.get(loserName);
+        const nowW = nowSeeds.get(winnerName), nowL = nowSeeds.get(loserName);
+        if (prevW != null && prevL != null && nowW != null && nowL != null && prevW > prevL && nowW < nowL) {
+          impacts.push({ type: "tableImpact", text: `Damit zieht ${winnerName} in der Tabelle an ${loserName} vorbei.` });
+        }
       }
     }
 
-    try {
-      const titleOdds = computeTitleOdds(history, state);
-      const pct = titleOdds[loserName];
-      if (pct != null) {
-        impacts.push({ type: "titleImpact", text: `Damit liegen ${loserName}s Titelchancen jetzt bei ${Math.round(pct)} Prozent.` });
-      }
-    } catch (e) {}
+    // Titelchancen sind fast immer irgendeine Zahl > 0 - würden sonst JEDES
+    // Mal als Fakt gewinnen und den Direktvergleich-Fallback nie zum Zug
+    // kommen lassen. Deshalb nur mit 50% Wahrscheinlichkeit als Kandidat
+    // aufnehmen, wenn kein "härterer" Impact (Ausscheiden/Tabelle) vorliegt.
+    if (!impacts.length) {
+      try {
+        const titleOdds = computeTitleOdds(history, state);
+        const pct = titleOdds[loserName];
+        if (pct != null && Math.random() < 0.5) {
+          impacts.push({ type: "titleImpact", text: `Damit liegen ${loserName}s Titelchancen jetzt bei ${Math.round(pct)} Prozent.` });
+        }
+      } catch (e) {}
+    }
 
     return impacts;
   }
