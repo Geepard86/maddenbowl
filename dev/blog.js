@@ -560,62 +560,46 @@
   // ======================================================================
 
   const SPURIOUS_INTROS = [
-    "Manchmal braucht es keinen Grund, nur zwei Zahlenreihen, die zufällig denselben Weg gehen. Genau das ist hier passiert.",
-    "Korrelation ist nicht Kausalität — das hier ist trotzdem zu schön, um es nicht aufzuschreiben.",
-    "Die Datenlage im Madden Bowl ist überschaubar. Genau deshalb lohnt sich ab und zu ein Blick auf Zufälle, die keiner braucht, aber jeder liest.",
+    "Die vorliegende Kurzanalyse untersucht den statistischen Zusammenhang zwischen zwei zunächst unabhängig erscheinenden Kennzahlen.",
+    "Im Rahmen einer fortlaufenden Datenbetrachtung wurde folgender Zusammenhang identifiziert.",
+    "Die folgende Auswertung dokumentiert eine bemerkenswert enge Übereinstimmung zweier Zeitreihen.",
+    "Gegenstand dieser Kurzmitteilung ist eine auffällige statistische Kovarianz zweier an sich themenfremder Datenreihen.",
   ];
 
   const SPURIOUS_CLOSERS = [
-    "Ein ursächlicher Zusammenhang ist hochgradig unwahrscheinlich. Ein Eintrag in der Turnierstatistik ist er trotzdem geworden.",
-    "Nächstes Jahr gibt es neue Zahlen — und damit die Chance auf eine noch absurdere Übereinstimmung.",
-    "Zum Nachlesen und Nachrechnen: die Rohwerte stehen unten in der Tabelle. Viel Spaß beim Kopfschütteln.",
+    "Ein kausaler Mechanismus zwischen beiden Größen ist nicht erkennbar; die Korrelation ist als Zufallsbefund zu werten.",
+    "Weitere Erhebungszeiträume könnten diesen Befund erhärten oder widerlegen — belastbar ist er in der vorliegenden Form nicht.",
+    "Von einer inhaltlichen Interpretation dieses Zusammenhangs wird an dieser Stelle ausdrücklich abgesehen.",
+    "Für eine gesicherte Aussage wäre eine deutlich breitere Datenbasis erforderlich, als sie hier vorliegt.",
   ];
-
-  function fmtStatNumber(v) {
-    if (v == null) return "–";
-    if (Math.abs(v) >= 1e6) return v.toLocaleString("de-DE", { maximumFractionDigits: 2 });
-    return v.toLocaleString("de-DE", { maximumFractionDigits: 3 });
-  }
 
   function buildSpuriousArticle(candidate) {
     const rStr = candidate.r.toFixed(6);
-    const direction = candidate.r >= 0 ? "im Gleichschritt" : "gegenläufig";
-    const hasCustomLabels = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
-    const timeLabels = hasCustomLabels ? candidate.xLabels : candidate.years;
-    const timeHeader = hasCustomLabels ? "Zeitpunkt" : "Jahr";
-
-    const tableRows = timeLabels
-      .map((label, i) => {
-        return `<tr><td>${label}</td><td>${fmtStatNumber(candidate.mbValues[i])} ${candidate.mbUnit}</td><td>${fmtStatNumber(candidate.germanValues[i])} ${candidate.germanUnit}</td></tr>`;
-      })
-      .join("");
-
-    const table = `<table style="margin-top:10px;"><tr><th>${timeHeader}</th><th>${candidate.mbLabel}</th><th>${candidate.germanName}</th></tr>${tableRows}</table>`;
+    const strength = Math.abs(candidate.r) >= 0.99 ? "nahezu perfekter" : "sehr starker";
+    const direction = candidate.r >= 0 ? "gleichläufiger" : "gegenläufiger";
+    const hasOrdinalMapping = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
 
     const spanDesc = candidate.isPlayer
-      ? `die letzten ${candidate.years.length} Spiele im Turnier`
-      : `die letzten ${candidate.years.length} Turnier-Saisons`;
+      ? `über die letzten ${candidate.years.length} Spiele im Turnier`
+      : `über die letzten ${candidate.years.length} Turnier-Saisons`;
 
     const parts = [
       pick(SPURIOUS_INTROS),
-      `<strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) bewegen sich über ${spanDesc} ${direction} — mit einem Korrelationskoeffizienten von <strong>r = ${rStr}</strong>.`,
+      `<strong>Befund.</strong> Zwischen <strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) besteht ${spanDesc} ein ${strength} ${direction} Zusammenhang (r = ${rStr}).`,
     ];
 
-    if (hasCustomLabels) {
-      const subject = candidate.isPlayer
-        ? `Das älteste betrachtete Spiel von ${candidate.player}`
-        : `Die älteste betrachtete Madden-Bowl-Saison`;
-      const newest = candidate.isPlayer ? "das jüngste Spiel" : "die jüngste Saison";
+    if (hasOrdinalMapping) {
+      const mapping = candidate.isPlayer
+        ? `${candidate.player}s Spielverlauf wird der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`
+        : `Die betrachteten Turnier-Saisons werden der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`;
       parts.push(
-        `Die Zuordnung erfolgt rein der Reihenfolge nach: ${subject} trifft auf das älteste Jahr der Statistik, ${newest} auf das aktuellste Jahr — nicht zwangsläufig auf denselben Kalenderzeitraum. Genau das macht den Vergleich so schön sinnfrei.`
+        `<strong>Datengrundlage.</strong> ${mapping} (älteste Beobachtung zu ältestem Jahr, jüngste zu jüngstem Jahr) — nicht notwendigerweise demselben Kalenderjahr. Quelle: ${candidate.germanSource}.`
       );
+    } else {
+      parts.push(`<strong>Datengrundlage.</strong> Quelle „${candidate.germanName}“: ${candidate.germanSource}.`);
     }
 
-    parts.push(
-      table,
-      `Quelle „${candidate.germanName}“: ${candidate.germanSource}.`,
-      pick(SPURIOUS_CLOSERS)
-    );
+    parts.push(`<strong>Einordnung.</strong> ${pick(SPURIOUS_CLOSERS)}`);
 
     return {
       kind: "spurious",

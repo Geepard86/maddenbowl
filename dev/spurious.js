@@ -306,11 +306,21 @@
 
   const PLAYER_MIN_GAMES = 5; // erst ab so vielen fertigen Spielen wird ein Spieler betrachtet
 
+  // WICHTIG: keine "kumulierte Punkte"-Kennzahl mehr — eine laufende Summe
+  // ist über 4+ Spiele so gut wie garantiert streng monoton steigend, und
+  // eine streng monotone Reihe korreliert bei nur n=4 Punkten fast mit JEDER
+  // anderen Reihe mit erkennbarem Trend (egal ob rauf oder runter) extrem
+  // stark — nicht weil die beiden Größen etwas miteinander zu tun haben,
+  // sondern weil "immer nur in eine Richtung" kaum Freiheitsgrade lässt.
+  // Das war ein zweiter, subtilerer Fall derselben Kategorie Problem wie
+  // die Zwei-Werte-Plateaus (siehe hasEnoughVariety) — nur eben nicht durch
+  // zu wenig Varianz, sondern durch zu wenig ÜBERRASCHUNG in der Reihe
+  // selbst. Pro-Spiel-Werte (erzielt/zugelassen/Differenz) schwanken
+  // dagegen tatsächlich unvorhersehbar von Spiel zu Spiel.
   const PLAYER_STAT_DEFS = [
     { key: "scored", label: "erzielte Punkte pro Spiel", unit: "Punkte" },
     { key: "allowed", label: "zugelassene Gegnerpunkte pro Spiel", unit: "Punkte" },
     { key: "diff", label: "Punktedifferenz pro Spiel", unit: "Punkte" },
-    { key: "cumulative", label: "kumulierte Punkte im Turnierverlauf", unit: "Punkte" },
   ];
 
   // Alle Jahre, die IRGENDEINE der 101 Statistiken abdeckt, aufsteigend sortiert.
@@ -329,16 +339,14 @@
   // games: Ergebnis von getPlayerFinishedGames(), bereits auf die
   // gewünschte Länge zugeschnitten (siehe findPlayerCandidates).
   function computePlayerSeries(games, playerName) {
-    let running = 0;
-    const scored = [], allowed = [], diff = [], cumulative = [];
+    const scored = [], allowed = [], diff = [];
     games.forEach((m) => {
       const isHome = m.homePlayer === playerName;
       const s = isHome ? m.homeScore : m.awayScore;
       const a = isHome ? m.awayScore : m.homeScore;
       scored.push(s); allowed.push(a); diff.push(s - a);
-      running += s; cumulative.push(running);
     });
-    return { scored, allowed, diff, cumulative };
+    return { scored, allowed, diff };
   }
 
   // Deutscher Possessiv: Namen auf s/ß/x/z/ce bekommen nur einen Apostroph
