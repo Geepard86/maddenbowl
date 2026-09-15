@@ -173,27 +173,16 @@
     };
   }
 
-  // Liefert { statKey: { jahr: wert, ... }, ... } über alle archivierten Saisons.
-  async function computeMaddenBowlSeries() {
+  // Liefert eine chronologisch sortierte Liste aller archivierten Saisons
+  // mit ihren berechneten Kennzahlen: [{ seasonLabel, agg }, ...]. Bewusst
+  // OHNE Bezug zum tatsächlichen Kalenderjahr des Datensatzes — siehe
+  // findCandidates() weiter unten, warum.
+  async function computeMaddenBowlSeasonList() {
     const seasons = await MB.loadHistorySeasons();
-    const perYear = {};
-    seasons.forEach((s) => {
-      const year = Number(s.season);
-      if (!Number.isFinite(year)) return;
-      const agg = computeSeasonAggregates(s);
-      if (agg) perYear[year] = agg;
-    });
-
-    const series = {};
-    MB_STAT_DEFS.forEach((def) => {
-      const pts = {};
-      Object.keys(perYear).forEach((yearStr) => {
-        const v = perYear[yearStr][def.key];
-        if (v != null && Number.isFinite(v)) pts[yearStr] = v;
-      });
-      series[def.key] = pts;
-    });
-    return series;
+    return seasons
+      .map((s) => ({ seasonLabel: s.season, agg: computeSeasonAggregates(s) }))
+      .filter((x) => x.agg)
+      .sort((a, b) => Number(a.seasonLabel) - Number(b.seasonLabel));
   }
 
   // ======================================================================
@@ -218,31 +207,51 @@
   // ----------------------------------------------------------------------
   // excludePairKeys: Set von "mbStatKey::germanStatId" — bereits in diesem
   // Turnier veröffentlichte Paarungen, damit sich nichts wiederholt.
+  //
+  // WICHTIG: hier wird bewusst NICHT verlangt, dass eine Madden-Bowl-Saison
+  // (state.season, z.B. "2026") denselben Zahlenwert trägt wie ein Jahr im
+  // deutschen Datensatz (aktuell 2022–2025). Turnier-Saisonbezeichnungen
+  // folgen ihrer eigenen Logik (Turnier Nr. X, benannt nach dem Jahr, in dem
+  // es endet, o.ä.) und würden bei exaktem Jahresabgleich irgendwann komplett
+  // aus dem Deckungsbereich des Datensatzes herauslaufen. Stattdessen: die
+  // letzten n archivierten Saisons (chronologisch) werden rein der
+  // Reihenfolge nach den letzten n Jahren der Statistik gegenübergestellt —
+  // exakt dasselbe Prinzip wie bei den Spieler-Kandidaten weiter unten. Die
+  // jeweilige Saisonbezeichnung bleibt sichtbar (xLabels), damit die
+  // Zuordnung transparent bleibt statt einen echten Kalenderbezug
+  // vorzutäuschen, den es so nicht gibt.
   // ======================================================================
   const MATCH_THRESHOLD = 0.9; // |r| ab hier gilt als "passt gut"
   const MIN_POINTS = 4;
 
-  function findCandidates(mbSeries, excludePairKeys, opts) {
+  function findCandidates(seasonList, excludePairKeys, opts) {
     opts = opts || {};
     const threshold = opts.threshold != null ? opts.threshold : MATCH_THRESHOLD;
     const minPoints = opts.minPoints != null ? opts.minPoints : MIN_POINTS;
     const exclude = excludePairKeys || new Set();
+    const years = allAvailableYears(); // aufsteigend, z.B. [2022,2023,2024,2025]
     const out = [];
+    if (!years.length) return out;
 
     MB_STAT_DEFS.forEach((def) => {
-      const mbPts = mbSeries[def.key] || {};
-      const years = Object.keys(mbPts).map(Number);
-      if (years.length < minPoints) return;
+      const series = seasonList
+        .map((s) => ({ seasonLabel: s.seasonLabel, value: s.agg[def.key] }))
+        .filter((x) => x.value != null && Number.isFinite(x.value));
+
+      const n = Math.min(series.length, years.length);
+      if (n < minPoints) return;
+
+      const recentSeries = series.slice(-n); // die letzten n archivierten Saisons
+      const recentYears = years.slice(-n); // die letzten n Jahre der Statistik-Reihe
+      const xs = recentSeries.map((s) => s.value);
+      const xLabels = recentSeries.map((s, i) => `Saison ${s.seasonLabel} → ${recentYears[i]}`);
 
       GERMAN_STATS.forEach((gs) => {
+        if (recentYears.some((y) => gs.values[y] == null)) return;
         const pairKey = def.key + "::" + gs.id;
         if (exclude.has(pairKey)) return;
 
-        const sharedYears = years.filter((y) => gs.values[y] != null).sort((a, b) => a - b);
-        if (sharedYears.length < minPoints) return;
-
-        const xs = sharedYears.map((y) => mbPts[y]);
-        const ys = sharedYears.map((y) => gs.values[y]);
+        const ys = recentYears.map((y) => gs.values[y]);
         const r = pearson(xs, ys);
         if (r == null || Math.abs(r) < threshold) return;
 
@@ -250,7 +259,7 @@
           pairKey,
           mbStatKey: def.key, mbLabel: def.label, mbUnit: def.unit,
           germanStatId: gs.id, germanName: gs.name, germanUnit: gs.unit, germanSource: gs.source,
-          years: sharedYears, mbValues: xs, germanValues: ys, r,
+          years: recentYears, mbValues: xs, germanValues: ys, r, xLabels,
         });
       });
     });
@@ -259,11 +268,11 @@
     return out;
   }
 
-  // Bequemer Einstiegspunkt: berechnet die Madden-Bowl-Reihen selbst und
-  // liefert direkt den besten (noch nicht verwendeten) Treffer, oder null.
+  // Bequemer Einstiegspunkt: berechnet die Saison-Liste selbst und liefert
+  // direkt den besten (noch nicht verwendeten) Treffer, oder null.
   async function findBestCandidate(excludePairKeys, opts) {
-    const mbSeries = await computeMaddenBowlSeries();
-    const candidates = findCandidates(mbSeries, excludePairKeys, opts);
+    const seasonList = await computeMaddenBowlSeasonList();
+    const candidates = findCandidates(seasonList, excludePairKeys, opts);
     return candidates.length ? candidates[0] : null;
   }
 
@@ -383,12 +392,35 @@
   // Sucht über BEIDE Quellen (Saison-Kennzahlen + Spieler-Turnierverlauf)
   // und liefert insgesamt den besten noch nicht verwendeten Treffer.
   async function findBestOverallCandidate(state, excludePairKeys, opts) {
-    const mbSeries = await computeMaddenBowlSeries();
-    const seasonCandidates = findCandidates(mbSeries, excludePairKeys, opts);
+    const all = await findAllOverallCandidates(state, excludePairKeys, opts);
+    return all.length ? all[0] : null;
+  }
+
+  // Sammelt alle Kandidaten über beide Quellen, entfernt Redundanz (mehrere
+  // MB-Kennzahlen korrelieren oft untereinander sehr ähnlich, z.B.
+  // Gesamtpunkte vs. Punkteschnitt — pro deutscher Statistik wird nur die
+  // stärkste Paarung behalten) und liefert die Top-`limit` Treffer, sortiert
+  // nach |r| absteigend. Für "mehrere passende Vorschläge gleichzeitig".
+  async function findAllOverallCandidates(state, excludePairKeys, opts) {
+    opts = opts || {};
+    const limit = opts.limit != null ? opts.limit : 5;
+    const seasonList = await computeMaddenBowlSeasonList();
+    const seasonCandidates = findCandidates(seasonList, excludePairKeys, opts);
     const playerCandidates = findPlayerCandidates(state, excludePairKeys, opts);
     const all = [...seasonCandidates, ...playerCandidates];
     all.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
-    return all.length ? all[0] : null;
+
+    // Redundanz raus: pro (Spieler +) deutscher Statistik nur den stärksten Treffer.
+    const seen = new Set();
+    const deduped = [];
+    all.forEach((c) => {
+      const dedupeKey = (c.isPlayer ? "player::" + c.player + "::" : "") + c.germanStatId;
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      deduped.push(c);
+    });
+
+    return deduped.slice(0, limit);
   }
 
   // ======================================================================
@@ -423,7 +455,7 @@
     ctx.fillText("Spurious Correlation", W / 2, 46);
     ctx.font = "400 17px 'Segoe UI', Roboto, sans-serif";
     ctx.fillStyle = "rgba(255,255,255,0.75)";
-    wrapCenter(ctx, `${candidate.mbLabel} correlates with ${candidate.germanName}`, W / 2, 76, W - 120, 22);
+    wrapCenter(ctx, `${candidate.mbLabel} korreliert mit ${candidate.germanName}`, W / 2, 76, W - 120, 22);
 
     // Plot-Bereich
     const hasCustomLabels = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
@@ -493,7 +525,7 @@
     ctx.textAlign = "center";
     ctx.font = "700 18px 'Segoe UI', Roboto, sans-serif";
     ctx.fillStyle = "#fff";
-    ctx.fillText(`Correlation: r = ${candidate.r.toFixed(6)}`, W / 2, H - 30);
+    ctx.fillText(`Korrelation: r = ${candidate.r.toFixed(6)}`, W / 2, H - 30);
 
     ctx.textAlign = "right";
     ctx.font = "400 13px 'Segoe UI', Roboto, sans-serif";
@@ -536,7 +568,7 @@
     MIN_POINTS,
     PLAYER_MIN_GAMES,
     computeSeasonAggregates,
-    computeMaddenBowlSeries,
+    computeMaddenBowlSeasonList,
     pearson,
     findCandidates,
     findBestCandidate,
@@ -546,6 +578,7 @@
     findPlayerCandidates,
     findBestPlayerCandidate,
     findBestOverallCandidate,
+    findAllOverallCandidates,
     renderChartCanvas,
   };
 })(window);

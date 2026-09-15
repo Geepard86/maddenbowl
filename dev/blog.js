@@ -580,8 +580,9 @@
   function buildSpuriousArticle(candidate) {
     const rStr = candidate.r.toFixed(6);
     const direction = candidate.r >= 0 ? "im Gleichschritt" : "gegenläufig";
-    const timeLabels = candidate.xLabels || candidate.years;
-    const timeHeader = candidate.isPlayer ? "Zeitpunkt" : "Jahr";
+    const hasCustomLabels = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
+    const timeLabels = hasCustomLabels ? candidate.xLabels : candidate.years;
+    const timeHeader = hasCustomLabels ? "Zeitpunkt" : "Jahr";
 
     const tableRows = timeLabels
       .map((label, i) => {
@@ -593,16 +594,20 @@
 
     const spanDesc = candidate.isPlayer
       ? `die letzten ${candidate.years.length} Spiele im Turnier`
-      : `die letzten ${candidate.years.length} Jahre`;
+      : `die letzten ${candidate.years.length} Turnier-Saisons`;
 
     const parts = [
       pick(SPURIOUS_INTROS),
       `<strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) bewegen sich über ${spanDesc} ${direction} — mit einem Korrelationskoeffizienten von <strong>r = ${rStr}</strong>.`,
     ];
 
-    if (candidate.isPlayer) {
+    if (hasCustomLabels) {
+      const subject = candidate.isPlayer
+        ? `Das älteste betrachtete Spiel von ${candidate.player}`
+        : `Die älteste betrachtete Madden-Bowl-Saison`;
+      const newest = candidate.isPlayer ? "das jüngste Spiel" : "die jüngste Saison";
       parts.push(
-        `Die Zuordnung erfolgt rein der Reihenfolge nach: Das älteste betrachtete Spiel von ${candidate.player} trifft auf das älteste Jahr der Statistik, das jüngste Spiel auf das aktuellste Jahr — nicht auf denselben Kalenderzeitraum. Genau das macht den Vergleich so schön sinnfrei.`
+        `Die Zuordnung erfolgt rein der Reihenfolge nach: ${subject} trifft auf das älteste Jahr der Statistik, ${newest} auf das aktuellste Jahr — nicht zwangsläufig auf denselben Kalenderzeitraum. Genau das macht den Vergleich so schön sinnfrei.`
       );
     }
 

@@ -2845,6 +2845,14 @@ function renderRanking() {
         MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), story);
         entries = [entry, ...autoEntries];
       }
+
+      // Spurious-Correlation-Vorschläge, die währenddessen (async, siehe
+      // maybeOfferSpuriousCorrelation) hereingekommen sind, jetzt mit
+      // anzeigen statt sie nur still in den Rekord-Momenten liegen zu
+      // lassen — genau wie ein Meme sollen sie direkt im Popup auftauchen.
+      const pendingSpurious = sessionRecords.filter((e) => e.isSpurious && !e.published);
+      entries = [...entries, ...pendingSpurious];
+
       if (entries.length) {
         activePopupEntries = entries;
         openMemePopup();
@@ -2864,6 +2872,8 @@ function renderRanking() {
     // entry.isSpurious === true (entry.record bleibt dabei unbesetzt).
     // =========================================================
 
+    const SPURIOUS_SUGGESTIONS_LIMIT = 3; // max. gleichzeitig vorgeschlagene Korrelationen
+
     async function addSessionSpuriousCandidate(candidate) {
       const entry = { isSpurious: true, candidate, canvasPreview: null, loading: true, error: null, published: false };
       sessionRecords.unshift(entry);
@@ -2880,6 +2890,27 @@ function renderRanking() {
       return entry;
     }
 
+    // Zeigt neu gefundene Spurious-Correlation-Vorschläge im Popup an — genau
+    // wie bei automatisch erkannten Memes: sofort, wenn das Popup schon offen
+    // ist oder kein Meme-Kontext-Dialog gerade wartet, sonst übernimmt
+    // finalizeMemeContext() sie automatisch mit, sobald der Dialog schließt
+    // (siehe dort). Bei mehreren Einträgen erscheinen sie untereinander im
+    // selben Popup (siehe renderMemePopupContent).
+    function presentSpuriousEntries(entries, force) {
+      if (!entries.length) return;
+      const popupModal = document.getElementById('memePopupModal');
+      if (popupModal && !popupModal.classList.contains('hidden')) {
+        activePopupEntries = [...entries, ...activePopupEntries];
+        refreshMemeViews();
+      } else if (force || !pendingMemeContext) {
+        activePopupEntries = entries;
+        openMemePopup();
+      }
+      // Andernfalls: liegen bereit in sessionRecords, werden von
+      // finalizeMemeContext() beim Schließen des Kontext-Dialogs mit
+      // eingesammelt.
+    }
+
     // Wird aus finishScoreUpdate() aufgerufen — läuft async im Hintergrund,
     // blockiert also nie das Speichern eines Ergebnisses selbst.
     // opts.force: ignoriert die "schon ein Vorschlag offen"-Bremse und
@@ -2893,16 +2924,17 @@ function renderRanking() {
         const tournamentId = MB.getCurrentTournamentId();
         if (!tournamentId) { if (force) alert('Kein aktives Turnier gefunden.'); return; }
 
-        // Schon ein unveröffentlichter Vorschlag offen? Nicht noch einen
+        // Schon unveröffentlichte Vorschläge offen? Nicht noch mehr
         // draufsatteln, sonst häufen sich unbeantwortete Kandidaten an.
         if (!force && sessionRecords.some((e) => e.isSpurious && !e.published)) return;
 
         // Sucht über beide Quellen: Saison-Kennzahlen (Turnier-Historie)
         // UND Spieler-Turnierverlauf (ab MB.Spurious.PLAYER_MIN_GAMES
-        // fertigen Spielen), siehe spurious.js.
+        // fertigen Spielen), siehe spurious.js. Liefert mehrere (bis zu
+        // SPURIOUS_SUGGESTIONS_LIMIT), falls mehrere gut genug passen.
         const used = await MB.Blog.getUsedSpuriousPairKeys(tournamentId);
-        const candidate = await MB.Spurious.findBestOverallCandidate(state, used);
-        if (!candidate) {
+        const candidates = await MB.Spurious.findAllOverallCandidates(state, used, { limit: SPURIOUS_SUGGESTIONS_LIMIT });
+        if (!candidates.length) {
           if (force) alert('Kein Kandidat über der Schwelle gefunden — entweder ist schon alles Passende veröffentlicht, oder es liegt noch zu wenig Turnier-/Spieler-Historie vor.');
           return;
         }
@@ -2911,23 +2943,10 @@ function renderRanking() {
         // könnte längst ein anderer Vorschlag aufgetaucht sein).
         if (!force && sessionRecords.some((e) => e.isSpurious && !e.published)) return;
 
-        const entry = await addSessionSpuriousCandidate(candidate);
+        const entries = [];
+        for (const candidate of candidates) entries.push(await addSessionSpuriousCandidate(candidate));
 
-        const popupModal = document.getElementById('memePopupModal');
-        if (popupModal && !popupModal.classList.contains('hidden')) {
-          // Popup ist schon offen (z.B. wegen eines Meme-Rekords aus
-          // demselben Speichervorgang) — Eintrag einfach mit reinhängen.
-          activePopupEntries = [entry, ...activePopupEntries];
-          refreshMemeViews();
-        } else if (force || !pendingMemeContext) {
-          // Kein Meme-Kontext-Dialog wartet gerade auf eine Antwort —
-          // Popup direkt mit nur diesem einen Eintrag öffnen.
-          activePopupEntries = [entry];
-          openMemePopup();
-        }
-        // Andernfalls (Kontext-Dialog offen): Eintrag liegt bereit in der
-        // immer sichtbaren "🏆 Rekord-Momente"-Karte, kein zusätzliches
-        // Popup wird erzwungen.
+        presentSpuriousEntries(entries, force);
       } catch (e) {
         console.warn('Spurious-Correlation-Check fehlgeschlagen:', e);
         if (force) alert('Fehler beim Testen: ' + e.message);
@@ -2953,7 +2972,11 @@ function renderRanking() {
       } catch (e) {
         console.warn('Spurious-Chart-Upload fehlgeschlagen, Artikel wird ohne Bild gepostet:', e);
       }
-      await MB.Blog.pushArticle(tournamentId, article);
+      const saved = await MB.Blog.pushArticle(tournamentId, article);
+      if (!saved) {
+        alert('Der Artikel konnte nicht gespeichert werden. Vermutlich fehlt noch die "data"-Spalte aus supabase-schema-update-7.sql — bitte einmal im Supabase-SQL-Editor ausführen und dann erneut versuchen.');
+        return;
+      }
       entry.published = true;
       refreshMemeViews();
     }
