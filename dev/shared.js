@@ -722,51 +722,61 @@
 
   // "Flavour Facts": datenbasierte, variierte Insights zu einem Matchup.
   // Auffällige Konstellationen werden bevorzugt; erfunden wird nichts.
-  function pickFlavourFacts(history, state, homePlayer, awayPlayer) {
+  //
+  // pickFlavourFactsTyped() ist die Quelle der Wahrheit: jeder Kandidat wird
+  // HIER, direkt an der Entstehungsstelle, mit seinem Fakt-Typ getaggt
+  // (odds/averagePoints/directComparison/playoffFact/form/other - siehe
+  // Announcer-Anforderungsdokument). Dadurch muss der Typ später (in
+  // announcer.js) nicht mehr per Keyword-Raten aus dem Freitext rekonstruiert
+  // werden - das wäre bei jedem neuen/geänderten Textbaustein hier eine
+  // stille Fehlerquelle. pickFlavourFacts() bleibt als abwärtskompatibler
+  // Wrapper (nur Text, Top 2) für die bestehenden Anzeige-Stellen
+  // (index.html/live.html/music.js) unverändert erhalten.
+  function pickFlavourFactsTyped(history, state, homePlayer, awayPlayer) {
     const H = normName(homePlayer), A = normName(awayPlayer);
     if (!H || !A) return [];
     const s = computeMatchupStats(history, state, H, A);
     const h = getPlayerFacts(history, state, H), a = getPlayerFacts(history, state, A);
     const candidates = [];
-    const add = (text, score = 1) => { if (text) candidates.push({ text, score }); };
+    const add = (text, score = 1, type = "other") => { if (text) candidates.push({ text, score, type }); };
     const one = (v) => Number(v).toFixed(1);
 
     if (s && s.games > 0) {
       const leader = s.aWins > s.bWins ? H : s.bWins > s.aWins ? A : null;
       const diff = Math.abs(s.aWins - s.bWins);
-      if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff);
-      else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4);
+      if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff, "directComparison");
+      else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4, "directComparison");
 
       if (s.curLastWinners.length) {
         const recent = s.curLastWinners[s.curLastWinners.length - 1];
         const streak = s.curLastWinners.slice().reverse().findIndex(x => x !== recent);
         const n = streak < 0 ? s.curLastWinners.length : streak;
-        add(`Im laufenden Turnier gewann zuletzt ${recent}${n >= 2 ? ` — ${n} direkte Siege in Folge für ${recent}` : ""}.`, 6 + n);
+        add(`Im laufenden Turnier gewann zuletzt ${recent}${n >= 2 ? ` — ${n} direkte Siege in Folge für ${recent}` : ""}.`, 6 + n, "directComparison");
       }
       if (s.playoff.games >= 2) {
         if (s.playoff.aWins !== s.playoff.bWins) {
           const leaderP = s.playoff.aWins > s.playoff.bWins ? H : A;
-          add(`In den Playoffs liegt ${leaderP} im direkten Vergleich vorne: ${s.playoff.aWins}:${s.playoff.bWins}.`, 8);
-        } else add(`In den Playoffs ist das Duell ausgeglichen: ${s.playoff.aWins}:${s.playoff.bWins}.`, 6);
+          add(`In den Playoffs liegt ${leaderP} im direkten Vergleich vorne: ${s.playoff.aWins}:${s.playoff.bWins}.`, 8, "playoffFact");
+        } else add(`In den Playoffs ist das Duell ausgeglichen: ${s.playoff.aWins}:${s.playoff.bWins}.`, 6, "playoffFact");
       }
       const avgTotal = s.totals.length ? s.totals.reduce((x,y) => x+y, 0) / s.totals.length : 0;
-      if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7);
-      else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7);
-      else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3);
+      if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7, "averagePoints");
+      else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7, "averagePoints");
+      else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3, "averagePoints");
       const gap = Math.abs(s.aPPG - s.bPPG);
       if (gap >= 4) {
         const scorer = s.aPPG > s.bPPG ? H : A, other = scorer === H ? A : H;
-        add(`${scorer} kommt im direkten Vergleich auf ${one(Math.max(s.aPPG, s.bPPG))} Punkte pro Spiel und damit ${one(gap)} mehr als ${other}.`, 7);
+        add(`${scorer} kommt im direkten Vergleich auf ${one(Math.max(s.aPPG, s.bPPG))} Punkte pro Spiel und damit ${one(gap)} mehr als ${other}.`, 7, "averagePoints");
       }
     }
 
     const addForm = (name, f) => {
       if (f.curGames < 2) return;
       const wr = f.curWins / f.curGames;
-      if (wr >= .75) add(`${name} ist im Turnier stark unterwegs: ${f.curWins}:${f.curLosses}.`, 8);
-      else if (wr <= .25) add(`${name} sucht im Turnier noch den Rhythmus: ${f.curWins}:${f.curLosses}.`, 7);
-      if (f.curAPG != null && f.curAPG <= 18) add(`${name} verteidigt bisher stark und lässt im Schnitt nur ${one(f.curAPG)} Punkte zu.`, 8);
-      else if (f.curPPG != null && f.curPPG >= 28) add(`${name} liefert offensiv ab und kommt auf ${one(f.curPPG)} Punkte pro Spiel.`, 7);
+      if (wr >= .75) add(`${name} ist im Turnier stark unterwegs: ${f.curWins}:${f.curLosses}.`, 8, "form");
+      else if (wr <= .25) add(`${name} sucht im Turnier noch den Rhythmus: ${f.curWins}:${f.curLosses}.`, 7, "form");
+      if (f.curAPG != null && f.curAPG <= 18) add(`${name} verteidigt bisher stark und lässt im Schnitt nur ${one(f.curAPG)} Punkte zu.`, 8, "form");
+      else if (f.curPPG != null && f.curPPG >= 28) add(`${name} liefert offensiv ab und kommt auf ${one(f.curPPG)} Punkte pro Spiel.`, 7, "form");
     };
     addForm(H, h); addForm(A, a);
 
@@ -783,8 +793,8 @@
     };
     [H, A].forEach(name => {
       const st = streakOf(name);
-      if (st.n >= 2 && st.kind === 'Sieg') add(`${name} kommt mit ${st.n} Siegen in Folge in dieses Spiel.`, 11 + st.n);
-      if (st.n >= 2 && st.kind === 'Niederlage') add(`${name} hat zuletzt ${st.n} Spiele in Folge verloren.`, 10 + st.n);
+      if (st.n >= 2 && st.kind === 'Sieg') add(`${name} kommt mit ${st.n} Siegen in Folge in dieses Spiel.`, 11 + st.n, "form");
+      if (st.n >= 2 && st.kind === 'Niederlage') add(`${name} hat zuletzt ${st.n} Spiele in Folge verloren.`, 10 + st.n, "form");
     });
 
     try {
@@ -792,17 +802,59 @@
       const fav = odds.pHome >= odds.pAway ? H : A, favProb = Math.max(odds.pHome, odds.pAway);
       if (s && s.games >= 2) {
         const h2h = fav === H ? s.aWins / s.games : s.bWins / s.games;
-        if (h2h <= .35 && favProb >= .58) add(`Spannender Widerspruch: ${fav} ist laut Modell Favorit, hat im direkten Vergleich aber nur ${Math.round(h2h * 100)}% der Spiele gewonnen.`, 12);
-        else if (h2h >= .65 && favProb < .55) add(`Die Statistik spricht klar für ${fav}: ${Math.round(h2h * 100)}% Siege im direkten Vergleich, obwohl die Quote kaum einen Favoriten ausmacht.`, 11);
+        if (h2h <= .35 && favProb >= .58) add(`Spannender Widerspruch: ${fav} ist laut Modell Favorit, hat im direkten Vergleich aber nur ${Math.round(h2h * 100)}% der Spiele gewonnen.`, 12, "other");
+        else if (h2h >= .65 && favProb < .55) add(`Die Statistik spricht klar für ${fav}: ${Math.round(h2h * 100)}% Siege im direkten Vergleich, obwohl die Quote kaum einen Favoriten ausmacht.`, 11, "other");
       }
     } catch (e) {}
 
     if (!candidates.length) {
-      if (h.curGames > 0) add(`${H} im Turnier: ${h.curWins}:${h.curLosses}, im Schnitt ${one(h.curPPG)} Punkte.`, 2);
-      if (a.curGames > 0) add(`${A} im Turnier: ${a.curWins}:${a.curLosses}, im Schnitt ${one(a.curPPG)} Punkte.`, 2);
-      if (!candidates.length && history.loaded) add("Erstes Duell der beiden — keine gemeinsame Historie vorhanden.", 1);
+      if (h.curGames > 0) add(`${H} im Turnier: ${h.curWins}:${h.curLosses}, im Schnitt ${one(h.curPPG)} Punkte.`, 2, "form");
+      if (a.curGames > 0) add(`${A} im Turnier: ${a.curWins}:${a.curLosses}, im Schnitt ${one(a.curPPG)} Punkte.`, 2, "form");
+      if (!candidates.length && history.loaded) add("Erstes Duell der beiden — keine gemeinsame Historie vorhanden.", 1, "other");
     }
-    return candidates.map(x => ({...x, tie: Math.random()})).sort((a,b) => b.score-a.score || b.tie-a.tie).slice(0, Math.min(2, candidates.length)).map(x => x.text);
+    return candidates.map(x => ({...x, tie: Math.random()})).sort((a,b) => b.score-a.score || b.tie-a.tie).map(({tie, ...x}) => x);
+  }
+
+  // Abwärtskompatibler Wrapper: nur Text, wie bisher auf max. 2 Einträge
+  // begrenzt. Wird weiterhin von index.html/live.html/music.js für die
+  // sichtbaren Insight-Badges genutzt - deren Verhalten/Formatierung ändert
+  // sich durch die Typisierung oben nicht.
+  function pickFlavourFacts(history, state, homePlayer, awayPlayer) {
+    return pickFlavourFactsTyped(history, state, homePlayer, awayPlayer)
+      .slice(0, 2)
+      .map(x => x.text);
+  }
+
+  // Ergebnis-Impacts für das GERADE ABGESCHLOSSENE Spiel (Kommentator-Rolle).
+  // Bewusst getrennt von pickFlavourFacts/pickFlavourFactsTyped, die sich nur
+  // auf das KOMMENDE Spiel beziehen (Moderator-Rolle) - siehe Anforderung 1.
+  //
+  // prevSeeds (optional): Map<Name, Platzierung> VOR diesem Spiel, z.B. aus
+  // MB.getLiveSeeds(state), das der Aufrufer VOR dem Score-Commit einmal
+  // eingefroren haben muss (die Tabelle in `state` ist zu diesem Zeitpunkt
+  // bereits mit dem neuen Ergebnis aktualisiert). Ohne prevSeeds wird kein
+  // tableImpact geliefert (lieber kein Fakt als ein geratener).
+  function getAnnouncerResultImpacts(history, state, winnerName, loserName, prevSeeds) {
+    const impacts = [];
+
+    if (prevSeeds && prevSeeds.size) {
+      const nowSeeds = getLiveSeeds(state);
+      const prevW = prevSeeds.get(winnerName), prevL = prevSeeds.get(loserName);
+      const nowW = nowSeeds.get(winnerName), nowL = nowSeeds.get(loserName);
+      if (prevW != null && prevL != null && nowW != null && nowL != null && prevW > prevL && nowW < nowL) {
+        impacts.push({ type: "tableImpact", text: `Damit zieht ${winnerName} in der Tabelle an ${loserName} vorbei.` });
+      }
+    }
+
+    try {
+      const titleOdds = computeTitleOdds(history, state);
+      const pct = titleOdds[loserName];
+      if (pct != null) {
+        impacts.push({ type: "titleImpact", text: `Damit liegen ${loserName}s Titelchancen jetzt bei ${Math.round(pct)} Prozent.` });
+      }
+    } catch (e) {}
+
+    return impacts;
   }
 
   function normalCdf(x) {
@@ -1159,6 +1211,7 @@
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
+    pickFlavourFactsTyped, getAnnouncerResultImpacts,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,
     normalCdf, getPpgEstimate, seedFactor, teamOVRFactor, formFactor,
     computeBaseRanking, getGroupSeedsFinal, applyToiletBowlOverride, computeFinalRanking,

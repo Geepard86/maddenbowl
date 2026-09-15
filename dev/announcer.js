@@ -40,31 +40,58 @@
     "Da war früh zu sehen, wohin die Reise geht.",
     "Am Ende wurde es deutlich — da kam nicht mehr viel zurück.",
   ];
-  const UPCOMING_OPENERS = [
-    "Und weiter geht's — als Nächstes kommt:",
-    "Keine lange Pause, die nächste Partie steht an:",
-    "Weiter im Programm mit:",
-    "Nächste Runde, nächstes Duell:",
-    "Und jetzt wird wieder aufgeschlagen:",
-  ];
-  const CLOSING_LINES = [
-    "Dranbleiben — hier kann jederzeit etwas passieren.",
-    "Weiter geht's, die nächste Partie wartet schon.",
-    "Also: zurücklehnen und schauen, was als Nächstes passiert.",
-  ];
-  // Bewusst kurz: Die Stimmen sollen wie Kollegen wirken, nicht wie ein Skript.
+  // Nur der Kommentator übergibt an den Moderator (Anforderung 20) - Name
+  // kommt dynamisch aus den konfigurierten Sprecher-Namen, nie hartcodiert.
   const HANDOFF_OUT_PHRASES = [
-    "Und jetzt zu dir mit der nächsten Partie.",
-    "Du bist dran — was kommt als Nächstes?",
-    "Ab zu dir mit dem Ausblick.",
-    "Dann schauen wir mal nach vorne — du übernimmst.",
+    (n) => `Und jetzt zu ${n.moderator}.`,
+    () => `Was steht als Nächstes an?`,
+    () => `Wie geht's weiter?`,
+    () => `Was kommt als Nächstes?`,
+    (n) => `${n.moderator}, was ist die nächste Partie?`,
+    () => `Wer ist als Nächstes dran?`,
   ];
+  // Der Moderator sagt nur gelegentlich "Danke" (Anforderung 21) - drei von
+  // vier Varianten sind bewusst leer, damit die Ansage meistens direkt mit
+  // der nächsten Partie beginnt.
   const HANDOFF_IN_PHRASES = [
-    "Gerne — schauen wir nach vorne.",
-    "Alles klar, weiter geht's.",
-    "Genau. Die nächste Partie steht an:",
-    "Jawohl — hier kommt der Ausblick.",
+    () => "",
+    () => "",
+    () => "",
+    (n) => `Danke ${n.commentator}.`,
   ];
+
+  // ======================================================================
+  // SPRECHER-KONFIGURATION (Anforderung 1) — Kommentator/Moderator sind
+  // Rollen, keine festen Namen. Admin kann beide Namen frei konfigurieren;
+  // Rudi/Mona sind nur Default-Werte. Wird lokal gespeichert, damit die
+  // Namen einen Reload überleben.
+  // ======================================================================
+  const DEFAULT_SPEAKER_NAMES = { commentator: "Rudi", moderator: "Mona" };
+  const SPEAKER_NAMES_KEY = "mb_announcer_speakers";
+  let _speakerNamesCache = null;
+
+  function getSpeakerNames() {
+    if (_speakerNamesCache) return _speakerNamesCache;
+    let stored = {};
+    try { stored = JSON.parse(localStorage.getItem(SPEAKER_NAMES_KEY) || "{}"); }
+    catch (e) { stored = {}; }
+    _speakerNamesCache = {
+      commentator: stored.commentator || DEFAULT_SPEAKER_NAMES.commentator,
+      moderator: stored.moderator || DEFAULT_SPEAKER_NAMES.moderator,
+    };
+    return _speakerNamesCache;
+  }
+
+  function setSpeakerNames({ commentator, moderator } = {}) {
+    const next = {
+      commentator: (commentator || "").trim() || DEFAULT_SPEAKER_NAMES.commentator,
+      moderator: (moderator || "").trim() || DEFAULT_SPEAKER_NAMES.moderator,
+    };
+    _speakerNamesCache = next;
+    try { localStorage.setItem(SPEAKER_NAMES_KEY, JSON.stringify(next)); }
+    catch (e) { console.warn("Sprecher-Namen konnten nicht gespeichert werden:", e); }
+    return next;
+  }
 
   // Namen bleiben in den Daten exakt erhalten. Nur für die Sprachausgabe
   // werden problematische Abkürzungen phonetisch ausgeschrieben.
@@ -81,7 +108,102 @@
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function fmt(tpl, vars) { return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? ""); }
 
-  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium }) {
+  // Fakten aus shared.js (MB.pickFlavourFactsTyped/getAnnouncerResultImpacts)
+  // kommen bereits mit `type` getaggt. classifyFact() ist nur noch ein
+  // Sicherheitsnetz für den Fall, dass irgendwo doch mal ein unklassifizierter
+  // String ankommt (Anforderung 4) - die eigentliche Typisierung passiert an
+  // der Quelle in shared.js, nicht hier per Keyword-Raten.
+  function classifyFact(fact) {
+    if (fact && typeof fact === "object" && fact.type) return fact.type;
+    const text = String(fact || "");
+    if (/Wettquote/i.test(text)) return "odds";
+    if (/Direktvergleich/i.test(text)) return "directComparison";
+    if (/Gesamtpunkte|Punkte pro Spiel|Punkten/i.test(text)) return "averagePoints";
+    if (/Playoffs?/i.test(text)) return "playoffFact";
+    if (/Siegen? in Folge|Rhythmus|verteidigt|liefert offensiv|stark unterwegs|Spiele in Folge verloren/i.test(text)) return "form";
+    if (/Tabelle/i.test(text)) return "tableImpact";
+    if (/Titelchancen/i.test(text)) return "titleImpact";
+    return "other";
+  }
+
+  // Sprachlich natürlichere Fassung eines Fakts (Anforderung 17): entfernt
+  // das rohe "Direktvergleich: "-Präfix und vermeidet doppelte Namensnennung.
+  // Deckt genau die beiden Direktvergleich-Formulierungen aus
+  // shared.js/pickFlavourFactsTyped ab; alles andere bleibt unverändert.
+  function naturalizeFact(text) {
+    if (!text) return text;
+    let m = text.match(/^Direktvergleich: (.+?) führt mit (.+)$/);
+    if (m) return `Im Direktvergleich führt ${m[1]} mit ${m[2]}`;
+    m = text.match(/^Direktvergleich: (.+?) und (.+?) stehen bei (.+)$/);
+    if (m) return `Im Direktvergleich stehen ${m[1]} und ${m[2]} bei ${m[3]}`;
+    return text;
+  }
+
+  // Zentrale Stadion-Formulierung (Anforderung 19). Grammatikalisches
+  // Geschlecht lässt sich aus einem freien Stadionnamen nicht zuverlässig
+  // herleiten, daher: Default "im" (deckt die meisten Fälle wie "...-Stadion"
+  // oder "...Field" ab) mit Möglichkeit, pro Stadion eine andere Präposition
+  // zu übergeben (z.B. "in der" für "Energiequelle") - siehe Admin-Konfig in
+  // index.html. Bereits vorhandene Präpositionen werden nicht verdoppelt.
+  function stadiumPhrase(stadium, preposition) {
+    if (!stadium) return "";
+    const s = String(stadium).trim();
+    if (/^(im|in der|in dem|in|auf dem)\s+/i.test(s)) return s;
+    return `${preposition || "im"} ${s}`;
+  }
+
+  // Reihenfolge, in der Preview-Fakt-Typen bevorzugt werden (Anforderung 14).
+  // Darf sich verschieben, wenn das natürlicher klingt - wichtig ist nur,
+  // dass bereits verwendete Typen (usedFactTypes) ausgeschlossen werden.
+  const UPCOMING_FACT_PRIORITY = ["odds", "directComparison", "averagePoints", "playoffFact", "form", "other"];
+
+  function formatOddsForSpeech(p) {
+    return MB.decimalOdds(p).toFixed(2).replace(".", ",");
+  }
+
+  function buildOddsFact(history, state, homeName, awayName) {
+    try {
+      const odds = MB.computeOddsForMatch(history, state, homeName, awayName);
+      const favIsHome = odds.pHome >= odds.pAway;
+      const favName = speechName(favIsHome ? homeName : awayName);
+      const dogName = speechName(favIsHome ? awayName : homeName);
+      const favQuote = formatOddsForSpeech(favIsHome ? odds.pHome : odds.pAway);
+      const dogQuote = formatOddsForSpeech(favIsHome ? odds.pAway : odds.pHome);
+      return { type: "odds", text: `Die Wettquoten sehen ${favName} bei ${favQuote} und ${dogName} bei ${dogQuote}.` };
+    } catch (e) { return null; }
+  }
+
+  // Wählt EINEN Preview-Fakt für den Moderator, der noch nicht von einem
+  // anderen Typ verbraucht wurde (Anforderungen 3, 15, 16). Holt sich dafür
+  // ALLE getypten Kandidaten aus shared.js (nicht nur die Top 2 wie die
+  // Anzeige-Variante pickFlavourFacts), damit bei einer Typ-Kollision noch
+  // Alternativen übrig sind.
+  function pickUpcomingFact(history, state, homeName, awayName, usedFactTypes) {
+    const used = usedFactTypes || new Set();
+    const candidates = [];
+    const oddsFact = buildOddsFact(history, state, homeName, awayName);
+    if (oddsFact) candidates.push(oddsFact);
+    try {
+      (MB.pickFlavourFactsTyped(history, state, homeName, awayName) || []).forEach((f) => candidates.push(f));
+    } catch (e) {}
+
+    const available = candidates.filter((f) => !used.has(f.type));
+    if (!available.length) return null;
+
+    available.sort((a, b) => {
+      const pa = UPCOMING_FACT_PRIORITY.indexOf(a.type), pb = UPCOMING_FACT_PRIORITY.indexOf(b.type);
+      return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
+    });
+    return available[0];
+  }
+
+  // Kommentator: berichtet AUSSCHLIESSLICH über das gerade abgeschlossene
+  // Spiel (Anforderung 6). Ergebnis-Impact (Tabelle/Titel, zentral aus
+  // shared.js) hat Vorrang; ohne Impact ist der Direktvergleich der einzige
+  // erlaubte Rückfall-Fakt (Anforderung 12) - niemals allgemeine
+  // Preview-Fakten des kommenden Spiels. Gibt zusätzlich zurück, welcher(r)
+  // Fakt-Typ verbraucht wurde, damit der Moderator ihn nicht doppelt nennt.
+  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds }) {
     const { home, away } = speechNames(homeName, awayName);
     const winnerRaw = homeScore > awayScore ? homeName : awayName;
     const loserRaw = homeScore > awayScore ? awayName : homeName;
@@ -89,6 +211,8 @@
     const winnerScore = Math.max(homeScore, awayScore);
     const loserScore = Math.min(homeScore, awayScore);
     const margin = winnerScore - loserScore;
+    const usedFactTypes = new Set();
+    const names = getSpeakerNames();
 
     let line = `${pick(OPENERS_RESULT)} ${stadium || "Stadion"}! `;
     // UI-Konvention: Heim@Auswärts = zweiter Name ist das Heimteam.
@@ -99,56 +223,54 @@
     if (margin <= 3) line += pick(CLOSE_GAME_PHRASES) + " ";
     else if (margin >= 21) line += pick(BLOWOUT_PHRASES) + " ";
 
+    let impactUsed = false;
     try {
-      const facts = MB.pickFlavourFacts(history, state, homeName, awayName);
-      if (facts && facts.length) line += facts[0] + " ";
+      const impacts = MB.getAnnouncerResultImpacts(history, state, winnerRaw, loserRaw, prevSeeds) || [];
+      if (impacts.length) {
+        line += impacts[0].text + " ";
+        usedFactTypes.add(impacts[0].type);
+        impactUsed = true;
+      }
     } catch (e) {}
-    return line.trim();
+
+    if (!impactUsed) {
+      try {
+        const typed = MB.pickFlavourFactsTyped(history, state, homeName, awayName) || [];
+        const directCompare = typed.find((f) => f.type === "directComparison");
+        if (directCompare) {
+          line += naturalizeFact(directCompare.text) + " ";
+          usedFactTypes.add("directComparison");
+        }
+      } catch (e) {}
+    }
+
+    line += pick(HANDOFF_OUT_PHRASES)(names);
+
+    return { line: line.trim(), usedFactTypes };
   }
 
-  function buildUpcomingLine({ state, history, homeName, awayName, homeTeam, awayTeam, time, stadium }) {
+  // Moderator: berichtet AUSSCHLIESSLICH über die kommende Partie
+  // (Anforderung 8) und nennt mindestens einen Preview-Fakt, dessen Typ noch
+  // nicht vom Kommentator verwendet wurde (Anforderungen 9, 15, 16). Übergibt
+  // nie zurück an den Kommentator (Anforderung 20) und endet ohne generische
+  // Schlussfloskel (Anforderung 22).
+  function buildUpcomingLine({ state, history, homeName, awayName, time, stadium, stadiumPreposition, usedFactTypes }) {
     const { home, away } = speechNames(homeName, awayName);
+    const names = getSpeakerNames();
+    const used = usedFactTypes || new Set();
+
+    const handoffIn = pick(HANDOFF_IN_PHRASES)(names);
+    let line = handoffIn ? `${handoffIn} ` : "";
     // UI-Konvention: erster Name = Auswärts, zweiter Name = Heim.
-    let line = `${pick(UPCOMING_OPENERS)} ${away} gegen ${home}`;
+    line += `Als Nächstes spielt ${away} bei ${home}`;
     if (time) line += `, Anpfiff ${time} Uhr`;
-    if (stadium) line += ` im ${stadium}`;
+    if (stadium) line += `, ${stadiumPhrase(stadium, stadiumPreposition)}`;
     line += ". ";
 
-    let odds = null;
-    try { odds = MB.computeOddsForMatch(history, state, homeName, awayName); } catch (e) {}
-
-    // Quote und Statistik werden bewusst variiert: manchmal nur die Quote,
-    // manchmal ein Insight, selten beides. So klingt die Vorschau weniger wie
-    // eine wiederholte Vorlage.
-    const facts = (() => {
-      try { return MB.pickFlavourFacts(history, state, homeName, awayName) || []; } catch (e) { return []; }
-    })();
-
-    const hasOdds = !!odds;
-    const hasFacts = facts.length > 0;
-
-    const addOddsLine = () => {
-      const favIsHome = odds.pHome >= odds.pAway;
-      const favName = speechName(favIsHome ? homeName : awayName);
-      const favQuote = favIsHome ? MB.decimalOdds(odds.pHome) : MB.decimalOdds(odds.pAway);
-      line += Math.random() < 0.5
-        ? `Das Wettbüro sieht ${favName} vorne, mit einer Quote von ${favQuote}. `
-        : `Favorit laut Wettbüro: ${favName}, Quote ${favQuote}. `;
-    };
-    const addFactsLine = () => {
-      line += facts[0] + " ";
-      if (facts.length > 1 && Math.random() > 0.85) line += facts[1] + " ";
-    };
-
-    if (hasOdds && hasFacts) {
-      const modeRoll = Math.random();
-      if (modeRoll < 0.45) addOddsLine();          // 45%: nur Quote
-      else if (modeRoll < 0.9) addFactsLine();      // 45%: nur Insight
-      else { addOddsLine(); addFactsLine(); }       // 10%: beides (selten, wie gewollt)
-    } else if (hasOdds) {
-      addOddsLine();
-    } else if (hasFacts) {
-      addFactsLine();
+    const fact = pickUpcomingFact(history, state, homeName, awayName, used);
+    if (fact) {
+      line += naturalizeFact(fact.text) + " ";
+      used.add(fact.type);
     }
 
     return line.trim();
@@ -162,7 +284,15 @@
   // normale Kardinalzahl.
   function sanitizeForSpeech(text) {
     return text
-      .replace(/(\d)\.(\s|$)/g, "$1 .$2")   // "17." -> "17 ."
+      // Dezimalzahlen für deutsche TTS (Anforderungen 23/24) - NUR hier im
+      // Sprachpfad, nicht in shared.js/one(), damit die sichtbaren
+      // Insight-Texte auf index.html/live.html/music.js unverändert bleiben.
+      // Reihenfolge wichtig: erst "42.0" -> "42" (keine unnötige
+      // Nachkommastelle bei Ganzzahlen), danach erst verbleibende echte
+      // Dezimalzahlen "17.5" -> "17,5" (Komma statt Punkt).
+      .replace(/(\d+)\.0\b/g, "$1")
+      .replace(/(\d+)\.(\d+)/g, "$1,$2")
+      .replace(/(\d)\.(\s|$)/g, "$1 .$2")   // "17." -> "17 ." (Ordinalzahl-Fix)
       .replace(/\s{2,}/g, " ")
       .trim();
   }
@@ -361,28 +491,31 @@
   // Eigentliche Ansage-Logik (vormals der einzige "announce"). Umbenannt zu
   // _announceNow, weil der öffentliche Einstiegspunkt jetzt announce() weiter
   // unten ist, der Aufrufe in eine Warteschlange einreiht.
-  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, homeTeam, awayTeam, stadium, upcoming }) {
+  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, upcoming, prevSeeds }) {
     if (homeScore === null || awayScore === null || homeScore === undefined || awayScore === undefined) return;
 
     const settings = getTtsSettings();
     const twoVoiceMode = settings.provider === "elevenlabs" && settings.voiceIdResult && settings.voiceIdPreview;
 
-    const resultLine = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium });
-    const nextTwo = upcoming || [];
+    // buildResultLine() enthält bereits die Übergabe ans Ende der Zeile
+    // (Anforderung 20: nur der Kommentator übergibt) und liefert zurück,
+    // welche(r) Fakt-Typ(en) dabei verbraucht wurden, damit der Moderator
+    // nicht denselben Typ nochmal nennt (Anforderungen 3, 15, 16).
+    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds });
+    const nextMatch = (upcoming || [])[0] || null;
+
+    const buildPreviewLine = () => buildUpcomingLine({
+      state, history, homeName: nextMatch.homeName, awayName: nextMatch.awayName,
+      time: nextMatch.time, stadium: nextMatch.stadium, stadiumPreposition: nextMatch.stadiumPreposition,
+      usedFactTypes,
+    });
 
     if (twoVoiceMode) {
       // Zwei-Stimmen-Duo mit Übergabe: beide Zeilen (Ergebnis + Vorschau)
       // werden von speakSequence() gleichzeitig generiert, dann nahtlos
       // hintereinander abgespielt.
-      const segments = [{ text: resultLine + " " + pick(HANDOFF_OUT_PHRASES), voiceId: settings.voiceIdResult }];
-      const m = nextTwo[0];
-      if (m) {
-        const line = buildUpcomingLine({
-          state, history, homeName: m.homeName, awayName: m.awayName,
-          homeTeam: m.homeTeam, awayTeam: m.awayTeam, time: m.time, stadium: m.stadium,
-        });
-        segments.push({ text: pick(HANDOFF_IN_PHRASES) + " " + line, voiceId: settings.voiceIdPreview });
-      }
+      const segments = [{ text: resultLine, voiceId: settings.voiceIdResult }];
+      if (nextMatch) segments.push({ text: buildPreviewLine(), voiceId: settings.voiceIdPreview });
       await speakSequence(segments);
       return;
     }
@@ -392,16 +525,39 @@
     // dann der Reihe nach abgespielt.
     const singleVoiceId = settings.provider === "elevenlabs" ? (settings.voiceIdResult || settings.voiceIdPreview) : null;
     const segments = [{ text: resultLine, voiceId: singleVoiceId }];
-    for (const m of nextTwo.slice(0, 2)) {
-      const line = buildUpcomingLine({
-        state, history, homeName: m.homeName, awayName: m.awayName,
-        homeTeam: m.homeTeam, awayTeam: m.awayTeam, time: m.time, stadium: m.stadium,
-      });
-      segments.push({ text: line, voiceId: singleVoiceId });
-    }
-    if (nextTwo.length) segments.push({ text: pick(CLOSING_LINES), voiceId: singleVoiceId });
+    if (nextMatch) segments.push({ text: buildPreviewLine(), voiceId: singleVoiceId });
 
     await speakSequence(segments);
+  }
+
+  // ======================================================================
+  // TURNIERSTART-INTRO (Anforderungen 26-28) — beide Rollen stellen sich mit
+  // den aktuell konfigurierten Namen vor, Teilnehmernamen kommen 1:1 aus dem
+  // Aufrufer (index.html reicht state.players.map(p => p.name) durch).
+  // ======================================================================
+  async function _announceTournamentStartNow({ athleteNames } = {}) {
+    const names = getSpeakerNames();
+    const settings = getTtsSettings();
+    const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
+    const resultVoice = useElevenLabs ? settings.voiceIdResult : null;
+    const previewVoice = useElevenLabs ? settings.voiceIdPreview : null;
+
+    const segments = [
+      { text: `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`, voiceId: resultVoice },
+      { text: `${names.moderator} begleitet euch durch den Abend.`, voiceId: previewVoice },
+    ];
+    const athletes = (athleteNames || []).filter(Boolean).map(speechName);
+    if (athletes.length) {
+      segments.push({
+        text: `Allen Athletinnen und Athleten, ${athletes.join(", ")}, viel Erfolg am Controller!`,
+        voiceId: resultVoice,
+      });
+    }
+    await speakSequence(segments);
+  }
+
+  function announceTournamentStart(args) {
+    return _enqueue(() => _announceTournamentStartNow(args));
   }
 
   // ======================================================================
@@ -473,9 +629,10 @@
 
   global.MB = global.MB || {};
   global.MB.Announcer = {
-    announce, announceSong, speak, warmupVoices, buildResultLine, buildUpcomingLine,
+    announce, announceSong, announceTournamentStart, speak, warmupVoices, buildResultLine, buildUpcomingLine,
     setPreferredVoice, getGermanVoiceCandidates, sanitizeForSpeech,
     getTtsSettings, setTtsSettings, fetchElevenLabsVoices, speakElevenLabs, speakSmart,
     speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
+    getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
   };
 })(window);

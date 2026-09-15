@@ -580,22 +580,37 @@
   function buildSpuriousArticle(candidate) {
     const rStr = candidate.r.toFixed(6);
     const direction = candidate.r >= 0 ? "im Gleichschritt" : "gegenläufig";
+    const timeLabels = candidate.xLabels || candidate.years;
+    const timeHeader = candidate.isPlayer ? "Zeitpunkt" : "Jahr";
 
-    const tableRows = candidate.years
-      .map((year, i) => {
-        return `<tr><td>${year}</td><td>${fmtStatNumber(candidate.mbValues[i])} ${candidate.mbUnit}</td><td>${fmtStatNumber(candidate.germanValues[i])} ${candidate.germanUnit}</td></tr>`;
+    const tableRows = timeLabels
+      .map((label, i) => {
+        return `<tr><td>${label}</td><td>${fmtStatNumber(candidate.mbValues[i])} ${candidate.mbUnit}</td><td>${fmtStatNumber(candidate.germanValues[i])} ${candidate.germanUnit}</td></tr>`;
       })
       .join("");
 
-    const table = `<table style="margin-top:10px;"><tr><th>Jahr</th><th>${candidate.mbLabel}</th><th>${candidate.germanName}</th></tr>${tableRows}</table>`;
+    const table = `<table style="margin-top:10px;"><tr><th>${timeHeader}</th><th>${candidate.mbLabel}</th><th>${candidate.germanName}</th></tr>${tableRows}</table>`;
+
+    const spanDesc = candidate.isPlayer
+      ? `die letzten ${candidate.years.length} Spiele im Turnier`
+      : `die letzten ${candidate.years.length} Jahre`;
 
     const parts = [
       pick(SPURIOUS_INTROS),
-      `<strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) bewegen sich über die letzten ${candidate.years.length} Jahre ${direction} — mit einem Korrelationskoeffizienten von <strong>r = ${rStr}</strong>.`,
+      `<strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) bewegen sich über ${spanDesc} ${direction} — mit einem Korrelationskoeffizienten von <strong>r = ${rStr}</strong>.`,
+    ];
+
+    if (candidate.isPlayer) {
+      parts.push(
+        `Die Zuordnung erfolgt rein der Reihenfolge nach: Das älteste betrachtete Spiel von ${candidate.player} trifft auf das älteste Jahr der Statistik, das jüngste Spiel auf das aktuellste Jahr — nicht auf denselben Kalenderzeitraum. Genau das macht den Vergleich so schön sinnfrei.`
+      );
+    }
+
+    parts.push(
       table,
       `Quelle „${candidate.germanName}“: ${candidate.germanSource}.`,
-      pick(SPURIOUS_CLOSERS),
-    ];
+      pick(SPURIOUS_CLOSERS)
+    );
 
     return {
       kind: "spurious",
@@ -605,6 +620,7 @@
         pairKey: candidate.pairKey,
         mbStatKey: candidate.mbStatKey,
         germanStatId: candidate.germanStatId,
+        player: candidate.player || null,
         r: candidate.r,
       },
     };

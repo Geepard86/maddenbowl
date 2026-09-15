@@ -224,8 +224,26 @@
           <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
           <div class="config-item"><label>Min/P:</label><input type="number" id="durPlayoff" value="45" onchange="updateModeInfo()"></div>
           <div class="config-item"><label>Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
-          <div class="config-item"><label>Stadion 1:</label><input type="text" id="stadium1" value="Altima Field"></div>
-          <div class="config-item"><label>Stadion 2:</label><input type="text" id="stadium2" value="KEVAG Stadium"></div>
+          <div class="config-item">
+            <label>Stadion 1:</label>
+            <input type="text" id="stadium1" value="Altima Field">
+            <select id="stadium1Prep" title="Präposition für die Announcer-Ansage, z.B. 'im Altima-Stadion' oder 'in der Energiequelle'" style="margin-top:4px;">
+              <option value="im" selected>im ...</option>
+              <option value="in der">in der ...</option>
+              <option value="in">in ...</option>
+              <option value="auf dem">auf dem ...</option>
+            </select>
+          </div>
+          <div class="config-item">
+            <label>Stadion 2:</label>
+            <input type="text" id="stadium2" value="KEVAG Stadium">
+            <select id="stadium2Prep" title="Präposition für die Announcer-Ansage" style="margin-top:4px;">
+              <option value="im" selected>im ...</option>
+              <option value="in der">in der ...</option>
+              <option value="in">in ...</option>
+              <option value="auf dem">auf dem ...</option>
+            </select>
+          </div>
           <div class="config-item">
             <label>Madden Version:</label>
             <select id="maddenYear" onchange="renderPlayerInputs()">
@@ -380,6 +398,12 @@
     let presetDraftQueue = [];
     let titleOddsPrev = null; // Map name -> %
     let titleOddsNow  = null; // Map name -> %
+    // Tabellen-Rang VOR/NACH dem letzten Score-Commit (Map name -> Platz),
+    // analog zu titleOddsPrev/titleOddsNow. Wird für den Announcer-
+    // "Tabellen-Impact" ("zieht in der Tabelle vorbei") gebraucht, weil
+    // `state` beim Announcer-Aufruf bereits den NEUEN Stand enthält.
+    let tableRankPrev = null;
+    let tableRankNow  = null;
 
 
     // =========================================================
@@ -1193,6 +1217,8 @@ document.querySelectorAll('.draft-row').forEach(row => {
         durB: parseInt(document.getElementById('durBreak').value),
         s1: document.getElementById('stadium1').value,
         s2: document.getElementById('stadium2').value,
+        s1Prep: document.getElementById('stadium1Prep').value || 'im',
+        s2Prep: document.getElementById('stadium2Prep').value || 'im',
         year: document.getElementById('maddenYear').value
       };
 
@@ -1218,6 +1244,9 @@ document.querySelectorAll('.draft-row').forEach(row => {
         // Turnierblog: Kickoff-Artikel, sobald wir die frische Tournament-ID haben.
         MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state));
         progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
+        // Announcer-Intro: beide Rollen stellen sich mit den konfigurierten
+        // Namen vor (Anforderungen 26-28).
+        MB.Announcer.announceTournamentStart({ athleteNames: state.players.map(p => p.name) });
       }
     }
 
@@ -1444,6 +1473,13 @@ const ringsHtml = rings > 0
     }
 
     function finishScoreUpdate(type, idx, match, wasFinished) {
+      // Tabellen-Rang VOR diesem Spiel einfrieren, bevor renderTable() unten
+      // p.wins/p.diff mit dem neuen Ergebnis überschreibt (anders als bei
+      // titleOddsPrev/Now oben: dort ist der bestehende Zeitpunkt schon
+      // etabliert, hier brauchen wir für den Tabellen-Impact aber garantiert
+      // den Stand VOR dieser Aktualisierung).
+      tableRankPrev = tableRankNow || null;
+
       updatePlayoffLogic();
       // BUGFIX (Zeit-Engine): Playoff-Offsets bye-bereinigt neu berechnen,
       // NACHDEM updatePlayoffLogic() die Spieler den Matches zugeordnet hat.
@@ -1451,6 +1487,9 @@ const ringsHtml = rings > 0
       // ✅ Titel-Odds Snapshot updaten (damit Trend "seit letztem Ergebnis" stimmt)
       recalcTitleOddsSnapshots();
       renderTable();
+      // Tabellen-Rang NACH renderTable() neu berechnen, denn erst dort werden
+      // p.wins/p.diff für das gerade committete Ergebnis aktualisiert.
+      tableRankNow = MB.getLiveSeeds(state);
       renderPlayoffPicture();
       renderNextGames();
 
@@ -1471,11 +1510,18 @@ const ringsHtml = rings > 0
         const stadium = (type === 'group')
           ? ((state.slots.find(s => s.includes(match)) || []).indexOf(match) === 1 ? state.config.s2 : state.config.s1)
           : ((state.playoffMatches.indexOf(match) % 2 === 0) ? state.config.s1 : state.config.s2);
+        const stadiumPrepFor = (name) => (name === state.config.s2 ? (state.config.s2Prep || 'im') : (state.config.s1Prep || 'im'));
+        const upcomingWithPrep = getNextUnplayedMatches(1).map(m => ({ ...m, stadiumPreposition: stadiumPrepFor(m.stadium) }));
 
         MB.Announcer.announce({
           state, history, homeName, awayName, homeTeam, awayTeam,
           homeScore: match.s1, awayScore: match.s2, stadium,
-          upcoming: getNextUnplayedMatches(1)
+          stadiumPreposition: stadiumPrepFor(stadium),
+          // Vorheriger Tabellenstand (VOR diesem Score-Commit) für den
+          // Announcer-Tabellen-Impact - `state` selbst enthält an dieser
+          // Stelle schon den neuen Stand (siehe tableRankPrev/-Now oben).
+          prevSeeds: tableRankPrev,
+          upcoming: upcomingWithPrep,
         });
 
         // Tippspiel: Punkte werden live aus den Tipps + Ergebnissen berechnet
@@ -2836,23 +2882,34 @@ function renderRanking() {
 
     // Wird aus finishScoreUpdate() aufgerufen — läuft async im Hintergrund,
     // blockiert also nie das Speichern eines Ergebnisses selbst.
-    async function maybeOfferSpuriousCorrelation() {
+    // opts.force: ignoriert die "schon ein Vorschlag offen"-Bremse und
+    // erzwingt ein Popup auch bei offenem Meme-Kontext-Dialog — nur für
+    // den manuellen Test-Button gedacht (siehe testSpuriousCorrelation()).
+    async function maybeOfferSpuriousCorrelation(opts) {
+      opts = opts || {};
+      const force = !!opts.force;
       try {
-        if (!MB.Spurious) return; // spurious.js nicht geladen
+        if (!MB.Spurious) { if (force) alert('spurious.js ist nicht geladen.'); return; }
         const tournamentId = MB.getCurrentTournamentId();
-        if (!tournamentId) return;
+        if (!tournamentId) { if (force) alert('Kein aktives Turnier gefunden.'); return; }
 
         // Schon ein unveröffentlichter Vorschlag offen? Nicht noch einen
         // draufsatteln, sonst häufen sich unbeantwortete Kandidaten an.
-        if (sessionRecords.some((e) => e.isSpurious && !e.published)) return;
+        if (!force && sessionRecords.some((e) => e.isSpurious && !e.published)) return;
 
+        // Sucht über beide Quellen: Saison-Kennzahlen (Turnier-Historie)
+        // UND Spieler-Turnierverlauf (ab MB.Spurious.PLAYER_MIN_GAMES
+        // fertigen Spielen), siehe spurious.js.
         const used = await MB.Blog.getUsedSpuriousPairKeys(tournamentId);
-        const candidate = await MB.Spurious.findBestCandidate(used);
-        if (!candidate) return;
+        const candidate = await MB.Spurious.findBestOverallCandidate(state, used);
+        if (!candidate) {
+          if (force) alert('Kein Kandidat über der Schwelle gefunden — entweder ist schon alles Passende veröffentlicht, oder es liegt noch zu wenig Turnier-/Spieler-Historie vor.');
+          return;
+        }
 
         // Erneut prüfen (der obige await kostet Zeit — in der Zwischenzeit
         // könnte längst ein anderer Vorschlag aufgetaucht sein).
-        if (sessionRecords.some((e) => e.isSpurious && !e.published)) return;
+        if (!force && sessionRecords.some((e) => e.isSpurious && !e.published)) return;
 
         const entry = await addSessionSpuriousCandidate(candidate);
 
@@ -2862,7 +2919,7 @@ function renderRanking() {
           // demselben Speichervorgang) — Eintrag einfach mit reinhängen.
           activePopupEntries = [entry, ...activePopupEntries];
           refreshMemeViews();
-        } else if (!pendingMemeContext) {
+        } else if (force || !pendingMemeContext) {
           // Kein Meme-Kontext-Dialog wartet gerade auf eine Antwort —
           // Popup direkt mit nur diesem einen Eintrag öffnen.
           activePopupEntries = [entry];
@@ -2873,7 +2930,15 @@ function renderRanking() {
         // Popup wird erzwungen.
       } catch (e) {
         console.warn('Spurious-Correlation-Check fehlgeschlagen:', e);
+        if (force) alert('Fehler beim Testen: ' + e.message);
       }
+    }
+
+    // Button in den Ansage-/Meme-Einstellungen: manueller Testlauf, ohne
+    // auf ein gespeichertes Ergebnis warten zu müssen. Ignoriert die
+    // "kein anderer Post läuft gerade"-Bremse bewusst — ist ja ein Test.
+    function testSpuriousCorrelation() {
+      maybeOfferSpuriousCorrelation({ force: true });
     }
 
     async function publishSpuriousToBlog(i) {
@@ -3127,6 +3192,24 @@ function renderRanking() {
         }
       }
 
+      // Spurious Correlations (spurious.js): manueller Testlauf, unabhängig
+      // vom Meme-Stil — sucht sofort nach dem besten (noch unveröffentlichten)
+      // Treffer über Saison-Kennzahlen UND Spieler-Turnierverlauf und zeigt
+      // ihn im selben Popup wie ein automatisch erkanntes Meme.
+      if (!ttsUnlocked) {
+        html += `<button class="btn-secondary" style="margin-top:10px;" onclick="unlockTtsSettings()">🔒 Entsperren, um Spurious Correlations zu testen</button>`;
+      } else {
+        html += `
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid #22304366;">
+            <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:6px;">📊 Spurious Correlations</label>
+            <button class="btn-secondary" onclick="testSpuriousCorrelation()">🧪 Testkandidat suchen</button>
+            <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:6px;">
+              Sucht sofort nach der besten (noch nicht in diesem Turnier verwendeten) Schein-Korrelation
+              — normalerweise läuft das automatisch bei jedem gespeicherten Ergebnis.
+            </div>
+          </div>`;
+      }
+
       el.innerHTML = html;
     }
 
@@ -3304,7 +3387,22 @@ function renderRanking() {
         return;
       }
 
+      const speakerNames = MB.Announcer.getSpeakerNames();
       el.innerHTML = `
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:4px;">Sprecher-Namen (frei wählbar, Rollen bleiben fest)</label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:140px;">
+              <label style="font-size:0.7em; opacity:0.6;">Kommentator</label>
+              <input type="text" id="speakerCommentator" value="${speakerNames.commentator}" style="width:100%;">
+            </div>
+            <div style="flex:1; min-width:140px;">
+              <label style="font-size:0.7em; opacity:0.6;">Moderator</label>
+              <input type="text" id="speakerModerator" value="${speakerNames.moderator}" style="width:100%;">
+            </div>
+          </div>
+        </div>
+
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
           <select id="ttsProvider" onchange="onTtsProviderChange()">
             <option value="browser" ${settings.provider !== 'elevenlabs' ? 'selected' : ''}>Browser (kostenlos)</option>
@@ -3390,6 +3488,10 @@ function renderRanking() {
     }
 
     function saveTtsSettings() {
+      MB.Announcer.setSpeakerNames({
+        commentator: document.getElementById('speakerCommentator').value,
+        moderator: document.getElementById('speakerModerator').value,
+      });
       const provider = document.getElementById('ttsProvider').value;
       const settings = { provider };
       if (provider === 'elevenlabs') {

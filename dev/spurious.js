@@ -268,6 +268,130 @@
   }
 
   // ======================================================================
+  // SPIELER-SEITE — Turnierverlauf EINES Spielers im laufenden Turnier
+  // ----------------------------------------------------------------------
+  // Statt Saison-Kennzahl vs. deutsche Statistik über dieselben Kalender-
+  // jahre: die letzten n Spiele eines Spielers (n >= PLAYER_MIN_GAMES)
+  // werden rein der Reihenfolge nach den letzten n Jahren der deutschen
+  // Statistik gegenübergestellt — ältestes Spiel <-> ältestes Jahr, letztes
+  // Spiel <-> aktuellstes Jahr. Genau der Tyler-Vigen-Kniff: zwei Zeitreihen
+  // gleicher Länge, deren x-Achsen inhaltlich nichts miteinander zu tun
+  // haben, werden trotzdem übereinandergelegt. Braucht MB.getCurrentMatchesNormalized
+  // (shared.js), muss also NACH shared.js geladen werden.
+  // ======================================================================
+
+  const PLAYER_MIN_GAMES = 5; // erst ab so vielen fertigen Spielen wird ein Spieler betrachtet
+
+  const PLAYER_STAT_DEFS = [
+    { key: "scored", label: "erzielte Punkte pro Spiel", unit: "Punkte" },
+    { key: "allowed", label: "zugelassene Gegnerpunkte pro Spiel", unit: "Punkte" },
+    { key: "diff", label: "Punktedifferenz pro Spiel", unit: "Punkte" },
+    { key: "cumulative", label: "kumulierte Punkte im Turnierverlauf", unit: "Punkte" },
+  ];
+
+  // Alle Jahre, die IRGENDEINE der 101 Statistiken abdeckt, aufsteigend sortiert.
+  function allAvailableYears() {
+    const years = new Set();
+    GERMAN_STATS.forEach((gs) => Object.keys(gs.values).forEach((y) => years.add(Number(y))));
+    return [...years].sort((a, b) => a - b);
+  }
+
+  function getPlayerFinishedGames(state, playerName) {
+    return MB.getCurrentMatchesNormalized(state).filter(
+      (m) => m.homePlayer === playerName || m.awayPlayer === playerName
+    );
+  }
+
+  // games: Ergebnis von getPlayerFinishedGames(), bereits auf die
+  // gewünschte Länge zugeschnitten (siehe findPlayerCandidates).
+  function computePlayerSeries(games, playerName) {
+    let running = 0;
+    const scored = [], allowed = [], diff = [], cumulative = [];
+    games.forEach((m) => {
+      const isHome = m.homePlayer === playerName;
+      const s = isHome ? m.homeScore : m.awayScore;
+      const a = isHome ? m.awayScore : m.homeScore;
+      scored.push(s); allowed.push(a); diff.push(s - a);
+      running += s; cumulative.push(running);
+    });
+    return { scored, allowed, diff, cumulative };
+  }
+
+  // Deutscher Possessiv: Namen auf s/ß/x/z/ce bekommen nur einen Apostroph
+  // ("Markus' Punkte"), alle anderen ein "s" ("Toms Punkte").
+  function possessive(name) {
+    return /[sßxz]$/i.test(name) || /ce$/i.test(name) ? name + "'" : name + "s";
+  }
+
+  function findPlayerCandidates(state, excludePairKeys, opts) {
+    opts = opts || {};
+    const threshold = opts.threshold != null ? opts.threshold : MATCH_THRESHOLD;
+    const exclude = excludePairKeys || new Set();
+    const years = allAvailableYears(); // aufsteigend
+    const out = [];
+    if (!years.length) return out;
+
+    const playerNames = (state.players || []).map((p) => p && p.name).filter(Boolean);
+
+    playerNames.forEach((player) => {
+      const games = getPlayerFinishedGames(state, player);
+      if (games.length < PLAYER_MIN_GAMES) return;
+
+      const n = Math.min(games.length, years.length);
+      if (n < 3) return; // zu wenig Datenpunkte für eine halbwegs sinnvolle Korrelation
+
+      const recentGames = games.slice(-n); // die letzten n Spiele
+      const recentYears = years.slice(-n); // die letzten n Jahre der Statistik-Reihe
+      const series = computePlayerSeries(recentGames, player);
+      // z.B. "Spiel 6 → 2023" — macht die (bewusst willkürliche) Zuordnung
+      // Spiel-Reihenfolge <-> Jahres-Reihenfolge transparent statt sie als
+      // echten Kalenderbezug zu verkaufen.
+      const startGameNo = games.length - n + 1;
+      const xLabels = recentYears.map((y, i) => `Spiel ${startGameNo + i} → ${y}`);
+
+      PLAYER_STAT_DEFS.forEach((def) => {
+        const xs = series[def.key];
+        GERMAN_STATS.forEach((gs) => {
+          if (recentYears.some((y) => gs.values[y] == null)) return;
+          const pairKey = "player::" + player + "::" + def.key + "::" + gs.id;
+          if (exclude.has(pairKey)) return;
+
+          const ys = recentYears.map((y) => gs.values[y]);
+          const r = pearson(xs, ys);
+          if (r == null || Math.abs(r) < threshold) return;
+
+          out.push({
+            isPlayer: true, pairKey, player,
+            mbStatKey: def.key, mbLabel: `${possessive(player)} ${def.label} im Turnier`, mbUnit: def.unit,
+            germanStatId: gs.id, germanName: gs.name, germanUnit: gs.unit, germanSource: gs.source,
+            years: recentYears, mbValues: xs, germanValues: ys, r,
+            xLabels,
+          });
+        });
+      });
+    });
+
+    out.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+    return out;
+  }
+
+  async function findBestPlayerCandidate(state, excludePairKeys, opts) {
+    const candidates = findPlayerCandidates(state, excludePairKeys, opts);
+    return candidates.length ? candidates[0] : null;
+  }
+
+  // Sucht über BEIDE Quellen (Saison-Kennzahlen + Spieler-Turnierverlauf)
+  // und liefert insgesamt den besten noch nicht verwendeten Treffer.
+  async function findBestOverallCandidate(state, excludePairKeys, opts) {
+    const mbSeries = await computeMaddenBowlSeries();
+    const seasonCandidates = findCandidates(mbSeries, excludePairKeys, opts);
+    const playerCandidates = findPlayerCandidates(state, excludePairKeys, opts);
+    const all = [...seasonCandidates, ...playerCandidates];
+    all.sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+    return all.length ? all[0] : null;
+  }
+
+  // ======================================================================
   // CHART (Canvas) — im Look von tylervigen.com/spurious: zwei Linien,
   // zwei y-Achsen (links: Madden-Bowl-Kennzahl, rechts: deutsche Statistik),
   // gemeinsame Jahres-x-Achse. Selbst gezeichnet, keine externe Chart-Lib.
@@ -302,9 +426,11 @@
     wrapCenter(ctx, `${candidate.mbLabel} correlates with ${candidate.germanName}`, W / 2, 76, W - 120, 22);
 
     // Plot-Bereich
-    const padL = 90, padR = 90, padT = 130, padB = 90;
+    const hasCustomLabels = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
+    const padL = 90, padR = 90, padT = 130, padB = hasCustomLabels ? 120 : 90;
     const plotW = W - padL - padR, plotH = H - padT - padB;
     const years = candidate.years;
+    const xLabels = hasCustomLabels ? candidate.xLabels : years.map(String);
     const n = years.length;
     const xFor = (i) => padL + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
 
@@ -317,16 +443,26 @@
     const yForMb = (v) => padT + plotH - ((v - mbLo) / (mbHi - mbLo)) * plotH;
     const yForG = (v) => padT + plotH - ((v - gLo) / (gHi - gLo)) * plotH;
 
-    // Gitternetz + Jahres-Achse
+    // Gitternetz + x-Achse (Jahre, oder bei Spieler-Kandidaten
+    // "Spiel N → Jahr" — leicht schräg, weil länger als ein bloßes Jahr)
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.lineWidth = 1;
     for (let i = 0; i < n; i++) {
       const x = xFor(i);
       ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
       ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.font = "400 15px 'Segoe UI', Roboto, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(String(years[i]), x, padT + plotH + 28);
+      ctx.font = "400 14px 'Segoe UI', Roboto, sans-serif";
+      if (hasCustomLabels) {
+        ctx.save();
+        ctx.translate(x, padT + plotH + 22);
+        ctx.rotate(-Math.PI / 10);
+        ctx.textAlign = "right";
+        ctx.fillText(xLabels[i], 0, 0);
+        ctx.restore();
+      } else {
+        ctx.textAlign = "center";
+        ctx.fillText(xLabels[i], x, padT + plotH + 28);
+      }
     }
 
     // Linie 1: Madden Bowl (accent-türkis)
@@ -395,13 +531,21 @@
   global.MB.Spurious = {
     GERMAN_STATS,
     MB_STAT_DEFS,
+    PLAYER_STAT_DEFS,
     MATCH_THRESHOLD,
     MIN_POINTS,
+    PLAYER_MIN_GAMES,
     computeSeasonAggregates,
     computeMaddenBowlSeries,
     pearson,
     findCandidates,
     findBestCandidate,
+    allAvailableYears,
+    getPlayerFinishedGames,
+    computePlayerSeries,
+    findPlayerCandidates,
+    findBestPlayerCandidate,
+    findBestOverallCandidate,
     renderChartCanvas,
   };
 })(window);
