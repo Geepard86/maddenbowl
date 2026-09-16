@@ -180,6 +180,17 @@
     } catch (e) { return null; }
   }
 
+  function buildRivalryFact(history, state, homeName, awayName) {
+    try {
+      const rivalry = MB.computeBiggestRivalry(history, state);
+      // Erst ab einer spürbaren Anzahl Spiele als "Rivalität" ausrufen -
+      // sonst wäre jede beliebige Erstpaarung automatisch "die größte".
+      if (!rivalry || rivalry.count < 3) return null;
+      if (rivalry.pairKey !== MB.pairKey(homeName, awayName)) return null;
+      return { type: "rivalry", text: `Das ist mit ${rivalry.count} Spielen die meistgespielte Partie der Madden-Bowl-Geschichte.`, score: 13 };
+    } catch (e) { return null; }
+  }
+
   // Wählt EINEN Preview-Fakt für den Moderator, der noch nicht von einem
   // anderen Typ verbraucht wurde (Anforderungen 3, 15, 16). Holt sich dafür
   // ALLE getypten Kandidaten aus shared.js (nicht nur die Top 2 wie die
@@ -194,6 +205,8 @@
     const candidates = [];
     const oddsFact = buildOddsFact(history, state, homeName, awayName);
     if (oddsFact) candidates.push(oddsFact);
+    const rivalryFact = buildRivalryFact(history, state, homeName, awayName);
+    if (rivalryFact) candidates.push(rivalryFact);
     try {
       (MB.pickFlavourFactsTyped(history, state, homeName, awayName) || []).forEach((f) => candidates.push(f));
     } catch (e) {}
@@ -205,6 +218,42 @@
     withJitter.sort((a, b) => b.key - a.key);
     return withJitter[0].f;
   }
+
+  // Spricht einen von MB.Records.detectRecords() erkannten Rekord natürlich
+  // aus. Die Erkennung selbst bleibt zentral in records.js (Anforderung 29
+  // sinngemäß: keine parallele Logik) - hier wird nur die Sprachformulierung
+  // gebaut.
+  function describeRecordForSpeech(rec) {
+    if (!rec) return null;
+    const player = rec.player ? speechName(rec.player) : "";
+    const opponent = rec.opponent ? speechName(rec.opponent) : "";
+    switch (rec.type) {
+      case "allTimeMargin":
+        return `Das ist die größte Klatsche der gesamten Madden-Bowl-Geschichte!`;
+      case "tournamentMargin":
+        return `Das ist der bisher größte Blowout dieses Turniers!`;
+      case "allTimeHigh":
+        return `Und das ist gleichzeitig ein neuer Allzeit-Highscore mit ${rec.value} Punkten für ${player}!`;
+      case "winStreak":
+        return `${player} feiert damit den ${rec.value}. Sieg in Folge.`;
+      case "upset":
+        return `Das ist eine faustdicke Überraschung - ${player} war hier klarer Außenseiter gegen ${opponent}.`;
+      case "shutout":
+        return `${opponent} kam praktisch nicht vom Fleck.`;
+      case "shootout":
+        return `Das ist die höchste Gesamtpunktzahl, die dieses Turnier bisher gesehen hat.`;
+      default:
+        return null;
+    }
+  }
+  // Diese Rekord-Typen sagen bereits selbst "das war ein Blowout" - die
+  // generische CLOSE/BLOWOUT-Farbkommentar-Zeile würde dann nur denselben
+  // Punkt ein zweites Mal machen.
+  const MARGIN_RECORD_TYPES = new Set(["allTimeMargin", "tournamentMargin", "shutout"]);
+  // Wenn ein Spiel mehrere Rekorde gleichzeitig bricht (z.B. Highscore UND
+  // größte Klatsche in einem), wird nur EINER angesagt (sonst zu viel) -
+  // Blowout-Rekorde zuerst, weil das i.d.R. die spektakulärere Aussage ist.
+  const RECORD_SPEECH_PRIORITY = ["allTimeMargin", "tournamentMargin", "allTimeHigh", "shutout", "upset", "shootout", "winStreak"];
 
   // Kommentator: berichtet AUSSCHLIESSLICH über das gerade abgeschlossene
   // Spiel (Anforderung 6). Ergebnis-Impact (Tabelle/Titel, zentral aus
@@ -228,11 +277,31 @@
     // Sieger- und Verlierer-Perspektive für mehr Abwechslung.
     line += fmt(pick([...WIN_PHRASES, ...LOSE_PHRASES]), { winner, loser, winnerScore, loserScore }) + " ";
 
+    // Neuer Rekord? (größte Klatsche, Highscore, Siegesserie, Überraschung, ...)
+    // - erkannt zentral in records.js, hier nur ausgesprochen.
+    let recordText = null, recordType = null;
+    try {
+      if (MB.Records && typeof MB.Records.detectRecords === "function") {
+        const newRecords = MB.Records.detectRecords(state, history, { homeName, awayName, homeScore, awayScore }) || [];
+        if (newRecords.length) {
+          newRecords.sort((a, b) => RECORD_SPEECH_PRIORITY.indexOf(a.type) - RECORD_SPEECH_PRIORITY.indexOf(b.type));
+          recordType = newRecords[0].type;
+          recordText = describeRecordForSpeech(newRecords[0]);
+        }
+      }
+    } catch (e) {}
+
     // Nicht JEDES enge/deutliche Spiel bekommt zusätzlich noch eine
     // Farbkommentar-Zeile - sonst klingt jede Ansage gleich lang/gleich
-    // aufgebaut. Manchmal reicht der reine Ergebnissatz.
-    if (margin <= 3 && Math.random() < 0.7) line += pick(CLOSE_GAME_PHRASES) + " ";
+    // aufgebaut. Manchmal reicht der reine Ergebnissatz. Ein Rekord, der
+    // bereits "das war ein Blowout" aussagt, ersetzt die generische Zeile,
+    // statt denselben Punkt doppelt zu machen.
+    if (recordType && MARGIN_RECORD_TYPES.has(recordType)) {
+      // generische Zeile bewusst übersprungen
+    } else if (margin <= 3 && Math.random() < 0.7) line += pick(CLOSE_GAME_PHRASES) + " ";
     else if (margin >= 21 && Math.random() < 0.7) line += pick(BLOWOUT_PHRASES) + " ";
+
+    if (recordText) line += recordText + " ";
 
     let impactUsed = false;
     try {

@@ -559,6 +559,30 @@
   // germanSource, years, mbValues, germanValues, r }.
   // ======================================================================
 
+  // Kategorie-abhängige Formulierung für die "Prognose": was ein weiterer
+  // Anstieg bzw. Rückgang bei einer deutschen Statistik dieser Art
+  // plausibel bedeuten würde. Bewusst nicht pauschal "Verknappung" für
+  // alles — bei Ereignis-Zählungen (Übernachtungen, Paketsendungen) gibt es
+  // keine "Knappheit", bei Preisen/Kosten ist "Verteuerung" treffender als
+  // "Engpass", usw. Kategorie kommt aus GERMAN_STATS in spurious.js
+  // (candidate.germanCategory); unbekannte/neutrale Kategorien (rate,
+  // infrastructure, other) fallen auf schlichtes Anstieg/Rückgang zurück.
+  const CATEGORY_TREND_WORDS = {
+    goods: { up: "ein Überangebot", down: "ein Engpass" },
+    price: { up: "eine Verteuerung", down: "eine Verbilligung" },
+    revenue: { up: "ein Boom", down: "ein Einbruch" },
+    events: { up: "ein Ansturm", down: "eine Flaute" },
+    population: { up: "ein Zuwachs", down: "ein Schwund" },
+    infrastructure: { up: "ein weiterer Ausbau", down: "ein Rückgang" },
+    rate: { up: "ein weiterer Anstieg", down: "ein weiterer Rückgang" },
+    other: { up: "ein weiterer Anstieg", down: "ein weiterer Rückgang" },
+  };
+
+  function trendWordFor(category, direction) {
+    const words = CATEGORY_TREND_WORDS[category] || CATEGORY_TREND_WORDS.other;
+    return direction === "up" ? words.up : words.down;
+  }
+
   const SPURIOUS_INTROS = [
     "Die vorliegende Kurzanalyse untersucht den statistischen Zusammenhang zwischen zwei zunächst unabhängig erscheinenden Kennzahlen.",
     "Im Rahmen einer fortlaufenden Datenbetrachtung wurde folgender Zusammenhang identifiziert.",
@@ -567,9 +591,9 @@
   ];
 
   const SPURIOUS_CLOSERS = [
-    "Ein kausaler Mechanismus zwischen beiden Größen ist nicht erkennbar; die Korrelation ist als Zufallsbefund zu werten.",
+    "Ein kausaler Mechanismus zwischen beiden Größen ist nicht belegt; die Prognose ist entsprechend mit Vorsicht zu genießen.",
     "Weitere Erhebungszeiträume könnten diesen Befund erhärten oder widerlegen — belastbar ist er in der vorliegenden Form nicht.",
-    "Von einer inhaltlichen Interpretation dieses Zusammenhangs wird an dieser Stelle ausdrücklich abgesehen.",
+    "Von einer verbindlichen Kausalaussage wird an dieser Stelle ausdrücklich abgesehen.",
     "Für eine gesicherte Aussage wäre eine deutlich breitere Datenbasis erforderlich, als sie hier vorliegt.",
   ];
 
@@ -585,7 +609,7 @@
 
     const parts = [
       pick(SPURIOUS_INTROS),
-      `<strong>Befund.</strong> Zwischen <strong>${candidate.mbLabel}</strong> und <strong>„${candidate.germanName}“</strong> (${candidate.germanUnit}) besteht ${spanDesc} ein ${strength} ${direction} Zusammenhang (r = ${rStr}).`,
+      `<strong>Befund.</strong> ${candidate.mbLabel} scheint sich auf „${candidate.germanName}“ (${candidate.germanUnit}) auszuwirken — ${spanDesc} zeigt sich ein ${strength} ${direction} Zusammenhang (r = ${rStr}).`,
     ];
 
     if (hasOrdinalMapping) {
@@ -598,6 +622,16 @@
     } else {
       parts.push(`<strong>Datengrundlage.</strong> Quelle „${candidate.germanName}“: ${candidate.germanSource}.`);
     }
+
+    // Prognose: "steigt mbStat weiter" -> was das für den deutschen Wert
+    // laut diesem (Zufalls-)Befund bedeuten würde, passend zur Kategorie
+    // der deutschen Statistik formuliert (siehe CATEGORY_TREND_WORDS).
+    const germanDirection = candidate.r >= 0 ? "up" : "down";
+    const trendWord = trendWordFor(candidate.germanCategory, germanDirection);
+    const nextScopeLabel = candidate.isPlayer ? "im nächsten Spiel" : "in der nächsten Saison";
+    parts.push(
+      `<strong>Prognose.</strong> Sollte sich ${candidate.mbLabel} ${nextScopeLabel} noch weiter erhöhen, wäre nach diesem Befund ${trendWord} bei „${candidate.germanName}“ zu erwarten.`
+    );
 
     parts.push(`<strong>Einordnung.</strong> ${pick(SPURIOUS_CLOSERS)}`);
 

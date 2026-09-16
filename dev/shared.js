@@ -658,6 +658,23 @@
     return out;
   }
 
+  // Ermittelt die Paarung mit den meisten gemeinsamen Spielen aller Zeiten
+  // (Historie + laufendes Turnier). Für den Announcer-Fakt "größte Rivalität"
+  // in der Vorschau (Anforderung: "Biggest Rivalry" ankündigen).
+  function computeBiggestRivalry(history, state) {
+    const counts = new Map(); // pairKey -> Anzahl Spiele
+    (history.byPair || new Map()).forEach((matches, pk) => counts.set(pk, matches.length));
+    getCurrentMatchesNormalized(state).forEach((m) => {
+      const pk = pairKey(m.homePlayer, m.awayPlayer);
+      counts.set(pk, (counts.get(pk) || 0) + 1);
+    });
+    let bestKey = null, bestCount = 0;
+    counts.forEach((count, pk) => { if (count > bestCount) { bestCount = count; bestKey = pk; } });
+    if (!bestKey) return null;
+    const [a, b] = bestKey.split("|");
+    return { pairKey: bestKey, count: bestCount, names: [a, b] };
+  }
+
   function computeMatchupStats(history, state, playerA, playerB) {
     const A = normName(playerA), B = normName(playerB);
     if (!A || !B) return null;
@@ -1255,7 +1272,7 @@
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
-    pickFlavourFactsTyped, getAnnouncerResultImpacts,
+    pickFlavourFactsTyped, getAnnouncerResultImpacts, computeBiggestRivalry,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,
     normalCdf, getPpgEstimate, seedFactor, teamOVRFactor, formFactor,
     computeBaseRanking, getGroupSeedsFinal, applyToiletBowlOverride, computeFinalRanking,
