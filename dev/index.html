@@ -1244,6 +1244,7 @@ document.querySelectorAll('.draft-row').forEach(row => {
         // Turnierblog: Kickoff-Artikel, sobald wir die frische Tournament-ID haben.
         MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state));
         progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
+        songMomentFlags = {}; // neues Turnier -> alte Song-Momente-Flags verwerfen
         // Announcer-Intro: beide Rollen stellen sich mit den konfigurierten
         // Namen vor (Anforderungen 26-28).
         MB.Announcer.announceTournamentStart({ athleteNames: state.players.map(p => p.name) });
@@ -1472,7 +1473,7 @@ const ringsHtml = rings > 0
       finishScoreUpdate(type, idx, match, wasFinished);
     }
 
-    function finishScoreUpdate(type, idx, match, wasFinished) {
+    async function finishScoreUpdate(type, idx, match, wasFinished) {
       // Tabellen-Rang VOR diesem Spiel einfrieren, bevor renderTable() unten
       // p.wins/p.diff mit dem neuen Ergebnis überschreibt (anders als bei
       // titleOddsPrev/Now oben: dort ist der bestehende Zeitpunkt schon
@@ -1513,6 +1514,14 @@ const ringsHtml = rings > 0
         const stadiumPrepFor = (name) => (name === state.config.s2 ? (state.config.s2Prep || 'im') : (state.config.s1Prep || 'im'));
         const upcomingWithPrep = getNextUnplayedMatches(1).map(m => ({ ...m, stadiumPreposition: stadiumPrepFor(m.stadium) }));
 
+        // Erreicht dieses Ergebnis gerade neu einen der vier großen
+        // Song-Meilensteine (Regular Season, erstes Ausscheiden, Finale,
+        // Champion)? Falls ja: hier auf die Admin-Entscheidung warten
+        // (generieren/überspringen), BEVOR die Ansage für dieses Spiel
+        // gebaut wird - so kann der Kommentator schon wissen, ob (und dass)
+        // gerade ein Song entstanden ist.
+        const songMoment = await maybeHandleSongMoment();
+
         MB.Announcer.announce({
           state, history, homeName, awayName, homeTeam, awayTeam,
           homeScore: match.s1, awayScore: match.s2, stadium,
@@ -1529,7 +1538,18 @@ const ringsHtml = rings > 0
           matchKind: type,
           matchId: (type === 'playoff') ? match.id : null,
           upcoming: upcomingWithPrep,
+          songMilestone: songMoment.milestone,
+          songGenerated: songMoment.generated,
         });
+
+        // Der eigentliche Song (falls generiert) wird NACH der Spielansage
+        // angesagt/abgespielt - announce() und announceSong() hängen in
+        // derselben Warteschlange, spielen also garantiert in dieser
+        // Reihenfolge, nie überlappend.
+        if (songMoment.generated) {
+          const settings = MB.Announcer.getTtsSettings();
+          MB.Announcer.announceSong(songMoment.milestone, songMoment.url, { voiceId: settings.voiceIdResult });
+        }
 
         // Tippspiel: Punkte werden live aus den Tipps + Ergebnissen berechnet
         // (MB.Tipp.computeTippStandings), kein Abrechnungsschritt nötig.
@@ -2441,6 +2461,10 @@ function renderRanking() {
       applyLayoutRules();
 
       MB.Announcer.warmupVoices(); // Stimmen für Web Speech API vorladen
+      // Bereits erreichte Meilensteine beim Laden als "schon entschieden"
+      // markieren - sonst würde ein Reload mitten im Turnier sofort wieder
+      // ein Song-Popup für längst vergangene Momente aufreißen.
+      try { MB.Music.detectMilestones(state).forEach((k) => { songMomentFlags[k] = true; }); } catch (e) {}
       if (isAdmin) setTimeout(renderTtsSettingsPanel, 800); // Panel erst nach kurzem Warmup füllen
       if (isAdmin) setTimeout(renderSongMomentsPanel, 800);
       if (isAdmin) setTimeout(renderMemeSettingsPanel, 800);
@@ -2598,6 +2622,25 @@ function renderRanking() {
       renderSongMomentsPanel();
     }
 
+    // Gemeinsame Generierungs- + Buchführungslogik, genutzt sowohl vom
+    // manuellen Song-Panel (generateMilestoneSong/sendReviewedSong) als auch
+    // vom neuen automatischen Song-Momente-Popup (promptSongMomentPopup).
+    // testMode: true macht KEINEN echten API-Call (siehe MB.Music.generateAndStoreSong).
+    async function generateAndRecordSong(milestone, { styleId, languageId, factsOverride, promptOverride, seconds, testMode } = {}) {
+      const settings = MB.Announcer.getTtsSettings();
+      if (!settings.apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
+      const tournamentId = MB.getCurrentTournamentId();
+      const result = await MB.Music.generateAndStoreSong({
+        apiKey: settings.apiKey, milestone, state, history, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
+        tournamentId, lengthMs: (seconds || 60) * 1000, styleId, languageId, factsOverride, promptOverride, testMode,
+      });
+      if (result.testMode) return result;
+      state.songs = { ...(state.songs || {}), [milestone]: result.url };
+      MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url));
+      renderSongMomentsPanel();
+      return result;
+    }
+
     async function generateMilestoneSong(milestone) {
       const settings = MB.Announcer.getTtsSettings();
       const styleId = document.getElementById(`songStyle-${milestone}`).value || null;
@@ -2610,11 +2653,7 @@ function renderRanking() {
       if (!testMode && !confirm(`Song für "${MUSIC_MILESTONE_LABELS[milestone]}" generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s).`)) return;
 
       try {
-        const tournamentId = MB.getCurrentTournamentId();
-        const result = await MB.Music.generateAndStoreSong({
-          apiKey: settings.apiKey, milestone, state, history, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
-          tournamentId, lengthMs: seconds * 1000, styleId, languageId, factsOverride, testMode,
-        });
+        const result = await generateAndRecordSong(milestone, { styleId, languageId, factsOverride, seconds, testMode });
 
         if (result.testMode) {
           document.getElementById(`songPromptPreview-${milestone}`).value = result.prompt;
@@ -2622,10 +2661,7 @@ function renderRanking() {
           return;
         }
 
-        state.songs = { ...(state.songs || {}), [milestone]: result.url };
         alert(`Song generiert (Stil: ${result.styleLabel}, Sprache: ${result.languageLabel}).`);
-        renderSongMomentsPanel();
-        MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url));
         MB.Announcer.announceSong(milestone, result.url, { voiceId: settings.voiceIdResult });
       } catch (e) {
         alert('Song-Generierung fehlgeschlagen: ' + e.message);
@@ -2643,19 +2679,111 @@ function renderRanking() {
       if (!confirm(`Song für "${MUSIC_MILESTONE_LABELS[milestone]}" mit diesem Prompt generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s).`)) return;
 
       try {
-        const tournamentId = MB.getCurrentTournamentId();
-        const result = await MB.Music.generateAndStoreSong({
-          apiKey: settings.apiKey, milestone, state, history, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
-          tournamentId, lengthMs: seconds * 1000, promptOverride,
-        });
-        state.songs = { ...(state.songs || {}), [milestone]: result.url };
+        const result = await generateAndRecordSong(milestone, { promptOverride, seconds });
         alert('Song generiert.');
-        renderSongMomentsPanel();
-        MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url));
         MB.Announcer.announceSong(milestone, result.url, { voiceId: settings.voiceIdResult });
       } catch (e) {
         alert('Song-Generierung fehlgeschlagen: ' + e.message);
       }
+    }
+
+    // ---------------------------------------------------------------------
+    // AUTOMATISCHES SONG-MOMENTE-POPUP
+    // ---------------------------------------------------------------------
+    // Erscheint direkt bei der Ergebniseingabe, sobald einer der vier
+    // "großen" Meilensteine gerade neu erreicht wurde - VOR der Ansage für
+    // dieses Spiel, damit Kommentator/Moderator schon wissen, ob (und dass)
+    // ein Song entstanden ist. "toiletBowl" bewusst ausgenommen - dafür soll
+    // es laut Vorgabe keinen automatischen Song geben (manuell im Panel
+    // unten weiterhin möglich).
+    const AUTO_SONG_MILESTONES = ["regularSeason", "firstElimination", "finals", "champion"];
+
+    function promptSongMomentPopup(milestone) {
+      return new Promise((resolve) => {
+        songLangSelected[milestone] = songLangSelected[milestone] || MB.Music.DEFAULT_LANGUAGE_ID;
+        if (songFactsDraft[milestone] == null) {
+          songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history, songLangSelected[milestone]);
+        }
+        const meta = MB.Music.MILESTONE_META[milestone];
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+          <div class="modal-box" style="max-width:560px;">
+            <h2>🎵 ${MUSIC_MILESTONE_LABELS[milestone]}</h2>
+            <p class="hint" style="font-size:0.85em; opacity:0.8; margin-top:-8px;">
+              Dieser Meilenstein ist gerade erreicht. Jetzt einen Song dafür generieren? Kostet ElevenLabs-Credits
+              (~900 Credits/Minute Musik). Stil, Sprache, Länge und Fakten sind vor dem Absenden noch änderbar.
+            </p>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+              <select id="popupSongStyle" style="min-width:190px;">
+                ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
+              </select>
+              <select id="popupSongLang" style="min-width:140px;">
+                ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songLangSelected[milestone] ? 'selected' : ''}>${l.label}</option>`).join('')}
+              </select>
+              <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
+                Dauer: <input type="number" id="popupSongLen" value="60" min="10" max="180" step="5" style="width:60px;"> Sek.
+              </label>
+            </div>
+            <textarea id="popupSongFacts" rows="4" style="width:100%; font-size:0.82em; box-sizing:border-box;">${songFactsDraft[milestone]}</textarea>
+            <div id="popupSongStatus" class="hint" style="font-size:0.78em; opacity:0.7; min-height:1.2em; margin-top:6px;"></div>
+            <div style="display:flex; gap:10px; margin-top:14px;">
+              <button id="popupSongGenerate" class="btn" style="width:auto; padding:10px 16px;">🎵 Song generieren</button>
+              <button id="popupSongSkip" class="btn-secondary" style="width:auto;">Überspringen</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+
+        const cleanup = (result) => { overlay.remove(); resolve(result); };
+
+        overlay.querySelector('#popupSongSkip').onclick = () => cleanup({ generated: false, url: null });
+        overlay.querySelector('#popupSongGenerate').onclick = async () => {
+          const genBtn = overlay.querySelector('#popupSongGenerate');
+          const skipBtn = overlay.querySelector('#popupSongSkip');
+          const statusEl = overlay.querySelector('#popupSongStatus');
+          genBtn.disabled = true; skipBtn.disabled = true;
+          genBtn.textContent = '⏳ Generiere Song...';
+          statusEl.textContent = 'Das kann ein bis zwei Minuten dauern.';
+          try {
+            const styleId = overlay.querySelector('#popupSongStyle').value;
+            const languageId = overlay.querySelector('#popupSongLang').value;
+            const factsOverride = overlay.querySelector('#popupSongFacts').value;
+            const seconds = parseInt(overlay.querySelector('#popupSongLen').value, 10) || 60;
+            songFactsDraft[milestone] = factsOverride;
+            songLangSelected[milestone] = languageId;
+            const result = await generateAndRecordSong(milestone, { styleId, languageId, factsOverride, seconds });
+            cleanup({ generated: true, url: result.url });
+          } catch (e) {
+            alert('Song-Generierung fehlgeschlagen: ' + e.message);
+            cleanup({ generated: false, url: null });
+          }
+        };
+      });
+    }
+
+    // Prüft, ob durch DIESEN Score-Commit gerade neu einer der vier
+    // Song-Popup-Meilensteine erreicht wurde, und falls ja, wartet auf die
+    // Admin-Entscheidung (generieren/überspringen), bevor es weitergeht.
+    // Gibt { milestone, generated } zurück (milestone: null, wenn nichts
+    // Neues erreicht wurde) - wird von finishScoreUpdate VOR dem
+    // Announcer-Aufruf für dasselbe Spiel awaited.
+    async function maybeHandleSongMoment() {
+      if (!isAdmin) return { milestone: null, generated: false };
+      const settings = MB.Announcer.getTtsSettings();
+      if (settings.provider !== 'elevenlabs' || !settings.apiKey) return { milestone: null, generated: false };
+
+      let reached = [];
+      try { reached = MB.Music.detectMilestones(state); } catch (e) { return { milestone: null, generated: false }; }
+
+      for (const key of AUTO_SONG_MILESTONES) {
+        if (reached.includes(key) && !songMomentFlags[key]) {
+          songMomentFlags[key] = true; // sofort markieren, egal wie entschieden wird - kein zweites Popup dafür
+          const decision = await promptSongMomentPopup(key);
+          return { milestone: key, generated: !!decision.generated, url: decision.url || null };
+        }
+      }
+      return { milestone: null, generated: false };
     }
 
     let songTestSelected = MB.Music.MILESTONE_ORDER[0];
@@ -2719,6 +2847,11 @@ function renderRanking() {
 
     function switchSongTestMilestone(key) {
       songTestSelected = key;
+      // Bewusst NEU aus den Platzhalter-Fakten aufbauen (nicht den evtl.
+      // vorher editierten Entwurf behalten) - beim Meilenstein-Wechsel sollen
+      // die Defaults für den NEUEN Meilenstein erscheinen, änderbar bleiben
+      // sie ja trotzdem.
+      songTestFactsDraft[key] = MB.Music.getTestFacts(key, songTestLangSelected);
       renderSongTestPanel();
     }
 
@@ -2777,6 +2910,10 @@ function renderRanking() {
     // =========================================================
     let sessionRecords = []; // { record, styleId, canvasPreview }
     let milestoneRecordFlags = {}; // { finals: true, champion: true } — verhindert Mehrfach-Feuern
+    // Analog zu milestoneRecordFlags, aber für die Song-Momente-Popups unten
+    // (promptSongMomentPopup). "toiletBowl" bewusst NICHT hier drin - dafür
+    // gibt's kein automatisches Popup (siehe AUTO_SONG_MILESTONES).
+    let songMomentFlags = {};
     let progressArticlesSoFar = 0; // Anzahl bisheriger Zwischenstand-Artikel (aus Supabase geladen)
     let activePopupEntries = []; // aktuell im Meme-Popup angezeigte sessionRecords-Einträge
     let pendingMemeContext = null; // { type, idx, match, autoEntries } — während der Meme-Kontext-Dialog offen ist
@@ -3497,6 +3634,17 @@ function renderRanking() {
         <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:8px;">
           Gilt nur für dieses Gerät/diesen Browser — wird nicht mit Supabase synchronisiert.
         </div>
+
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304333;">
+          <div style="font-weight:bold; margin-bottom:4px;">📄 Testlauf: alle Ansage-Varianten als Text</div>
+          <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:8px;">
+            Erzeugt mit frei erfundenen Spielern/Ergebnissen so ziemlich jede Ansage-Variante als Textprotokoll
+            (Ergebnis, Vorschau, Rekorde, Ausscheiden, Toilet Bowl, Finale, Song-Anmoderationen, ...) - rein lokal,
+            spricht nichts laut, ruft keine TTS- oder Music-API auf und kostet nichts. Zahlen stehen bereits in der
+            gesprochenen Form, wie sie später auch tatsächlich vorgelesen würden.
+          </div>
+          <button class="btn-secondary" style="width:auto;" onclick="downloadAnnouncerDryRun()">📄 Testlauf herunterladen</button>
+        </div>
       `;
 
       refreshTtsVoiceList();
@@ -3506,6 +3654,23 @@ function renderRanking() {
       const provider = document.getElementById('ttsProvider').value;
       document.getElementById('browserVoiceFields').style.display = provider === 'elevenlabs' ? 'none' : '';
       document.getElementById('elevenLabsFields').style.display = provider === 'elevenlabs' ? '' : 'none';
+    }
+
+    // Reines Text-Testprotokoll aller Ansage-Varianten (siehe
+    // MB.Announcer.buildDryRunTranscript()) - läuft komplett lokal mit
+    // erfundenen Daten, ruft keine API auf, kostet nichts.
+    function downloadAnnouncerDryRun() {
+      const text = MB.Announcer.buildDryRunTranscript();
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `announcer-testlauf-${stamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     async function loadElevenLabsVoices() {

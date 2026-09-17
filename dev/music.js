@@ -180,6 +180,11 @@
     if (milestone === "finals") {
       const gf = MB.getPlayoffMatch(state, "gf");
       const p1 = gf?.p1, p2 = gf?.p2;
+      // Toilet Bowl läuft unabhängig vom Bracket-Fortschritt der Finalisten -
+      // ist sie zu diesem Zeitpunkt schon entschieden, bekommt ihr "Sieger"
+      // (= landet ganz unten) einen kleinen Seitenhieb im Song ab.
+      const tb = MB.getPlayoffMatch(state, "tb");
+      const tbLoserRankWinner = MB.winnerOf(tb); // gewinnt das Spiel, landet aber ganz unten
       if (lang === "de") {
         let facts = `Das große Finale eines Fantasy-Football-Turniers namens Madden Bowl, "der Madden Bowl", steht fest. `;
         if (p1 && p2) {
@@ -188,6 +193,9 @@
             const flavour = MB.pickFlavourFacts(history, state, p1.name, p2.name);
             if (flavour && flavour.length) facts += flavour[0] + " ";
           } catch (e) {}
+        }
+        if (tbLoserRankWinner) {
+          facts += `Nebenbei: Die "Toilet Bowl" ist bereits entschieden - ${tbLoserRankWinner.name} hat sie "gewonnen" und landet damit ganz unten in der Tabelle. Ein kleiner Seitenhieb im Song darf ruhig sein: nächstes Jahr wird's für ${tbLoserRankWinner.name} wahrscheinlich auch nicht besser.`;
         }
         return facts;
       }
@@ -198,6 +206,9 @@
           const flavour = MB.pickFlavourFacts(history, state, p1.name, p2.name);
           if (flavour && flavour.length) facts += flavour[0] + " ";
         } catch (e) {}
+      }
+      if (tbLoserRankWinner) {
+        facts += `By the way: the "Toilet Bowl" has already been decided - ${tbLoserRankWinner.name} "won" it and ends up dead last in the standings. Feel free to take a little jab at that in the song: next year probably won't go much better for ${tbLoserRankWinner.name} either.`;
       }
       return facts;
     }

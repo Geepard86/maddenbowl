@@ -191,6 +191,39 @@
     } catch (e) { return null; }
   }
 
+  // "Gelingt die Revanche?" - wer hat die beiden zuletzt gegeneinander
+  // gespielten Partien gewonnen, und bekommt der Verlierer von damals jetzt
+  // die Chance zurückzuschlagen.
+  function buildRevengeFact(history, state, homeName, awayName) {
+    try {
+      const s = MB.computeMatchupStats(history, state, homeName, awayName);
+      if (!s || s.games < 1) return null;
+      const lastWinnerRaw = s.lastWinners[s.lastWinners.length - 1];
+      if (!lastWinnerRaw) return null; // letztes Duell war unentschieden
+      const H = MB.normName(homeName);
+      const lastLoserRaw = lastWinnerRaw === H ? awayName : homeName;
+      return {
+        type: "revenge",
+        text: `Beim letzten Duell hat sich ${speechName(lastWinnerRaw)} gegen ${speechName(lastLoserRaw)} durchgesetzt - gelingt heute die Revanche?`,
+        score: 10,
+      };
+    } catch (e) { return null; }
+  }
+
+  // Runde Gesamtspielzahl in der Madden-Bowl-Geschichte (Historie + laufendes
+  // Turnier bis inkl. dem gerade beendeten Spiel) - reine Trivia, alle 50 Spiele.
+  function buildRoundNumberFact(history, state) {
+    try {
+      const histCount = (history.matches || []).length;
+      const curCount = MB.getCurrentMatchesNormalized(state).filter((m) => m.homeScore != null && m.awayScore != null).length;
+      const total = histCount + curCount;
+      if (total > 0 && total % 50 === 0) {
+        return { type: "milestone", text: `Nebenbei: Das war gerade Spiel Nummer ${total} in der gesamten Madden-Bowl-Geschichte.`, score: 14 };
+      }
+    } catch (e) {}
+    return null;
+  }
+
   // Wählt EINEN Preview-Fakt für den Moderator, der noch nicht von einem
   // anderen Typ verbraucht wurde (Anforderungen 3, 15, 16). Holt sich dafür
   // ALLE getypten Kandidaten aus shared.js (nicht nur die Top 2 wie die
@@ -207,6 +240,10 @@
     if (oddsFact) candidates.push(oddsFact);
     const rivalryFact = buildRivalryFact(history, state, homeName, awayName);
     if (rivalryFact) candidates.push(rivalryFact);
+    const revengeFact = buildRevengeFact(history, state, homeName, awayName);
+    if (revengeFact) candidates.push(revengeFact);
+    const roundNumberFact = buildRoundNumberFact(history, state);
+    if (roundNumberFact) candidates.push(roundNumberFact);
     try {
       (MB.pickFlavourFactsTyped(history, state, homeName, awayName) || []).forEach((f) => candidates.push(f));
     } catch (e) {}
@@ -261,7 +298,7 @@
   // erlaubte Rückfall-Fakt (Anforderung 12) - niemals allgemeine
   // Preview-Fakten des kommenden Spiels. Gibt zusätzlich zurück, welcher(r)
   // Fakt-Typ verbraucht wurde, damit der Moderator ihn nicht doppelt nennt.
-  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId }) {
+  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId, songMilestone, songGenerated }) {
     const winnerRaw = homeScore > awayScore ? homeName : awayName;
     const loserRaw = homeScore > awayScore ? awayName : homeName;
     const winner = speechName(winnerRaw), loser = speechName(loserRaw);
@@ -331,7 +368,19 @@
       } catch (e) {}
     }
 
-    line += pick(HANDOFF_OUT_PHRASES)(names);
+    // Song-Meilenstein, der GENAU JETZT (im selben Score-Commit) entschieden
+    // wurde - siehe index.html/promptSongMomentPopup(). Nur wenn tatsächlich
+    // ein Song generiert wurde, sonst kein Wort darüber. Der Song selbst wird
+    // separat über announceSong() angesagt/abgespielt (eigene Intro-Zeile).
+    if (songGenerated) {
+      if (songMilestone === "firstElimination") {
+        line += "Das Internet hat bereits mit einem Song reagiert. ";
+      } else if (songMilestone === "champion") {
+        line += `${winner} hat vorher heimlich seinen eigenen Song geschrieben, um den Sieg zu feiern. Hören wir mal rein. `;
+      }
+    }
+
+    if (songMilestone !== "champion") line += pick(HANDOFF_OUT_PHRASES)(names);
 
     return { line: line.trim(), usedFactTypes };
   }
@@ -351,18 +400,48 @@
     "Dann kommt {away} bei {home}",
     "Als Nächstes duellieren sich {away} und {home}",
   ];
+  // Sonderfälle: Toilet Bowl und Finale sind kein normales Spiel und
+  // verdienen keine 08/15-Ansage. `phase` kommt 1:1 aus MB.getUpcomingMatches()
+  // (state.playoffMatches[i].phase, z.B. "Toilet Bowl"/"Madden Bowl").
+  const SPECIAL_PHASE_LEAD_INS = {
+    "Toilet Bowl": [
+      "Es geht um die rote Laterne: als Nächstes die Toilet Bowl zwischen {away} und {home}",
+      "Niemand will dieses Spiel gewinnen - jetzt die Toilet Bowl zwischen {away} und {home}",
+    ],
+    "Madden Bowl": [
+      "Das Finale! {away} gegen {home} um den Titel",
+      "Jetzt geht's um alles: {away} gegen {home} im großen Finale, dem Madden Bowl",
+    ],
+  };
   // Gelegentlicher kleiner Konnektor vor dem Fakt, statt immer nahtlos
   // anzuschließen - rein für Abwechslung, meistens bleibt es aber leer.
   const FACT_CONNECTORS = ["", "", "", "Dazu: ", "Außerdem: "];
 
-  function buildUpcomingLine({ state, history, homeName, awayName, time, stadium, stadiumPreposition, usedFactTypes }) {
+  // Teaser-Zeilen für einen Song-Meilenstein, der GENAU JETZT (im selben
+  // Score-Commit, vor dieser Vorschau) entschieden wurde - nur wenn der Song
+  // auch tatsächlich generiert wurde (sonst kein Wort darüber verlieren).
+  // Der eigentliche Song wird separat über announceSong() angesagt/abgespielt
+  // (eigene Intro-Zeile dort) - hier nur der kurze Teaser davor.
+  const SONG_TEASER_UPCOMING = {
+    regularSeason: "Wir starten in die Playoffs, aber vorher noch eine musikalische Zusammenfassung.",
+    firstElimination: "Tja, sowas passiert wohl, wenn man nicht aufpasst.",
+    finals: "Jedes Jahr freut sich die ganze Welt auf die Halbzeit-Show und die Werbespots - aber dieses Jahr wurde bereits vorher ein viraler Moment geschaffen...",
+  };
+
+  function buildUpcomingLine({ state, history, homeName, awayName, time, stadium, stadiumPreposition, phase, usedFactTypes, songMilestone, songGenerated }) {
     const { home, away } = speechNames(homeName, awayName);
     const names = getSpeakerNames();
     const used = usedFactTypes || new Set();
 
     const handoffIn = pick(HANDOFF_IN_PHRASES)(names);
     let line = handoffIn ? `${handoffIn} ` : "";
-    line += fmt(pick(UPCOMING_LEAD_INS), { away, home });
+
+    if (songMilestone && songGenerated && SONG_TEASER_UPCOMING[songMilestone]) {
+      line += SONG_TEASER_UPCOMING[songMilestone] + " ";
+    }
+
+    const leadIns = (phase && SPECIAL_PHASE_LEAD_INS[phase]) || UPCOMING_LEAD_INS;
+    line += fmt(pick(leadIns), { away, home });
     if (time) line += `, Anpfiff ${formatTimeForSpeech(time)}`;
     if (stadium) line += `, ${stadiumPhrase(stadium, stadiumPreposition)}`;
     line += ". ";
@@ -643,7 +722,7 @@
   // Eigentliche Ansage-Logik (vormals der einzige "announce"). Umbenannt zu
   // _announceNow, weil der öffentliche Einstiegspunkt jetzt announce() weiter
   // unten ist, der Aufrufe in eine Warteschlange einreiht.
-  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, upcoming, prevSeeds, matchKind, matchId }) {
+  async function _announceNow({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, upcoming, prevSeeds, matchKind, matchId, songMilestone, songGenerated }) {
     if (homeScore === null || awayScore === null || homeScore === undefined || awayScore === undefined) return;
 
     const settings = getTtsSettings();
@@ -653,13 +732,13 @@
     // (Anforderung 20: nur der Kommentator übergibt) und liefert zurück,
     // welche(r) Fakt-Typ(en) dabei verbraucht wurden, damit der Moderator
     // nicht denselben Typ nochmal nennt (Anforderungen 3, 15, 16).
-    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId });
+    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId, songMilestone, songGenerated });
     const nextMatch = (upcoming || [])[0] || null;
 
     const buildPreviewLine = () => buildUpcomingLine({
       state, history, homeName: nextMatch.homeName, awayName: nextMatch.awayName,
       time: nextMatch.time, stadium: nextMatch.stadium, stadiumPreposition: nextMatch.stadiumPreposition,
-      usedFactTypes,
+      phase: nextMatch.phase, usedFactTypes, songMilestone, songGenerated,
     });
 
     if (twoVoiceMode) {
@@ -749,8 +828,161 @@
   }
 
   // ======================================================================
-  // WARTESCHLANGE
-  // -------------------------------------------------------------------------
+  // TESTLAUF / TROCKENÜBUNG — erzeugt EINMAL den Text für so ziemlich jede
+  // Ansage-Variante, mit frei erfundenen Spielern/Ergebnissen. Nutzt exakt
+  // dieselben Bau-Funktionen wie der echte Betrieb (buildResultLine,
+  // buildUpcomingLine, describeRecordForSpeech, ...) - es wird nichts
+  // separat "nachgebaut". Spricht NICHTS laut aus, ruft KEINE TTS/Music-API
+  // auf und rührt die echten `state`/`history`-Daten der Seite nicht an -
+  // rein zum Gegenlesen/Testen, kostet nichts.
+  // ======================================================================
+  function fakeState(playerNames, overrides = {}) {
+    const players = playerNames.map((name, i) => ({ id: i, name, team: `Team ${i + 1}`, wins: 0, diff: 0 }));
+    return {
+      players,
+      matches: [{ p1: 0, p2: 1, s1: 10, s2: 20 }], // genügt für isGroupPhaseComplete()
+      playoffMatches: [],
+      config: { s1: "Altima Field", s2: "Energiequelle", s1Prep: "im", s2Prep: "in der" },
+      songs: {},
+      ...overrides,
+    };
+  }
+  const FAKE_HISTORY_EMPTY = { loaded: false, matches: [], byPair: new Map(), byPlayer: new Map() };
+
+  function buildDryRunTranscript() {
+    const lines = [];
+    const names = getSpeakerNames();
+    const say = (role, text) => lines.push(`[${role === "commentator" ? names.commentator : names.moderator}] ${sanitizeForSpeech(text)}`);
+    const heading = (n, title) => { lines.push(""); lines.push("=".repeat(70)); lines.push(`${n}. ${title}`); lines.push("=".repeat(70)); };
+    const note = (text) => lines.push(`   (${text})`);
+
+    lines.push("MADDEN BOWL ANNOUNCER — TESTLAUF MIT FIKTIVEN DATEN");
+    lines.push(`Erzeugt am ${new Date().toLocaleString("de-DE")}`);
+    lines.push(`Sprecher: Kommentator = ${names.commentator}, Moderator = ${names.moderator}`);
+    lines.push("Hinweis: Zahlen stehen hier schon in der gesprochenen Form (z.B. Quoten als 'eins Komma ...').");
+    lines.push("Records/Impacts hängen stark von den erfundenen Platzhalter-Daten ab und variieren bei jedem Lauf (u.a. durch Zufallsauswahl der Formulierungen).");
+
+    // 1) Turnierstart -----------------------------------------------------
+    heading(1, "TURNIERSTART");
+    const athletes = ["Alex", "Tim", "Marco", "Jonas", "Kevin", "Nico"];
+    say("commentator", `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`);
+    say("moderator", `${names.moderator} begleitet euch durch den Abend.`);
+    say("commentator", `Allen Athletinnen und Athleten, ${athletes.map(speechName).join(", ")}, viel Erfolg am Controller!`);
+
+    // 2) Normales, enges Gruppenspiel --------------------------------------
+    heading(2, "GRUPPENSPIEL — KNAPPES ERGEBNIS");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Tim", homeScore: 24, awayScore: 22, stadium: "Altima Field" });
+      say("commentator", r.line);
+      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Marco", awayName: "Jonas", time: "19:30", stadium: "Energiequelle", stadiumPreposition: "in der", usedFactTypes: r.usedFactTypes }));
+    }
+
+    // 3) Blowout / Rekord ---------------------------------------------------
+    heading(3, "GRUPPENSPIEL — KLARER BLOWOUT (löst i.d.R. einen Rekord aus)");
+    note("Records vergleichen gegen die (hier leere) Historie - mit echten Turnierdaten seltener als hier.");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Tim", homeScore: 45, awayScore: 3, stadium: "Altima Field" });
+      say("commentator", r.line);
+    }
+
+    // 4) Makellose Bilanz / Niederlagenserie ---------------------------------
+    heading(4, "MAKELLOSE BILANZ / NIEDERLAGENSERIE");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      state.matches = [
+        { p1: 0, p2: 1, s1: 20, s2: 10 }, { p1: 0, p2: 1, s1: 21, s2: 14 }, { p1: 0, p2: 1, s1: 30, s2: 20 },
+        { p1: 0, p2: 1, s1: 28, s2: 16 }, { p1: 0, p2: 1, s1: 24, s2: 12 }, // Alex 5x gewonnen
+      ];
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Tim", homeScore: 24, awayScore: 12, stadium: "Altima Field" });
+      say("commentator", r.line);
+      note("Analog: 3+ Niederlagen in Folge beim Verlierer -> 'kassiert die X. Niederlage in Folge.'");
+    }
+
+    // 5) Gruppenphase — Playoff-Chance verpasst -----------------------------
+    heading(5, "GRUPPENPHASE ABGESCHLOSSEN — PLAYOFF-PLATZ VERPASST");
+    {
+      const names9 = ["Alex", "Tim", "Marco", "Jonas", "Kevin", "Nico", "Basti", "Renke", "Flo"];
+      const state = fakeState(names9);
+      const prevSeeds = new Map(names9.map((n, i) => [n, i + 1])); // Flo (Index 8) vorher Platz 8 (gerade noch drin)
+      state.players[8].wins = 1; state.players[8].diff = -50; // Flo fällt jetzt auf Platz 9
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Flo", homeScore: 30, awayScore: 10, stadium: "Altima Field", prevSeeds });
+      say("commentator", r.line);
+    }
+
+    // 6) Playoffs — Wildcard verloren (KEIN Ausscheiden, geht ins Lower Bracket)
+    heading(6, "PLAYOFFS — WILDCARD VERLOREN (kein Turnier-Aus, nur Lower Bracket)");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Tim", homeScore: 20, awayScore: 17, stadium: "Altima Field", matchKind: "playoff", matchId: "ub1" });
+      say("commentator", r.line);
+    }
+
+    // 7) Playoffs — Erstes Ausscheiden + Song -------------------------------
+    heading(7, "PLAYOFFS — ERSTES AUSSCHEIDEN (mit generiertem Song)");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Tim", homeScore: 24, awayScore: 14, stadium: "Altima Field", matchKind: "playoff", matchId: "lb1", songMilestone: "firstElimination", songGenerated: true });
+      say("commentator", r.line);
+      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Marco", awayName: "Jonas", time: "20:00", stadium: "Altima Field", stadiumPreposition: "im", usedFactTypes: r.usedFactTypes, songMilestone: "firstElimination", songGenerated: true }));
+      note(`[Song-Intro] ${pick(SONG_ANNOUNCE_INTROS.firstElimination)} [Song wird hier abgespielt]`);
+    }
+
+    // 8) Toilet Bowl (Vorschau-Framing, KEIN Song) --------------------------
+    heading(8, "VORSCHAU AUFS TOILET-BOWL-SPIEL (kein Song dafür)");
+    {
+      const state = fakeState(["Basti", "Nico"]);
+      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Basti", awayName: "Nico", time: "21:00", stadium: "Energiequelle", stadiumPreposition: "in der", phase: "Toilet Bowl", usedFactTypes: new Set() }));
+    }
+
+    // 9) Finals stehen fest + Song-Teaser -----------------------------------
+    heading(9, "FINALE STEHT FEST (mit generiertem Song)");
+    {
+      const state = fakeState(["Alex", "Marco"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Jonas", awayName: "Marco", homeScore: 17, awayScore: 27, stadium: "Altima Field", matchKind: "playoff", matchId: "uf" });
+      say("commentator", r.line);
+      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Marco", time: "20:00", stadium: "Altima Field", stadiumPreposition: "im", phase: "Madden Bowl", usedFactTypes: r.usedFactTypes, songMilestone: "finals", songGenerated: true }));
+      note(`[Song-Intro] ${pick(SONG_ANNOUNCE_INTROS.finals)} [Song wird hier abgespielt]`);
+    }
+
+    // 10) Turniersieger steht fest + Song -----------------------------------
+    heading(10, "TURNIERSIEGER STEHT FEST (mit generiertem Song)");
+    {
+      const state = fakeState(["Alex", "Marco"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Marco", homeScore: 31, awayScore: 24, stadium: "Altima Field", matchKind: "playoff", matchId: "gf", songMilestone: "champion", songGenerated: true });
+      say("commentator", r.line);
+      note(`[Song-Intro] ${pick(SONG_ANNOUNCE_INTROS.champion)} [Song wird hier abgespielt]`);
+    }
+
+    // 11) Regular Season beendet + Song-Teaser ------------------------------
+    heading(11, "REGULAR SEASON BEENDET (mit generiertem Song)");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Tim", homeScore: 20, awayScore: 18, stadium: "Altima Field" });
+      say("commentator", r.line);
+      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Marco", awayName: "Jonas", time: "18:00", stadium: "Altima Field", stadiumPreposition: "im", usedFactTypes: r.usedFactTypes, songMilestone: "regularSeason", songGenerated: true }));
+      note(`[Song-Intro] ${pick(SONG_ANNOUNCE_INTROS.regularSeason)} [Song wird hier abgespielt]`);
+    }
+
+    // 12) Rivalität / Revanche / Rundenzahl-Meilenstein ---------------------
+    heading(12, "VORSCHAU-FAKTEN: RIVALITÄT, REVANCHE, RUNDENZAHL");
+    {
+      const state = fakeState(["Alex", "Tim"]);
+      const pk = MB.pairKey("Alex", "Tim");
+      const history = { loaded: true, matches: new Array(49).fill(0).map(() => ({ homePlayer: "Alex", awayPlayer: "Tim", homeScore: 20, awayScore: 14, total: 34, stage: "group" })), byPair: new Map([[pk, [
+        { homePlayer: "Tim", awayPlayer: "Alex", homeScore: 10, awayScore: 24, total: 34, stage: "group" },
+        { homePlayer: "Alex", awayPlayer: "Tim", homeScore: 20, awayScore: 14, total: 34, stage: "group" },
+        { homePlayer: "Tim", awayPlayer: "Alex", homeScore: 21, awayScore: 17, total: 38, stage: "group" },
+      ]]]), byPlayer: new Map() };
+      note("Rivalität ab 3 gemeinsamen Spielen; Rundenzahl-Meilenstein alle 50 Spiele insgesamt (hier künstlich auf 49 vorbelegt, das Duell selbst ist Spiel 50).");
+      say("moderator", buildUpcomingLine({ state, history, homeName: "Alex", awayName: "Tim", time: "19:00", stadium: "Altima Field", stadiumPreposition: "im", usedFactTypes: new Set() }));
+    }
+
+    return lines.join("\n");
+  }
+
+
   // Wird z.B. in index.html aus finishScoreUpdate() OHNE await aufgerufen.
   // Wenn kurz hintereinander zwei Spiele fertig werden, laufen dadurch zwei
   // announce()-Aufrufe parallel. Für die kostenlose Browser-Stimme wäre das
@@ -786,5 +1018,6 @@
     getTtsSettings, setTtsSettings, fetchElevenLabsVoices, speakElevenLabs, speakSmart,
     speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
     getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
+    buildDryRunTranscript,
   };
 })(window);

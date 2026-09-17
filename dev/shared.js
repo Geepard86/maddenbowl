@@ -675,6 +675,29 @@
     return { pairKey: bestKey, count: bestCount, names: [a, b] };
   }
 
+  // Aktuelle Sieg-/Niederlagenserie eines Spielers im laufenden Turnier
+  // (Gruppe + Playoffs zusammen, da getCurrentMatchesNormalized beides
+  // liefert). Allgemeiner gehalten als der ähnliche private Helfer in
+  // records.js (der ist auf "neuer Rekord" zugeschnitten) - hier geht es um
+  // JEDE Serie, nicht nur die turnierweit längste.
+  function computeCurrentStreakInfo(state, playerName) {
+    const name = normName(playerName);
+    const games = getCurrentMatchesNormalized(state).filter(
+      (m) => (m.homePlayer === name || m.awayPlayer === name) && m.homeScore != null && m.awayScore != null
+    );
+    let kind = null, length = 0;
+    for (let i = games.length - 1; i >= 0; i--) {
+      const m = games[i];
+      const scored = m.homePlayer === name ? m.homeScore : m.awayScore;
+      const allowed = m.homePlayer === name ? m.awayScore : m.homeScore;
+      const k = scored > allowed ? "win" : scored < allowed ? "loss" : "tie";
+      if (kind == null) kind = k;
+      if (k !== kind) break;
+      length++;
+    }
+    return { kind, length, gamesPlayed: games.length };
+  }
+
   function computeMatchupStats(history, state, playerA, playerB) {
     const A = normName(playerA), B = normName(playerB);
     if (!A || !B) return null;
@@ -899,6 +922,26 @@
           impacts.push({ type: "tableImpact", text: `Damit zieht ${winnerName} in der Tabelle an ${loserName} vorbei.` });
         }
       }
+    }
+
+    // Makellose Bilanz (Sieger seit Turnierbeginn ungeschlagen, ab 5 Siegen)
+    // bzw. Niederlagenserie (Verlierer, ab 3 Niederlagen in Folge) - nur
+    // eins von beiden, und nur wenn noch kein härterer Impact feststeht.
+    if (!impacts.length) {
+      try {
+        const winnerStreak = computeCurrentStreakInfo(state, winnerName);
+        if (winnerStreak.kind === "win" && winnerStreak.length === winnerStreak.gamesPlayed && winnerStreak.gamesPlayed >= 5) {
+          impacts.push({ type: "perfectRecord", text: `${winnerName} bleibt mit ${winnerStreak.gamesPlayed}:0 weiterhin makellos.` });
+        }
+      } catch (e) {}
+    }
+    if (!impacts.length) {
+      try {
+        const loserStreak = computeCurrentStreakInfo(state, loserName);
+        if (loserStreak.kind === "loss" && loserStreak.length >= 3) {
+          impacts.push({ type: "losingStreak", text: `${loserName} kassiert damit die ${loserStreak.length}. Niederlage in Folge.` });
+        }
+      } catch (e) {}
     }
 
     // Titelchancen sind fast immer irgendeine Zahl > 0 - würden sonst JEDES
@@ -1272,7 +1315,7 @@
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
-    pickFlavourFactsTyped, getAnnouncerResultImpacts, computeBiggestRivalry,
+    pickFlavourFactsTyped, getAnnouncerResultImpacts, computeBiggestRivalry, computeCurrentStreakInfo,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,
     normalCdf, getPpgEstimate, seedFactor, teamOVRFactor, formFactor,
     computeBaseRanking, getGroupSeedsFinal, applyToiletBowlOverride, computeFinalRanking,
