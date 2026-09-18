@@ -1,0 +1,3731 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MADDEN BOWL MANAGER</title>
+  <link rel="icon" type="image/png" href="maddenbowl.ico" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="shared.js"></script>
+  <script src="announcer.js"></script>
+  <script src="music.js"></script>
+  <script src="records.js"></script>
+  <script src="blog.js"></script>
+  <script src="spurious.js"></script>
+
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Speichern-Box für Score-Eingabe: Ergebnis wird erst bei Klick auf den
+       Button (oder Enter) committed, nicht mehr live bei jedem onchange.
+       Verhindert Fokus-Sprünge beim Tabben + doppelte/überlappende
+       Cloud-Pushes (siehe Kommentare bei commitScore()/finishScoreUpdate()). */
+    .score-save-btn {
+      margin-left: 6px;
+      padding: 2px 7px;
+      font-size: 0.85em;
+      line-height: 1.4;
+      border-radius: 5px;
+      border: 1px solid var(--accent, #4ade80);
+      background: transparent;
+      color: var(--accent, #4ade80);
+      cursor: pointer;
+      opacity: 0.55;
+      transition: opacity 0.15s, background 0.15s, color 0.15s;
+    }
+    .score-save-btn.dirty {
+      opacity: 1;
+      background: var(--accent, #4ade80);
+      color: #0b1119;
+      font-weight: bold;
+    }
+    .score-save-btn:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div id="live-header">
+      <h1>MADDEN BOWL LIVE</h1>
+
+      <div id="hofPublicWrap" style="text-align:center; margin-bottom:10px;">
+  <button class="btn-secondary"
+          style="background:var(--nfl-blue)"
+          onclick="window.open('hall_of_fame.html','_blank')">
+    🏛️ Hall of Fame
+  </button>
+</div>
+
+      <div id="nextUp" class="next-games">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+          <small style="color:var(--accent); font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">
+            Turnier-Informationen & Live-Tracking
+          </small>
+          <button onclick="document.getElementById('infoPanel').classList.toggle('hidden')"
+                  class="btn-secondary" style="padding: 2px 8px; font-size: 0.6em; background: var(--nfl-blue);">
+            ⓘ REGELN & SETTINGS
+          </button>
+        </div>
+
+        <div id="infoPanel" class="hidden" style="background: rgba(0,0,0,0.3); border: 1px solid #2d3748; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 0.75em; line-height: 1.5;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <div>
+              <strong style="color:var(--accent);">⚙️ MADDEN SETTINGS</strong><br>
+              • Zeit: 4 Min (Reg.) / 5 Min (Playoffs)<br>
+              • Level: Pro | Style: Simulation<br>
+              • Kicking: Classic | Passing: Classic<br>
+              • Wetter: Random | Broadcast: Random | Accelerated Clock: On
+            </div>
+            <div>
+              <strong style="color:var(--accent);">📜 TURNIER-REGELN</strong><br>
+              • Draft: Neueinsteiger > Vorjahresletzte<br>
+              • Team-Limit: OVR ≤ 90<br>
+              • Trade: Freiwilliger Down-Trade nach 2L
+              • Strafen: Abknien = 10P für den Gegner
+            </div>
+            <div>
+              <strong style="color:var(--accent);">🎮 CONTROLLER HUB</strong><br>
+              <a href="https://www.ea.com/games/madden-nfl/madden-nfl-26/controls-hub/playstation-controls-hub"
+                 target="_blank" style="color: white; text-decoration: underline;">
+                Madden 26 Controls Hub (EA)
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div id="nextGamesList" style="width: 100%;"></div>
+      </div>
+    </div>
+
+    <div id="resetModal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h2>Full Reset</h2>
+        <p>Was soll mit dem aktuellen Turnier passieren?</p>
+        <button class="btn-secondary" onclick="resetTournamentAction('archive')">📦 Archivieren &amp; neu starten<br><small style="font-weight:normal;opacity:0.8;">Bleibt als abgeschlossene Saison erhalten (Hall of Fame etc.)</small></button>
+        <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournamentAction('discard')">🗑️ Verwerfen &amp; neu starten<br><small style="font-weight:normal;opacity:0.8;">Unwiderruflich löschen, auch aus Supabase</small></button>
+        <button class="btn-secondary" style="background:var(--gray)" onclick="closeResetModal()">Abbrechen</button>
+      </div>
+    </div>
+
+    <!-- Meme-Vorschläge: erscheinen als Popup direkt nach "Ergebnis speichern",
+         wenn dieses Spiel einen Rekord/besonderen Moment ausgelöst hat, statt
+         nur unten in der "🏆 Rekord-Momente"-Karte zu erscheinen (wo man sie
+         leicht übersieht). Inhalt kommt aus renderMemePopupContent(). -->
+    <div id="memePopupModal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:420px; max-height:80vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2 style="margin:0;">🏆 Neuer Moment!</h2>
+          <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeMemePopup()">✕</button>
+        </div>
+        <div id="memePopupBody"></div>
+      </div>
+    </div>
+
+    <!-- Erscheint nach JEDEM gespeicherten Ergebnis: Admin kann optional
+         markieren, was besonders war (Fehlentscheidung, Ausrede, Comeback...).
+         Nur wenn hier mindestens ein Häkchen gesetzt wird, entsteht daraus
+         ein zusätzliches "Story-Meme" (siehe records.js/detectStoryMeme) —
+         reines Wegklicken löst nichts aus. -->
+    <div id="memeContextModal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:460px; max-height:85vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2 style="margin:0;">🎭 Meme-Kontext</h2>
+          <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="skipMemeContext()">✕</button>
+        </div>
+        <div id="memeContextSummary" class="hint" style="margin-bottom:12px;"></div>
+        <div style="font-size:0.8em; opacity:0.75; margin-bottom:8px;">Was war die Story dieses Spiels? Mehrere Optionen möglich — ohne Häkchen entsteht kein Story-Meme.</div>
+        <div id="memeContextTags" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:7px;"></div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button class="btn-secondary" style="width:auto;" onclick="skipMemeContext()">Ohne Kontext weiter</button>
+          <button class="btn" style="width:auto;" onclick="saveMemeContext()">🎭 Meme erzeugen</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="admin-panel" class="hidden">
+      <!-- Zeigt JEDE hinterlegte Meme-Vorlage einmal mit Test-Daten, live
+           während des Durchlaufs befüllt (siehe runAllMemeTest()). -->
+      <div id="memeTestModal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width:900px; max-height:88vh; overflow-y:auto;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h2 style="margin:0;">🧪 Alle Memes testen</h2>
+            <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeMemeTestModal()">✕</button>
+          </div>
+          <div id="memeTestStatus" class="hint" style="margin-bottom:10px;"></div>
+          <div id="memeTestGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px;"></div>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
+        <button class="btn-secondary" onclick="window.print()">PDF Export</button>
+        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
+        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('hall_of_fame.html','_blank')">🏛️ Hall of Fame</button>
+        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
+        <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+      </div>
+
+      <!-- Standardmäßig eingeklappt: diese Einstellungen (Ansage-Provider,
+           API-Keys, Song-Generierung) sollen nicht auf dem Beamer zu sehen
+           sein, z.B. während der Auslosung. Der eigentliche API-Key ist
+           zusätzlich per Passwort gesperrt (siehe ttsUnlocked weiter unten) —
+           dieser Ein-/Ausklapper blendet aber schon die ganze Karte (inkl.
+           harmloser Status-Zeile) aus, bis man sie aktiv braucht. -->
+      <div style="margin-bottom:15px;">
+        <button class="btn-secondary" style="width:auto; font-size:0.8em;"
+                onclick="document.getElementById('advancedAudioSettings').classList.toggle('hidden')">
+          ⚙️ Ansage/Musik-Einstellungen ein-/ausblenden
+        </button>
+        <div id="advancedAudioSettings" class="hidden" style="margin-top:10px;">
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🎙️ Ansage-Engine</h2>
+            <div id="ttsSettingsPanel"></div>
+          </div>
+
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🎵 Song-Momente</h2>
+            <div id="songMomentsPanel"></div>
+          </div>
+
+          <!-- Testet die Song-Engine für JEDEN Meilenstein, unabhängig vom
+               echten Turnierstand — mit Platzhalter-Fakten (TEST_FACTS).
+               "Testweise senden" erzeugt einen ECHTEN Song zum Anhören
+               (kostet Credits), speichert ihn aber NIE als offiziellen
+               Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht
+               oben in "Song-Momente" nicht auf). -->
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🧪 Song-Engine testen</h2>
+            <div id="songTestPanel"></div>
+          </div>
+
+          <div class="card" style="margin-bottom:15px;">
+            <h2>🖼️ Meme-Einstellungen</h2>
+            <div id="memeSettingsPanel"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:15px;">
+        <h2>🏆 Rekord-Momente</h2>
+        <div id="recordMomentsPanel">
+          <div class="hint" style="font-size:0.85em; opacity:0.7;">
+            Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore,
+            Allzeit-/Turnier-Klatsche, Siegesserie) — komplett kostenlos, kein API-Key nötig.
+          </div>
+        </div>
+      </div>
+
+      <div id="setup-view" class="card">
+        <h2>Tournament Setup</h2>
+
+        <div class="config-grid">
+          <div class="config-item"><label>Start:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Min/P:</label><input type="number" id="durPlayoff" value="45" onchange="updateModeInfo()"></div>
+          <div class="config-item"><label>Pause:</label><input type="number" id="durBreak" value="15" onchange="updateModeInfo()"></div>
+          <div class="config-item">
+            <label>Stadion 1:</label>
+            <input type="text" id="stadium1" value="Altima Field">
+            <select id="stadium1Prep" title="Präposition für die Announcer-Ansage, z.B. 'im Altima-Stadion' oder 'in der Energiequelle'" style="margin-top:4px;">
+              <option value="im" selected>im ...</option>
+              <option value="in der">in der ...</option>
+              <option value="in">in ...</option>
+              <option value="auf dem">auf dem ...</option>
+            </select>
+          </div>
+          <div class="config-item">
+            <label>Stadion 2:</label>
+            <input type="text" id="stadium2" value="KEVAG Stadium">
+            <select id="stadium2Prep" title="Präposition für die Announcer-Ansage" style="margin-top:4px;">
+              <option value="im" selected>im ...</option>
+              <option value="in der">in der ...</option>
+              <option value="in">in ...</option>
+              <option value="auf dem">auf dem ...</option>
+            </select>
+          </div>
+          <div class="config-item">
+            <label>Madden Version:</label>
+            <select id="maddenYear" onchange="renderPlayerInputs()">
+              <option value="2026">Madden 26</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;"></div>
+
+        <select id="playerCount" onchange="updateModeInfo()" style="width:100%; margin-bottom: 10px;">
+          <option value="8" selected>8 Spieler (Standard)</option>
+          <option value="6">6 Spieler</option>
+          <option value="7">7 Spieler</option>
+          <option value="9">9 Spieler</option>
+          <option value="10">10 Spieler</option>
+        </select>
+
+        <div id="playerInputs"></div>
+        <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
+        <button class="btn-secondary" onclick="createRandomTournament()" style="margin-top:8px;">🎲 Zufalls-Turnier erstellen (Testzwecke)</button>
+      </div>
+    </div>
+
+    <div id="main-content">
+      <div id="standingsCard" class="card">
+  <div class="card-topbar">
+    <h2 style="margin:0;">Regular Season Standing</h2>
+    <button id="toggleStandingsBtn" class="btn-secondary hidden" onclick="toggleSection('standings')">
+      ▼
+    </button>
+  </div>
+  <div id="standingsContent">
+    <div id="tableContainer"></div>
+  </div>
+</div>
+
+<div id="playoff-picture" class="card">
+  <h2>Playoff Picture</h2>
+  <div class="bracket-wrapper">
+    <div class="bracket-title">Upper Bracket (Winner's Path)</div>
+    <div id="upper-bracket" class="bracket-row"></div>
+
+    <div class="bracket-title" style="border-color: #555; margin-top:20px;">Lower Bracket (Elimination Path)</div>
+    <div id="lower-bracket" class="bracket-row"></div>
+  </div>
+</div>
+
+<div id="groupPhase" class="card">
+  <div class="card-topbar">
+    <h2 style="margin:0;">Regular Season Schedule</h2>
+    <button id="toggleGroupBtn" class="btn-secondary hidden" onclick="toggleSection('group')">
+      ▼
+    </button>
+  </div>
+  <div id="groupContent">
+    <div id="groupMatches"></div>
+  </div>
+</div>
+
+<div id="playoffs" class="card">
+  <h2>Playoff Schedule</h2>
+  <div id="playoffSections"></div>
+</div>
+
+<div id="rankingCard" class="card">
+  <h2>Finale Rangliste</h2>
+  <div id="rankingContainer" style="overflow-x:auto;"></div>
+</div>
+
+
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // CONFIG / BASE
+    // (nflTeams, maddenRatings, schedules, playoffLabels kommen jetzt
+    //  zentral aus shared.js / window.MB — "gemeinsam genutzte Funktionen"
+    //  statt Duplikate in jeder Seite. Backend ist jetzt Supabase,
+    //  siehe MB.fetchCloudState/pushCloudState in shared.js.)
+    // =========================================================
+    const isAdmin = window.location.search.includes('Altima');
+
+    // =========================================================
+    // AUSLOSUNGS-SOUNDEFFEKTE (Web Audio API, keine externen Dateien)
+    // -------------------------------------------------------------------
+    // Ticken während des Spinnens (steigt leicht in der Tonhöhe, wie eine
+    // Lostrommel) + ein kleiner Fanfaren-Akkord, sobald ein Name feststeht.
+    // =========================================================
+    let _drawAudioCtx = null;
+    function getDrawAudioCtx() {
+      if (!_drawAudioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        _drawAudioCtx = new Ctx();
+      }
+      if (_drawAudioCtx.state === 'suspended') _drawAudioCtx.resume();
+      return _drawAudioCtx;
+    }
+
+    function playDrawTick(pitchFactor) {
+      const ctx = getDrawAudioCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 320 + (pitchFactor || 0) * 260;
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.07);
+    }
+
+    function playDrawFanfare() {
+      const ctx = getDrawAudioCtx();
+      if (!ctx) return;
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C-E-G-C, kleiner Dur-Aufstieg
+      notes.forEach((freq, i) => {
+        const start = ctx.currentTime + i * 0.09;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.14, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.4);
+      });
+    }
+
+
+    function toggleHallOfFameButtons() {
+  const pub = document.getElementById("hofPublicWrap");
+  if (pub) pub.style.display = isAdmin ? "none" : "block";
+}
+
+
+    const nflTeams = MB.nflTeams;
+    const maddenRatings = MB.maddenRatings;
+    const schedules = MB.schedules;
+    const playoffLabels = MB.playoffLabels;
+
+    let state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
+    let availableSlots = [];
+    let lastDrawnPlayer = { name: "", slot: null };
+    // Vorbereitete Ziehreihenfolge aus seasons.html (state.config.draftOrder),
+    // [{name, reason}] — siehe initSetupInputs()/finalizeDraw() weiter unten.
+    let presetDraftQueue = [];
+    let titleOddsPrev = null; // Map name -> %
+    let titleOddsNow  = null; // Map name -> %
+    // Tabellen-Rang VOR/NACH dem letzten Score-Commit (Map name -> Platz),
+    // analog zu titleOddsPrev/titleOddsNow. Wird für den Announcer-
+    // "Tabellen-Impact" ("zieht in der Tabelle vorbei") gebraucht, weil
+    // `state` beim Announcer-Aufruf bereits den NEUEN Stand enthält.
+    let tableRankPrev = null;
+    let tableRankNow  = null;
+
+
+    // =========================================================
+    // HISTORY / STATS / ODDS
+    // =========================================================
+    let history = {
+      loaded: false,
+      seasons: [],
+      players: new Set(),
+      matches: [],
+      byPair: new Map(),
+      byPlayer: new Map(),
+      ringsByPlayer: new Map(),
+    };
+
+    // Ab hier: dünne Wrapper um MB.* (shared.js) statt Duplikate —
+    // state/history sind hier als Closure-Variablen verfügbar.
+    function normName(name) { return MB.normName(name); }
+    function pairKey(a, b) { return MB.pairKey(a, b); }
+
+    function getChampionFromTournament(t) {
+  const st = Array.isArray(t?.standings) ? t.standings : [];
+  const champ = st.find(x => Number(x.rank) === 1);
+  return normName(champ?.name) || null;
+}
+
+
+
+    async function loadHistory() {
+      // Historische Saisons kommen jetzt aus Supabase (status='completed'),
+      // nicht mehr aus lokalen JSON-Dateien (MB.loadAndBuildHistory).
+      const built = await MB.loadAndBuildHistory();
+      Object.assign(history, built);
+
+      buildPlayerDatalist();
+      console.log("History loaded:", {
+        seasons: history.seasons.length,
+        players: history.players.size,
+        matches: history.matches.length
+      });
+    }
+
+    function buildPlayerDatalist() {
+  const listId = "playerNameSuggestions";
+  let dl = document.getElementById(listId);
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = listId;
+    document.body.appendChild(dl);
+  }
+
+  // schon gewählte Namen im aktuellen Draft (Setup-Board)
+  const taken = new Set();
+  const countSel = document.getElementById("playerCount");
+  const count = countSel ? parseInt(countSel.value) : 0;
+
+  for (let i = 0; i < count; i++) {
+    const v = (document.getElementById(`pName${i}`)?.value || "").trim();
+    if (v) taken.add(v);
+  }
+
+  // Namen aus History, aber ohne die bereits vergebenen
+  const names = Array.from(history.players)
+    .filter(n => !taken.has(n))
+    .sort((a,b) => a.localeCompare(b, "de"));
+
+  dl.innerHTML = names.map(n => `<option value="${n}"></option>`).join("");
+
+  const inp = document.getElementById("nextPlayerName");
+  if (inp) inp.setAttribute("list", listId);
+}
+
+
+    function getCurrentMatchesNormalized() { return MB.getCurrentMatchesNormalized(state); }
+
+    // computeMatchupStats/pickBestInsights/fallbackInsights/getPlayerFacts:
+    // jetzt zentral in shared.js (MB.computeMatchupStats / MB.pickFlavourFacts).
+    function computeMatchupStats(playerA, playerB) { return MB.computeMatchupStats(history, state, playerA, playerB); }
+    function pickBestInsights(homePlayer, awayPlayer) { return MB.pickFlavourFacts(history, state, homePlayer, awayPlayer); }
+
+
+    // Elo/Quoten/Titelchancen-Engine: zentral in shared.js (MB.*)
+    function computeEloMap() { return MB.computeEloMap(history, state); }
+    function moneylineFromProb(p) { return MB.moneylineFromProb(p); }
+    function decimalOdds(p) { return MB.decimalOdds(p); }
+    function normalCdf(x) { return MB.normalCdf ? MB.normalCdf(x) : 0; }
+    function getPpgEstimate(player) { return MB.getPpgEstimate(history, state, player); }
+
+    // simple cache (recomputed on score updates)
+    let _oddsCacheKey = "";
+
+    function computeOddsForMatch(homePlayer, awayPlayer) {
+      return MB.computeOddsForMatch(history, state, homePlayer, awayPlayer);
+    }
+
+    let lastTitleOdds = {}; // Cache für Trend (Name -> letzter Wert)
+
+    // isInUpperBracket/isInLowerBracket: nicht mehr benötigt (Logik steckt
+    // jetzt in MB.computeTitleOdds), daher hier entfernt.
+    function getLiveSeeds() { return MB.getLiveSeeds(state); }
+    function seedFactor(seed, n) { return MB.seedFactor ? MB.seedFactor(seed, n) : 1; }
+    function teamOVRFactor(player) { return MB.teamOVRFactor ? MB.teamOVRFactor(state, player) : 1; }
+    function formFactor(player) { return MB.formFactor ? MB.formFactor(player) : 1; }
+
+    function computeTitleOdds() { return MB.computeTitleOdds(history, state); }
+
+  function recalcTitleOddsSnapshots() {
+  // vorheriger Stand merken
+  titleOddsPrev = titleOddsNow ? { ...titleOddsNow } : null;
+
+  // neuen Stand berechnen
+  titleOddsNow = computeTitleOdds();
+}
+
+function getTitleOddsDisplay(name) {
+  if (!titleOddsNow) titleOddsNow = computeTitleOdds();
+
+  const now = titleOddsNow[name] ?? 0;
+  const prev = titleOddsPrev ? (titleOddsPrev[name] ?? now) : now;
+
+  const diff = now - prev;
+
+  let arrow = "→";
+  if (diff > 0.8) arrow = "↗";
+  if (diff < -0.8) arrow = "↘";
+
+  return { now, diff, arrow };
+}
+
+    
+function getTitleOddsWithTrend(name) {
+  const current = computeTitleOdds();
+  const now = current[name] || 0;
+  const prev = (lastTitleOdds[name] ?? now);
+
+  const diff = now - prev;
+  lastTitleOdds[name] = now;
+
+  let arrow = "→";
+  if (diff > 0.8) arrow = "↗";
+  if (diff < -0.8) arrow = "↘";
+
+  return { now, diff, arrow };
+}
+
+function renderMatchMeta(homeName, awayName, isFinished) {
+  const H = (homeName || "").trim();
+  const A = (awayName || "").trim();
+  if (!H || !A) return "";
+
+  // --- Odds ---
+  const odds = computeOddsForMatch(H, A);
+  const qHome = decimalOdds(odds.pHome);
+  const qAway = decimalOdds(odds.pAway);
+
+  // --- Badges ---
+  const badges = [
+    `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
+    `O/U ${odds.ouLine}`,
+  ];
+
+  // --- Titelchance nur für offene Spiele ---
+  if (!isFinished) {
+    const tHome = getTitleOddsDisplay(H);
+    const tAway = getTitleOddsDisplay(A);
+
+    const colorForArrow = (arrow) =>
+      (arrow === "↗") ? "var(--accent)" :
+      (arrow === "↘") ? "var(--nfl-red)" : "#aaa";
+
+    const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
+
+    badges.push(
+      `🏆 Titelchance:
+        <b>${H}</b> ${tHome.now.toFixed(1)}% <span style="color:${colorForArrow(tHome.arrow)}; font-weight:800;">${tHome.arrow} ${fmtDelta(tHome.diff)}</span>
+        &nbsp;|&nbsp;
+        <b>${A}</b> ${tAway.now.toFixed(1)}% <span style="color:${colorForArrow(tAway.arrow)}; font-weight:800;">${tAway.arrow} ${fmtDelta(tAway.diff)}</span>`
+    );
+  }
+
+  // --- Render Badges HTML ---
+  const badgeHtml = badges
+    .filter(Boolean)
+    .map(b => `
+      <div style="
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:4px 8px;
+        border:1px solid rgba(255,255,255,0.10);
+        background:rgba(0,0,0,0.22);
+        border-radius:999px;
+        font-size:0.72em;
+        line-height:1.2;
+        white-space:nowrap;
+      ">${b}</div>
+    `).join("");
+
+  // --- Insights nur für offene Spiele (und nur dann erzeugen!) ---
+  let insightsSection = "";
+  if (!isFinished) {
+    let insightsArr = [];
+    try {
+      insightsArr = pickBestInsights(H, A) || [];
+    } catch (e) {
+      insightsArr = [];
+    }
+    if (!insightsArr.length) insightsArr = fallbackInsights(H, A);
+
+    const insightsHtml = insightsArr
+      .slice(0, 3)
+      .map(t => `
+        <div style="
+          margin-top:6px;
+          padding:8px 10px;
+          background:rgba(255,255,255,0.04);
+          border:1px solid rgba(255,255,255,0.06);
+          border-left:3px solid var(--accent);
+          border-radius:8px;
+          font-size:0.78em;
+          line-height:1.25;
+        ">${t}</div>
+      `).join("");
+
+    insightsSection = `<div class="meta-insights">${insightsHtml}</div>`;
+  }
+
+  return `
+    <div class="match-meta">
+      <div class="meta-badges">
+        ${badgeHtml}
+      </div>
+      ${insightsSection}
+    </div>
+  `;
+}
+
+    // =========================================================
+    // UI HELPERS / SYNC
+    // =========================================================
+
+
+    function getSeasonForHistoryExport() {
+  const y = Number(state?.config?.year);
+  return Number.isFinite(y) ? y : new Date().getFullYear();
+}
+
+
+function buildStandingsExport() {
+  // stellt sicher, dass wins/diff etc. aktuell sind
+  renderTable();
+
+  const base = computeBaseRanking();
+  const final = applyToiletBowlOverride(base);
+
+  // standings: rank/name/points
+  const arr = final.ordered.map((r, idx) => ({
+    rank: r.displayRank || r.rank || (idx + 1),
+    name: r.name,
+    points: r.points
+  }));
+
+  // sicherheitshalber sortieren
+  arr.sort((a,b) => a.rank - b.rank);
+  return arr;
+}
+
+function exportHistoryJson() {
+  if (!state?.players?.length) {
+    alert("Kein aktives Turnier zum Exportieren gefunden.");
+    return;
+  }
+
+  const season = getSeasonForHistoryExport();
+
+  // players
+  const players = (state.players || [])
+    .map(p => ({ name: (p.name || "").trim(), team: p.team }))
+    .filter(p => p.name && p.team);
+
+  // matches (nur fertige, ohne BYE)
+  const matches = [];
+
+// group matches: p1 = home, p2 = away
+(state.matches || []).forEach(m => {
+  if (m?.s1 == null || m?.s2 == null) return;
+
+  const home = state.players[m.p1];
+  const away = state.players[m.p2];
+  if (!home || !away) return;
+
+  matches.push({
+    stage: "group",
+    homeTeam: home.team || null,   // <- nicht mehr skippen
+    awayTeam: away.team || null,
+    homePlayer: (home.name || "").trim(),
+    awayPlayer: (away.name || "").trim(),
+    homeScore: Number(m.s1),
+    awayScore: Number(m.s2)
+  });
+});
+
+// playoff matches: p1 = home, p2 = away (BYE rausfiltern)
+(state.playoffMatches || []).forEach(pm => {
+  if (!pm?.p1 || !pm?.p2) return;
+  if (pm.p1.id === -1 || pm.p2.id === -1) return;   // BYE
+  if (pm?.s1 == null || pm?.s2 == null) return;     // nur fertige
+
+  matches.push({
+    stage: "playoff",
+    homeTeam: pm.p1.team || null,                   // <- nicht mehr skippen
+    awayTeam: pm.p2.team || null,
+    homePlayer: (pm.p1.name || "").trim(),
+    awayPlayer: (pm.p2.name || "").trim(),
+    homeScore: Number(pm.s1),
+    awayScore: Number(pm.s2)
+  });
+});
+
+  // standings
+  const standings = buildStandingsExport();
+
+  // final object
+  const out = {
+    schemaVersion: 1,
+    season,
+    tournament: {
+      season,
+      players,
+      matches,
+      standings
+    }
+  };
+
+  // Download als Datei
+  const filename = `maddenbowl_${season}.json`;
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+
+  console.log("History JSON exported:", filename, out);
+}
+
+    
+function isByeMatch(match) { return MB.isByeMatch(match); }
+
+function isFinished(match) { return MB.isFinished(match); }
+
+    function isOpen(match) {
+      return match && match.s1 === null && match.s2 === null;
+    }
+    // optional: falls einseitig eingetragen -> "in progress"
+    function isPartial(match) {
+      return match && ((match.s1 !== null) !== (match.s2 !== null));
+    }
+    
+    function getLogoHtml(teamId) { return MB.getLogoHtml(teamId); }
+
+    let isSyncing = false;
+
+    async function syncData(isUpload = false) {
+      if (isSyncing && !isUpload) return;
+
+      try {
+        if (isUpload) {
+          isSyncing = true;
+          await MB.pushCloudState(state);
+          setTimeout(() => { isSyncing = false; }, 2000);
+        } else {
+          // BUGFIX (Refresh-Bug): MB.fetchCloudState() erzwingt no-store +
+          // Cache-Busting-Query, damit veraltete Cloud-Antworten (Browser-
+          // oder CDN-Cache) nicht mehr ausgeliefert werden.
+          const data = await MB.fetchCloudState();
+
+          if (data && data.players) {
+            const isTyping = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('score-input');
+            if (!isTyping && !isSyncing && unsavedScoreCount === 0) {
+              state = data;
+              ensureUiState();
+              if (state.slots) state.matches = state.slots.flat();
+              renderAll();
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Sync Fehler:", e);
+        isSyncing = false;
+      }
+    }
+
+    function addMinutes(time, mins) { return MB.addMinutes(time, mins); }
+
+    function save() { localStorage.setItem('madden_bowl_v2.7', JSON.stringify(state)); }
+
+    async function resetTournament() {
+      document.getElementById('resetModal').classList.remove('hidden');
+    }
+
+    function closeResetModal() {
+      document.getElementById('resetModal').classList.add('hidden');
+    }
+
+    async function resetTournamentAction(mode) {
+      closeResetModal();
+
+      if (mode === 'discard' && !confirm("Wirklich unwiderruflich löschen? Das Turnier ist danach komplett weg (auch aus Supabase) und kann NICHT wiederhergestellt werden.")) {
+        return;
+      }
+
+      localStorage.clear();
+      try {
+        if (mode === 'archive') {
+          const finalRanking = state.players.length ? MB.computeFinalRanking(state) : null;
+          const finalStandings = finalRanking
+            ? finalRanking.ordered.map(r => ({ rank: r.displayRank || r.rank, name: r.name, points: r.points }))
+            : null;
+          await MB.archiveCurrentTournament(finalStandings);
+        } else if (mode === 'discard') {
+          await MB.discardCurrentTournament();
+        }
+      } catch (e) {
+        console.error(mode + " fehlgeschlagen:", e);
+        alert((mode === 'archive' ? "Archivieren" : "Löschen") + " in Supabase fehlgeschlagen — bitte Konsole prüfen, bevor du fortfährst.");
+        return;
+      }
+      state = { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: 'setup' };
+      location.reload();
+    }
+
+    // =========================================================
+    // SETUP / DRAFT
+    // =========================================================
+    function renderPlayerInputs() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      initSetupInputs(count);
+      buildPlayerDatalist();
+    }
+
+    function initSetupInputs(count) {
+      const container = document.getElementById('playerInputs');
+      container.innerHTML = '';
+
+      availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
+
+      const year = document.getElementById('maddenYear').value;
+      const ratings = maddenRatings[year] || {};
+      const sortedTeams = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 }))
+                                  .sort((a, b) => b.rating - a.rating);
+
+      const teamOptions = sortedTeams.map(t =>
+        `<option value="${t.id}">${t.n} [${t.rating}]</option>`
+      ).join('');
+
+      let html = `
+        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
+          <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
+            <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
+          </div>
+          <small style="display:block; opacity:.7; margin-top:8px;">
+            Tipp: alte Spielernamen werden vorgeschlagen – neue Namen gehen natürlich auch.
+          </small>
+        </div>
+
+        ${presetDraftQueue.length ? `
+        <div class="card" style="background: rgba(0,255,204,0.04); font-size: 0.85em; margin-bottom: 15px;">
+          <b>📋 Vorbereitete Ziehreihenfolge</b> <span style="opacity:0.6;">(aus Saison-Setup — nur ein Vorschlag, oben frei änderbar)</span>
+          ${presetDraftQueue.length !== count ? `<div style="color:var(--nfl-red); margin-top:4px;">⚠️ ${presetDraftQueue.length} vorbereitete Spieler, aber ${count} Slots gewählt.</div>` : ''}
+          <div id="presetQueueRows" style="margin-top:6px;">${presetQueueRowsHtml()}</div>
+        </div>` : ''}
+
+        <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.85em; min-height: 50px;">
+          <div id="liveSchedulePreview" style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="color:var(--gray); text-align:center;">Noch kein Slot gezogen...</div>
+          </div>
+        </div>
+
+        <div id="draftBoard">`;
+
+      for (let i = 0; i < count; i++) {
+        html += `
+          <div class="draft-row" id="row-${i}">
+            <div class="slot-label">P${i+1}</div>
+            <div id="pDisplayName${i}" class="name-display" style="color:var(--gray)">--- offen ---</div>
+            <select id="pTeam${i}" class="team-select" onchange="updateTeamAvailability()">
+              <option value="" disabled selected>Team wählen...</option>
+              ${teamOptions}
+            </select>
+            <input type="hidden" id="pName${i}" value="">
+          </div>`;
+      }
+
+      container.innerHTML = html + `</div>`;
+
+      buildPlayerDatalist();
+      if (presetDraftQueue.length) document.getElementById('nextPlayerName').value = nextPresetName();
+    }
+
+    // Reihen-Markup der vorbereiteten Ziehreihenfolge (erledigte Namen
+    // durchgestrichen) — separat, damit es nach jedem Zug per
+    // refreshPresetQueueBox() aktualisiert werden kann, ohne das komplette
+    // Draft-Board (inkl. schon gewählter Teams) neu aufzubauen.
+    function presetQueueRowsHtml() {
+      if (!presetDraftQueue.length) return '';
+      const totalSlots = parseInt(document.getElementById('playerCount')?.value || 0);
+      const drawnNames = new Set();
+      for (let i = 0; i < totalSlots; i++) {
+        const v = document.getElementById(`pName${i}`)?.value;
+        if (v) drawnNames.add(v.trim().toLowerCase());
+      }
+      return presetDraftQueue.map((entry, i) => {
+        const done = drawnNames.has(entry.name.trim().toLowerCase());
+        return `<div style="display:flex; justify-content:space-between; gap:8px; padding:3px 0; ${done ? 'opacity:0.4; text-decoration:line-through;' : ''}">
+          <span>${i + 1}. ${entry.name}</span>
+          <span style="opacity:0.7; font-size:0.85em;">${entry.reason || ''}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function refreshPresetQueueBox() {
+      const el = document.getElementById('presetQueueRows');
+      if (el) el.innerHTML = presetQueueRowsHtml();
+    }
+
+    // Nächster noch nicht gezogener Name aus der vorbereiteten Reihenfolge —
+    // Vorschlag fürs Eingabefeld, bleibt jederzeit frei überschreibbar.
+    function nextPresetName() {
+      const totalSlots = parseInt(document.getElementById('playerCount')?.value || 0);
+      const drawnNames = new Set();
+      for (let i = 0; i < totalSlots; i++) {
+        const v = document.getElementById(`pName${i}`)?.value;
+        if (v) drawnNames.add(v.trim().toLowerCase());
+      }
+      const next = presetDraftQueue.find((e) => !drawnNames.has(e.name.trim().toLowerCase()));
+      return next ? next.name : '';
+    }
+
+    function updateLivePreview() {
+      const previewContainer = document.getElementById('liveSchedulePreview');
+      if (!previewContainer || !lastDrawnPlayer.name) return;
+
+      const count = parseInt(document.getElementById('playerCount').value);
+      const schedule = schedules[count];
+      const mySlot = lastDrawnPlayer.slot;
+
+      let html = `
+        <div style="margin-bottom: 10px; border-bottom: 1px solid var(--accent); padding-bottom: 5px;">
+          <h4 style="margin:0; color:var(--accent)">🏈 ${lastDrawnPlayer.name}s Gruppengegner:</h4>
+        </div>`;
+
+      schedule.forEach((round, roundIdx) => {
+        round.forEach(match => {
+          if (match[0] === mySlot || match[1] === mySlot) {
+            const oppSlot = (match[0] === mySlot) ? match[1] : match[0];
+            const oppName = document.getElementById(`pName${oppSlot}`).value || `P${oppSlot + 1}`;
+            const oppTeamId = document.getElementById(`pTeam${oppSlot}`).value;
+
+            const logoUrl = oppTeamId ? `https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${oppTeamId}.png` : '';
+            const logoHtml = logoUrl
+              ? `<img src="${logoUrl}" style="width:24px; height:24px; object-fit:contain;">`
+              : `<span style="width:24px; display:inline-block"></span>`;
+
+            const isHome = (match[0] === mySlot);
+
+            html += `
+              <div class="opponent-row" style="display:flex; align-items:center; gap:10px; justify-content: space-between;">
+                <span style="color:var(--gray); min-width:60px;">Runde ${roundIdx + 1}</span>
+                <div style="flex:1; display:flex; align-items:center; gap:10px;">
+                  ${logoHtml}
+                  <span style="${!oppTeamId ? 'color:var(--gray)' : ''}">${oppName}</span>
+                </div>
+                <span style="font-size: 0.8em; color:var(--accent)">${isHome ? 'HOME' : 'AWAY'}</span>
+              </div>`;
+          }
+        });
+      });
+
+      previewContainer.innerHTML = html;
+    }
+
+    function finalizeDraw(name) {
+      const randomIndex = Math.floor(Math.random() * availableSlots.length);
+      const chosenSlot = availableSlots.splice(randomIndex, 1)[0];
+
+      lastDrawnPlayer = { name: name, slot: chosenSlot };
+      playDrawFanfare();
+
+      const nameDisplay = document.getElementById(`pDisplayName${chosenSlot}`);
+      const hiddenInput = document.getElementById(`pName${chosenSlot}`);
+      const row = document.getElementById(`row-${chosenSlot}`);
+
+      document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+
+      nameDisplay.innerText = name;
+      nameDisplay.style.color = "var(--nfl-red)";
+      nameDisplay.style.fontWeight = "bold";
+      hiddenInput.value = name;
+
+      // erst mal ROT markieren, bis Team gewählt wurde
+      row.classList.remove('assigned');
+      row.classList.add('await-team');
+
+      updateLivePreview();
+
+      document.getElementById('draftPreview').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      document.getElementById('nextPlayerName').value = presetDraftQueue.length ? nextPresetName() : "";
+      refreshPresetQueueBox();
+      setTimeout(() => document.getElementById('nextPlayerName').focus(), 500);
+    }
+
+    function drawSlot() {
+      const nameInput = document.getElementById('nextPlayerName');
+      const name = nameInput.value.trim();
+
+      if (!name) { alert("Bitte erst einen Namen eingeben!"); return; }
+      // Duplicate Name verhindern
+const totalSlots = parseInt(document.getElementById('playerCount').value);
+for (let i = 0; i < totalSlots; i++) {
+  const existing = (document.getElementById(`pName${i}`)?.value || "").trim();
+  if (existing && existing.toLowerCase() === name.toLowerCase()) {
+    alert(`Der Name "${name}" ist bereits vergeben.`);
+    return;
+  }
+}
+      if (availableSlots.length === 0) { alert("Alle Plätze belegt!"); return; }
+
+      for (let i = 0; i < totalSlots; i++) {
+        const nameVal = document.getElementById(`pName${i}`).value;
+        const teamVal = document.getElementById(`pTeam${i}`).value;
+        if (nameVal !== "" && teamVal === "") {
+          alert(`Stopp! ${nameVal} muss erst ein Team wählen, bevor der nächste Slot gezogen werden kann.`);
+          document.getElementById(`pTeam${i}`).focus();
+          return;
+        }
+      }
+
+      document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const btn = document.querySelector('button[onclick="drawSlot()"]');
+      btn.disabled = true;
+      getDrawAudioCtx(); // Audio-Context innerhalb des Klick-Handlers "entsperren" (Autoplay-Policy)
+
+      let counter = 0;
+      const maxSpins = 15;
+      const spinInterval = setInterval(() => {
+        document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+        const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+        document.getElementById(`row-${tempSlot}`).classList.add('spinning');
+        playDrawTick(counter / maxSpins); // wird zum Ende hin leicht höher — mehr Spannung
+
+        counter++;
+        if (counter >= maxSpins) {
+          clearInterval(spinInterval);
+          finalizeDraw(name);
+          buildPlayerDatalist();
+          btn.disabled = false;
+        }
+      }, 80);
+    }
+
+    function updateTeamAvailability() {
+      const selects = document.querySelectorAll('.team-select');
+      const selectedTeams = Array.from(selects).map(s => s.value).filter(v => v !== "");
+
+      selects.forEach(s => {
+        const currentVal = s.value;
+        Array.from(s.options).forEach(opt => {
+          if (opt.value !== "" && opt.value !== currentVal) {
+            opt.disabled = selectedTeams.includes(opt.value);
+          }
+        });
+      });
+
+      updateLivePreview();
+      // Wenn Name gesetzt & Team gewählt -> Slot wird GRÜN
+document.querySelectorAll('.draft-row').forEach(row => {
+  const id = row.id?.split("-")[1];
+  if (id == null) return;
+
+  const nameVal = document.getElementById(`pName${id}`)?.value || "";
+  const teamVal = document.getElementById(`pTeam${id}`)?.value || "";
+  const nameDisplay = document.getElementById(`pDisplayName${id}`);
+
+  if (nameVal && teamVal) {
+    row.classList.remove("await-team");
+    row.classList.add("assigned");
+    if (nameDisplay) {
+      nameDisplay.style.color = "var(--accent)";
+      nameDisplay.style.fontWeight = "bold";
+    }
+  } else if (nameVal && !teamVal) {
+    row.classList.remove("assigned");
+    row.classList.add("await-team");
+    if (nameDisplay) {
+      nameDisplay.style.color = "var(--nfl-red)";
+      nameDisplay.style.fontWeight = "bold";
+    }
+  }
+});
+    }
+
+    // getPlayerFacts/fallbackInsights: zentral in shared.js (MB.getPlayerFacts,
+    // in MB.pickFlavourFacts bereits mit eingebaut als Fallback-Zweig)
+    function getPlayerFacts(name) { return MB.getPlayerFacts(history, state, name); }
+    function fallbackInsights(H, A) { return MB.pickFlavourFacts(history, state, H, A); }
+
+
+    // =========================================================
+    // MODE INFO + START
+    // =========================================================
+    function updateModeInfo() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      const start = document.getElementById('startTime').value;
+      const dG = parseInt(document.getElementById('durGroup').value) || 0;
+      const dP = parseInt(document.getElementById('durPlayoff').value) || 0;
+      const dB = parseInt(document.getElementById('durBreak').value) || 0;
+
+      const modeMeta = {
+        6: { games: 15, perP: 5, cut: "Alle kommen weiter (P1 & P2 erhalten Bye)", groupSlots: 8 },
+        7: { games: 21, perP: 6, cut: "Alle kommen weiter (P1 erhält ein Bye)", groupSlots: 11 },
+        8: { games: 20, perP: 5, cut: "Alle 8 Spieler rücken in die Playoffs vor", groupSlots: 10 },
+        9: { games: 18, perP: 4, cut: "Platz 9 scheidet nach der Gruppenphase aus", groupSlots: 9 },
+        10:{ games: 25, perP: 5, cut: "Platz 9 & 10 scheiden nach der Gruppenphase aus", groupSlots: 13 }
+      };
+
+      const meta = modeMeta[count];
+
+      const groupMinutes = meta.groupSlots * (dG + dB);
+      const groupEndTime = addMinutes(start, groupMinutes);
+      const finalKickoffTime = addMinutes(groupEndTime, 7 * (dP + dB));
+
+      const infoBox = document.getElementById('dynamicInfoBox');
+      infoBox.innerHTML = `
+        <div style="color:var(--accent); font-weight:bold; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px;">
+          🏆 Modus: ${count === 6 || count === 7 ? count + 'er Gruppe (Jeder gegen jeden)' : 'Gruppenphase (' + count + ' Spieler)'}
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <b>🛡 Playoff-Modus:</b> Doppel-KO (Double Elim)<br>
+            <b>🏈 Spiele:</b> ${meta.games} gesamt (${meta.perP} pro Person)<br>
+            <b>📉 Cut / Bye:</b> ${meta.cut}
+          </div>
+          <div style="border-left: 1px solid #4a5568; padding-left: 15px;">
+            <b>⏱ Gruppe Ende:</b> ca. ${groupEndTime} Uhr<br>
+            <b style="color:var(--nfl-red)">🏈 FINAL KICKOFF:</b> ca. ${finalKickoffTime} Uhr<br>
+            <small style="opacity:0.7">Basis: ${dG}m/G, ${dP}m/P, ${dB}m Pause</small>
+          </div>
+        </div>
+      `;
+
+      renderPlayerInputs();
+    }
+
+    // =========================================================
+    // ZUFALLS-TURNIER (Testzwecke) — überspringt Namens-/Team-Auslosung,
+    // erzeugt sofort ein komplett zufälliges, spielbereites Turnier mit der
+    // gewählten Spieleranzahl. Nutzt denselben startTournament()-Pfad wie
+    // ein normal ausgelostes Turnier (inkl. Supabase-Sync/Kickoff-Artikel).
+    // =========================================================
+    const RANDOM_TEST_NAMES = [
+      "Test-Tim", "Test-Alex", "Test-Markus", "Test-Lukas", "Test-Micha",
+      "Test-Tobi", "Test-Jan", "Test-Chris", "Test-Basti", "Test-Flo",
+    ];
+
+    function shuffleArray(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function createRandomTournament() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      if (!confirm(`Zufalls-Turnier mit ${count} Testspielern erstellen?\nNamen, Teams und Reihenfolge werden komplett zufällig vergeben — nur für Testzwecke.`)) return;
+
+      // Draft-Board für die gewählte Spieleranzahl aufbauen (liefert die
+      // pName{i}/pTeam{i}-Inputs, die startTournament() danach ausliest).
+      initSetupInputs(count);
+
+      const names = shuffleArray(RANDOM_TEST_NAMES).slice(0, count);
+      while (names.length < count) names.push(`Testspieler ${names.length + 1}`);
+      const teamIds = shuffleArray(nflTeams.map(t => t.id)).slice(0, count);
+
+      for (let i = 0; i < count; i++) {
+        document.getElementById(`pName${i}`).value = names[i];
+        document.getElementById(`pDisplayName${i}`).innerText = names[i];
+        document.getElementById(`pTeam${i}`).value = teamIds[i];
+      }
+      updateTeamAvailability();
+      startTournament();
+    }
+
+    async function startTournament() {
+      const count = parseInt(document.getElementById('playerCount').value);
+
+      state.config = {
+        start: document.getElementById('startTime').value,
+        durG: parseInt(document.getElementById('durGroup').value),
+        durP: parseInt(document.getElementById('durPlayoff').value),
+        durB: parseInt(document.getElementById('durBreak').value),
+        s1: document.getElementById('stadium1').value,
+        s2: document.getElementById('stadium2').value,
+        s1Prep: document.getElementById('stadium1Prep').value || 'im',
+        s2Prep: document.getElementById('stadium2Prep').value || 'im',
+        year: document.getElementById('maddenYear').value
+      };
+
+      state.players = [];
+      for (let i = 0; i < count; i++) {
+        state.players.push({
+          id: i,
+          name: document.getElementById(`pName${i}`).value || `P${i+1}`,
+          team: document.getElementById(`pTeam${i}`).value,
+          wins: 0, diff: 0, pointsFor: 0, played: 0
+        });
+      }
+
+      state.slots = schedules[count].map(slotData => slotData.map(m => ({ p1: m[0], p2: m[1], s1: null, s2: null })));
+      state.matches = state.slots.flat();
+      state.playoffMatches = [];
+      state.currentView = 'running';
+
+      renderAll();
+      save();
+      if (isAdmin) {
+        await syncData(true); // Tournament-ID entsteht hier (siehe MB.pushCloudState)
+        // Turnierblog: Kickoff-Artikel, sobald wir die frische Tournament-ID haben.
+        MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state));
+        progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
+        songMomentFlags = {}; // neues Turnier -> alte Song-Momente-Flags verwerfen
+        // Announcer-Intro: beide Rollen stellen sich mit den konfigurierten
+        // Namen vor (Anforderungen 26-28).
+        MB.Announcer.announceTournamentStart({ athleteNames: state.players.map(p => p.name) });
+      }
+    }
+
+    function changeTeam(pid, tid) {
+      state.players.find(x => x.id === pid).team = tid;
+      renderAll(); save(); if (isAdmin) syncData(true);
+    }
+
+    // =========================================================
+    // TABLE + GROUP MATCHES
+    // =========================================================
+    function renderTable() {
+      state.players.forEach(p => { p.wins = 0; p.diff = 0; p.pointsFor = 0; p.played = 0; });
+
+      state.matches.forEach(m => {
+        if (m.s1 !== null && m.s2 !== null) {
+          state.players[m.p1].played++; state.players[m.p2].played++;
+          state.players[m.p1].pointsFor += m.s1; state.players[m.p2].pointsFor += m.s2;
+          state.players[m.p1].diff += (m.s1 - m.s2); state.players[m.p2].diff += (m.s2 - m.s1);
+          if (m.s1 > m.s2) state.players[m.p1].wins++;
+          else if (m.s2 > m.s1) state.players[m.p2].wins++;
+        }
+      });
+
+      let sorted = [...state.players].sort((a,b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        let h2h = state.matches.find(m => ((m.p1===a.id && m.p2===b.id) || (m.p1===b.id && m.p2===a.id)) && m.s1!==null);
+        if (h2h) {
+          let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+          let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+          if (aS !== bS) return bS - aS;
+        }
+        return b.diff - a.diff;
+      });
+
+      let count = state.players.length;
+      let html = `<table><tr><th>#</th><th>NFL</th><th>Name</th><th>Ringe</th><th>W-L</th><th>Diff</th></tr>`;
+
+      sorted.forEach((p, i) => {
+        let classes = [];
+
+        if (count === 6 && i < 2) { classes.push("row-bye"); if (i === 1) classes.push("row-bye-last"); }
+        else if (count === 7 && i === 0) { classes.push("row-bye"); classes.push("row-bye-last"); }
+
+        if (count === 9 && i === 8) { classes.push("row-eliminated"); classes.push("row-eliminated-first"); }
+        else if (count === 10 && i >= 8) { classes.push("row-eliminated"); if (i === 8) classes.push("row-eliminated-first"); }
+
+        let teamSelect = isAdmin ? `
+          <select onchange="changeTeam(${p.id}, this.value)" style="font-size:0.7em; margin-left:5px;">
+            ${nflTeams.map(t => `<option value="${t.id}" ${t.id===p.team?'selected':''}>${t.id}</option>`).join('')}
+          </select>` : '';
+        const rings = (history?.ringsByPlayer?.get(normName(p.name)) || 0);
+const ringsHtml = rings > 0
+  ? `<div class="ring-cell"><img src="maddenbowl.ico" class="ring-icon" alt="Ring"> <span>${rings}</span></div>`
+  : `<div class="ring-cell" style="opacity:.35;">–</div>`;
+
+
+        html += `
+          <tr class="${classes.join(' ')}">
+            <td>${i+1}</td>
+            <td>
+              <div style="display:flex; align-items:center; justify-content:center;">
+                ${getLogoHtml(p.team)} ${teamSelect}
+              </div>
+            </td>
+            <td style="font-weight:bold;">${p.name}</td>
+            <td>${ringsHtml}</td>
+            <td>${p.wins}-${p.played - p.wins}</td>
+            <td style="color:${p.diff > 0 ? 'var(--accent)' : (p.diff < 0 ? 'var(--nfl-red)' : 'white')}">
+              ${p.diff > 0 ? '+' : ''}${p.diff}
+            </td>
+          </tr>`;
+      });
+
+      document.getElementById('tableContainer').innerHTML = html + `</table>`;
+    }
+
+    function renderGroupMatches() {
+      let currentTime = state.config.start;
+      let matchCounter = 0;
+
+      document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
+        let html = `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
+
+        slot.forEach((m, mIdx) => {
+          const p1 = state.players[m.p1]; // home
+          const p2 = state.players[m.p2]; // away
+          const gIdx = matchCounter++;
+          const stadium = mIdx === 0 ? state.config.s1 : state.config.s2;
+
+          html += `
+            <div id="gmatch-${gIdx}" class="match-row ${isFinished(m) ? 'finished' : ''}">
+              <div class="stadium-tag">${stadium}</div>
+              <div class="team-box right">
+                <span>${p2.name}</span> ${getLogoHtml(p2.team)}
+              </div>
+              <div class="score-area">
+                <input type="number" class="score-input" id="score-group-${gIdx}-away" value="${m.s2 !== null ? m.s2 : ''}"
+                       oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
+                <span style="color:var(--accent)">:</span>
+                <input type="number" class="score-input" id="score-group-${gIdx}-home" value="${m.s1 !== null ? m.s1 : ''}"
+                       oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
+                ${isAdmin ? `<button type="button" id="score-group-${gIdx}-save" class="score-save-btn" onclick="commitScore('group',${gIdx})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
+                ${(isAdmin && isFinished(m)) ? `<button type="button" class="score-save-btn" onclick="openMemeContextEditorManual('group',${gIdx})" title="Meme generieren">🎭</button>` : ''}
+              </div>
+              <div class="team-box">
+                ${getLogoHtml(p1.team)} <span>${p1.name}</span>
+              </div>
+
+              ${renderMatchMeta(p1.name, p2.name, isFinished(m))}
+            </div>`;
+        });
+
+        currentTime = addMinutes(currentTime, state.config.durG + state.config.durB);
+        return html + `</div>`;
+      }).join('');
+    }
+
+    // Liefert die nächsten `limit` noch offenen Spiele (Gruppe + Playoff),
+    // zeitlich sortiert — Basis für die KI-Ansage der "kommenden Partie".
+    // Zentral in shared.js (MB.getUpcomingMatches) — dieselbe Funktion
+    // nutzen auch wettbuero.html und live.html, statt sie jeweils eigen
+    // nachzubauen.
+    function getNextUnplayedMatches(limit) {
+      return MB.getUpcomingMatches(state, { limit });
+    }
+
+    // =========================================================
+    // SPEICHERN-BOX für Score-Eingabe
+    // -------------------------------------------------------
+    // Vorher (setScore()) hat JEDES einzelne Feld (Heim ODER Auswärts) bei
+    // jedem onchange sofort den kompletten Re-Render + Cloud-Push
+    // ausgelöst. Das hatte zwei Folgebugs:
+    //  1) Der Re-Render (innerHTML-Rebuild der ganzen Matchliste) riss dem
+    //     Nutzer beim Tab-Sprung ins zweite Feld den Fokus weg, bevor er
+    //     dort etwas eintippen konnte.
+    //  2) Zwei schnell hintereinander ausgelöste Cloud-Pushes (einer pro
+    //     Feld) liefen als überlappende async-Requests — kommt die Antwort
+    //     des ÄLTEREN Pushes (nur ein Score gesetzt) NACH der des neueren
+    //     an, überschreibt er den bereits korrekt gespeicherten zweiten
+    //     Score in Supabase wieder mit "leer". Der 45s-Polling-Sync holt
+    //     diesen veralteten Stand dann zurück in die lokale Ansicht.
+    //
+    // Jetzt: Eingaben werden nur lokal gepuffert (Inputs behalten einfach
+    // ihren Wert, es passiert sonst nichts). Committed wird erst explizit
+    // per Klick auf den 💾-Button oder Enter in einem der beiden Felder —
+    // dann werden BEIDE Werte auf einmal übernommen, genau EIN Render und
+    // genau EIN Cloud-Push ausgelöst. Kein Rendern während der Eingabe =
+    // kein Fokusklau, kein doppelter Push = keine Race Condition.
+    // =========================================================
+
+    function scoreInputIds(type, idx) {
+      const prefix = `score-${type}-${idx}`;
+      return { away: `${prefix}-away`, home: `${prefix}-home`, save: `${prefix}-save` };
+    }
+
+    // Zählt offene, ungespeicherte Score-Boxen. Solange > 0, darf der
+    // periodische Cloud-Poll (siehe syncData()) nicht die ganze `state`-
+    // Variable überschreiben — sonst gehen getippte, aber noch nicht per
+    // 💾/Enter bestätigte Werte beim nächsten Poll wieder verloren.
+    let unsavedScoreCount = 0;
+
+    // Markiert die Speichern-Box als "ungespeichert" (visuelles Feedback),
+    // löst aber explizit NICHTS anderes aus — kein Render, kein Push.
+    function markScoreDirty(type, idx) {
+      const { save: saveBtnId } = scoreInputIds(type, idx);
+      const btn = document.getElementById(saveBtnId);
+      if (btn && !btn.classList.contains('dirty')) {
+        btn.classList.add('dirty');
+        unsavedScoreCount++;
+      }
+    }
+
+    function handleScoreKeydown(e, type, idx) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      commitScore(type, idx);
+    }
+
+    function commitScore(type, idx) {
+      const { away, home, save: saveBtnId } = scoreInputIds(type, idx);
+      const awayEl = document.getElementById(away);
+      const homeEl = document.getElementById(home);
+      if (!awayEl || !homeEl) return;
+
+      const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
+      const match = targetArray[idx];
+      if (!match) return;
+
+      const wasFinished = isFinished(match);
+      const vAway = awayEl.value === "" ? null : parseInt(awayEl.value);
+      const vHome = homeEl.value === "" ? null : parseInt(homeEl.value);
+
+      match.s2 = vAway;
+      match.s1 = vHome;
+
+      // Fürs Tippspiel (tipp.js/wettbuero.html): Zeitstempel, wann dieses
+      // Spiel fertig wurde. Dient dort als "echter" Anker fürs nächste Spiel
+      // auf demselben Feld (feste Kickoff-Uhrzeiten passen ja meistens eh
+      // nicht) — wird nur beim ERSTEN Fertigwerden gesetzt, damit eine
+      // spätere Korrektur den Zeitplan nicht künstlich nach hinten schiebt.
+      // Wird ein Ergebnis wieder gelöscht, auch wieder zurücksetzen.
+      const nowFinishedForTimestamp = isFinished(match);
+      if (nowFinishedForTimestamp && !wasFinished) {
+        match.finishedAt = new Date().toISOString();
+      } else if (!nowFinishedForTimestamp) {
+        match.finishedAt = null;
+      }
+
+      const saveBtn = document.getElementById(saveBtnId);
+      if (saveBtn && saveBtn.classList.contains('dirty')) unsavedScoreCount = Math.max(0, unsavedScoreCount - 1);
+
+      save();
+      _oddsCacheKey = "";
+
+      // Fokus bewusst VOR dem Re-Render wegnehmen (statt umgekehrt wie
+      // früher) — dann kann der DOM-Rebuild in finishScoreUpdate() kein
+      // aktives Feld mehr "unter dem Cursor wegreißen".
+      if (document.activeElement === awayEl || document.activeElement === homeEl) {
+        document.activeElement.blur();
+      }
+
+      finishScoreUpdate(type, idx, match, wasFinished);
+    }
+
+    async function finishScoreUpdate(type, idx, match, wasFinished) {
+      // Tabellen-Rang VOR diesem Spiel einfrieren, bevor renderTable() unten
+      // p.wins/p.diff mit dem neuen Ergebnis überschreibt (anders als bei
+      // titleOddsPrev/Now oben: dort ist der bestehende Zeitpunkt schon
+      // etabliert, hier brauchen wir für den Tabellen-Impact aber garantiert
+      // den Stand VOR dieser Aktualisierung).
+      tableRankPrev = tableRankNow || null;
+
+      updatePlayoffLogic();
+      // BUGFIX (Zeit-Engine): Playoff-Offsets bye-bereinigt neu berechnen,
+      // NACHDEM updatePlayoffLogic() die Spieler den Matches zugeordnet hat.
+      MB.syncPlayoffOffsets(state);
+      // ✅ Titel-Odds Snapshot updaten (damit Trend "seit letztem Ergebnis" stimmt)
+      recalcTitleOddsSnapshots();
+      renderTable();
+      // Tabellen-Rang NACH renderTable() neu berechnen, denn erst dort werden
+      // p.wins/p.diff für das gerade committete Ergebnis aktualisiert.
+      tableRankNow = MB.getLiveSeeds(state);
+      renderPlayoffPicture();
+      renderNextGames();
+
+      // re-render group/playoff lists so meta updates too
+      renderGroupMatches();
+      renderAllPlayoffAdmin();
+      applyLayoutRules();
+      renderRanking();
+
+      // KI-Ansage: nur auslösen, wenn dieses Spiel GERADE fertig geworden ist
+      // (Übergang offen -> beendet), nicht bei jeder Korrektur eines Scores.
+      const nowFinished = isFinished(match);
+      if (isAdmin && !wasFinished && nowFinished && match.s1 !== null && match.s2 !== null) {
+        const homeName = (type === 'group') ? state.players[match.p1].name : match.p1.name;
+        const awayName = (type === 'group') ? state.players[match.p2].name : match.p2.name;
+        const homeTeam = (type === 'group') ? state.players[match.p1].team : match.p1.team;
+        const awayTeam = (type === 'group') ? state.players[match.p2].team : match.p2.team;
+        const stadium = (type === 'group')
+          ? ((state.slots.find(s => s.includes(match)) || []).indexOf(match) === 1 ? state.config.s2 : state.config.s1)
+          : ((state.playoffMatches.indexOf(match) % 2 === 0) ? state.config.s1 : state.config.s2);
+        const stadiumPrepFor = (name) => (name === state.config.s2 ? (state.config.s2Prep || 'im') : (state.config.s1Prep || 'im'));
+        const upcomingWithPrep = getNextUnplayedMatches(1).map(m => ({ ...m, stadiumPreposition: stadiumPrepFor(m.stadium) }));
+
+        // Erreicht dieses Ergebnis gerade neu einen der vier großen
+        // Song-Meilensteine (Regular Season, erstes Ausscheiden, Finale,
+        // Champion)? Falls ja: hier auf die Admin-Entscheidung warten
+        // (generieren/überspringen), BEVOR die Ansage für dieses Spiel
+        // gebaut wird - so kann der Kommentator schon wissen, ob (und dass)
+        // gerade ein Song entstanden ist.
+        const songMoment = await maybeHandleSongMoment();
+
+        MB.Announcer.announce({
+          state, history, homeName, awayName, homeTeam, awayTeam,
+          homeScore: match.s1, awayScore: match.s2, stadium,
+          stadiumPreposition: stadiumPrepFor(stadium),
+          // Vorheriger Tabellenstand (VOR diesem Score-Commit) für den
+          // Announcer-Tabellen-Impact - `state` selbst enthält an dieser
+          // Stelle schon den neuen Stand (siehe tableRankPrev/-Now oben).
+          prevSeeds: tableRankPrev,
+          // "group" vs "playoff" + Match-ID (z.B. "lb1") - damit der
+          // Announcer zwischen "Playoff-Chancen verpasst" (Gruppenphase) und
+          // "raus aus dem Turnier" (K.o.-Niederlage im Bracket) unterscheiden
+          // kann, statt in den Playoffs fälschlich von "Playoffs verpasst"
+          // zu sprechen.
+          matchKind: type,
+          matchId: (type === 'playoff') ? match.id : null,
+          upcoming: upcomingWithPrep,
+          songMilestone: songMoment.milestone,
+          songGenerated: songMoment.generated,
+        });
+
+        // Der eigentliche Song (falls generiert) wird NACH der Spielansage
+        // angesagt/abgespielt - announce() und announceSong() hängen in
+        // derselben Warteschlange, spielen also garantiert in dieser
+        // Reihenfolge, nie überlappend.
+        if (songMoment.generated) {
+          const settings = MB.Announcer.getTtsSettings();
+          MB.Announcer.announceSong(songMoment.milestone, songMoment.url, { voiceId: settings.voiceIdResult });
+        }
+
+        // Tippspiel: Punkte werden live aus den Tipps + Ergebnissen berechnet
+        // (MB.Tipp.computeTippStandings), kein Abrechnungsschritt nötig.
+
+        // Rekord-Momente & Memes: komplett kostenlos, immer aktiv. Werden
+        // nach Supabase gepusht, damit sie auch auf live.html?Altima (z.B.
+        // am Handy) sichtbar sind. Der Turnierblog-Artikel für einen
+        // "normalen" Rekord entsteht jetzt automatisch, sobald das Meme-Bild
+        // fertig ist (siehe addSessionRecord/postRecordBlogArticle) — nicht
+        // mehr erst beim manuellen Teilen. Zusätzlich poppt hier direkt nach
+        // dem Speichern ein Vorschau-Popup auf, damit man es nicht erst in
+        // der "🏆 Rekord-Momente"-Karte suchen muss.
+        const recordsBeforePopup = sessionRecords.length;
+
+        const newRecords = MB.Records.detectRecords(state, history, { homeName, awayName, homeScore: match.s1, awayScore: match.s2 });
+        newRecords.forEach(r => {
+          addSessionRecord(r);
+          MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
+        });
+
+        // Finaleinzug / neuer Champion: an den Bracket-Zustand gebunden,
+        // nicht an dieses einzelne Spiel — daher eigene Prüfung, nur einmal
+        // pro Turnier feuernd (siehe milestoneRecordFlags).
+        const milestoneRecords = MB.Records.detectMilestoneRecords(state, milestoneRecordFlags);
+        milestoneRecords.forEach(r => {
+          milestoneRecordFlags[r.type] = true;
+          addSessionRecord(r);
+          MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
+          const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r) : MB.Blog.buildChampionArticle(r);
+          MB.Blog.pushArticle(MB.getCurrentTournamentId(), article);
+        });
+
+        // addSessionRecord() unshiftet synchron in sessionRecords (der
+        // eigentliche Bildaufbau läuft danach async weiter) — direkt nach
+        // beiden forEach-Durchläufen stehen alle neuen Einträge also schon
+        // vorne in sessionRecords.
+        const addedCount = sessionRecords.length - recordsBeforePopup;
+        const autoDetectedEntries = addedCount > 0 ? sessionRecords.slice(0, addedCount) : [];
+
+        // Reine Rand-Erkennung (Blowout ab 21, knapp bis 3 Punkten) OHNE
+        // Tags — nur um zu wissen, ob sich das Kontext-Popup von selbst
+        // aufdrängt. Passiert nicht bei jedem Spiel, daher ok als Auto-Trigger.
+        let autoStoryPreview = null;
+        try {
+          autoStoryPreview = MB.Records.detectStoryMeme({ homeName, awayName, homeScore: match.s1, awayScore: match.s2, memeContext: {} });
+        } catch (e) {}
+
+        // Normalfall (kein Rekord, kein auffälliger Rand): einfach still
+        // speichern, kein Popup. Auffällige Spiele bekommen den Dialog
+        // automatisch; für alles andere gibt's das 🎭-Icon neben Speichern.
+        if (autoDetectedEntries.length > 0 || autoStoryPreview) {
+          openMemeContextEditor(type, idx, match, autoDetectedEntries);
+        }
+
+        // Turnierblog: alle 3 Spiele ein Zwischenstand-Artikel.
+        const progressDueNow = MB.Blog.isProgressArticleDue(state, progressArticlesSoFar);
+        if (progressDueNow) {
+          const finishedCount = MB.Blog.countFinishedMatches(state);
+          MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildProgressArticle(state, history, finishedCount));
+          progressArticlesSoFar++;
+        }
+
+        // Spurious Correlations (spurious.js): bei JEDEM gespeicherten
+        // Ergebnis prüfen, ob eine Madden-Bowl-Kennzahl aus der Historie
+        // zufällig stark mit einer der 101 hinterlegten deutschen
+        // Jahres-Statistiken korreliert. Läuft bewusst NICHT, wenn in
+        // diesem Speichervorgang bereits automatisch ein anderer Artikel
+        // entsteht (Finale/Champion/Zwischenstand) — sonst wirkt der Blog
+        // überladen — und nicht, solange schon ein unveröffentlichter
+        // Vorschlag in den Rekord-Momenten liegt. Läuft async im
+        // Hintergrund, blockiert also nichts.
+        if (milestoneRecords.length === 0 && !progressDueNow) {
+          maybeOfferSpuriousCorrelation();
+        }
+      }
+
+      if (isAdmin && ttsUnlocked) renderSongMomentsPanel(); // neu erreichte Meilensteine sofort sichtbar machen
+
+      if (isAdmin) syncData(true);
+    }
+
+    // =========================================================
+    // PLAYOFFS
+    // =========================================================
+    function initPlayoffs() {
+      if (state.playoffMatches.length > 0) return;
+
+      // BUGFIX (Contender Round): Sessions/Reihenfolge kommen jetzt aus
+      // MB.PLAYOFF_STRUCTURE — dort läuft lb1/lb2 (Lower) bewusst VOR
+      // us1/us2 (Upper). Die konkreten Uhrzeiten (offset) werden nicht mehr
+      // statisch hier gesetzt, sondern dynamisch & bye-bereinigt über
+      // MB.syncPlayoffOffsets() nachgezogen (siehe unten + updatePlayoffLogic/setScore).
+      const phaseById = {
+        ub1:'Wildcard', ub2:'Wildcard', ub3:'Wildcard', ub4:'Wildcard',
+        lb1:'Elim. R1', lb2:'Elim. R1', us1:'Upper Semi', us2:'Upper Semi',
+        lb3:'Elim. R2', lb4:'Elim. R2',
+        uf:'Upper Final', ls:'Elim. Semi',
+        lf:'Elim. Final', tb:'Toilet Bowl',
+        gf:'Madden Bowl'
+      };
+
+      state.playoffMatches = MB.PLAYOFF_STRUCTURE.flatMap(slotDef =>
+        slotDef.ids.map(id => ({
+          id, phase: phaseById[id], session: slotDef.session,
+          offset: 0, p1: null, p2: null, s1: null, s2: null
+        }))
+      );
+
+      MB.syncPlayoffOffsets(state);
+    }
+
+    function updatePlayoffLogic() {
+      const m = state.playoffMatches;
+      if (!m || m.length === 0) return;
+
+      let s = [...state.players].sort((a,b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        let h2h = state.matches.find(gm => ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) && gm.s1!==null);
+        if (h2h) {
+          let aS = h2h.p1===a.id ? h2h.s1 : h2h.s2;
+          let bS = h2h.p1===b.id ? h2h.s1 : h2h.s2;
+          if (aS !== bS) return bS - aS;
+        }
+        return b.diff - a.diff;
+      });
+
+      const bye = { id: -1, name: "BYE", team: null };
+
+      if (m[0].s1 === null && m[0].s2 === null) { m[0].p1 = s[0]; m[0].p2 = s[7] || bye; }
+      if (m[1].s1 === null && m[1].s2 === null) { m[1].p1 = s[3]; m[1].p2 = s[4] || bye; }
+      if (m[2].s1 === null && m[2].s2 === null) { m[2].p1 = s[1]; m[2].p2 = s[6] || bye; }
+      if (m[3].s1 === null && m[3].s2 === null) { m[3].p1 = s[2]; m[3].p2 = s[5] || bye; }
+
+      // ------------------------------------------------------
+// WILDCARD TIMING: wenn 2 BYEs, dann alle Wildcard-Spiele im gleichen Timeslot
+// ------------------------------------------------------
+const durP = state.config.durP + state.config.durB;
+
+// Default: 2 Spiele jetzt (offset 0), 2 Spiele später (offset durP)
+m[0].offset = 0;
+m[1].offset = 0;
+m[2].offset = durP;
+m[3].offset = durP;
+
+// Wenn 2 Wildcards BYE sind -> es gibt nur 2 echte Games -> beide können sofort laufen
+const wc = [m[0], m[1], m[2], m[3]];
+const byeCount = wc.filter(x => x?.p2?.id === -1).length;
+
+if (byeCount >= 2) {
+  m[2].offset = 0;
+  m[3].offset = 0;
+}
+
+const isBye = (match) => match?.p2 && match.p2.id === -1;
+
+const win = (match) => {
+  if (!match) return null;
+
+  // ✅ BYE: sofort weiter – ohne Score
+  if (isBye(match)) return match.p1;
+
+  // normales Spiel
+  if (match.s1 === null || match.s2 === null) return null;
+  return (match.s1 > match.s2) ? match.p1 : match.p2;
+};
+
+const loss = (match) => {
+  if (!match) return null;
+
+  // ✅ BYE: kein Verlierer
+  if (isBye(match)) return null;
+
+  if (match.s1 === null || match.s2 === null) return null;
+  return (match.s1 > match.s2) ? match.p2 : match.p1;
+};
+      const sortBySeed = (players) => {
+        const seedOrder = s.map(p => p.id);
+        return players.filter(p => p !== null).sort((a, b) => seedOrder.indexOf(a.id) - seedOrder.indexOf(b.id));
+      };
+
+      const wcWinners = sortBySeed([win(m[0]), win(m[1]), win(m[2]), win(m[3])]);
+      const wcLosers  = sortBySeed([loss(m[0]), loss(m[1]), loss(m[2]), loss(m[3])]);
+
+      if (wcWinners.length >= 4) {
+        m[6].p1 = wcWinners[0]; m[6].p2 = wcWinners[3];
+        m[7].p1 = wcWinners[1]; m[7].p2 = wcWinners[2];
+      }
+
+// ---- Lower Bracket R1: immer "auffüllen", damit BYE sauber weiterläuft ----
+const padTo = (arr, len, filler) => {
+  const out = [...arr];
+  while (out.length < len) out.push(filler);
+  return out;
+};
+
+// Wenn es weniger als 4 Loser gibt (wegen BYE), füllen wir mit BYE auf.
+// Mapping bleibt wie gedacht: Best vs Worst, 2nd vs 3rd
+const losersPadded = padTo(wcLosers, 4, bye);
+
+// lb1 / lb2 nur setzen, wenn es überhaupt echte Loser gibt
+if (wcLosers.length > 0) {
+  m[4].p1 = losersPadded[0] || null;
+  m[4].p2 = losersPadded[3] || bye;
+
+  // Wenn der zweite Slot komplett nur BYE wäre (z.B. nur 1 Loser), kannst du ihn trotzdem anzeigen
+  // – dein UI zeigt dann AUTO ADVANCE für den echten Spieler.
+  m[5].p1 = losersPadded[1] || null;
+  m[5].p2 = losersPadded[2] || bye;
+
+  // Optional: Falls m[5] nur BYE vs BYE wäre, komplett leeren (damit es nicht “quatschig” wirkt)
+  if (m[5].p1?.id === -1 && m[5].p2?.id === -1) {
+    m[5].p1 = null; m[5].p2 = null;
+    m[5].s1 = null; m[5].s2 = null;
+  }
+} else {
+  // keine Loser vorhanden -> LB R1 komplett leer
+  m[4].p1 = null; m[4].p2 = null; m[4].s1 = null; m[4].s2 = null;
+  m[5].p1 = null; m[5].p2 = null; m[5].s1 = null; m[5].s2 = null;
+}
+
+      const divLosers = sortBySeed([loss(m[6]), loss(m[7])]);
+      const elimR1Winners = sortBySeed([win(m[4]), win(m[5])]);
+
+      if (divLosers.length >= 2 && elimR1Winners.length >= 2) {
+        m[8].p1 = divLosers[0]; m[8].p2 = elimR1Winners[1];
+        m[9].p1 = divLosers[1]; m[9].p2 = elimR1Winners[0];
+      }
+
+      m[10].p1 = win(m[6]); m[10].p2 = win(m[7]);
+
+      const elimR2Winners = sortBySeed([win(m[8]), win(m[9])]);
+      if (elimR2Winners.length >= 2) {
+        m[11].p1 = elimR2Winners[0]; m[11].p2 = elimR2Winners[1];
+      }
+
+      m[12].p1 = loss(m[10]); m[12].p2 = win(m[11]);
+      const gfMatch = m.find(x => x.id === "gf");
+      if (gfMatch) {
+        gfMatch.p1 = win(m[10]); // Upper Final Winner
+        gfMatch.p2 = win(m[12]); // Elim Final Winner
+      }
+
+      // ------------------------------------------------------
+// TOILET BOWL: darf NIE von BYE gespielt werden
+// => nimm die ersten 2 echten Eliminations-Verlierer (ohne BYE)
+// ------------------------------------------------------
+const tb = m.find(x => x.id === "tb");
+
+const isRealPlayer = (p) => !!(p && p.id !== -1);
+const safeLoser = (match) => {
+  const l = loss(match);
+  return isRealPlayer(l) ? l : null;
+};
+
+function getFirstTwoEliminated() {
+  // Reihenfolge der Eliminations-Spiele (chronologisch)
+  // Elim R1: lb1/lb2
+  // Elim R2: lb3/lb4
+  // Danach: ls (Elim Semi), lf (Elim Final) – nur falls vorher nicht genug echte Elims existieren
+  const elimOrder = ["lb1", "lb2", "lb3", "lb4", "ls", "lf"];
+
+  const out = [];
+  for (const id of elimOrder) {
+    const match = m.find(x => x.id === id);
+    if (!match) continue;
+
+    const l = safeLoser(match);
+    if (l && !out.some(p => p.id === l.id)) out.push(l);
+
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
+if (tb && tb.s1 === null && tb.s2 === null) {
+  // Wenn TB noch leer ist ODER aus Versehen BYE drin wäre -> neu setzen
+  const tbHasBye = (tb.p1 && tb.p1.id === -1) || (tb.p2 && tb.p2.id === -1);
+  const tbIncomplete = !(isRealPlayer(tb.p1) && isRealPlayer(tb.p2));
+
+  if (tbHasBye || tbIncomplete) {
+    const elim2 = getFirstTwoEliminated();
+    if (elim2.length === 2) {
+      tb.p1 = elim2[0]; // 1st Eliminated (echter Spieler)
+      tb.p2 = elim2[1]; // 2nd Eliminated (echter Spieler)
+    } else {
+      // noch nicht genug echte Elims -> TB offen lassen
+      tb.p1 = null;
+      tb.p2 = null;
+      tb.s1 = null;
+      tb.s2 = null;
+    }
+  }
+}
+
+    }
+
+    function renderPlayoffPicture() {
+      const m = state.playoffMatches;
+      if (!m || m.length === 0) return;
+
+      // Zentral aus shared.js statt eigener Formel (dieselbe Quelle wie
+      // Next-Games, Admin-Liste, Wettbüro, Live-Tracking).
+      const groupEndTime = MB.computePlayoffTimes(state).groupEndTime;
+
+  // ✅ sicherstellen, dass wins/diff aktuell sind
+  renderTable();
+
+  // ✅ Seeds exakt wie in updatePlayoffLogic: wins -> h2h -> diff
+  const s = [...state.players].sort((a,b) => {
+    if (b.wins !== a.wins) return b.wins - a.wins;
+
+    const h2h = state.matches.find(gm =>
+      ((gm.p1===a.id && gm.p2===b.id) || (gm.p1===b.id && gm.p2===a.id)) &&
+      gm.s1 !== null && gm.s2 !== null
+    );
+    if (h2h) {
+      const aS = (h2h.p1 === a.id) ? h2h.s1 : h2h.s2;
+      const bS = (h2h.p1 === b.id) ? h2h.s1 : h2h.s2;
+      if (aS !== bS) return bS - aS;
+    }
+    return (b.diff || 0) - (a.diff || 0);
+  });
+
+  // ✅ Map: playerId -> seed
+  const seedById = new Map(s.map((p, i) => [Number(p.id), i + 1]));
+
+  const getSeed = (player) => {
+    if (!player || player.id === -1) return "";
+    return seedById.get(Number(player.id)) || "";
+  };
+
+      const formatPlayer = (player, placeholder, isWinner, isLoser, side = 'left', matchId) => {
+        if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+        if (player.id === -1) return "BYE";
+
+        const seedColor = isWinner ? 'var(--accent)' : 'white';
+        const textColor = isWinner ? 'var(--accent)' : 'inherit';
+        const seed = `<span style="color:${seedColor}; font-weight:bold; margin:0 4px;">[${getSeed(player)}]</span>`;
+        const logo = getLogoHtml(player.team);
+        const name = player.name;
+
+        const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+        const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.6; filter:grayscale(1);' : '';
+        const winnerClass = isWinner ? 'winner' : '';
+
+        return `<span class="${winnerClass}" style="${style} color:${textColor};">
+          ${side === 'left' ? `${seed} ${name} ${logo}` : `${logo} ${name} ${seed}`}
+        </span>`;
+      };
+
+      const renderM = (match, idx, placeholderP1, placeholderP2) => {
+        if (!match) return "";
+        const bye = isByeMatch(match);
+        const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !isFinished(match);
+        const time = addMinutes(groupEndTime, match.offset);
+        const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
+
+        const hasScore = match.s1 !== null && match.s2 !== null;
+        const w1 = hasScore && match.s1 > match.s2;
+        const w2 = hasScore && match.s2 > match.s1;
+        const l1 = hasScore && match.s1 < match.s2;
+        const l2 = hasScore && match.s2 < match.s1;
+
+        return `
+          <div class="bracket-match ${active ? 'match-active' : ''}">
+            <div class="bracket-match-header">
+  <span>${match.phase} | ${time}</span>
+  <span>${bye ? "BYE • AUTO" : stadium}</span>
+</div>
+            <div class="bracket-team ${w2 ? 'winner' : ''}">
+              ${formatPlayer(match.p2, placeholderP2, w2, l2, 'left', match.id)}
+              <span class="bracket-score">${bye ? "—" : (match.s2 !== null ? match.s2 : '')}</span>
+            </div>
+            <div style="text-align:center; font-size:0.55em; color:var(--accent); line-height:1; margin:2px 0;">@</div>
+            <div class="bracket-team ${w1 ? 'winner' : ''}">
+              ${formatPlayer(match.p1, placeholderP1, w1, l1, 'left', match.id)}
+              <span class="bracket-score">${bye ? "—" : (match.s1 !== null ? match.s1 : '')}</span>
+            </div>
+          </div>`;
+      };
+
+      let wcSummaryHtml = `<div class="wildcard-summary">`;
+      [m[0], m[1], m[2], m[3]].forEach((match, i) => {
+        if (match.p1) {
+          const time = addMinutes(groupEndTime, match.offset);
+          const stadium = (i % 2 === 0) ? state.config.s1 : state.config.s2;
+          const hasScore = match.s1 !== null && match.s2 !== null;
+          const w1 = hasScore && match.s1 > match.s2;
+          const w2 = hasScore && match.s2 > match.s1;
+          const l1 = hasScore && match.s1 < match.s2;
+          const l2 = hasScore && match.s2 < match.s1;
+
+          wcSummaryHtml += `
+            <div class="bracket-match">
+              <div class="bracket-match-header"><span>Wildcard Game #${i+1} | ${time}</span><span>${stadium}</span></div>
+              <div style="padding:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:0.9em;">
+                <div style="flex:1; text-align:left;">${formatPlayer(match.p2, "TBD", w2, l2, 'left', match.id)}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="bracket-score" style="${w2?'color:var(--accent)':''}">${match.s2 !== null ? match.s2 : '-'}</span>
+                  <span style="color:var(--nfl-red); font-weight:bold;">:</span>
+                  <span class="bracket-score" style="${w1?'color:var(--accent)':''}">${match.s1 !== null ? match.s1 : '-'}</span>
+                </div>
+                <div style="flex:1; text-align:right;">${formatPlayer(match.p1, "TBD", w1, l1, 'right', match.id)}</div>
+              </div>
+            </div>`;
+        }
+      });
+      wcSummaryHtml += `</div>`;
+
+      document.getElementById('playoff-picture').innerHTML = `
+        <h2 style="margin-bottom:15px;">Playoff Picture</h2>
+        ${wcSummaryHtml}
+        <div class="playoff-grid" style="margin-top:20px;">
+          <div class="bracket-row-flow">
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+              <div class="upper-floor">
+                ${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}
+                ${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}
+              </div>
+              <div class="lower-floor">
+                ${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}
+                ${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+              <div class="upper-floor"></div>
+              <div class="lower-floor">
+                ${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}
+                ${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Finals</div></div>
+              <div class="upper-floor" style="justify-content: center;">
+                ${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}
+              </div>
+              <div class="lower-floor" style="justify-content: center;">
+                ${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column">
+              <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+              <div class="upper-floor"></div>
+              <div class="lower-floor" style="justify-content: center;">
+                ${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}
+                ${renderM(m.find(x=>x.id==="tb"), state.playoffMatches.findIndex(x=>x.id==="tb"), playoffLabels.tb.p1, playoffLabels.tb.p2)}
+              </div>
+            </div>
+
+            <div class="bracket-column" style="margin-left: 10px; border-left: 2px solid var(--nfl-red); padding-left: 15px;">
+              <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+              <div class="upper-floor" style="justify-content: center; height: 100%;">
+                ${renderM(
+                  m.find(x => x.id === "gf"),
+                  state.playoffMatches.findIndex(x => x.id === "gf"),
+                  playoffLabels.gf.p1,
+                  playoffLabels.gf.p2
+                )}
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderAllPlayoffAdmin() {
+  // group matches already rendered separately
+  if (!state.playoffMatches || state.playoffMatches.length === 0) {
+    document.getElementById('playoffSections').innerHTML = "";
+    return;
+  }
+
+  // isByeMatch: globaler Wrapper (siehe oben) wird verwendet — keine lokale
+  // Schatten-Kopie mehr nötig.
+
+  const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
+    const offset = match.offset || 0;
+    if (!groups[offset]) groups[offset] = [];
+    groups[offset].push({ match, index: i });
+    return groups;
+  }, {});
+
+  const groupEndTime = MB.computePlayoffTimes(state).groupEndTime;
+
+  document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
+    .sort((a, b) => parseInt(a) - parseInt(b))
+    .map(offset => {
+      const time = addMinutes(groupEndTime, parseInt(offset));
+      const matchesInSlot = playoffGroups[offset];
+      const roundName =
+        matchesInSlot[0].match.session ||
+        matchesInSlot[0].match.phase ||
+        "Playoff-Phase";
+
+      let html = `
+        <div class="time-slot">
+          <div class="slot-header">
+            <span>${time} Uhr | ${roundName}</span>
+          </div>`;
+
+      matchesInSlot.forEach(({ match, index }) => {
+        const labels = playoffLabels[match.id] || { p1: "TBD", p2: "TBD" };
+        const stadium =
+          (matchesInSlot.findIndex(x => x.index === index) === 0)
+            ? state.config.s1
+            : state.config.s2;
+
+        const bye = isByeMatch(match);
+
+        // Für BYE: keine Score Inputs, stattdessen Badge
+        const scoreAreaHtml = bye
+          ? `<div class="score-area">
+               <span class="status-tag tag-next" style="font-size:.65em;">AUTO ADVANCE</span>
+             </div>`
+          : `<div class="score-area">
+               <input type="number" class="score-input" id="score-playoff-${index}-away" value="${match.s2 !== null ? match.s2 : ''}"
+                      oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
+                      ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
+               <span style="color:var(--accent)">:</span>
+               <input type="number" class="score-input" id="score-playoff-${index}-home" value="${match.s1 !== null ? match.s1 : ''}"
+                      oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
+                      ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
+               ${(isAdmin && isGroupPhaseComplete()) ? `<button type="button" id="score-playoff-${index}-save" class="score-save-btn" onclick="commitScore('playoff',${index})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
+               ${(isAdmin && isFinished(match)) ? `<button type="button" class="score-save-btn" onclick="openMemeContextEditorManual('playoff',${index})" title="Meme generieren">🎭</button>` : ''}
+             </div>`;
+
+        html += `
+          <div id="pmatch-${index}" class="match-row ${isFinished(match) ? 'finished' : ''}">
+            <div class="stadium-tag">${match.phase}<br>${stadium}</div>
+
+            <div class="team-box right">
+              <span>${match.p2 ? (match.p2.id === -1 ? 'BYE' : match.p2.name) : labels.p2}</span>
+              ${match.p2 ? getLogoHtml(match.p2.team) : ''}
+            </div>
+
+            ${scoreAreaHtml}
+
+            <div class="team-box">
+              ${match.p1 ? getLogoHtml(match.p1.team) : ''}
+              <span>${match.p1 ? match.p1.name : labels.p1}</span>
+            </div>
+
+            ${
+              (!bye && match.p1 && match.p2 && match.p1.id !== -1 && match.p2.id !== -1)
+                ? renderMatchMeta(
+                    match.p1.name,
+                    match.p2.name,
+                    (match.s1 !== null && match.s2 !== null)
+                  )
+                : ""
+            }
+          </div>`;
+      });
+
+      return html + `</div>`;
+    }).join('');
+}
+
+
+    // =========================================================
+    // NEXT GAMES
+    // =========================================================
+    function renderNextGames() {
+      // Zeitberechnung kommt jetzt aus derselben zentralen Quelle wie
+      // Playoff Picture, Admin-Liste, Wettbüro und Live-Tracking
+      // (MB.getGroupMatchTime / MB.computePlayoffTimes) — keine eigene
+      // Kopie der Zeit-Logik mehr hier.
+      const playoffTimes = MB.computePlayoffTimes(state);
+      const getMatchTime = (m, type) => (type === 'g') ? MB.getGroupMatchTime(state, m) : (playoffTimes.byId[m.id] || playoffTimes.groupEndTime);
+
+      let allMatches = [
+  ...state.matches
+    .filter(m => !isFinished(m))
+    .map(m => ({
+      ...m,
+      t: 'g',
+      anchor: `gmatch-${state.matches.indexOf(m)}`
+    })),
+
+  ...state.playoffMatches
+    .filter(m => !isFinished(m) && m.p1 && m.p2 && m.p2.id !== -1)
+    .map(m => ({
+      ...m,
+      t: 'p',
+      anchor: `pmatch-${state.playoffMatches.indexOf(m)}`
+    }))
+];
+
+      allMatches.forEach(m => m.displayTime = getMatchTime(m, m.t));
+
+      const liveMatches = allMatches.slice(0, 2);
+      const upcomingMatches = allMatches.slice(2, 4);
+
+      const formatMiniCard = (m, labelClass, labelText) => {
+        const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;
+        const p2 = m.t === 'g' ? state.players[m.p2] : m.p2;
+
+        let stadium = state.config.s1;
+        if (m.t === 'g') {
+          const slot = state.slots.find(s => s.includes(m));
+          const matchIndexInSlot = slot ? slot.indexOf(m) : 0;
+          stadium = matchIndexInSlot === 1 ? state.config.s2 : state.config.s1;
+        } else {
+          stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
+        }
+
+        return `
+          <div class="next-card" onclick="document.getElementById('${m.anchor}').scrollIntoView({behavior:'smooth'})">
+            <div style="font-size: 0.8em; flex-grow: 1;">
+              <div style="color: var(--accent); font-size: 0.7em; margin-bottom: 2px;">
+                ${m.displayTime} Uhr | ${stadium}
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>${p2.name}</span> ${getLogoHtml(p2.team)}
+                <span style="color: var(--nfl-red); font-weight: bold; font-size: 0.8em;">@</span>
+                ${getLogoHtml(p1.team)} <span>${p1.name}</span>
+              </div>
+            </div>
+            <div class="status-tag ${labelClass}">${labelText}</div>
+          </div>`;
+      };
+
+      document.getElementById('nextGamesList').innerHTML = `
+        <div class="next-grid-container">
+          <div>
+            <small style="color:var(--nfl-red); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
+              On the Field:
+            </small>
+            ${liveMatches.map(m => formatMiniCard(m, 'tag-live', 'LIVE')).join('') ||
+              '<div class="next-card" style="cursor:default; opacity:0.5;">Pause / Wartezeit</div>'}
+          </div>
+
+          <div>
+            <small style="color:var(--accent); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
+              Upcoming Battles:
+            </small>
+            ${upcomingMatches.map(m => formatMiniCard(m, 'tag-next', 'NEXT')).join('') ||
+              '<div class="next-card" style="cursor:default; opacity:0.5;">Keine weiteren Spiele</div>'}
+          </div>
+        </div>`;
+    }
+
+    // =========================================================
+    // RENDER ALL
+    // =========================================================
+
+    // ---------------------------------------------------------
+// GROUP COMPLETE + LAYOUT
+// ---------------------------------------------------------
+function isGroupPhaseComplete() { return MB.isGroupPhaseComplete(state); }
+
+// UI State (auf/zu) – bleibt über renders stabil
+state.ui = state.ui || { standingsOpen: true, groupOpen: true };
+
+function toggleSection(which) {
+  ensureUiState();
+  if (!state.ui) state.ui = { standingsOpen: true, groupOpen: true };
+
+  if (which === "standings") state.ui.standingsOpen = !state.ui.standingsOpen;
+  if (which === "group") state.ui.groupOpen = !state.ui.groupOpen;
+
+  applyLayoutRules();
+}
+    
+function ensureUiState() {
+  if (!state || typeof state !== "object") state = {};
+  if (!state.ui || typeof state.ui !== "object") {
+    state.ui = { standingsOpen: true, groupOpen: true };
+  }
+}
+    
+function applyLayoutRules() {
+  ensureUiState();
+  const complete = isGroupPhaseComplete();
+
+  const standingsCard = document.getElementById("standingsCard");
+  const standingsContent = document.getElementById("standingsContent");
+  const btnStandings = document.getElementById("toggleStandingsBtn");
+
+  const bracket = document.getElementById("playoff-picture");
+
+  const group = document.getElementById("groupPhase");
+  const groupContent = document.getElementById("groupContent");
+  const btnGroup = document.getElementById("toggleGroupBtn");
+
+  const playoffs = document.getElementById("playoffs");
+  const ranking = document.getElementById("rankingCard");
+
+  // --- Vor Gruppenphase Ende: Playoff Schedule gesperrt ---
+  if (!complete) {
+    // Reihenfolge:
+    // Live-Tracking -> Standing -> Playoff Picture -> Group -> Playoff Schedule (versteckt)
+    standingsCard.style.order = "0";
+    bracket.style.order = "1";
+    group.style.order = "2";
+    playoffs.style.order = "3";
+
+    playoffs.classList.remove("hidden");
+    if (ranking) ranking.classList.add("hidden");
+
+    // Collapse-Buttons aus + Inhalte immer offen
+    btnStandings.classList.add("hidden");
+    btnGroup.classList.add("hidden");
+
+    standingsContent.classList.remove("collapsed");
+    groupContent.classList.remove("collapsed");
+
+    // UI default "offen" merken
+    state.ui.standingsOpen = true;
+    state.ui.groupOpen = true;
+
+    return;
+  }
+
+  // --- Nach Gruppenphase Ende: Playoff Schedule freigeben + Standing/Group einklappbar ---
+  // Reihenfolge:
+  // Live-Tracking -> Playoff Picture -> Playoff Schedule -> (aufklappbar) Standing -> Group
+  bracket.style.order = "0";
+  playoffs.style.order = "1";
+  standingsCard.style.order = "2";
+  if (ranking) ranking.style.order = "3"; 
+  group.style.order = "4";
+
+  playoffs.classList.remove("hidden");
+  if (ranking) ranking.classList.remove("hidden");
+
+  // Buttons aktivieren
+  btnStandings.classList.remove("hidden");
+  btnGroup.classList.remove("hidden");
+
+  // Default nach Abschluss: beide zu (falls noch nie gesetzt)
+  if (typeof state.ui._postCompleteInitialized === "undefined") {
+    state.ui.standingsOpen = false;
+    state.ui.groupOpen = false;
+    state.ui._postCompleteInitialized = true;
+  }
+
+  // Apply collapse
+  standingsContent.classList.toggle("collapsed", !state.ui.standingsOpen);
+  groupContent.classList.toggle("collapsed", !state.ui.groupOpen);
+
+  // Pfeil drehen
+  btnStandings.classList.toggle("rotate-180", state.ui.standingsOpen);
+  btnGroup.classList.toggle("rotate-180", state.ui.groupOpen);
+}
+
+    // =========================================================
+// RANKING / POINTS (Finale Rangliste)
+// =========================================================
+
+// Seeds aus der Gruppenphase (wie deine Tabelle: wins -> h2h -> diff)
+function getGroupSeedsFinal() { return MB.getGroupSeedsFinal(state); }
+
+function getPlayoffMatch(id) { return MB.getPlayoffMatch(state, id); }
+
+function winnerOf(match) { return MB.winnerOf(match); }
+
+function loserOf(match) { return MB.loserOf(match); }
+
+// Kern: berechnet Basis-Ranking + Basis-Punkte (ohne TB-Override)
+// Ranking-Engine: zentral in shared.js (MB.computeBaseRanking / MB.applyToiletBowlOverride).
+// Enthält dort bereits die neuen Punkteregeln:
+//   - Turniersieger bekommt +100 Punkte Bonus
+//   - Toilet-Bowl-Sieger übernimmt die Punkte des vorletzten Platzes und
+//     belegt selbst den letzten Platz
+function computeBaseRanking() { return MB.computeBaseRanking(state); }
+function applyToiletBowlOverride(base) { return MB.applyToiletBowlOverride(state, base); }
+
+function renderRanking() {
+  const container = document.getElementById("rankingContainer");
+  if (!container) return;
+
+  if (!state.players || state.players.length === 0) {
+    container.innerHTML = `<div style="opacity:.7;">Noch kein Turnier gestartet.</div>`;
+    return;
+  }
+
+  // sicherstellen, dass Gruppen-Stats aktuell sind (wins/diff)
+  renderTable();
+
+  const base = computeBaseRanking();
+  const final = applyToiletBowlOverride(base);
+
+  const n = state.players.length;
+  const gf = getPlayoffMatch("gf");
+  const isComplete = gf && gf.s1 !== null && gf.s2 !== null;
+
+  const note = isComplete
+    ? `Finale Rangliste (inkl. Toilet Bowl Sonderregel).`
+    : `Zwischenstand: Rangliste wird live aus dem aktuellen Stand geschätzt (final erst nach dem Madden Bowl).`;
+
+  let html = `
+    <div class="rank-note">${note}</div>
+    <table style="margin-top:10px;">
+      <tr>
+        <th>#</th>
+        <th>Seed</th>
+        <th>Name</th>
+        <th>Punkte</th>
+        <th>Out</th>
+      </tr>
+  `;
+
+  final.ordered.forEach((r, idx) => {
+    const displayRank = r.displayRank || r.rank || (idx + 1);
+    const isChampion = displayRank === 1 && isComplete;
+    const isLast = displayRank === n && isComplete;
+
+    const tbBadge = (final.tbWinner && r.name === final.tbWinner)
+      ? ` <span class="status-tag tag-live" style="font-size:.55em; padding:2px 6px;">TOILET BOWL SIEGER = LETZTER</span>`
+      : "";
+
+    html += `
+      <tr class="${isChampion ? 'rank-champion' : ''} ${isLast ? 'rank-last' : ''}">
+        <td>${displayRank}</td>
+        <td>${r.seed ?? '-'}</td>
+        <td style="text-align:left; font-weight:700;">${r.name}${tbBadge}</td>
+        <td>${r.points}</td>
+        <td>${r.out}</td>
+      </tr>
+    `;
+  });
+
+  html += `</table>`;
+  container.innerHTML = html;
+}
+
+    
+    function renderAll() {
+      const table = document.getElementById('tableContainer');
+      const bracket = document.getElementById('playoff-picture');
+      const groupMatches = document.getElementById('groupPhase');
+      const playoffAdmin = document.getElementById('playoffs');
+
+      if (state.currentView === 'setup' && isAdmin) {
+        document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('setup-view').classList.remove('hidden');
+        document.getElementById('main-content').classList.add('hidden');
+      } else {
+        if (isAdmin) document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('setup-view').classList.add('hidden');
+        document.getElementById('main-content').classList.remove('hidden');
+
+        applyLayoutRules();
+        renderTable();
+        renderGroupMatches();
+        initPlayoffs();
+        updatePlayoffLogic();
+        renderPlayoffPicture();
+        renderNextGames();
+        renderAllPlayoffAdmin();
+        renderRanking();
+      }
+    }
+
+    // =========================================================
+    // LOAD
+    // =========================================================
+    window.onload = async () => {
+      // Load historical data first (for suggestions + stats)
+      await loadHistory();
+
+      // Cloud then local fallback
+      await syncData();
+
+      if (!state.players || state.players.length === 0) {
+        const s = localStorage.getItem('madden_bowl_v2.7');
+        if (s) state = JSON.parse(s);
+      }
+
+      if (!state.players || state.players.length === 0) {
+        // Vorbereitete Ziehreihenfolge aus seasons.html übernehmen, falls
+        // vorhanden — Spieleranzahl passend vorauswählen, wenn möglich.
+        presetDraftQueue = Array.isArray(state.config?.draftOrder) ? state.config.draftOrder : [];
+        if (presetDraftQueue.length) {
+          const countSelect = document.getElementById('playerCount');
+          const match = [...countSelect.options].find(o => parseInt(o.value) === presetDraftQueue.length);
+          if (match) countSelect.value = String(presetDraftQueue.length);
+        }
+        updateModeInfo();
+      }
+
+      if (state.slots && state.slots.length > 0) {
+        state.matches = state.slots.flat();
+      }
+
+      state.currentView = (state.players && state.players.length > 0) ? 'running' : 'setup';
+
+      // Team-Ratings für die Quoten-Engine laden (jetzt aus Supabase, editierbar via seasons.html)
+      await MB.loadTeamRatings(state.config.year || '2026');
+
+      // Turnierblog: Zähler für "alle 3 Spiele ein Zwischenstand" aus Supabase laden,
+      // damit das nach einem Reload nicht wieder bei 0 anfängt.
+      if (isAdmin) {
+        const tid = MB.getCurrentTournamentId();
+        progressArticlesSoFar = tid ? await MB.Blog.countArticlesByKind(tid, 'progress') : 0;
+      }
+
+      renderAll();
+      toggleHallOfFameButtons();
+      recalcTitleOddsSnapshots();
+      updatePlayoffLogic();
+      MB.syncPlayoffOffsets(state); // Bugfix: Bye-bereinigte Zeiten auch beim ersten Laden
+      renderAll();
+      applyLayoutRules();
+
+      MB.Announcer.warmupVoices(); // Stimmen für Web Speech API vorladen
+      // Bereits erreichte Meilensteine beim Laden als "schon entschieden"
+      // markieren - sonst würde ein Reload mitten im Turnier sofort wieder
+      // ein Song-Popup für längst vergangene Momente aufreißen.
+      try { MB.Music.detectMilestones(state).forEach((k) => { songMomentFlags[k] = true; }); } catch (e) {}
+      if (isAdmin) setTimeout(renderTtsSettingsPanel, 800); // Panel erst nach kurzem Warmup füllen
+      if (isAdmin) setTimeout(renderSongMomentsPanel, 800);
+      if (isAdmin) setTimeout(renderMemeSettingsPanel, 800);
+      if (isAdmin) setTimeout(renderRecordMomentsPanel, 800);
+
+      setInterval(() => syncData(false), 45000);
+    };
+
+    // =========================================================
+    // ANSAGE-ENGINE: Browser (kostenlos) vs. ElevenLabs (kostenpflichtig)
+    // -------------------------------------------------------------------------
+    // ElevenLabs-Einstellungen (inkl. API-Key) liegen NUR in localStorage
+    // (dieses Gerät/dieser Browser), NICHT in Supabase — die DB-Policies
+    // sind aktuell offen für jeden mit dem anon-Key, ein bezahlter Key
+    // sollte da nicht landen. Zusätzlich per einfachem Passwort gesperrt,
+    // damit nicht jeder, der kurz am Admin-Gerät sitzt, versehentlich den
+    // API-Key sieht/ändert — das ist KEIN Schutz gegen jemanden mit
+    // Zugriff auf die Browser-Devtools/localStorage auf diesem Gerät.
+    // =========================================================
+    let ttsUnlocked = false;
+
+    async function sha256Hex(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function unlockTtsSettings() {
+      const storedHash = localStorage.getItem('mb_tts_pw_hash');
+      if (!storedHash) {
+        const pw = prompt('Noch kein Passwort für die Ansage-Einstellungen gesetzt.\nNeues Passwort festlegen:');
+        if (!pw) return;
+        localStorage.setItem('mb_tts_pw_hash', await sha256Hex(pw));
+        ttsUnlocked = true;
+      } else {
+        const pw = prompt('Passwort für Ansage-Einstellungen:');
+        if (!pw) return;
+        if (await sha256Hex(pw) !== storedHash) { alert('Falsches Passwort.'); return; }
+        ttsUnlocked = true;
+      }
+      renderTtsSettingsPanel();
+      renderSongMomentsPanel();
+      renderMemeSettingsPanel();
+    }
+
+    function resetTtsPassword() {
+      if (!confirm('Passwort UND gespeicherte ElevenLabs-Einstellungen auf diesem Gerät löschen? (API-Key muss danach neu eingegeben werden)')) return;
+      localStorage.removeItem('mb_tts_pw_hash');
+      localStorage.removeItem('mb_tts_settings');
+      ttsUnlocked = false;
+      renderTtsSettingsPanel();
+      renderSongMomentsPanel();
+      renderMemeSettingsPanel();
+    }
+
+    // =========================================================
+    // SONG-MOMENTE (ElevenLabs Music API) — manuell ausgelöst pro
+    // Meilenstein, nutzt denselben ElevenLabs-Key/Passwort-Gate wie die
+    // Ansage-Engine oben (keine zweite Schlüsselverwaltung nötig).
+    // =========================================================
+    const MUSIC_MILESTONE_LABELS = Object.fromEntries(
+      MB.Music.MILESTONE_ORDER.map(key => [key, MB.Music.MILESTONE_META[key].label])
+    );
+    // Merkt sich pro Meilenstein den zuletzt angezeigten/editierten Fakten-Text,
+    // damit er beim Re-Render des Panels (z.B. nach dem Umschalten von Stil/
+    // Sprache) nicht verloren geht, bis explizit auf "🔁 Daten neu laden"
+    // geklickt wird.
+    let songFactsDraft = {};
+    let songLangSelected = {}; // pro Meilenstein gemerkt
+
+    function renderSongMomentsPanel() {
+      renderSongTestPanel();
+      const el = document.getElementById('songMomentsPanel');
+      if (!el) return;
+
+      if (!ttsUnlocked) {
+        el.innerHTML = `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren (gleiches Passwort wie Ansage-Engine)</button>`;
+        return;
+      }
+
+      const settings = MB.Announcer.getTtsSettings();
+      if (settings.provider !== 'elevenlabs' || !settings.apiKey) {
+        el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.75;">Erst unter "🎙️ Ansage-Engine" ElevenLabs mit API-Key einrichten — dann erscheinen hier die Song-Optionen.</div>`;
+        return;
+      }
+
+      const reached = MB.Music.detectMilestones(state);
+      const songs = state.songs || {};
+
+      el.innerHTML = MB.Music.MILESTONE_ORDER.map(key => {
+        const isReached = reached.includes(key);
+        const url = songs[key];
+        if (!isReached) {
+          return `<div class="row-line" style="margin-bottom:8px; opacity:0.4;"><span class="label" style="width:180px; display:inline-block;">${MUSIC_MILESTONE_LABELS[key]}</span><span class="hint">noch nicht erreicht</span></div>`;
+        }
+        if (songFactsDraft[key] == null) {
+          songLangSelected[key] = songLangSelected[key] || MB.Music.DEFAULT_LANGUAGE_ID;
+          songFactsDraft[key] = MB.Music.buildFacts(key, state, history, songLangSelected[key]);
+        }
+        const meta = MB.Music.MILESTONE_META[key];
+        return `
+          <div style="margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #22304333;">
+            <div style="font-weight:bold; margin-bottom:6px;">${MUSIC_MILESTONE_LABELS[key]}</div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+              <select id="songStyle-${key}" style="min-width:190px;">
+                ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
+              </select>
+              <select id="songLang-${key}" style="min-width:140px;" onchange="switchSongLang('${key}', this.value)">
+                ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songLangSelected[key] ? 'selected' : ''}>${l.label}</option>`).join('')}
+              </select>
+              <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
+                Dauer: <input type="number" id="songLen-${key}" value="60" min="10" max="180" step="5" style="width:60px;"> Sek.
+              </label>
+            </div>
+            <textarea id="songFacts-${key}" rows="4" style="width:100%; font-size:0.82em; box-sizing:border-box;">${songFactsDraft[key]}</textarea>
+            <div class="hint" style="font-size:0.75em; opacity:0.65; margin:4px 0 8px;">
+              Diese Fakten werden dem Modell mitgegeben — vor dem Generieren frei anpassbar.
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="btn-secondary" style="width:auto;" onclick="resetSongFacts('${key}')">🔁 Daten neu laden</button>
+              <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
+                <input type="checkbox" id="songTest-${key}"> Testmodus (kein API-Call, keine Credits)
+              </label>
+              <button class="btn-secondary" style="width:auto;" onclick="generateMilestoneSong('${key}')">${url ? '🔁 Neu generieren' : '🎵 Song generieren'}</button>
+            </div>
+            <div id="songPreview-${key}" style="display:none; margin-top:10px; padding:10px; border:1px solid #22304355; border-radius:6px;">
+              <div class="hint" style="font-size:0.78em; opacity:0.7; margin-bottom:6px;">
+                Testlauf — das hier würde an die Music API gesendet (Fakten + Stil-/Sprachvorgaben bereits eingerechnet). Bei Bedarf hier direkt nachschärfen, dann senden:
+              </div>
+              <textarea id="songPromptPreview-${key}" rows="5" style="width:100%; font-size:0.8em; box-sizing:border-box;"></textarea>
+              <div style="margin-top:8px;">
+                <button class="btn-secondary" style="width:auto;" onclick="sendReviewedSong('${key}')">🚀 Diesen Prompt jetzt senden (kostet Credits)</button>
+              </div>
+            </div>
+            ${url ? `
+            <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+              <audio controls src="${url}" style="height:32px; flex:1; min-width:0;"></audio>
+              <a class="btn-secondary" style="width:auto; text-decoration:none; text-align:center; white-space:nowrap;" href="${MB.Music.buildDownloadUrl(url, `madden-bowl-${key}.mp3`)}" target="_blank" rel="noopener">⬇️ Download</a>
+            </div>` : ''}
+          </div>`;
+      }).join('');
+    }
+
+    function resetSongFacts(milestone) {
+      songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history, songLangSelected[milestone]);
+      renderSongMomentsPanel();
+    }
+
+    // Sprachwechsel im echten Song-Panel: Fakten neu (in der neuen Sprache)
+    // laden, sonst bliebe z.B. beim Umschalten auf Deutsch der englische
+    // Text im Feld stehen und würde als factsOverride die Übersetzung
+    // wieder überschreiben.
+    function switchSongLang(milestone, langId) {
+      songLangSelected[milestone] = langId;
+      songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history, langId);
+      renderSongMomentsPanel();
+    }
+
+    // Gemeinsame Generierungs- + Buchführungslogik, genutzt sowohl vom
+    // manuellen Song-Panel (generateMilestoneSong/sendReviewedSong) als auch
+    // vom neuen automatischen Song-Momente-Popup (promptSongMomentPopup).
+    // testMode: true macht KEINEN echten API-Call (siehe MB.Music.generateAndStoreSong).
+    async function generateAndRecordSong(milestone, { styleId, languageId, factsOverride, promptOverride, seconds, testMode } = {}) {
+      const settings = MB.Announcer.getTtsSettings();
+      if (!settings.apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
+      const tournamentId = MB.getCurrentTournamentId();
+      const result = await MB.Music.generateAndStoreSong({
+        apiKey: settings.apiKey, milestone, state, history, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
+        tournamentId, lengthMs: (seconds || 60) * 1000, styleId, languageId, factsOverride, promptOverride, testMode,
+      });
+      if (result.testMode) return result;
+      state.songs = { ...(state.songs || {}), [milestone]: result.url };
+      MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url));
+      renderSongMomentsPanel();
+      return result;
+    }
+
+    async function generateMilestoneSong(milestone) {
+      const settings = MB.Announcer.getTtsSettings();
+      const styleId = document.getElementById(`songStyle-${milestone}`).value || null;
+      const languageId = document.getElementById(`songLang-${milestone}`).value || null;
+      const factsOverride = document.getElementById(`songFacts-${milestone}`).value;
+      const seconds = parseInt(document.getElementById(`songLen-${milestone}`).value, 10) || 60;
+      const testMode = document.getElementById(`songTest-${milestone}`).checked;
+      songFactsDraft[milestone] = factsOverride; // Editierten Text über Re-Renders hinweg behalten
+
+      if (!testMode && !confirm(`Song für "${MUSIC_MILESTONE_LABELS[milestone]}" generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s).`)) return;
+
+      try {
+        const result = await generateAndRecordSong(milestone, { styleId, languageId, factsOverride, seconds, testMode });
+
+        if (result.testMode) {
+          document.getElementById(`songPromptPreview-${milestone}`).value = result.prompt;
+          document.getElementById(`songPreview-${milestone}`).style.display = 'block';
+          return;
+        }
+
+        alert(`Song generiert (Stil: ${result.styleLabel}, Sprache: ${result.languageLabel}).`);
+        MB.Announcer.announceSong(milestone, result.url, { voiceId: settings.voiceIdResult });
+      } catch (e) {
+        alert('Song-Generierung fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    // Sendet den im Testlauf geprüften (und ggf. manuell angepassten) Prompt
+    // 1:1 an die echte Music API — baut ihn NICHT neu aus den Fakten
+    // zusammen, damit exakt das generiert wird, was oben zu sehen war.
+    async function sendReviewedSong(milestone) {
+      const settings = MB.Announcer.getTtsSettings();
+      const promptOverride = document.getElementById(`songPromptPreview-${milestone}`).value;
+      const seconds = parseInt(document.getElementById(`songLen-${milestone}`).value, 10) || 60;
+      if (!promptOverride || !promptOverride.trim()) { alert('Kein Prompt vorhanden.'); return; }
+      if (!confirm(`Song für "${MUSIC_MILESTONE_LABELS[milestone]}" mit diesem Prompt generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s).`)) return;
+
+      try {
+        const result = await generateAndRecordSong(milestone, { promptOverride, seconds });
+        alert('Song generiert.');
+        MB.Announcer.announceSong(milestone, result.url, { voiceId: settings.voiceIdResult });
+      } catch (e) {
+        alert('Song-Generierung fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    // ---------------------------------------------------------------------
+    // AUTOMATISCHES SONG-MOMENTE-POPUP
+    // ---------------------------------------------------------------------
+    // Erscheint direkt bei der Ergebniseingabe, sobald einer der vier
+    // "großen" Meilensteine gerade neu erreicht wurde - VOR der Ansage für
+    // dieses Spiel, damit Kommentator/Moderator schon wissen, ob (und dass)
+    // ein Song entstanden ist. "toiletBowl" bewusst ausgenommen - dafür soll
+    // es laut Vorgabe keinen automatischen Song geben (manuell im Panel
+    // unten weiterhin möglich).
+    const AUTO_SONG_MILESTONES = ["regularSeason", "firstElimination", "finals", "champion"];
+
+    function promptSongMomentPopup(milestone) {
+      return new Promise((resolve) => {
+        songLangSelected[milestone] = songLangSelected[milestone] || MB.Music.DEFAULT_LANGUAGE_ID;
+        if (songFactsDraft[milestone] == null) {
+          songFactsDraft[milestone] = MB.Music.buildFacts(milestone, state, history, songLangSelected[milestone]);
+        }
+        const meta = MB.Music.MILESTONE_META[milestone];
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+          <div class="modal-box" style="max-width:560px;">
+            <h2>🎵 ${MUSIC_MILESTONE_LABELS[milestone]}</h2>
+            <p class="hint" style="font-size:0.85em; opacity:0.8; margin-top:-8px;">
+              Dieser Meilenstein ist gerade erreicht. Jetzt einen Song dafür generieren? Kostet ElevenLabs-Credits
+              (~900 Credits/Minute Musik). Stil, Sprache, Länge und Fakten sind vor dem Absenden noch änderbar.
+            </p>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+              <select id="popupSongStyle" style="min-width:190px;">
+                ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
+              </select>
+              <select id="popupSongLang" style="min-width:140px;">
+                ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songLangSelected[milestone] ? 'selected' : ''}>${l.label}</option>`).join('')}
+              </select>
+              <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
+                Dauer: <input type="number" id="popupSongLen" value="60" min="10" max="180" step="5" style="width:60px;"> Sek.
+              </label>
+            </div>
+            <textarea id="popupSongFacts" rows="4" style="width:100%; font-size:0.82em; box-sizing:border-box;">${songFactsDraft[milestone]}</textarea>
+            <div id="popupSongStatus" class="hint" style="font-size:0.78em; opacity:0.7; min-height:1.2em; margin-top:6px;"></div>
+            <div style="display:flex; gap:10px; margin-top:14px;">
+              <button id="popupSongGenerate" class="btn" style="width:auto; padding:10px 16px;">🎵 Song generieren</button>
+              <button id="popupSongSkip" class="btn-secondary" style="width:auto;">Überspringen</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+
+        const cleanup = (result) => { overlay.remove(); resolve(result); };
+
+        overlay.querySelector('#popupSongSkip').onclick = () => cleanup({ generated: false, url: null });
+        overlay.querySelector('#popupSongGenerate').onclick = async () => {
+          const genBtn = overlay.querySelector('#popupSongGenerate');
+          const skipBtn = overlay.querySelector('#popupSongSkip');
+          const statusEl = overlay.querySelector('#popupSongStatus');
+          genBtn.disabled = true; skipBtn.disabled = true;
+          genBtn.textContent = '⏳ Generiere Song...';
+          statusEl.textContent = 'Das kann ein bis zwei Minuten dauern.';
+          try {
+            const styleId = overlay.querySelector('#popupSongStyle').value;
+            const languageId = overlay.querySelector('#popupSongLang').value;
+            const factsOverride = overlay.querySelector('#popupSongFacts').value;
+            const seconds = parseInt(overlay.querySelector('#popupSongLen').value, 10) || 60;
+            songFactsDraft[milestone] = factsOverride;
+            songLangSelected[milestone] = languageId;
+            const result = await generateAndRecordSong(milestone, { styleId, languageId, factsOverride, seconds });
+            cleanup({ generated: true, url: result.url });
+          } catch (e) {
+            alert('Song-Generierung fehlgeschlagen: ' + e.message);
+            cleanup({ generated: false, url: null });
+          }
+        };
+      });
+    }
+
+    // Prüft, ob durch DIESEN Score-Commit gerade neu einer der vier
+    // Song-Popup-Meilensteine erreicht wurde, und falls ja, wartet auf die
+    // Admin-Entscheidung (generieren/überspringen), bevor es weitergeht.
+    // Gibt { milestone, generated } zurück (milestone: null, wenn nichts
+    // Neues erreicht wurde) - wird von finishScoreUpdate VOR dem
+    // Announcer-Aufruf für dasselbe Spiel awaited.
+    async function maybeHandleSongMoment() {
+      if (!isAdmin) return { milestone: null, generated: false };
+      const settings = MB.Announcer.getTtsSettings();
+      if (settings.provider !== 'elevenlabs' || !settings.apiKey) return { milestone: null, generated: false };
+
+      let reached = [];
+      try { reached = MB.Music.detectMilestones(state); } catch (e) { return { milestone: null, generated: false }; }
+
+      for (const key of AUTO_SONG_MILESTONES) {
+        if (reached.includes(key) && !songMomentFlags[key]) {
+          songMomentFlags[key] = true; // sofort markieren, egal wie entschieden wird - kein zweites Popup dafür
+          const decision = await promptSongMomentPopup(key);
+          return { milestone: key, generated: !!decision.generated, url: decision.url || null };
+        }
+      }
+      return { milestone: null, generated: false };
+    }
+
+    let songTestSelected = MB.Music.MILESTONE_ORDER[0];
+    let songTestLangSelected = MB.Music.DEFAULT_LANGUAGE_ID;
+    let songTestFactsDraft = {};
+
+    function renderSongTestPanel() {
+      const el = document.getElementById('songTestPanel');
+      if (!el) return;
+
+      if (!ttsUnlocked) {
+        el.innerHTML = `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren (gleiches Passwort wie Ansage-Engine)</button>`;
+        return;
+      }
+      const settings = MB.Announcer.getTtsSettings();
+      if (settings.provider !== 'elevenlabs' || !settings.apiKey) {
+        el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.75;">Erst unter "🎙️ Ansage-Engine" ElevenLabs mit API-Key einrichten — dann geht's hier weiter.</div>`;
+        return;
+      }
+
+      const key = songTestSelected;
+      if (songTestFactsDraft[key] == null) songTestFactsDraft[key] = MB.Music.getTestFacts(key, songTestLangSelected);
+      const meta = MB.Music.MILESTONE_META[key];
+
+      el.innerHTML = `
+        <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:10px;">
+          Zum Ausprobieren, egal wie weit das echte Turnier schon ist — mit erfundenen Platzhalter-Namen/-Ergebnissen.
+          "Testweise senden" erzeugt einen echten Song zum Anhören (kostet Credits), speichert ihn aber
+          NICHT als offiziellen Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht oben nicht auf).
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+          <select id="songTestMilestone" style="min-width:190px;" onchange="switchSongTestMilestone(this.value)">
+            ${MB.Music.MILESTONE_ORDER.map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${MUSIC_MILESTONE_LABELS[k]}</option>`).join('')}
+          </select>
+          <select id="songTestStyle" style="min-width:190px;">
+            ${MB.Music.STYLE_POOL.map(s => `<option value="${s.id}" ${s.id === meta.defaultStyleId ? 'selected' : ''}>${s.label}</option>`).join('')}
+          </select>
+          <select id="songTestLang" style="min-width:140px;" onchange="switchSongTestLang(this.value)">
+            ${MB.Music.LANGUAGE_POOL.map(l => `<option value="${l.id}" ${l.id === songTestLangSelected ? 'selected' : ''}>${l.label}</option>`).join('')}
+          </select>
+          <label style="display:flex; align-items:center; gap:4px; font-size:0.85em;">
+            Dauer: <input type="number" id="songTestLen" value="60" min="10" max="180" step="5" style="width:60px;"> Sek.
+          </label>
+        </div>
+        <textarea id="songTestFacts" rows="4" style="width:100%; font-size:0.82em; box-sizing:border-box;">${songTestFactsDraft[key]}</textarea>
+        <div class="hint" style="font-size:0.75em; opacity:0.65; margin:4px 0 8px;">Platzhalter-Fakten — frei anpassbar, bevor der Prompt gebaut wird.</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn-secondary" style="width:auto;" onclick="resetSongTestFacts()">🔁 Platzhalter zurücksetzen</button>
+          <button class="btn-secondary" style="width:auto;" onclick="previewSongTestPrompt()">📝 Prompt anzeigen (kostenlos)</button>
+        </div>
+        <div id="songTestPreview" style="display:none; margin-top:10px; padding:10px; border:1px solid #22304355; border-radius:6px;">
+          <div class="hint" style="font-size:0.78em; opacity:0.7; margin-bottom:6px;">Das hier würde an die Music API gesendet — bei Bedarf direkt nachschärfen:</div>
+          <textarea id="songTestPromptPreview" rows="5" style="width:100%; font-size:0.8em; box-sizing:border-box;"></textarea>
+          <div style="margin-top:8px;">
+            <button class="btn-secondary" style="width:auto;" onclick="sendTestSong()">🚀 Testweise senden (kostet Credits)</button>
+          </div>
+        </div>
+        <div id="songTestResult" style="margin-top:10px;"></div>
+      `;
+    }
+
+    function switchSongTestMilestone(key) {
+      songTestSelected = key;
+      // Bewusst NEU aus den Platzhalter-Fakten aufbauen (nicht den evtl.
+      // vorher editierten Entwurf behalten) - beim Meilenstein-Wechsel sollen
+      // die Defaults für den NEUEN Meilenstein erscheinen, änderbar bleiben
+      // sie ja trotzdem.
+      songTestFactsDraft[key] = MB.Music.getTestFacts(key, songTestLangSelected);
+      renderSongTestPanel();
+    }
+
+    // Sprachwechsel setzt die Platzhalter-Fakten für den aktuellen Meilenstein
+    // automatisch auf die passende Sprache zurück (sonst blieben z.B. beim
+    // Umschalten auf Deutsch die alten englischen Fakten im Textfeld stehen).
+    function switchSongTestLang(langId) {
+      songTestLangSelected = langId;
+      songTestFactsDraft[songTestSelected] = MB.Music.getTestFacts(songTestSelected, langId);
+      renderSongTestPanel();
+    }
+
+    function resetSongTestFacts() {
+      songTestFactsDraft[songTestSelected] = MB.Music.getTestFacts(songTestSelected, songTestLangSelected);
+      renderSongTestPanel();
+    }
+
+    function previewSongTestPrompt() {
+      const key = songTestSelected;
+      const styleId = document.getElementById('songTestStyle').value || null;
+      const languageId = document.getElementById('songTestLang').value || null;
+      const facts = document.getElementById('songTestFacts').value;
+      songTestFactsDraft[key] = facts; // Editierten Text über Re-Renders hinweg behalten
+
+      const { prompt } = MB.Music.buildMusicPrompt(key, null, null, styleId, languageId, facts || MB.Music.getTestFacts(key, languageId));
+      document.getElementById('songTestPromptPreview').value = prompt;
+      document.getElementById('songTestPreview').style.display = 'block';
+    }
+
+    async function sendTestSong() {
+      const key = songTestSelected;
+      const settings = MB.Announcer.getTtsSettings();
+      const promptOverride = document.getElementById('songTestPromptPreview').value;
+      const seconds = parseInt(document.getElementById('songTestLen').value, 10) || 60;
+      if (!promptOverride || !promptOverride.trim()) { alert('Erst auf "Prompt anzeigen" klicken.'); return; }
+      if (!confirm(`Testsong für "${MUSIC_MILESTONE_LABELS[key]}" generieren?\nKostet ElevenLabs-Credits (~900 Credits/Minute Musik, hier ${seconds}s). Wird NICHT als offizieller Song gespeichert.`)) return;
+
+      const resultEl = document.getElementById('songTestResult');
+      resultEl.innerHTML = '<div class="hint">Generiere Testsong…</div>';
+      try {
+        const result = await MB.Music.generateTestSong({
+          apiKey: settings.apiKey, milestone: key, // KEIN modelId hier — das waere das TTS-Sprachmodell, nicht das Music-Modell
+          tournamentId: MB.getCurrentTournamentId(), lengthMs: seconds * 1000, promptOverride,
+        });
+        resultEl.innerHTML = `
+          <div class="hint" style="color:var(--accent); margin-bottom:6px;">✅ Testsong fertig (nur zum Anhören, nicht gespeichert):</div>
+          <audio controls src="${result.url}" style="width:100%; height:32px;"></audio>`;
+      } catch (e) {
+        resultEl.innerHTML = `<div class="hint" style="color:var(--nfl-red);">❌ ${e.message}</div>`;
+      }
+    }
+
+    // =========================================================
+    // REKORD-MOMENTE & MEMES (records.js) — komplett kostenlos, kein
+    // API-Key, kein Passwort-Gate nötig (reines Canvas-Rendering).
+    // =========================================================
+    let sessionRecords = []; // { record, styleId, canvasPreview }
+    let milestoneRecordFlags = {}; // { finals: true, champion: true } — verhindert Mehrfach-Feuern
+    // Analog zu milestoneRecordFlags, aber für die Song-Momente-Popups unten
+    // (promptSongMomentPopup). "toiletBowl" bewusst NICHT hier drin - dafür
+    // gibt's kein automatisches Popup (siehe AUTO_SONG_MILESTONES).
+    let songMomentFlags = {};
+    let progressArticlesSoFar = 0; // Anzahl bisheriger Zwischenstand-Artikel (aus Supabase geladen)
+    let activePopupEntries = []; // aktuell im Meme-Popup angezeigte sessionRecords-Einträge
+    let pendingMemeContext = null; // { type, idx, match, autoEntries } — während der Meme-Kontext-Dialog offen ist
+
+    function getMemeProvider() { return localStorage.getItem('mb_meme_provider') || 'canvas'; }
+    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); renderMemeSettingsPanel(); }
+
+    function defaultMemeContext() {
+      const out = {};
+      Object.keys(MB.Records.MEME_CONTEXT_TAGS || {}).forEach((k) => { out[k] = false; });
+      return out;
+    }
+
+    function openMemeContextEditorManual(type, idx) {
+      const targetArray = (type === 'group') ? state.matches : state.playoffMatches;
+      const match = targetArray[idx];
+      if (!match || !isFinished(match)) return;
+      openMemeContextEditor(type, idx, match, []);
+    }
+
+    // Öffnet den kurzen Checkbox-Dialog nach jedem gespeicherten Ergebnis.
+    // autoEntries = bereits automatisch erkannte "klassische" Rekorde (Highscore,
+    // Klatsche, Serie, ...) zu genau diesem Speichervorgang — die werden so
+    // oder so gleich mit angezeigt, unabhängig davon, was hier angekreuzt wird.
+    function openMemeContextEditor(type, idx, match, autoEntries = []) {
+      pendingMemeContext = { type, idx, match, autoEntries };
+      const modal = document.getElementById('memeContextModal');
+      const summary = document.getElementById('memeContextSummary');
+      const tagsEl = document.getElementById('memeContextTags');
+      if (!modal || !tagsEl) return;
+      const homeName = type === 'group' ? state.players[match.p1].name : match.p1.name;
+      const awayName = type === 'group' ? state.players[match.p2].name : match.p2.name;
+      const ctx = { ...defaultMemeContext(), ...(match.memeContext || {}) };
+      const autoPreview = MB.Records.detectStoryMeme({ homeName, awayName, homeScore: match.s1, awayScore: match.s2, memeContext: {} });
+      const autoHint = autoPreview
+        ? (autoPreview.storyKey === 'blowout' ? '🔥 Automatisch erkannt: großer Blowout. ' : autoPreview.storyKey === 'close' ? '🤏 Automatisch erkannt: hauchdünnes Spiel. ' : '')
+        : '';
+      summary.textContent = `${autoHint}${homeName} ${match.s1}:${match.s2} ${awayName} — Ergebnis gespeichert. Story markieren (optional)?`;
+      tagsEl.innerHTML = Object.entries(MB.Records.MEME_CONTEXT_TAGS).map(([key, info]) => `
+        <label style="display:flex; align-items:center; gap:7px; padding:8px 9px; border:1px solid rgba(255,255,255,.08); border-radius:8px; background:rgba(255,255,255,.03); cursor:pointer; font-size:.8em;">
+          <input type="checkbox" data-meme-tag="${key}" ${ctx[key] ? 'checked' : ''}>
+          <span>${info.emoji} ${info.label}</span>
+        </label>`).join('');
+      modal.classList.remove('hidden');
+    }
+
+    // tagsChecked=false -> "Ohne Kontext weiter": Dialog schließt ohne ein
+    // Story-Meme zu erzeugen, auch wenn zufällig noch Häkchen von einem
+    // vorherigen Aufruf gesetzt waren. Die automatisch erkannten klassischen
+    // Rekorde (falls vorhanden) werden trotzdem angezeigt.
+    async function finalizeMemeContext(applyTags) {
+      if (!pendingMemeContext) return;
+      const { type, match, autoEntries } = pendingMemeContext;
+      document.getElementById('memeContextModal')?.classList.add('hidden');
+      pendingMemeContext = null;
+
+      let story = null;
+      if (applyTags) {
+        const ctx = defaultMemeContext();
+        document.querySelectorAll('#memeContextTags [data-meme-tag]').forEach((el) => { ctx[el.dataset.memeTag] = !!el.checked; });
+        match.memeContext = ctx;
+        save();
+        try { await syncData(true); } catch (e) { console.warn('Meme-Kontext konnte nicht synchronisiert werden:', e); }
+
+        const homeName = type === 'group' ? state.players[match.p1].name : match.p1.name;
+        const awayName = type === 'group' ? state.players[match.p2].name : match.p2.name;
+        story = MB.Records.detectStoryMeme({ homeName, awayName, homeScore: match.s1, awayScore: match.s2, memeContext: ctx });
+      }
+
+      let entries = autoEntries;
+      if (story) {
+        const entry = await addSessionRecord(story);
+        MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), story);
+        entries = [entry, ...autoEntries];
+      }
+
+      // Spurious-Correlation-Vorschläge, die währenddessen (async, siehe
+      // maybeOfferSpuriousCorrelation) hereingekommen sind, jetzt mit
+      // anzeigen statt sie nur still in den Rekord-Momenten liegen zu
+      // lassen — genau wie ein Meme sollen sie direkt im Popup auftauchen.
+      const pendingSpurious = sessionRecords.filter((e) => e.isSpurious && !e.published);
+      entries = [...entries, ...pendingSpurious];
+
+      if (entries.length) {
+        activePopupEntries = entries;
+        openMemePopup();
+      }
+    }
+
+    async function saveMemeContext() { await finalizeMemeContext(true); }
+    async function skipMemeContext() { await finalizeMemeContext(false); }
+
+    // =========================================================
+    // SPURIOUS CORRELATIONS (spurious.js) — Tyler-Vigen-Style
+    // Schein-Korrelationen zwischen einer Madden-Bowl-Saison-Kennzahl und
+    // einer der 101 hinterlegten deutschen Jahres-Statistiken. Läuft bei
+    // jedem gespeicherten Ergebnis im Hintergrund mit (siehe
+    // finishScoreUpdate) und hängt sich — genau wie Memes — als eigener
+    // Eintrag an sessionRecords/activePopupEntries an, erkennbar an
+    // entry.isSpurious === true (entry.record bleibt dabei unbesetzt).
+    // =========================================================
+
+    const SPURIOUS_SUGGESTIONS_LIMIT = 3; // max. gleichzeitig vorgeschlagene Korrelationen
+
+    async function addSessionSpuriousCandidate(candidate) {
+      const entry = { isSpurious: true, candidate, canvasPreview: null, loading: true, error: null, published: false };
+      sessionRecords.unshift(entry);
+      refreshMemeViews();
+      try {
+        const canvas = MB.Spurious.renderChartCanvas(candidate);
+        canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.style.objectFit = 'contain';
+        entry.canvasPreview = canvas;
+      } catch (e) {
+        entry.error = 'Grafik konnte nicht erzeugt werden: ' + e.message;
+      }
+      entry.loading = false;
+      refreshMemeViews();
+      return entry;
+    }
+
+    // Zeigt neu gefundene Spurious-Correlation-Vorschläge im Popup an — genau
+    // wie bei automatisch erkannten Memes: sofort, wenn das Popup schon offen
+    // ist oder kein Meme-Kontext-Dialog gerade wartet, sonst übernimmt
+    // finalizeMemeContext() sie automatisch mit, sobald der Dialog schließt
+    // (siehe dort). Bei mehreren Einträgen erscheinen sie untereinander im
+    // selben Popup (siehe renderMemePopupContent).
+    function presentSpuriousEntries(entries, force) {
+      if (!entries.length) return;
+      const popupModal = document.getElementById('memePopupModal');
+      if (popupModal && !popupModal.classList.contains('hidden')) {
+        activePopupEntries = [...entries, ...activePopupEntries];
+        refreshMemeViews();
+      } else if (force || !pendingMemeContext) {
+        activePopupEntries = entries;
+        openMemePopup();
+      }
+      // Andernfalls: liegen bereit in sessionRecords, werden von
+      // finalizeMemeContext() beim Schließen des Kontext-Dialogs mit
+      // eingesammelt.
+    }
+
+    // Wird aus finishScoreUpdate() aufgerufen — läuft async im Hintergrund,
+    // blockiert also nie das Speichern eines Ergebnisses selbst.
+    // opts.force: ignoriert die "schon ein Vorschlag offen"-Bremse und
+    // erzwingt ein Popup auch bei offenem Meme-Kontext-Dialog — nur für
+    // den manuellen Test-Button gedacht (siehe testSpuriousCorrelation()).
+    async function maybeOfferSpuriousCorrelation(opts) {
+      opts = opts || {};
+      const force = !!opts.force;
+      try {
+        if (!MB.Spurious) { if (force) alert('spurious.js ist nicht geladen.'); return; }
+        const tournamentId = MB.getCurrentTournamentId();
+        if (!tournamentId) { if (force) alert('Kein aktives Turnier gefunden.'); return; }
+
+        // Schon unveröffentlichte Vorschläge offen? Nicht noch mehr
+        // draufsatteln, sonst häufen sich unbeantwortete Kandidaten an.
+        if (!force && sessionRecords.some((e) => e.isSpurious && !e.published)) return;
+
+        // Sucht über beide Quellen: Saison-Kennzahlen (Turnier-Historie)
+        // UND Spieler-Turnierverlauf (ab MB.Spurious.PLAYER_MIN_GAMES
+        // fertigen Spielen), siehe spurious.js. Liefert mehrere (bis zu
+        // SPURIOUS_SUGGESTIONS_LIMIT), falls mehrere gut genug passen.
+        const used = await MB.Blog.getUsedSpuriousPairKeys(tournamentId);
+        const candidates = await MB.Spurious.findAllOverallCandidates(state, used, { limit: SPURIOUS_SUGGESTIONS_LIMIT });
+        if (!candidates.length) {
+          if (force) alert('Kein Kandidat über der Schwelle gefunden — entweder ist schon alles Passende veröffentlicht, oder es liegt noch zu wenig Turnier-/Spieler-Historie vor.');
+          return;
+        }
+
+        // Erneut prüfen (der obige await kostet Zeit — in der Zwischenzeit
+        // könnte längst ein anderer Vorschlag aufgetaucht sein).
+        if (!force && sessionRecords.some((e) => e.isSpurious && !e.published)) return;
+
+        const entries = [];
+        for (const candidate of candidates) entries.push(await addSessionSpuriousCandidate(candidate));
+
+        presentSpuriousEntries(entries, force);
+      } catch (e) {
+        console.warn('Spurious-Correlation-Check fehlgeschlagen:', e);
+        if (force) alert('Fehler beim Testen: ' + e.message);
+      }
+    }
+
+    // Button in den Ansage-/Meme-Einstellungen: manueller Testlauf, ohne
+    // auf ein gespeichertes Ergebnis warten zu müssen. Ignoriert die
+    // "kein anderer Post läuft gerade"-Bremse bewusst — ist ja ein Test.
+    function testSpuriousCorrelation() {
+      maybeOfferSpuriousCorrelation({ force: true });
+    }
+
+    async function publishSpuriousToBlog(i) {
+      const entry = sessionRecords[i];
+      if (!entry || !entry.isSpurious || entry.published || entry.loading || entry.error) return;
+      const tournamentId = MB.getCurrentTournamentId();
+      const article = MB.Blog.buildSpuriousArticle(entry.candidate);
+      try {
+        const canvas = entry.canvasPreview || MB.Spurious.renderChartCanvas(entry.candidate);
+        article.media_url = await MB.Records.uploadMemeToStorage(canvas, tournamentId, 'spurious');
+        article.media_type = 'image';
+      } catch (e) {
+        console.warn('Spurious-Chart-Upload fehlgeschlagen, Artikel wird ohne Bild gepostet:', e);
+      }
+      const saved = await MB.Blog.pushArticle(tournamentId, article);
+      if (!saved) {
+        const err = MB.Blog.getLastPushArticleError && MB.Blog.getLastPushArticleError();
+        const detail = err
+          ? `${err.message || err.code || ''}${err.hint ? '\n\nHinweis: ' + err.hint : ''}${err.details ? '\n\nDetails: ' + err.details : ''}`
+          : 'Unbekannter Fehler (siehe Browser-Konsole).';
+        alert('Der Artikel konnte nicht gespeichert werden:\n\n' + detail);
+        return;
+      }
+      entry.published = true;
+      refreshMemeViews();
+    }
+
+    function dismissSpurious(i) {
+      const entry = sessionRecords[i];
+      if (!entry) return;
+      sessionRecords = sessionRecords.filter((e) => e !== entry);
+      activePopupEntries = activePopupEntries.filter((e) => e !== entry);
+      refreshMemeViews();
+    }
+
+    // Rendert die "🏆 Rekord-Momente"-Karte UND (falls offen) das Popup neu.
+    // Alle Stellen, die früher direkt renderRecordMomentsPanel() aufgerufen
+    // haben, rufen jetzt das hier auf, damit beide Ansichten synchron bleiben.
+    function refreshMemeViews() {
+      renderRecordMomentsPanel();
+      const modal = document.getElementById('memePopupModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        renderMemePopupContent(activePopupEntries);
+      }
+    }
+
+    function openMemePopup() {
+      document.getElementById('memePopupModal').classList.remove('hidden');
+      renderMemePopupContent(activePopupEntries);
+    }
+
+    function closeMemePopup() {
+      document.getElementById('memePopupModal').classList.add('hidden');
+      activePopupEntries = [];
+    }
+
+    // Baut denselben Karten-Look wie renderRecordMomentsPanel(), aber nur für
+    // die Einträge dieses Speichervorgangs — untereinander im Popup.
+    function renderMemePopupContent(entries) {
+      const el = document.getElementById('memePopupBody');
+      if (!el) return;
+
+      if (!entries.length) {
+        el.innerHTML = `<div class="hint">Kein Meme generiert.</div>`;
+        return;
+      }
+
+      el.innerHTML = entries.map((entry) => {
+        const globalIndex = sessionRecords.indexOf(entry);
+
+        if (entry.isSpurious) return renderSpuriousCardHtml(entry, globalIndex);
+
+        const info = MB.Records.RECORD_TYPES[entry.record.type];
+        let bodyHtml;
+        if (entry.loading) {
+          bodyHtml = `<div class="hint">Wird generiert…</div>`;
+        } else if (entry.error) {
+          bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div>
+            <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="rerenderMeme(${globalIndex})">🔁 Erneut versuchen</button>`;
+        } else {
+          bodyHtml = `
+            <div class="meme-preview-slot" data-popup-slot="${globalIndex}"
+                 style="width:100%; max-width:260px; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
+            <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
+              <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${globalIndex})">🔁 Anderes Motiv</button>
+              <button style="width:auto;" onclick="shareMeme(${globalIndex})">📱 Teilen</button>
+              ${memePublishButtonHtml(entry, globalIndex)}
+            </div>`;
+        }
+        return `<div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #22304333; text-align:center;">
+          <div style="font-weight:bold; margin-bottom:8px; font-size:1.05em;">${info.emoji} ${info.label}</div>
+          ${bodyHtml}
+        </div>`;
+      }).join('');
+
+      // Canvas-/Bild-Previews nachträglich einsetzen (innerHTML kann kein
+      // lebendes <canvas>-Element transportieren).
+      entries.forEach((entry) => {
+        if (entry.loading || entry.error) return;
+        const globalIndex = sessionRecords.indexOf(entry);
+        const slot = el.querySelector(`[data-popup-slot="${globalIndex}"]`);
+        if (!slot) return;
+        if (entry.isSpurious) {
+          if (entry.canvasPreview) slot.appendChild(entry.canvasPreview);
+        } else if (entry.provider === 'imgflip' && entry.imageUrl) {
+          const img = document.createElement('img');
+          img.src = entry.imageUrl;
+          img.style.cssText = 'width:100%; height:100%; object-fit:contain;';
+          slot.appendChild(img);
+        } else if (entry.canvasPreview) {
+          slot.appendChild(entry.canvasPreview);
+        }
+      });
+    }
+
+    // Gemeinsame Karten-HTML für einen Spurious-Correlation-Eintrag —
+    // wird sowohl vom Popup als auch von der "🏆 Rekord-Momente"-Karte
+    // benutzt (siehe renderMemePopupContent/renderRecordMomentsPanel).
+    function renderSpuriousCardHtml(entry, globalIndex) {
+      const c = entry.candidate;
+      let bodyHtml;
+      if (entry.loading) {
+        bodyHtml = `<div class="hint">Wird berechnet…</div>`;
+      } else if (entry.error) {
+        bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div>`;
+      } else {
+        bodyHtml = `
+          <div style="font-size:0.8em; opacity:0.8; margin-bottom:8px;">
+            ${c.mbLabel} korreliert mit „${c.germanName}“ (r = ${c.r.toFixed(3)})
+          </div>
+          <div class="meme-preview-slot" data-popup-slot="${globalIndex}"
+               style="width:100%; max-width:340px; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
+          <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
+            ${entry.published
+              ? `<button style="width:auto;" disabled>✅ Im Blog</button>`
+              : `<button style="width:auto;" onclick="publishSpuriousToBlog(${globalIndex})">📰 Im Blog veröffentlichen</button>
+                 <button class="btn-secondary" style="width:auto;" onclick="dismissSpurious(${globalIndex})">🙈 Verwerfen</button>`}
+          </div>`;
+      }
+      return `<div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #22304333; text-align:center;">
+        <div style="font-weight:bold; margin-bottom:8px; font-size:1.05em;">📊 Spurious Correlation</div>
+        ${bodyHtml}
+      </div>`;
+    }
+
+    async function addSessionRecord(record) {
+      const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null, published: false };
+      sessionRecords.unshift(entry); // neueste zuerst
+      refreshMemeViews();
+      await regenerateEntryVisual(entry);
+      refreshMemeViews();
+      return entry;
+    }
+
+    // Finals/Champion-Momente bekommen ihren Blog-Artikel automatisch (siehe
+    // finishScoreUpdate) — dafür hier keinen zweiten, manuellen "Veröffentlichen"-
+    // Button anzeigen, sonst gäbe es doppelte Artikel für denselben Moment.
+    function memePublishButtonHtml(entry, i) {
+      if (entry.record.type === 'finals' || entry.record.type === 'champion') {
+        return `<button style="width:auto;" disabled title="Erscheint automatisch im Blog">📰 Automatisch im Blog</button>`;
+      }
+      if (entry.published) {
+        return `<button style="width:auto;" disabled>✅ Im Blog</button>`;
+      }
+      return `<button style="width:auto;" onclick="publishRecordToBlog(${i})">📰 Im Blog veröffentlichen</button>`;
+    }
+
+    // Wird über den 📰-Button im Popup (oder in der Rekord-Momente-Karte)
+    // ausgelöst — Finals/Champion-Artikel entstehen weiterhin automatisch
+    // (siehe finishScoreUpdate), für "normale" Rekorde ist das hier jetzt
+    // der EINZIGE Weg, wie ein Meme im Blog landet.
+    async function publishRecordToBlog(i) {
+      const entry = sessionRecords[i];
+      if (!entry || entry.published || entry.loading || entry.error) return;
+      await postRecordBlogArticle(entry);
+      entry.published = true;
+      refreshMemeViews();
+    }
+
+    async function postRecordBlogArticle(entry) {
+      const tournamentId = MB.getCurrentTournamentId();
+      const article = MB.Blog.buildRecordArticle(entry.record);
+      try {
+        if (entry.provider === 'imgflip' && entry.imageUrl) {
+          article.media_url = entry.imageUrl;
+          article.media_type = 'image';
+        } else if (entry.canvasPreview) {
+          const canvas = MB.Records.renderMemeCanvas(entry.record, entry.styleId);
+          article.media_url = await MB.Records.uploadMemeToStorage(canvas, tournamentId, entry.record.type);
+          article.media_type = 'image';
+        }
+      } catch (e) {
+        console.warn('Meme-Upload für Blog fehlgeschlagen, Artikel wird ohne Bild gepostet:', e);
+      }
+      MB.Blog.pushArticle(tournamentId, article);
+    }
+
+    async function regenerateEntryVisual(entry) {
+      entry.loading = true; entry.error = null;
+      if (entry.provider === 'imgflip') {
+        const settings = MB.Records.getImgflipSettings();
+        if (!settings.username || !settings.password) {
+          entry.error = 'Imgflip nicht eingerichtet (siehe oben).';
+          entry.loading = false;
+          return;
+        }
+        try {
+          const result = await MB.Records.generateImgflipMeme(entry.record, settings);
+          entry.imageUrl = result.url;
+        } catch (e) {
+          entry.error = 'Imgflip-Fehler: ' + e.message;
+        }
+      } else {
+        const styleId = MB.Records.MEME_STYLES[Math.floor(Math.random() * MB.Records.MEME_STYLES.length)].id;
+        const canvas = MB.Records.renderMemeCanvas(entry.record, styleId);
+        canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.style.objectFit = 'cover';
+        entry.styleId = styleId;
+        entry.canvasPreview = canvas;
+      }
+      entry.loading = false;
+    }
+
+    // Einstellungen (Meme-Stil, Imgflip-Zugangsdaten) — sitzt im eingeklappten
+    // "Ansage/Musik-Einstellungen"-Bereich, NICHT mehr in der immer sichtbaren
+    // Rekord-Momente-Karte (die zeigt nur noch die eigentlichen Meme-Einträge).
+    function renderMemeSettingsPanel() {
+      const el = document.getElementById('memeSettingsPanel');
+      if (!el) return;
+      const provider = getMemeProvider();
+      const imgflipSettings = MB.Records.getImgflipSettings();
+
+      let html = `
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:4px;">Meme-Stil</label>
+          <select onchange="setMemeProvider(this.value)">
+            <option value="canvas" ${provider !== 'imgflip' ? 'selected' : ''}>🎨 Eigene Grafik (kostenlos, kein Account)</option>
+            <option value="imgflip" ${provider === 'imgflip' ? 'selected' : ''}>🖼️ Imgflip — echte Meme-Vorlagen (kostenlos, Account nötig)</option>
+          </select>
+        </div>`;
+
+      if (provider === 'imgflip') {
+        if (!ttsUnlocked) {
+          html += `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren, um Imgflip-Zugangsdaten einzugeben</button>`;
+        } else {
+          html += `
+            <div style="margin-bottom:14px;">
+              <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">Imgflip-Benutzername</label>
+              <input type="text" id="imgflipUser" value="${imgflipSettings.username || ''}" placeholder="dein-imgflip-username">
+              <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">Imgflip-Passwort</label>
+              <input type="password" id="imgflipPass" value="${imgflipSettings.password || ''}" placeholder="Passwort">
+              <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:4px;">
+                Kostenloser Account auf imgflip.com/signup — am besten einen separaten, nicht deinen privaten.
+              </div>
+              <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
+              <button style="margin-top:8px;" onclick="testImgflip()">Testen</button>
+              <button class="btn-secondary" style="margin-top:8px;" onclick="runAllMemeTest()">🧪 Alle Memes testen (${MB.Records.buildTestMemeJobs().length})</button>
+              <div id="imgflipTestResult" style="margin-top:8px;"></div>
+            </div>`;
+        }
+      }
+
+      // Spurious Correlations (spurious.js): manueller Testlauf, unabhängig
+      // vom Meme-Stil — sucht sofort nach dem besten (noch unveröffentlichten)
+      // Treffer über Saison-Kennzahlen UND Spieler-Turnierverlauf und zeigt
+      // ihn im selben Popup wie ein automatisch erkanntes Meme.
+      if (!ttsUnlocked) {
+        html += `<button class="btn-secondary" style="margin-top:10px;" onclick="unlockTtsSettings()">🔒 Entsperren, um Spurious Correlations zu testen</button>`;
+      } else {
+        html += `
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid #22304366;">
+            <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:6px;">📊 Spurious Correlations</label>
+            <button class="btn-secondary" onclick="testSpuriousCorrelation()">🧪 Testkandidat suchen</button>
+            <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:6px;">
+              Sucht sofort nach der besten (noch nicht in diesem Turnier verwendeten) Schein-Korrelation
+              — normalerweise läuft das automatisch bei jedem gespeicherten Ergebnis.
+            </div>
+          </div>`;
+      }
+
+      el.innerHTML = html;
+    }
+
+    // Nur noch die Liste der Meme-Einträge — Veröffentlichen-Status inklusive
+    // (siehe publishRecordToBlog()).
+    function renderRecordMomentsPanel() {
+      const el = document.getElementById('recordMomentsPanel');
+      if (!el) return;
+
+      if (!sessionRecords.length) {
+        el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.7;">
+          Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore, Allzeit-/Turnier-Klatsche,
+          Siegesserie, Überraschung, Abgeschossen, Shootout, Finaleinzug, neuer Champion) — auch am Handy über
+          live.html?Altima sichtbar.
+        </div>`;
+        return;
+      }
+
+      el.innerHTML = '';
+      sessionRecords.forEach((entry, i) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid #22304333;';
+
+        if (entry.isSpurious) {
+          wrap.innerHTML = renderSpuriousCardHtml(entry, i);
+          el.appendChild(wrap);
+          const slot = wrap.querySelector('.meme-preview-slot');
+          if (slot && !entry.loading && !entry.error && entry.canvasPreview) slot.appendChild(entry.canvasPreview);
+          return;
+        }
+
+        const info = MB.Records.RECORD_TYPES[entry.record.type];
+
+        let bodyHtml;
+        if (entry.loading) {
+          bodyHtml = `<div class="hint">Wird generiert…</div>`;
+        } else if (entry.error) {
+          bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div><button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="rerenderMeme(${i})">🔁 Erneut versuchen</button>`;
+        } else {
+          bodyHtml = `
+            <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+              <div class="meme-preview-slot" style="width:150px; height:150px; border-radius:8px; overflow:hidden; background:#000; flex-shrink:0;"></div>
+              <div style="flex:1; min-width:180px;">
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${i})">🔁 Anderes Motiv</button>
+                  <button style="width:auto;" onclick="shareMeme(${i})">📱 Teilen</button>
+                  ${memePublishButtonHtml(entry, i)}
+                </div>
+              </div>
+            </div>`;
+        }
+
+        wrap.innerHTML = `<div style="font-weight:bold; margin-bottom:8px;">${info.emoji} ${info.label}</div>${bodyHtml}`;
+        el.appendChild(wrap);
+
+        const slot = wrap.querySelector('.meme-preview-slot');
+        if (slot) {
+          if (entry.provider === 'imgflip' && entry.imageUrl) {
+            const img = document.createElement('img');
+            img.src = entry.imageUrl;
+            img.style.cssText = 'width:100%; height:100%; object-fit:contain;';
+            slot.appendChild(img);
+          } else if (entry.canvasPreview) {
+            slot.appendChild(entry.canvasPreview);
+          }
+        }
+      });
+    }
+
+    function saveImgflipSettings() {
+      MB.Records.setImgflipSettings({
+        username: document.getElementById('imgflipUser').value.trim(),
+        password: document.getElementById('imgflipPass').value.trim(),
+      });
+      alert('Gespeichert.');
+    }
+
+    async function testImgflip() {
+      saveImgflipSettings();
+      const resultEl = document.getElementById('imgflipTestResult');
+      resultEl.innerHTML = '<div class="hint">Teste Verbindung…</div>';
+      const settings = MB.Records.getImgflipSettings();
+      const testRecord = { type: 'allTimeHigh', player: 'Tim', opponent: 'Alex', value: 42 };
+      try {
+        const result = await MB.Records.generateImgflipMeme(testRecord, settings);
+        resultEl.innerHTML = `
+          <div class="hint" style="color:var(--accent);">✅ Funktioniert! Vorlage: ${result.templateId}</div>
+          <img src="${result.url}" style="max-width:200px; border-radius:8px; margin-top:6px; display:block;">
+        `;
+      } catch (e) {
+        resultEl.innerHTML = `<div class="hint" style="color:var(--nfl-red);">❌ ${e.message}</div>`;
+      }
+    }
+
+    function closeMemeTestModal() {
+      document.getElementById('memeTestModal')?.classList.add('hidden');
+    }
+
+    // Erzeugt JEDE Vorlage aus JEDEM Pool (klassisch + Story) einmal mit
+    // Platzhalter-Daten — nacheinander, damit man live mitverfolgen kann UND
+    // Imgflip nicht mit 80 parallelen Requests bombardiert wird. Jede Kachel
+    // zeigt, WARUM das Meme erzeugt wurde (Anlass + Vorlagenname) und bietet
+    // einen Download mit genau diesem Namen an, damit man einzelne Treffer
+    // zum Nachschauen behalten kann.
+    async function runAllMemeTest() {
+      saveImgflipSettings();
+      const settings = MB.Records.getImgflipSettings();
+      if (!settings.username || !settings.password) { alert('Bitte zuerst Imgflip-Zugangsdaten eingeben und speichern.'); return; }
+
+      const modal = document.getElementById('memeTestModal');
+      const grid = document.getElementById('memeTestGrid');
+      const status = document.getElementById('memeTestStatus');
+      grid.innerHTML = '';
+      modal.classList.remove('hidden');
+
+      const jobs = MB.Records.buildTestMemeJobs();
+      status.textContent = `Erzeuge 0 / ${jobs.length} …`;
+
+      await MB.Records.generateAllTestMemes(settings, (result, done, total) => {
+        status.textContent = `Erzeuge ${done} / ${total} …`;
+        const cell = document.createElement('div');
+        cell.style.cssText = 'background:rgba(255,255,255,.03); border-radius:8px; padding:8px; font-size:.75em;';
+        if (result.ok) {
+          cell.innerHTML = `
+            <img src="${result.url}" style="width:100%; border-radius:6px; display:block; margin-bottom:6px; background:#000;">
+            <div style="opacity:.85; margin-bottom:4px;">${result.label}</div>
+            <button class="btn-secondary" style="width:100%; font-size:.9em; padding:4px;" onclick="MB.Records.shareOrOpenRemoteImage('${result.url}', '${result.filename}.png')">💾 Speichern</button>`;
+        } else {
+          cell.innerHTML = `
+            <div style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; background:#2a0e0e; border-radius:6px; margin-bottom:6px;">⚠️</div>
+            <div style="opacity:.85; margin-bottom:4px;">${result.label}</div>
+            <div style="color:var(--nfl-red);">${result.error}</div>`;
+        }
+        grid.appendChild(cell);
+      });
+
+      status.textContent = `Fertig: ${jobs.length} / ${jobs.length}.`;
+    }
+
+    async function rerenderMeme(i) {
+      const entry = sessionRecords[i];
+      entry.provider = getMemeProvider();
+      refreshMemeViews();
+      await regenerateEntryVisual(entry);
+      refreshMemeViews();
+    }
+
+    // Nur noch das EXTERNE Teilen (WhatsApp/Download etc.) — der Blog-Artikel
+    // entsteht jetzt automatisch in addSessionRecord()/postRecordBlogArticle(),
+    // sobald das Meme-Bild fertig ist, unabhängig davon ob hier geteilt wird.
+    async function shareMeme(i) {
+      const entry = sessionRecords[i];
+
+      if (entry.provider === 'imgflip' && entry.imageUrl) {
+        const result = await MB.Records.shareOrOpenRemoteImage(entry.imageUrl, `madden-bowl-${entry.record.type}.jpg`);
+        if (result === 'opened') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde in einem neuen Tab geöffnet, dort manuell speichern/teilen.');
+      } else if (entry.canvasPreview) {
+        const canvas = MB.Records.renderMemeCanvas(entry.record, entry.styleId); // frisch in voller Auflösung
+        const result = await MB.Records.shareOrDownloadMeme(canvas, `madden-bowl-${entry.record.type}.png`);
+        if (result === 'downloaded') alert('Teilen wird von diesem Browser nicht unterstützt — Bild wurde stattdessen heruntergeladen, kannst du manuell in WhatsApp anhängen.');
+      }
+    }
+
+    function renderTtsSettingsPanel() {
+      const el = document.getElementById('ttsSettingsPanel');
+      if (!el) return;
+      const settings = MB.Announcer.getTtsSettings();
+
+      if (!ttsUnlocked) {
+        el.innerHTML = `
+          <div style="font-size:0.85em; opacity:0.75; margin-bottom:10px;">
+            Aktuell: <b>${settings.provider === 'elevenlabs' ? 'ElevenLabs (kostenpflichtig)' : 'Browser (kostenlos)'}</b>
+          </div>
+          <button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren zum Bearbeiten</button>`;
+        return;
+      }
+
+      const speakerNames = MB.Announcer.getSpeakerNames();
+      el.innerHTML = `
+        <div style="margin-bottom:14px;">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:4px;">Sprecher-Namen (frei wählbar, Rollen bleiben fest)</label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:140px;">
+              <label style="font-size:0.7em; opacity:0.6;">Kommentator</label>
+              <input type="text" id="speakerCommentator" value="${speakerNames.commentator}" style="width:100%;">
+            </div>
+            <div style="flex:1; min-width:140px;">
+              <label style="font-size:0.7em; opacity:0.6;">Moderator</label>
+              <input type="text" id="speakerModerator" value="${speakerNames.moderator}" style="width:100%;">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+          <select id="ttsProvider" onchange="onTtsProviderChange()">
+            <option value="browser" ${settings.provider !== 'elevenlabs' ? 'selected' : ''}>Browser (kostenlos)</option>
+            <option value="elevenlabs" ${settings.provider === 'elevenlabs' ? 'selected' : ''}>ElevenLabs (kostenpflichtig)</option>
+          </select>
+        </div>
+
+        <div id="browserVoiceFields" style="${settings.provider === 'elevenlabs' ? 'display:none;' : ''}">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <select id="ttsVoiceSelect" style="flex:1; min-width:220px;"></select>
+            <button class="btn-secondary" onclick="testTtsVoice()">Testen</button>
+            <button class="btn-secondary" onclick="refreshTtsVoiceList()">Liste aktualisieren</button>
+          </div>
+          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-top:6px;">
+            Stimmen mit "Online (Natural)" im Namen klingen am natürlichsten (kostenlos, kommt von Edge/Chrome unter Windows 11).
+          </div>
+        </div>
+
+        <div id="elevenLabsFields" style="${settings.provider === 'elevenlabs' ? '' : 'display:none;'}">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">API-Key</label>
+          <input type="password" id="elApiKey" value="${settings.apiKey || ''}" placeholder="sk_..." style="width:100%;">
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">Modell</label>
+          <select id="elModel" style="width:100%;">
+            <option value="eleven_multilingual_v2" ${(!settings.modelId || settings.modelId === 'eleven_multilingual_v2') ? 'selected' : ''}>Multilingual v2 (empfohlen — beste Qualität, für unseren Fall schnell genug)</option>
+            <option value="eleven_flash_v2_5" ${settings.modelId === 'eleven_flash_v2_5' ? 'selected' : ''}>Flash v2.5 (schneller & günstiger, etwas weniger ausdrucksstark)</option>
+            <option value="eleven_v3" ${settings.modelId === 'eleven_v3' ? 'selected' : ''}>Eleven v3 (experimentell, sehr ausdrucksstark, weniger stabil)</option>
+          </select>
+
+          <div style="margin-top:10px;">
+            <button class="btn-secondary" onclick="loadElevenLabsVoices()">Stimmen laden</button>
+          </div>
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:10px 0 4px;">Stimme für Ergebnis-Ansage</label>
+          <select id="elVoiceResult" style="width:100%;">
+            <option value="${settings.voiceIdResult || ''}">${settings.voiceIdResult ? '(gespeichert) ' + settings.voiceIdResult : '– zuerst Stimmen laden –'}</option>
+          </select>
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:10px 0 4px;">Stimme für Vorschau-Ansage</label>
+          <select id="elVoicePreview" style="width:100%;">
+            <option value="${settings.voiceIdPreview || ''}">${settings.voiceIdPreview ? '(gespeichert) ' + settings.voiceIdPreview : '– zuerst Stimmen laden –'}</option>
+          </select>
+
+          <div style="margin-top:10px; display:flex; gap:10px;">
+            <button class="btn-secondary" onclick="testElevenLabsVoices()">Testen</button>
+          </div>
+
+          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-top:8px;">
+            Nur beide Stimmen gesetzt → Zwei-Stimmen-Übergabe (Ergebnis → Vorschau).
+            Nur eine gesetzt → diese eine liest alles vor.
+          </div>
+        </div>
+
+        <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button onclick="saveTtsSettings()">Speichern</button>
+          <button class="btn-secondary" onclick="resetTtsPassword()">Passwort zurücksetzen</button>
+        </div>
+        <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:8px;">
+          Gilt nur für dieses Gerät/diesen Browser — wird nicht mit Supabase synchronisiert.
+        </div>
+
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304333;">
+          <div style="font-weight:bold; margin-bottom:4px;">📄 Testlauf: alle Ansage-Varianten als Text</div>
+          <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:8px;">
+            Erzeugt mit frei erfundenen Spielern/Ergebnissen so ziemlich jede Ansage-Variante als Textprotokoll
+            (Ergebnis, Vorschau, Rekorde, Ausscheiden, Toilet Bowl, Finale, Song-Anmoderationen, ...) - rein lokal,
+            spricht nichts laut, ruft keine TTS- oder Music-API auf und kostet nichts. Zahlen stehen bereits in der
+            gesprochenen Form, wie sie später auch tatsächlich vorgelesen würden.
+          </div>
+          <button class="btn-secondary" style="width:auto;" onclick="downloadAnnouncerDryRun()">📄 Testlauf herunterladen</button>
+        </div>
+      `;
+
+      refreshTtsVoiceList();
+    }
+
+    function onTtsProviderChange() {
+      const provider = document.getElementById('ttsProvider').value;
+      document.getElementById('browserVoiceFields').style.display = provider === 'elevenlabs' ? 'none' : '';
+      document.getElementById('elevenLabsFields').style.display = provider === 'elevenlabs' ? '' : 'none';
+    }
+
+    // Reines Text-Testprotokoll aller Ansage-Varianten (siehe
+    // MB.Announcer.buildDryRunTranscript()) - läuft komplett lokal mit
+    // erfundenen Daten, ruft keine API auf, kostet nichts.
+    function downloadAnnouncerDryRun() {
+      const text = MB.Announcer.buildDryRunTranscript();
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `announcer-testlauf-${stamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function loadElevenLabsVoices() {
+      const key = document.getElementById('elApiKey').value.trim();
+      if (!key) { alert('Bitte zuerst API-Key eingeben.'); return; }
+      try {
+        const voices = await MB.Announcer.fetchElevenLabsVoices(key);
+        const opts = voices.map(v => `<option value="${v.voice_id}">${v.name}</option>`).join('');
+        document.getElementById('elVoiceResult').innerHTML = opts;
+        document.getElementById('elVoicePreview').innerHTML = opts;
+      } catch (e) {
+        alert('Stimmen laden fehlgeschlagen: ' + e.message);
+      }
+    }
+
+    function saveTtsSettings() {
+      MB.Announcer.setSpeakerNames({
+        commentator: document.getElementById('speakerCommentator').value,
+        moderator: document.getElementById('speakerModerator').value,
+      });
+      const provider = document.getElementById('ttsProvider').value;
+      const settings = { provider };
+      if (provider === 'elevenlabs') {
+        settings.apiKey = document.getElementById('elApiKey').value.trim();
+        settings.modelId = document.getElementById('elModel').value;
+        settings.voiceIdResult = document.getElementById('elVoiceResult').value || null;
+        settings.voiceIdPreview = document.getElementById('elVoicePreview').value || null;
+      }
+      MB.Announcer.setTtsSettings(settings);
+      alert('Gespeichert.');
+      renderSongMomentsPanel();
+    }
+
+    async function testElevenLabsVoices() {
+      saveTtsSettings();
+      await MB.Announcer.announce({
+        state, history, homeName: 'Tim', awayName: 'Alex', homeScore: 24, awayScore: 17,
+        stadium: 'Test-Stadion',
+        upcoming: [{ homeName: 'Markus', awayName: 'Lukas', time: '20:00', stadium: 'Test-Stadion 2' }],
+      });
+    }
+
+    function refreshTtsVoiceList() {
+      const sel = document.getElementById('ttsVoiceSelect');
+      if (!sel) return;
+      const voices = MB.Announcer.getGermanVoiceCandidates();
+      const current = localStorage.getItem('mb_tts_voice_name') || '';
+      sel.innerHTML = '<option value="">(Standard automatisch wählen)</option>' +
+        voices.map(v => `<option value="${v.name}" ${v.name === current ? 'selected' : ''}>${v.name} ${/online\s*\(natural\)|natural/i.test(v.name) ? '⭐' : ''}</option>`).join('');
+      sel.onchange = () => MB.Announcer.setPreferredVoice(sel.value || null);
+    }
+
+    function testTtsVoice() {
+      MB.Announcer.speak('So klingt die aktuell ausgewählte Stimme. Endstand: Tim 24, Alex 17. Was für ein Spiel!');
+    }
+  </script>
+</body>
+</html>

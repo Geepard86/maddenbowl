@@ -658,6 +658,46 @@
     return out;
   }
 
+  // Ermittelt die Paarung mit den meisten gemeinsamen Spielen aller Zeiten
+  // (Historie + laufendes Turnier). Für den Announcer-Fakt "größte Rivalität"
+  // in der Vorschau (Anforderung: "Biggest Rivalry" ankündigen).
+  function computeBiggestRivalry(history, state) {
+    const counts = new Map(); // pairKey -> Anzahl Spiele
+    (history.byPair || new Map()).forEach((matches, pk) => counts.set(pk, matches.length));
+    getCurrentMatchesNormalized(state).forEach((m) => {
+      const pk = pairKey(m.homePlayer, m.awayPlayer);
+      counts.set(pk, (counts.get(pk) || 0) + 1);
+    });
+    let bestKey = null, bestCount = 0;
+    counts.forEach((count, pk) => { if (count > bestCount) { bestCount = count; bestKey = pk; } });
+    if (!bestKey) return null;
+    const [a, b] = bestKey.split("|");
+    return { pairKey: bestKey, count: bestCount, names: [a, b] };
+  }
+
+  // Aktuelle Sieg-/Niederlagenserie eines Spielers im laufenden Turnier
+  // (Gruppe + Playoffs zusammen, da getCurrentMatchesNormalized beides
+  // liefert). Allgemeiner gehalten als der ähnliche private Helfer in
+  // records.js (der ist auf "neuer Rekord" zugeschnitten) - hier geht es um
+  // JEDE Serie, nicht nur die turnierweit längste.
+  function computeCurrentStreakInfo(state, playerName) {
+    const name = normName(playerName);
+    const games = getCurrentMatchesNormalized(state).filter(
+      (m) => (m.homePlayer === name || m.awayPlayer === name) && m.homeScore != null && m.awayScore != null
+    );
+    let kind = null, length = 0;
+    for (let i = games.length - 1; i >= 0; i--) {
+      const m = games[i];
+      const scored = m.homePlayer === name ? m.homeScore : m.awayScore;
+      const allowed = m.homePlayer === name ? m.awayScore : m.homeScore;
+      const k = scored > allowed ? "win" : scored < allowed ? "loss" : "tie";
+      if (kind == null) kind = k;
+      if (k !== kind) break;
+      length++;
+    }
+    return { kind, length, gamesPlayed: games.length };
+  }
+
   function computeMatchupStats(history, state, playerA, playerB) {
     const A = normName(playerA), B = normName(playerB);
     if (!A || !B) return null;
@@ -722,51 +762,61 @@
 
   // "Flavour Facts": datenbasierte, variierte Insights zu einem Matchup.
   // Auffällige Konstellationen werden bevorzugt; erfunden wird nichts.
-  function pickFlavourFacts(history, state, homePlayer, awayPlayer) {
+  //
+  // pickFlavourFactsTyped() ist die Quelle der Wahrheit: jeder Kandidat wird
+  // HIER, direkt an der Entstehungsstelle, mit seinem Fakt-Typ getaggt
+  // (odds/averagePoints/directComparison/playoffFact/form/other - siehe
+  // Announcer-Anforderungsdokument). Dadurch muss der Typ später (in
+  // announcer.js) nicht mehr per Keyword-Raten aus dem Freitext rekonstruiert
+  // werden - das wäre bei jedem neuen/geänderten Textbaustein hier eine
+  // stille Fehlerquelle. pickFlavourFacts() bleibt als abwärtskompatibler
+  // Wrapper (nur Text, Top 2) für die bestehenden Anzeige-Stellen
+  // (index.html/live.html/music.js) unverändert erhalten.
+  function pickFlavourFactsTyped(history, state, homePlayer, awayPlayer) {
     const H = normName(homePlayer), A = normName(awayPlayer);
     if (!H || !A) return [];
     const s = computeMatchupStats(history, state, H, A);
     const h = getPlayerFacts(history, state, H), a = getPlayerFacts(history, state, A);
     const candidates = [];
-    const add = (text, score = 1) => { if (text) candidates.push({ text, score }); };
+    const add = (text, score = 1, type = "other") => { if (text) candidates.push({ text, score, type }); };
     const one = (v) => Number(v).toFixed(1);
 
     if (s && s.games > 0) {
       const leader = s.aWins > s.bWins ? H : s.bWins > s.aWins ? A : null;
       const diff = Math.abs(s.aWins - s.bWins);
-      if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff);
-      else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4);
+      if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff, "directComparison");
+      else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4, "directComparison");
 
       if (s.curLastWinners.length) {
         const recent = s.curLastWinners[s.curLastWinners.length - 1];
         const streak = s.curLastWinners.slice().reverse().findIndex(x => x !== recent);
         const n = streak < 0 ? s.curLastWinners.length : streak;
-        add(`Im laufenden Turnier gewann zuletzt ${recent}${n >= 2 ? ` — ${n} direkte Siege in Folge für ${recent}` : ""}.`, 6 + n);
+        add(`Im laufenden Turnier gewann zuletzt ${recent}${n >= 2 ? ` — ${n} direkte Siege in Folge für ${recent}` : ""}.`, 6 + n, "directComparison");
       }
       if (s.playoff.games >= 2) {
         if (s.playoff.aWins !== s.playoff.bWins) {
           const leaderP = s.playoff.aWins > s.playoff.bWins ? H : A;
-          add(`In den Playoffs liegt ${leaderP} im direkten Vergleich vorne: ${s.playoff.aWins}:${s.playoff.bWins}.`, 8);
-        } else add(`In den Playoffs ist das Duell ausgeglichen: ${s.playoff.aWins}:${s.playoff.bWins}.`, 6);
+          add(`In den Playoffs liegt ${leaderP} im direkten Vergleich vorne: ${s.playoff.aWins}:${s.playoff.bWins}.`, 8, "playoffFact");
+        } else add(`In den Playoffs ist das Duell ausgeglichen: ${s.playoff.aWins}:${s.playoff.bWins}.`, 6, "playoffFact");
       }
       const avgTotal = s.totals.length ? s.totals.reduce((x,y) => x+y, 0) / s.totals.length : 0;
-      if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7);
-      else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7);
-      else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3);
+      if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7, "averagePoints");
+      else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7, "averagePoints");
+      else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3, "averagePoints");
       const gap = Math.abs(s.aPPG - s.bPPG);
       if (gap >= 4) {
         const scorer = s.aPPG > s.bPPG ? H : A, other = scorer === H ? A : H;
-        add(`${scorer} kommt im direkten Vergleich auf ${one(Math.max(s.aPPG, s.bPPG))} Punkte pro Spiel und damit ${one(gap)} mehr als ${other}.`, 7);
+        add(`${scorer} kommt im direkten Vergleich auf ${one(Math.max(s.aPPG, s.bPPG))} Punkte pro Spiel und damit ${one(gap)} mehr als ${other}.`, 7, "averagePoints");
       }
     }
 
     const addForm = (name, f) => {
       if (f.curGames < 2) return;
       const wr = f.curWins / f.curGames;
-      if (wr >= .75) add(`${name} ist im Turnier stark unterwegs: ${f.curWins}:${f.curLosses}.`, 8);
-      else if (wr <= .25) add(`${name} sucht im Turnier noch den Rhythmus: ${f.curWins}:${f.curLosses}.`, 7);
-      if (f.curAPG != null && f.curAPG <= 18) add(`${name} verteidigt bisher stark und lässt im Schnitt nur ${one(f.curAPG)} Punkte zu.`, 8);
-      else if (f.curPPG != null && f.curPPG >= 28) add(`${name} liefert offensiv ab und kommt auf ${one(f.curPPG)} Punkte pro Spiel.`, 7);
+      if (wr >= .75) add(`${name} ist im Turnier stark unterwegs: ${f.curWins}:${f.curLosses}.`, 8, "form");
+      else if (wr <= .25) add(`${name} sucht im Turnier noch den Rhythmus: ${f.curWins}:${f.curLosses}.`, 7, "form");
+      if (f.curAPG != null && f.curAPG <= 18) add(`${name} verteidigt bisher stark und lässt im Schnitt nur ${one(f.curAPG)} Punkte zu.`, 8, "form");
+      else if (f.curPPG != null && f.curPPG >= 28) add(`${name} liefert offensiv ab und kommt auf ${one(f.curPPG)} Punkte pro Spiel.`, 7, "form");
     };
     addForm(H, h); addForm(A, a);
 
@@ -783,8 +833,8 @@
     };
     [H, A].forEach(name => {
       const st = streakOf(name);
-      if (st.n >= 2 && st.kind === 'Sieg') add(`${name} kommt mit ${st.n} Siegen in Folge in dieses Spiel.`, 11 + st.n);
-      if (st.n >= 2 && st.kind === 'Niederlage') add(`${name} hat zuletzt ${st.n} Spiele in Folge verloren.`, 10 + st.n);
+      if (st.n >= 2 && st.kind === 'Sieg') add(`${name} kommt mit ${st.n} Siegen in Folge in dieses Spiel.`, 11 + st.n, "form");
+      if (st.n >= 2 && st.kind === 'Niederlage') add(`${name} hat zuletzt ${st.n} Spiele in Folge verloren.`, 10 + st.n, "form");
     });
 
     try {
@@ -792,17 +842,123 @@
       const fav = odds.pHome >= odds.pAway ? H : A, favProb = Math.max(odds.pHome, odds.pAway);
       if (s && s.games >= 2) {
         const h2h = fav === H ? s.aWins / s.games : s.bWins / s.games;
-        if (h2h <= .35 && favProb >= .58) add(`Spannender Widerspruch: ${fav} ist laut Modell Favorit, hat im direkten Vergleich aber nur ${Math.round(h2h * 100)}% der Spiele gewonnen.`, 12);
-        else if (h2h >= .65 && favProb < .55) add(`Die Statistik spricht klar für ${fav}: ${Math.round(h2h * 100)}% Siege im direkten Vergleich, obwohl die Quote kaum einen Favoriten ausmacht.`, 11);
+        if (h2h <= .35 && favProb >= .58) add(`Spannender Widerspruch: ${fav} ist laut Modell Favorit, hat im direkten Vergleich aber nur ${Math.round(h2h * 100)}% der Spiele gewonnen.`, 12, "other");
+        else if (h2h >= .65 && favProb < .55) add(`Die Statistik spricht klar für ${fav}: ${Math.round(h2h * 100)}% Siege im direkten Vergleich, obwohl die Quote kaum einen Favoriten ausmacht.`, 11, "other");
       }
     } catch (e) {}
 
     if (!candidates.length) {
-      if (h.curGames > 0) add(`${H} im Turnier: ${h.curWins}:${h.curLosses}, im Schnitt ${one(h.curPPG)} Punkte.`, 2);
-      if (a.curGames > 0) add(`${A} im Turnier: ${a.curWins}:${a.curLosses}, im Schnitt ${one(a.curPPG)} Punkte.`, 2);
-      if (!candidates.length && history.loaded) add("Erstes Duell der beiden — keine gemeinsame Historie vorhanden.", 1);
+      if (h.curGames > 0) add(`${H} im Turnier: ${h.curWins}:${h.curLosses}, im Schnitt ${one(h.curPPG)} Punkte.`, 2, "form");
+      if (a.curGames > 0) add(`${A} im Turnier: ${a.curWins}:${a.curLosses}, im Schnitt ${one(a.curPPG)} Punkte.`, 2, "form");
+      if (!candidates.length && history.loaded) add("Erstes Duell der beiden — keine gemeinsame Historie vorhanden.", 1, "other");
     }
-    return candidates.map(x => ({...x, tie: Math.random()})).sort((a,b) => b.score-a.score || b.tie-a.tie).slice(0, Math.min(2, candidates.length)).map(x => x.text);
+    return candidates.map(x => ({...x, tie: Math.random()})).sort((a,b) => b.score-a.score || b.tie-a.tie).map(({tie, ...x}) => x);
+  }
+
+  // Abwärtskompatibler Wrapper: nur Text, wie bisher auf max. 2 Einträge
+  // begrenzt. Wird weiterhin von index.html/live.html/music.js für die
+  // sichtbaren Insight-Badges genutzt - deren Verhalten/Formatierung ändert
+  // sich durch die Typisierung oben nicht.
+  function pickFlavourFacts(history, state, homePlayer, awayPlayer) {
+    return pickFlavourFactsTyped(history, state, homePlayer, awayPlayer)
+      .slice(0, 2)
+      .map(x => x.text);
+  }
+
+  // Ergebnis-Impacts für das GERADE ABGESCHLOSSENE Spiel (Kommentator-Rolle).
+  // Bewusst getrennt von pickFlavourFacts/pickFlavourFactsTyped, die sich nur
+  // auf das KOMMENDE Spiel beziehen (Moderator-Rolle) - siehe Anforderung 1.
+  //
+  // prevSeeds (optional): Map<Name, Platzierung> VOR diesem Spiel, z.B. aus
+  // MB.getLiveSeeds(state), das der Aufrufer VOR dem Score-Commit einmal
+  // eingefroren haben muss (die Tabelle in `state` ist zu diesem Zeitpunkt
+  // bereits mit dem neuen Ergebnis aktualisiert). Ohne prevSeeds wird weder
+  // tableImpact noch die Gruppenphase-eliminationImpact geliefert (lieber
+  // kein Fakt als ein geratener).
+  //
+  // ctx.matchKind ("group"|"playoff") + ctx.matchId (z.B. "lb1") sagen, ob es
+  // gerade ein Gruppen- oder ein Playoff-Spiel war. Wichtig, weil "Playoff-
+  // Chancen verpasst" (Gruppenphase) und "raus aus dem Turnier" (K.o. in den
+  // Playoffs) zwei völlig verschiedene Aussagen sind.
+  //
+  // Priorität: eliminationImpact > tableImpact > titleImpact. Playoff-Feld
+  // ist in diesem Turnierformat immer 8 Plätze groß (siehe renderTable()-
+  // Markierung "row-eliminated" für 9/10 Spieler); erst wenn die Gruppenphase
+  // komplett durch ist, gilt ein Platz außerhalb der Top 8 als endgültig
+  // verpasst - vorher könnten weitere Gruppenspiele die Reihenfolge noch
+  // drehen, und "ausgeschieden" wäre verfrüht.
+  const PLAYOFF_SPOTS = 8;
+
+  // Echte K.o.-Spiele im Doppel-Elimination-Bracket (siehe initPlayoffs() /
+  // elimOrder in index.html): wer hier verliert, ist raus aus dem Turnier.
+  // ub1-ub4 (Wildcard) und us1/us2 (Upper Semi) sind KEINE K.o.-Spiele - der
+  // Verlierer rutscht dort nur ins Lower Bracket und spielt weiter. "gf"
+  // (Finale) und "tb" (Platzierungsspiel) haben eigene Ansagen/Artikel
+  // andernorts in der App und werden hier bewusst nicht mit "ausgeschieden"
+  // kommentiert.
+  const PLAYOFF_ELIMINATION_MATCH_IDS = new Set(["lb1", "lb2", "lb3", "lb4", "ls", "lf"]);
+
+  function getAnnouncerResultImpacts(history, state, winnerName, loserName, prevSeeds, ctx = {}) {
+    const { matchKind, matchId } = ctx;
+    const impacts = [];
+    const nowSeeds = (prevSeeds && prevSeeds.size) ? getLiveSeeds(state) : null;
+
+    if (matchKind === "playoff") {
+      if (matchId && PLAYOFF_ELIMINATION_MATCH_IDS.has(matchId)) {
+        impacts.push({ type: "eliminationImpact", text: `Damit ist ${loserName} raus aus dem Turnier.` });
+      }
+    } else {
+      if (nowSeeds && (state.players || []).length > PLAYOFF_SPOTS && isGroupPhaseComplete(state)) {
+        const prevL = prevSeeds.get(loserName), nowL = nowSeeds.get(loserName);
+        if (prevL != null && nowL != null && nowL > PLAYOFF_SPOTS && prevL <= PLAYOFF_SPOTS) {
+          impacts.push({ type: "eliminationImpact", text: `Damit ist ${loserName} aus dem Rennen um die Playoffs.` });
+        }
+      }
+
+      if (nowSeeds) {
+        const prevW = prevSeeds.get(winnerName), prevL = prevSeeds.get(loserName);
+        const nowW = nowSeeds.get(winnerName), nowL = nowSeeds.get(loserName);
+        if (prevW != null && prevL != null && nowW != null && nowL != null && prevW > prevL && nowW < nowL) {
+          impacts.push({ type: "tableImpact", text: `Damit zieht ${winnerName} in der Tabelle an ${loserName} vorbei.` });
+        }
+      }
+    }
+
+    // Makellose Bilanz (Sieger seit Turnierbeginn ungeschlagen, ab 5 Siegen)
+    // bzw. Niederlagenserie (Verlierer, ab 3 Niederlagen in Folge) - nur
+    // eins von beiden, und nur wenn noch kein härterer Impact feststeht.
+    if (!impacts.length) {
+      try {
+        const winnerStreak = computeCurrentStreakInfo(state, winnerName);
+        if (winnerStreak.kind === "win" && winnerStreak.length === winnerStreak.gamesPlayed && winnerStreak.gamesPlayed >= 5) {
+          impacts.push({ type: "perfectRecord", text: `${winnerName} bleibt mit ${winnerStreak.gamesPlayed}:0 weiterhin makellos.` });
+        }
+      } catch (e) {}
+    }
+    if (!impacts.length) {
+      try {
+        const loserStreak = computeCurrentStreakInfo(state, loserName);
+        if (loserStreak.kind === "loss" && loserStreak.length >= 3) {
+          impacts.push({ type: "losingStreak", text: `${loserName} kassiert damit die ${loserStreak.length}. Niederlage in Folge.` });
+        }
+      } catch (e) {}
+    }
+
+    // Titelchancen sind fast immer irgendeine Zahl > 0 - würden sonst JEDES
+    // Mal als Fakt gewinnen und den Direktvergleich-Fallback nie zum Zug
+    // kommen lassen. Deshalb nur mit 50% Wahrscheinlichkeit als Kandidat
+    // aufnehmen, wenn kein "härterer" Impact (Ausscheiden/Tabelle) vorliegt.
+    if (!impacts.length) {
+      try {
+        const titleOdds = computeTitleOdds(history, state);
+        const pct = titleOdds[loserName];
+        if (pct != null && Math.random() < 0.5) {
+          impacts.push({ type: "titleImpact", text: `Damit liegen ${loserName}s Titelchancen jetzt bei ${Math.round(pct)} Prozent.` });
+        }
+      } catch (e) {}
+    }
+
+    return impacts;
   }
 
   function normalCdf(x) {
@@ -1148,148 +1304,6 @@
   }
 
   // ======================================================================
-  // AUTH — EINE Anmeldung für die ganze Seite (Dashboard, Tippspiel,
-  // Blog, Shop, Hall of Fame, ...). Bisher gab es nur eine tab-lokale
-  // Session im Tippspiel (sessionStorage). Jetzt liegt der eingeloggte
-  // Spielername in localStorage, gilt also seitenübergreifend und
-  // überlebt einen Reload/Tab-Wechsel. Der eigentliche PIN-Account bleibt
-  // wie gehabt in state.wettbuero.accounts[name].pin (Supabase).
-  // ======================================================================
-  const AUTH_STORAGE_KEY = 'mb_player_v2';
-  const AUTH_LEGACY_SESSION_KEY = 'mb_tipp_player'; // alte, tab-lokale Session (Migration)
-
-  function authGetPlayer() {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (stored) return stored;
-    // Migration: falls noch eine alte tab-lokale Session existiert (vor
-    // der Einführung der seitenweiten Anmeldung), einmalig übernehmen.
-    const legacy = sessionStorage.getItem(AUTH_LEGACY_SESSION_KEY);
-    if (legacy) {
-      localStorage.setItem(AUTH_STORAGE_KEY, legacy);
-      return legacy;
-    }
-    return null;
-  }
-
-  function authSetPlayer(name) {
-    localStorage.setItem(AUTH_STORAGE_KEY, name);
-    sessionStorage.removeItem(AUTH_LEGACY_SESSION_KEY);
-  }
-
-  function authLogout() {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    sessionStorage.removeItem(AUTH_LEGACY_SESSION_KEY);
-  }
-
-  // Prüft, ob der aktuell gemerkte Spieler auch im geladenen Turnier
-  // existiert (z.B. nach einem Full-Reset nicht mehr) — meldet dann ab.
-  function authCurrentPlayer(state) {
-    const name = authGetPlayer();
-    if (!name) return null;
-    if (state && state.wettbuero && state.wettbuero.accounts && !state.wettbuero.accounts[name]) {
-      return null;
-    }
-    return name;
-  }
-
-  async function authLogin(state, name, pin) {
-    if (!state || !state.players || !state.players.length) {
-      return { ok: false, error: 'Es läuft aktuell kein Turnier.' };
-    }
-    if (!/^\d{4,6}$/.test(String(pin || '').trim())) {
-      return { ok: false, error: 'PIN muss 4-6 Ziffern haben.' };
-    }
-    pin = String(pin).trim();
-    ensureWettbuero(state);
-    const acc = state.wettbuero.accounts[name];
-    if (!acc) return { ok: false, error: 'Unbekannter Spieler.' };
-    if (!acc.pin) {
-      acc.pin = pin;
-      try {
-        await pushCloudState(state);
-      } catch (e) {
-        return { ok: false, error: 'PIN konnte nicht gespeichert werden: ' + e.message };
-      }
-    } else if (acc.pin !== pin) {
-      return { ok: false, error: 'Falsche PIN.' };
-    }
-    authSetPlayer(name);
-    return { ok: true, name };
-  }
-
-  // ======================================================================
-  // HALL OF FAME — schlanke Auswertung für Dashboard-Widget UND die
-  // eigenständige hall_of_fame_live.html-Seite (eine gemeinsame Quelle,
-  // damit hier keine sechste Kopie der History-Auswertung entsteht — siehe
-  // README zu den bereits gefixten Dedupe-Runden). Bewusst leichtgewichtig:
-  // die volle Statistik-Engine bleibt in hall_of_fame.html (Admin-Bereich).
-  // ======================================================================
-  function computeHallOfFameSummary(rawSeasons) {
-    const playerMap = new Map();
-    const blowouts = [];
-    const seasonBestPoints = [];
-
-    (rawSeasons || []).forEach((raw) => {
-      const t = raw?.tournament || raw;
-      const season = Number(raw?.season ?? t?.season);
-      const standings = (Array.isArray(t?.standings) ? t.standings : [])
-        .map((x) => ({ rank: Number(x.rank), name: normName(x.name), points: Number(x.points ?? 0) }))
-        .filter((x) => x.name && Number.isFinite(x.rank))
-        .sort((a, b) => a.rank - b.rank);
-
-      standings.forEach((s) => {
-        if (!playerMap.has(s.name)) {
-          playerMap.set(s.name, { name: s.name, points: 0, championships: 0, podiums: 0, seasons: 0 });
-        }
-        const agg = playerMap.get(s.name);
-        agg.points += s.points;
-        agg.seasons += 1;
-        if (s.rank === 1) agg.championships += 1;
-        if (s.rank <= 3) agg.podiums += 1;
-        if (Number.isFinite(season)) seasonBestPoints.push({ name: s.name, points: s.points, season });
-      });
-
-      const players = Array.isArray(t?.players) ? t.players : [];
-      const teamToPlayer = new Map();
-      players.forEach((p) => { if (p.team) teamToPlayer.set(p.team, normName(p.name)); });
-
-      (Array.isArray(t?.matches) ? t.matches : []).forEach((m) => {
-        const hs = m.homeScore ?? m.s1 ?? null, as = m.awayScore ?? m.s2 ?? null;
-        if (hs == null || as == null) return;
-        const homeTeam = m.homeTeam ?? m.home ?? null, awayTeam = m.awayTeam ?? m.away ?? null;
-        const homePlayer = normName(m.homePlayer) || (homeTeam ? teamToPlayer.get(homeTeam) : null);
-        const awayPlayer = normName(m.awayPlayer) || (awayTeam ? teamToPlayer.get(awayTeam) : null);
-        if (!homePlayer || !awayPlayer) return;
-        const diff = Math.abs(Number(hs) - Number(as));
-        const winner = Number(hs) > Number(as) ? homePlayer : awayPlayer;
-        const loser = winner === homePlayer ? awayPlayer : homePlayer;
-        const ws = Math.max(Number(hs), Number(as)), ls = Math.min(Number(hs), Number(as));
-        blowouts.push({ diff, winner, loser, ws, ls, season });
-      });
-    });
-
-    const allTime = Array.from(playerMap.values()).sort((a, b) => b.points - a.points);
-
-    const records = [];
-    if (seasonBestPoints.length) {
-      const best = seasonBestPoints.reduce((a, b) => (b.points > a.points ? b : a));
-      records.push({ icon: '🔥', title: `Beste Saison: ${best.name}`, detail: `${best.points} Punkte (Saison ${best.season})` });
-    }
-    if (blowouts.length) {
-      const biggest = blowouts.reduce((a, b) => (b.diff > a.diff ? b : a));
-      records.push({ icon: '💥', title: `Höchster Kantersieg`, detail: `${biggest.winner} ${biggest.ws}:${biggest.ls} ${biggest.loser} (Saison ${biggest.season})` });
-      const highestScoring = blowouts.reduce((a, b) => (b.ws + b.ls > a.ws + a.ls ? b : a));
-      records.push({ icon: '🎯', title: `Höchstes Gesamtergebnis`, detail: `${highestScoring.ws + highestScoring.ls} Punkte in einem Spiel (Saison ${highestScoring.season})` });
-    }
-    const mostChampionships = allTime.slice().sort((a, b) => b.championships - a.championships)[0];
-    if (mostChampionships && mostChampionships.championships > 0) {
-      records.push({ icon: '👑', title: `Serien-Champion`, detail: `${mostChampionships.name} mit ${mostChampionships.championships} Titel${mostChampionships.championships === 1 ? '' : 'n'}` });
-    }
-
-    return { allTime, records };
-  }
-
-  // ======================================================================
   // EXPORT
   // ======================================================================
   global.MB = {
@@ -1301,17 +1315,10 @@
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
+    pickFlavourFactsTyped, getAnnouncerResultImpacts, computeBiggestRivalry, computeCurrentStreakInfo,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,
     normalCdf, getPpgEstimate, seedFactor, teamOVRFactor, formFactor,
     computeBaseRanking, getGroupSeedsFinal, applyToiletBowlOverride, computeFinalRanking,
     ensureWettbuero,
-    computeHallOfFameSummary,
-    Auth: {
-      getPlayer: authGetPlayer,
-      currentPlayer: authCurrentPlayer,
-      setPlayer: authSetPlayer,
-      logout: authLogout,
-      login: authLogin,
-    },
   };
 })(window);

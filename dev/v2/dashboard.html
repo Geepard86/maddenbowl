@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl VI — Dashboard</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Madden Bowl">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<script src="tipp.js"></script>
+<script src="blog.js"></script>
+<script src="ui.js"></script>
+<script src="shop-products.js"></script>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  .v2-footer { text-align: center; font-size: 0.7em; color: var(--v2-silver); text-transform: uppercase; letter-spacing: 1px; margin-top: 18px; opacity: 0.6; }
+  .skel { height: 12px; border-radius: 6px; margin: 6px 0; background: linear-gradient(90deg, #1c2231 25%, #2a3145 50%, #1c2231 75%); background-size: 200% 100%; animation: v2shimmer 1.3s infinite; }
+  @keyframes v2shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+</style>
+</head>
+<body class="v2">
+
+<div class="v2-wrap" id="app">
+  <div class="v2-card"><div class="skel" style="width:60%"></div><div class="skel" style="width:90%"></div></div>
+  <div class="v2-card"><div class="skel" style="width:50%"></div><div class="skel" style="width:80%"></div></div>
+</div>
+
+<script>
+  MB.UI.mountHeader({ active: 'dashboard' });
+
+  let state = null, history = null, articles = [];
+
+  function nowTimeStr() {
+    const d = new Date();
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+  }
+
+  function renderGameRow(m) {
+    const logoHome = MB.getLogoHtml(m.homeTeam), logoAway = MB.getLogoHtml(m.awayTeam);
+    return `
+      <div class="v2-game">
+        <div class="v2-game-top"><span>${m.phase || ''}</span><span>${m.stadium || ''}</span></div>
+        <div class="v2-game-teams">
+          <div class="v2-team">${logoAway}<span class="v2-team-name">${m.awayName}</span></div>
+          <span class="v2-vs">@</span>
+          <div class="v2-team">${logoHome}<span class="v2-team-name">${m.homeName}</span></div>
+        </div>
+      </div>`;
+  }
+
+  function renderCurrentUpcoming() {
+    const upcoming = MB.getUpcomingMatches(state);
+    const now = nowTimeStr();
+    const live = upcoming.filter(m => m.time && m.time <= now).slice(0, 2);
+    const next = upcoming.filter(m => !m.time || m.time > now).slice(0, 2);
+
+    const liveCard = `
+      <div class="v2-card">
+        <div class="v2-card-title"><span class="v2-live-tag"><span class="v2-live-dot"></span>LIVE</span>Aktuelle Spiele</div>
+        ${live.length ? live.map(m => `<div style="margin-bottom:4px;">${renderGameRow(m)}<div class="v2-game-meta">läuft seit ${m.time} Uhr</div></div>`).join('')
+          : `<div class="v2-empty">Gerade läuft kein Spiel.</div>`}
+      </div>`;
+
+    const nextCard = `
+      <div class="v2-card">
+        <div class="v2-card-title">📅 Kommende Spiele</div>
+        ${next.length ? next.map(m => `<div style="margin-bottom:4px;">${renderGameRow(m)}<div class="v2-game-meta">${m.time || '?'} Uhr</div></div>`).join('')
+          : `<div class="v2-empty">Keine weiteren Spiele geplant.</div>`}
+      </div>`;
+
+    return liveCard + nextCard;
+  }
+
+  async function renderTippspielCard() {
+    const tid = MB.getCurrentTournamentId();
+    const me = MB.UI.currentPlayer();
+    if (!tid) return `<div class="v2-card"><div class="v2-card-title">🏆 Tippspiel</div><div class="v2-empty">Kein aktives Turnier.</div></div>`;
+    try {
+      const allPicks = await MB.Tipp.fetchAllPicks(tid);
+      const ouLines = await MB.Tipp.fetchAllOuLines(tid);
+      const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
+      const top5 = standings.slice(0, 5);
+      const myIdx = standings.findIndex(r => r.name === me);
+      let rows = top5.map((r, i) => `
+        <div class="v2-lb-row ${r.name === me ? 'me' : ''}">
+          <span class="v2-lb-rank">${i + 1}</span><span class="v2-lb-name">${r.name}</span><span class="v2-lb-pts">${r.points} Pkt.</span>
+        </div>`).join('');
+      if (me && myIdx >= 5) {
+        rows += `<div class="v2-lb-row me" style="margin-top:4px;">
+          <span class="v2-lb-rank">${myIdx + 1}</span><span class="v2-lb-name">${me} (du)</span><span class="v2-lb-pts">${standings[myIdx].points} Pkt.</span>
+        </div>`;
+      }
+      return `
+        <div class="v2-card">
+          <div class="v2-card-title">🏆 Tippspiel<a class="v2-card-link" href="wettbuero.html">Mittippen →</a></div>
+          ${rows || `<div class="v2-empty">Noch keine Tipps abgegeben.</div>`}
+        </div>`;
+    } catch (e) {
+      console.warn('Tippspiel-Stand laden fehlgeschlagen:', e);
+      return `<div class="v2-card"><div class="v2-card-title">🏆 Tippspiel</div><div class="v2-empty">Konnte Tippstand nicht laden.</div></div>`;
+    }
+  }
+
+  function excerpt(text, n) {
+    const clean = (text || '').replace(/\s+/g, ' ').trim();
+    return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
+  }
+
+  function formatArticleDate(dateStr) {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ', ' +
+           d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderBlogCard() {
+    if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">📰 Neueste Blog-Beiträge</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
+    const items = articles.slice(0, 3).map(a => `
+      <div style="margin-bottom:10px;">
+        <div style="font-weight:800; font-size:0.92em;">${a.title}</div>
+        <div style="font-size:0.72em; color:var(--v2-silver); margin:2px 0 4px;">${formatArticleDate(a.created_at)}</div>
+        <div style="font-size:0.84em; opacity:0.85;">${excerpt(a.body, 90)}</div>
+      </div>`).join('');
+    return `
+      <div class="v2-card">
+        <div class="v2-card-title">📰 Neueste Blog-Beiträge<a class="v2-card-link" href="blog.html">Zum Blog →</a></div>
+        ${items}
+      </div>`;
+  }
+
+  function renderHallOfFameCard() {
+    if (!history || !history.ringsByPlayer || !history.ringsByPlayer.size) {
+      return `<div class="v2-card"><div class="v2-card-title">👑 Hall of Fame</div><div class="v2-empty">Noch keine abgeschlossene Saison.</div></div>`;
+    }
+    const top3 = [...history.ringsByPlayer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const medals = ['🥇', '🥈', '🥉'];
+    const rows = top3.map(([name, rings], i) => `
+      <div class="v2-lb-row">
+        <span class="v2-lb-rank">${medals[i] || i + 1}</span><span class="v2-lb-name">${name}</span><span class="v2-lb-pts">${rings} 🏆</span>
+      </div>`).join('');
+    return `
+      <div class="v2-card">
+        <div class="v2-card-title">👑 Hall of Fame<a class="v2-card-link" href="hall_of_fame.html">Zur Hall of Fame →</a></div>
+        ${rows}
+        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:8px;">Nach Anzahl Titeln — vollständige ewige Tabelle (Punkte, Bilanzen) in der Hall of Fame.</div>
+      </div>`;
+  }
+
+  function renderMerchCard() {
+    const products = MB.Shop.getFeaturedProducts(3);
+    return `
+      <div class="v2-card">
+        <div class="v2-card-title">🛍️ Featured Merch<a class="v2-card-link" href="shop.html">Zum Shop →</a></div>
+        <div class="v2-merch-grid">${products.map(MB.Shop.renderProductCardHtml).join('')}</div>
+      </div>`;
+  }
+
+  async function render() {
+    const app = document.getElementById('app');
+    if (!state.players || !state.players.length) {
+      app.innerHTML = `<div class="v2-card"><div class="v2-empty">Es läuft aktuell kein Turnier.</div></div>` + renderMerchCard();
+      return;
+    }
+    app.innerHTML = `
+      ${renderCurrentUpcoming()}
+      ${await renderTippspielCard()}
+      ${renderBlogCard()}
+      ${renderHallOfFameCard()}
+      ${renderMerchCard()}
+      <div class="v2-footer">Same Game. Different People.</div>
+    `;
+  }
+
+  async function boot() {
+    try {
+      state = await MB.fetchCloudState();
+    } catch (e) {
+      document.getElementById('app').innerHTML = `<div class="v2-card">Konnte Turnierdaten nicht laden. (${e.message})</div>`;
+      return;
+    }
+    MB.UI.setState(state, () => render());
+    try { history = await MB.loadAndBuildHistory(); } catch (e) { console.warn('History laden fehlgeschlagen:', e); }
+    try { await MB.loadTeamRatings(state.config?.year || '2026'); } catch (e) {}
+    try {
+      const tid = MB.getCurrentTournamentId();
+      articles = tid ? await MB.Blog.fetchArticles(tid, 10) : [];
+    } catch (e) { console.warn('Artikel laden fehlgeschlagen:', e); }
+
+    await render();
+
+    setInterval(async () => {
+      try {
+        state = await MB.fetchCloudState();
+        MB.UI.setState(state);
+        const tid = MB.getCurrentTournamentId();
+        articles = tid ? await MB.Blog.fetchArticles(tid, 10) : [];
+        await render();
+      } catch (e) { console.warn('Auto-Refresh fehlgeschlagen:', e); }
+    }, 15000);
+  }
+
+  boot();
+</script>
+</body>
+</html>

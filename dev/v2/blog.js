@@ -552,8 +552,108 @@
   }
 
   // ======================================================================
+  // SPURIOUS CORRELATION
+  // ----------------------------------------------------------------------
+  // Erwartet ein candidate-Objekt aus MB.Spurious.findBestCandidate()/
+  // findCandidates(): { pairKey, mbLabel, mbUnit, germanName, germanUnit,
+  // germanSource, years, mbValues, germanValues, r }.
+  // ======================================================================
+
+  // Kategorie-abhängige Formulierung für die "Prognose": was ein weiterer
+  // Anstieg bzw. Rückgang bei einer deutschen Statistik dieser Art
+  // plausibel bedeuten würde. Bewusst nicht pauschal "Verknappung" für
+  // alles — bei Ereignis-Zählungen (Übernachtungen, Paketsendungen) gibt es
+  // keine "Knappheit", bei Preisen/Kosten ist "Verteuerung" treffender als
+  // "Engpass", usw. Kategorie kommt aus GERMAN_STATS in spurious.js
+  // (candidate.germanCategory); unbekannte/neutrale Kategorien (rate,
+  // infrastructure, other) fallen auf schlichtes Anstieg/Rückgang zurück.
+  const CATEGORY_TREND_WORDS = {
+    goods: { up: "ein Überangebot", down: "ein Engpass" },
+    price: { up: "eine Verteuerung", down: "eine Verbilligung" },
+    revenue: { up: "ein Boom", down: "ein Einbruch" },
+    events: { up: "ein Ansturm", down: "eine Flaute" },
+    population: { up: "ein Zuwachs", down: "ein Schwund" },
+    infrastructure: { up: "ein weiterer Ausbau", down: "ein Rückgang" },
+    rate: { up: "ein weiterer Anstieg", down: "ein weiterer Rückgang" },
+    other: { up: "ein weiterer Anstieg", down: "ein weiterer Rückgang" },
+  };
+
+  function trendWordFor(category, direction) {
+    const words = CATEGORY_TREND_WORDS[category] || CATEGORY_TREND_WORDS.other;
+    return direction === "up" ? words.up : words.down;
+  }
+
+  const SPURIOUS_INTROS = [
+    "Die vorliegende Kurzanalyse untersucht den statistischen Zusammenhang zwischen zwei zunächst unabhängig erscheinenden Kennzahlen.",
+    "Im Rahmen einer fortlaufenden Datenbetrachtung wurde folgender Zusammenhang identifiziert.",
+    "Die folgende Auswertung dokumentiert eine bemerkenswert enge Übereinstimmung zweier Zeitreihen.",
+    "Gegenstand dieser Kurzmitteilung ist eine auffällige statistische Kovarianz zweier an sich themenfremder Datenreihen.",
+  ];
+
+  const SPURIOUS_CLOSERS = [
+    "Ein kausaler Mechanismus zwischen beiden Größen ist nicht belegt; die Prognose ist entsprechend mit Vorsicht zu genießen.",
+    "Weitere Erhebungszeiträume könnten diesen Befund erhärten oder widerlegen — belastbar ist er in der vorliegenden Form nicht.",
+    "Von einer verbindlichen Kausalaussage wird an dieser Stelle ausdrücklich abgesehen.",
+    "Für eine gesicherte Aussage wäre eine deutlich breitere Datenbasis erforderlich, als sie hier vorliegt.",
+  ];
+
+  function buildSpuriousArticle(candidate) {
+    const rStr = candidate.r.toFixed(6);
+    const strength = Math.abs(candidate.r) >= 0.99 ? "nahezu perfekter" : "sehr starker";
+    const direction = candidate.r >= 0 ? "gleichläufiger" : "gegenläufiger";
+    const hasOrdinalMapping = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
+
+    const spanDesc = candidate.isPlayer
+      ? `über die letzten ${candidate.years.length} Spiele im Turnier`
+      : `über die letzten ${candidate.years.length} Turnier-Saisons`;
+
+    const parts = [
+      pick(SPURIOUS_INTROS),
+      `<strong>Befund.</strong> ${candidate.mbLabel} scheint sich auf „${candidate.germanName}“ (${candidate.germanUnit}) auszuwirken — ${spanDesc} zeigt sich ein ${strength} ${direction} Zusammenhang (r = ${rStr}).`,
+    ];
+
+    if (hasOrdinalMapping) {
+      const mapping = candidate.isPlayer
+        ? `${candidate.player}s Spielverlauf wird der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`
+        : `Die betrachteten Turnier-Saisons werden der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`;
+      parts.push(
+        `<strong>Datengrundlage.</strong> ${mapping} (älteste Beobachtung zu ältestem Jahr, jüngste zu jüngstem Jahr) — nicht notwendigerweise demselben Kalenderjahr. Quelle: ${candidate.germanSource}.`
+      );
+    } else {
+      parts.push(`<strong>Datengrundlage.</strong> Quelle „${candidate.germanName}“: ${candidate.germanSource}.`);
+    }
+
+    // Prognose: "steigt mbStat weiter" -> was das für den deutschen Wert
+    // laut diesem (Zufalls-)Befund bedeuten würde, passend zur Kategorie
+    // der deutschen Statistik formuliert (siehe CATEGORY_TREND_WORDS).
+    const germanDirection = candidate.r >= 0 ? "up" : "down";
+    const trendWord = trendWordFor(candidate.germanCategory, germanDirection);
+    const nextScopeLabel = candidate.isPlayer ? "im nächsten Spiel" : "in der nächsten Saison";
+    parts.push(
+      `<strong>Prognose.</strong> Sollte sich ${candidate.mbLabel} ${nextScopeLabel} noch weiter erhöhen, wäre nach diesem Befund ${trendWord} bei „${candidate.germanName}“ zu erwarten.`
+    );
+
+    parts.push(`<strong>Einordnung.</strong> ${pick(SPURIOUS_CLOSERS)}`);
+
+    return {
+      kind: "spurious",
+      title: `📊 Spurious Correlation: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“`,
+      body: paragraphs(parts),
+      data: {
+        pairKey: candidate.pairKey,
+        mbStatKey: candidate.mbStatKey,
+        germanStatId: candidate.germanStatId,
+        player: candidate.player || null,
+        r: candidate.r,
+      },
+    };
+  }
+
+  // ======================================================================
   // SUPABASE
   // ======================================================================
+
+  let lastPushArticleError = null; // Diagnose-Hilfe für publishSpuriousToBlog() u.ä., siehe getLastPushArticleError()
 
   async function pushArticle(tournamentId, article) {
     const sb = MB.getSupabaseClient();
@@ -569,6 +669,7 @@
         body: article.body,
         media_url: article.media_url || null,
         media_type: article.media_type || null,
+        data: article.data || null,
       })
       .select()
       .single();
@@ -578,10 +679,19 @@
         "Artikel konnte nicht gespeichert werden:",
         error
       );
+      lastPushArticleError = error;
       return null;
     }
 
+    lastPushArticleError = null;
     return data;
+  }
+
+  // Liefert das zuletzt bei pushArticle() aufgetretene Supabase-/Postgres-
+  // Fehlerobjekt (oder null), damit Aufrufer bei einem Fehlschlag den
+  // TATSÄCHLICHEN Grund anzeigen können statt nur zu raten.
+  function getLastPushArticleError() {
+    return lastPushArticleError;
   }
 
   // Manuell verfasster Beitrag durch den Admin.
@@ -720,6 +830,18 @@
     return g + p;
   }
 
+  // Liefert die Menge bereits in diesem Turnier veröffentlichter
+  // Spurious-Correlation-Paarungen (als "mbStatKey::germanStatId"-Strings),
+  // damit MB.Spurious.findBestCandidate() keine Wiederholung vorschlägt.
+  async function getUsedSpuriousPairKeys(tournamentId) {
+    const articles = await fetchArticles(tournamentId, 200);
+    const out = new Set();
+    (articles || []).forEach((a) => {
+      if (a.kind === "spurious" && a.data && a.data.pairKey) out.add(a.data.pairKey);
+    });
+    return out;
+  }
+
   // Soll jetzt ein neuer Zwischenstands-Artikel erscheinen?
   // Alle 3 fertigen Spiele.
   function isProgressArticleDue(
@@ -736,57 +858,6 @@
     );
   }
 
-  // ======================================================================
-  // PLATZHALTER-VORSCHAUBILDER
-  // -------------------------------------------------------------------------
-  // Nicht jeder Artikel-Typ hat ein echtes Bild (nur geteilte Rekord-Momente/
-  // Memes haben eins). Statt gar keinem Vorschaubild gibt's hier pro
-  // Artikel-Art (kind) eine kleine, generierte SVG-Grafik in der jeweiligen
-  // Kategorie-Farbe (an die Farbwelt aus dem Blog-Mockup angelehnt) — ganz
-  // ohne externe Bilddatei, beliebig skalierbar, in Sekundenbruchteilen da.
-  // ======================================================================
-  const CATEGORY_META = {
-    kickoff: { label: 'Turnierstart', color: '#0EA5E9', icon: '🏈' },
-    progress: { label: 'Zwischenstand', color: '#8B5CF6', icon: '📊' },
-    record: { label: 'Rekord', color: '#F59E0B', icon: '🏆' },
-    finals: { label: 'Finale', color: '#EF4444', icon: '🎬' },
-    champion: { label: 'Champion', color: '#22C55E', icon: '👑' },
-    song: { label: 'Song', color: '#3B82F6', icon: '🎵' },
-    retrospective: { label: 'Rückblick', color: '#14B8A6', icon: '📜' },
-    manual: { label: 'Beitrag', color: '#4a5568', icon: '📝' },
-  };
-
-  function categoryFor(kind) {
-    return CATEGORY_META[kind] || CATEGORY_META.manual;
-  }
-
-  // Erzeugt Inline-SVG-Markup (kein <img>, kein Netzwerk-Request) für den
-  // Platzhalter: dezentes Diagonal-Muster in der Kategorie-Farbe + Icon +
-  // Label. `heightPx` optional, Standard passt für die Artikel-Kacheln.
-  function placeholderSvgMarkup(kind, heightPx) {
-    const meta = categoryFor(kind);
-    const h = heightPx || 130;
-    const uid = 'mbph' + Math.random().toString(36).slice(2, 8);
-    return `
-      <svg viewBox="0 0 400 ${h}" xmlns="http://www.w3.org/2000/svg" role="img"
-           aria-label="${meta.label}" style="width:100%; height:${h}px; border-radius:8px; display:block;">
-        <defs>
-          <linearGradient id="${uid}-bg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="${meta.color}" stop-opacity="0.55"/>
-            <stop offset="100%" stop-color="#0b1119" stop-opacity="0.95"/>
-          </linearGradient>
-          <pattern id="${uid}-p" width="26" height="26" patternTransform="rotate(20)" patternUnits="userSpaceOnUse">
-            <line x1="0" y1="0" x2="0" y2="26" stroke="${meta.color}" stroke-opacity="0.18" stroke-width="10"/>
-          </pattern>
-        </defs>
-        <rect width="400" height="${h}" fill="url(#${uid}-bg)"/>
-        <rect width="400" height="${h}" fill="url(#${uid}-p)"/>
-        <text x="20" y="${h - 20}" font-size="34" font-family="Segoe UI, Roboto, sans-serif">${meta.icon}</text>
-        <text x="60" y="${h - 16}" font-size="15" font-weight="800" letter-spacing="1"
-              font-family="Segoe UI, Roboto, sans-serif" fill="#ffffff" opacity="0.92">${meta.label.toUpperCase()}</text>
-      </svg>`;
-  }
-
   global.MB = global.MB || {};
 
   global.MB.Blog = {
@@ -797,8 +868,10 @@
     buildSongArticle,
     buildFinalsArticle,
     buildChampionArticle,
+    buildSpuriousArticle,
 
     pushArticle,
+    getLastPushArticleError,
     pushManualArticle,
     updateArticle,
     deleteArticle,
@@ -806,8 +879,6 @@
     countArticlesByKind,
     countFinishedMatches,
     isProgressArticleDue,
-
-    categoryFor,
-    placeholderSvgMarkup,
+    getUsedSpuriousPairKeys,
   };
 })(window);

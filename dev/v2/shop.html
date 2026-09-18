@@ -5,31 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Madden Bowl — Fan-Shop</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="shared.js"></script>
-<script src="nav.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  body { padding: 0 16px 16px; }
+  body { padding: 16px; }
+  header { padding: 12px 4px 16px; border-bottom: 1px solid #22304366; margin-bottom: 16px; max-width: 900px; margin-left: auto; margin-right: auto; }
+  header h1 { margin: 0; font-size: 1.15em; text-transform: uppercase; letter-spacing: 0.5px; }
+  header a { color: var(--accent); font-size: 0.85em; text-decoration: none; }
   #myShop { max-width: 900px; margin: 0 auto; }
 </style>
 </head>
 <body>
 
-<header></header>
-<div class="wrap" style="max-width:900px; margin:16px auto 0;">
-  <h1 style="margin:0 0 14px; font-size:1.1em; text-transform:uppercase; letter-spacing:0.5px;">🛍️ Madden Bowl Fan-Shop</h1>
-</div>
+<header>
+  <h1>🛍️ Madden Bowl Fan-Shop</h1>
+  <div style="margin-top:6px;"><a href="live.html">← Zurück zum Turnierblog</a></div>
+</header>
 
 <!-- Spreadshop-Einbindung. WICHTIG: baseId ("myShop") muss exakt zur ID
      dieses div passen, sonst rendert der Shop nichts hinein. -->
 <div id="myShop">
   <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
 </div>
-<script>
-  MB.Nav.mount({ current: 'shop', title: 'Madden Bowl', subtitle: 'Fan-Shop', state: null });
-  MB.fetchCloudState().then(function (state) { MB.Nav.refreshAuth(state); }).catch(function () {});
-</script>
 <script>
   var spread_shop_config = {
     shopName: 'maddenbowl',

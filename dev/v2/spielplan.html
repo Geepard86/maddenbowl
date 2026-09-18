@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl VI — Spielplan</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<script src="tipp.js"></script>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+  th, td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #22304333; }
+  .empty { opacity: 0.6; font-size: 0.9em; }
+  .bracket-session { margin-bottom: 14px; }
+  .bracket-session h3 { color: var(--v2-gold); font-size: 0.85em; text-transform: uppercase; margin: 0 0 6px; }
+  .bracket-row { display: flex; justify-content: space-between; font-size: 0.88em; padding: 5px 0; border-bottom: 1px solid #22304333; }
+  .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .title-name { width: 110px; font-size: 0.9em; }
+  .title-bar-bg { flex: 1; background: #0e1622; border-radius: 6px; overflow: hidden; height: 14px; }
+  .title-bar-fill { background: var(--v2-gold); height: 100%; }
+  .title-pct { width: 50px; text-align: right; font-size: 0.85em; }
+  .btn-secondary { background: transparent; border: 1px solid var(--v2-border); color: var(--v2-silver); border-radius: 6px; padding: 4px 10px; font-size: 0.7em; cursor: pointer; }
+</style>
+</head>
+<body class="v2">
+<div class="v2-wrap wide" id="app">
+  <div class="v2-card"><div class="v2-empty">Lade Spielplan…</div></div>
+</div>
+
+<div class="v2-modal-overlay" id="playoffPictureModal" onclick="if(event.target===this) closePlayoffPictureModal()">
+  <div class="modal-box" style="max-width: 900px; width: 96vw; max-height: 90vh; overflow:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h2 style="margin:0;">Playoff Picture</h2>
+      <button class="btn-secondary" onclick="closePlayoffPictureModal()">✕ Schließen</button>
+    </div>
+    <div id="playoffPictureModalContent"></div>
+  </div>
+</div>
+
+<script src="ui.js"></script>
+<script>
+  MB.UI.mountHeader({ active: 'spielplan' });
+
+  let state = null, history = null, activeTab = 'tabelle';
+
+  function renderTitleOdds() {
+    if (!state.players || !state.players.length) return '<div class="empty">—</div>';
+    const odds = MB.computeTitleOdds(history, state);
+    const sorted = [...state.players].map(p => ({ name: p.name, pct: odds[p.name] || 0 })).sort((a, b) => b.pct - a.pct);
+    const max = Math.max(...sorted.map(x => x.pct), 1);
+    return sorted.map(x => `
+      <div class="title-row">
+        <span class="title-name">${x.name}</span>
+        <div class="title-bar-bg"><div class="title-bar-fill" style="width:${(x.pct / max * 100).toFixed(0)}%"></div></div>
+        <span class="title-pct">${x.pct.toFixed(1)}%</span>
+      </div>`).join('');
+  }
+
+  function renderStandings() {
+    if (!state.players || !state.players.length) return '<div class="empty">—</div>';
+    const sorted = [...state.players].sort((a, b) => {
+      if ((b.wins||0) !== (a.wins||0)) return (b.wins||0) - (a.wins||0);
+      return (b.diff||0) - (a.diff||0);
+    });
+    let html = `<table><tr><th>#</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+    sorted.forEach((p, i) => {
+      html += `<tr><td>${i+1}</td><td style="text-align:left;font-weight:bold;">${p.name}</td><td>${p.wins||0}-${(p.played||0)-(p.wins||0)}</td><td style="color:${(p.diff||0)>0?'var(--accent)':(p.diff||0)<0?'var(--v2-red)':'#eee'}">${(p.diff||0)>0?'+':''}${p.diff||0}</td></tr>`;
+    });
+    return html + `</table>`;
+  }
+
+  function renderGroupSchedule() {
+    if (!state.matches || !state.matches.length) return '<div class="empty">Noch kein Spielplan.</div>';
+    return state.matches.map(m => {
+      const p1 = state.players[m.p1], p2 = state.players[m.p2];
+      if (!p1 || !p2) return '';
+      const played = m.s1 != null && m.s2 != null;
+      const time = MB.getGroupMatchTime(state, m);
+      return `<div class="bracket-row"><span>${p1.name} vs ${p2.name}</span><span>${played ? `${m.s1}:${m.s2}` : `${time} Uhr`}</span></div>`;
+    }).join('');
+  }
+
+  function renderBracket() {
+    if (!state.playoffMatches || !state.playoffMatches.length) return '<div class="empty">Playoffs noch nicht gestartet.</div>';
+    const times = MB.computePlayoffTimes(state);
+    return MB.PLAYOFF_STRUCTURE.map(slotDef => {
+      const rows = slotDef.ids.map(id => {
+        const m = MB.getPlayoffMatch(state, id);
+        const label = MB.playoffLabels[id] || {};
+        const p1Name = m?.p1 ? (m.p1.id === -1 ? 'Freilos' : m.p1.name) : (label.p1 || 'TBD');
+        const p2Name = m?.p2 ? (m.p2.id === -1 ? 'Freilos' : m.p2.name) : (label.p2 || 'TBD');
+        const played = m && m.s1 != null && m.s2 != null;
+        const right = played ? `${m.s1}:${m.s2}` : `${times.byId[id] || times.groupEndTime} Uhr`;
+        return `<div class="bracket-row"><span>${p1Name} vs ${p2Name}</span><span>${right}</span></div>`;
+      }).join('');
+      return `<div class="bracket-session"><h3>${slotDef.session}</h3>${rows}</div>`;
+    }).join('');
+  }
+
+  function buildPlayoffPictureHtml() {
+    const m = state.playoffMatches;
+    if (!m || !m.length) return '<div class="empty">Playoffs noch nicht gestartet.</div>';
+    const groupEndTime = MB.computePlayoffTimes(state).groupEndTime;
+    const seedByName = MB.getGroupSeedsFinal(state);
+    const playoffLabels = MB.playoffLabels;
+    const getSeed = (player) => (player && player.id !== -1) ? (seedByName.get(player.name) || '') : '';
+
+    const formatPlayer = (player, placeholder, isWinner, isLoser, matchId) => {
+      if (!player) return `<span style="color:#4a5568">${placeholder}</span>`;
+      if (player.id === -1) return 'BYE';
+      const seed = `<span style="color:${isWinner ? 'var(--accent)' : '#fff'}; font-weight:bold; margin-right:4px;">[${getSeed(player)}]</span>`;
+      const logo = MB.getLogoHtml(player.team);
+      const isEndElimination = matchId.startsWith('lb') || matchId === 'ls' || matchId === 'lf' || matchId === 'gf';
+      const style = (isLoser && isEndElimination) ? 'text-decoration:line-through; opacity:0.55; filter:grayscale(1);' : '';
+      return `<span style="${style}">${seed}${player.name} ${logo || ''}</span>`;
+    };
+
+    const renderM = (match, idx, placeholderP1, placeholderP2) => {
+      if (!match) return '';
+      const bye = MB.isByeMatch(match);
+      const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !MB.isFinished(match);
+      const time = MB.addMinutes(groupEndTime, match.offset);
+      const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
+      const hasScore = match.s1 !== null && match.s2 !== null;
+      const w1 = hasScore && match.s1 > match.s2, w2 = hasScore && match.s2 > match.s1;
+      const l1 = hasScore && match.s1 < match.s2, l2 = hasScore && match.s2 < match.s1;
+      return `
+        <div class="bracket-match ${active ? 'match-active' : ''}">
+          <div class="bracket-match-header"><span>${match.phase || ''} | ${time}</span><span>${bye ? 'BYE' : (stadium || '')}</span></div>
+          <div class="bracket-team ${w2 ? 'winner' : ''}"><span>${formatPlayer(match.p2, placeholderP2, w2, l2, match.id)}</span><span class="bracket-score">${bye ? '—' : (match.s2 !== null ? match.s2 : '')}</span></div>
+          <div class="bracket-team ${w1 ? 'winner' : ''}"><span>${formatPlayer(match.p1, placeholderP1, w1, l1, match.id)}</span><span class="bracket-score">${bye ? '—' : (match.s1 !== null ? match.s1 : '')}</span></div>
+        </div>`;
+    };
+
+    let wcSummaryHtml = '<div class="wildcard-summary">';
+    [m[0], m[1], m[2], m[3]].forEach((match, i) => { if (match && match.p1) wcSummaryHtml += renderM(match, i, 'TBD', 'TBD'); });
+    wcSummaryHtml += '</div>';
+
+    const findId = (id) => m.find((x) => x.id === id);
+    const idxOf = (id) => state.playoffMatches.findIndex((x) => x.id === id);
+
+    return `
+      ${wcSummaryHtml}
+      <div class="playoff-grid" style="margin-top:14px;">
+        <div class="bracket-row-flow">
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Contender Round</div></div>
+            <div class="upper-floor">${renderM(m[6], 6, playoffLabels.us1.p1, playoffLabels.us1.p2)}${renderM(m[7], 7, playoffLabels.us2.p1, playoffLabels.us2.p2)}</div>
+            <div class="lower-floor">${renderM(m[4], 4, playoffLabels.lb1.p1, playoffLabels.lb1.p2)}${renderM(m[5], 5, playoffLabels.lb2.p1, playoffLabels.lb2.p2)}</div>
+          </div>
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Survival Round</div></div>
+            <div class="upper-floor"></div>
+            <div class="lower-floor">${renderM(m[8], 8, playoffLabels.lb3.p1, playoffLabels.lb3.p2)}${renderM(m[9], 9, playoffLabels.lb4.p1, playoffLabels.lb4.p2)}</div>
+          </div>
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Finals</div></div>
+            <div class="upper-floor" style="justify-content:center;">${renderM(m[10], 10, playoffLabels.uf.p1, playoffLabels.uf.p2)}</div>
+            <div class="lower-floor" style="justify-content:center;">${renderM(m[11], 11, playoffLabels.ls.p1, playoffLabels.ls.p2)}</div>
+          </div>
+          <div class="bracket-column">
+            <div class="column-header"><div class="bracket-title">Judgement Day</div></div>
+            <div class="upper-floor"></div>
+            <div class="lower-floor" style="justify-content:center;">${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}${renderM(findId('tb'), idxOf('tb'), playoffLabels.tb.p1, playoffLabels.tb.p2)}</div>
+          </div>
+          <div class="bracket-column" style="margin-left:10px; border-left:2px solid var(--v2-red); padding-left:12px;">
+            <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+            <div class="upper-floor" style="justify-content:center; height:100%;">${renderM(findId('gf'), idxOf('gf'), playoffLabels.gf.p1, playoffLabels.gf.p2)}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function showPlayoffPictureModal() {
+    document.getElementById('playoffPictureModalContent').innerHTML = buildPlayoffPictureHtml();
+    document.getElementById('playoffPictureModal').classList.add('open');
+  }
+  function closePlayoffPictureModal() { document.getElementById('playoffPictureModal').classList.remove('open'); }
+
+  function setTab(tab) { activeTab = tab; renderBody(); }
+
+  function renderBody() {
+    let inner = '';
+    if (activeTab === 'tabelle') inner = `<div class="v2-card"><div class="v2-card-title">📊 Tabelle</div>${renderStandings()}</div>`;
+    else if (activeTab === 'spielplan') inner = `<div class="v2-card"><div class="v2-card-title">📅 Gruppenspielplan</div>${renderGroupSchedule()}</div>`;
+    else if (activeTab === 'playoff') inner = `<div class="v2-card"><div class="v2-card-title">🏆 Playoff Picture <button class="btn-secondary" style="margin-left:auto;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></div>${renderBracket()}</div>`;
+    else if (activeTab === 'titel') inner = `<div class="v2-card"><div class="v2-card-title">🎯 Titelchancen</div>${renderTitleOdds()}</div>`;
+    document.getElementById('mbTabContent').innerHTML = inner;
+  }
+
+  function renderShell() {
+    document.getElementById('app').innerHTML = `
+      <div class="v2-tabbar">
+        <button class="v2-tab ${activeTab==='tabelle'?'active':''}" onclick="setTab('tabelle')">📊 Tabelle</button>
+        <button class="v2-tab ${activeTab==='spielplan'?'active':''}" onclick="setTab('spielplan')">📅 Spielplan</button>
+        <button class="v2-tab ${activeTab==='playoff'?'active':''}" onclick="setTab('playoff')">🏆 Playoffs</button>
+        <button class="v2-tab ${activeTab==='titel'?'active':''}" onclick="setTab('titel')">🎯 Titelchancen</button>
+      </div>
+      <div id="mbTabContent"></div>
+    `;
+    renderBody();
+  }
+
+  async function boot() {
+    try { state = await MB.fetchCloudState(); } catch (e) {
+      document.getElementById('app').innerHTML = `<div class="v2-card">Konnte Turnierdaten nicht laden. (${e.message})</div>`;
+      return;
+    }
+    MB.UI.setState(state);
+    if (!state.players || !state.players.length) {
+      document.getElementById('app').innerHTML = `<div class="v2-card"><div class="v2-empty">Es läuft aktuell kein Turnier.</div></div>`;
+      return;
+    }
+    try { history = await MB.loadAndBuildHistory(); } catch (e) { console.warn(e); }
+    renderShell();
+  }
+
+  boot();
+</script>
+</body>
+</html>

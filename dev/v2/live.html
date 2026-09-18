@@ -16,16 +16,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
-<script src="nav.js"></script>
 <script src="records.js"></script>
 <script src="tipp.js"></script>
 <script src="blog.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  /* Seiten-spezifisch: Variablen/Basis-Theme kommen aus styles.css.
-     Header/Burgermenü/Login kommen jetzt zentral aus nav.js (MB.Nav). */
+  /* Seiten-spezifisch: Variablen/Basis-Theme kommen aus styles.css */
   * { box-sizing: border-box; }
   body { padding-bottom: 60px; }
+  header {
+    padding: 18px 20px; border-bottom: 1px solid #22304366;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, rgba(213,10,10,0.08), transparent);
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(6px);
+  }
+  header h1 {
+    font-size: 1.1em; margin: 0; letter-spacing: 0.5px; text-transform: uppercase;
+    background: linear-gradient(90deg, #fff, var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header .clock { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 0.9em; opacity: 0.9; }
   .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
 
   /* Modernere Karten-Basis */
@@ -37,7 +47,7 @@
 
   /* HUB: Schnellzugriff-Kacheln (Spielplan/Tippspiel/Shop/Rückblicke) */
   .hub-grid {
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     margin-bottom: 16px;
   }
   .hub-card {
@@ -116,46 +126,18 @@
     transition: border-color 0.2s ease;
   }
   .article-card:hover { border-color: #22304380; }
-  /* Dashboard-Kacheln: neueste Blog-Beiträge + Hall-of-Fame-Spitzenreiter */
-  .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-  .dash-card {
-    background: var(--card); border-radius: 12px; padding: 12px 14px; text-decoration: none; color: inherit;
-    border: 1px solid #22304355; box-shadow: 0 4px 16px rgba(0,0,0,0.18); display: block; min-width: 0;
-  }
-  .dash-card h2 { font-size: 0.85em; margin: 0 0 8px; }
-  .dash-mini-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; font-size: 0.78em; border-bottom: 1px solid #22304333; }
-  .dash-mini-row:last-child { border-bottom: none; }
-  .dash-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .dash-medal { flex-shrink: 0; }
-  .dash-mini-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-  .dash-mini-sub { flex-shrink: 0; opacity: 0.6; font-size: 0.85em; }
-  .dash-mini-empty { font-size: 0.78em; opacity: 0.55; }
-  @media (max-width: 420px) {
-    .dash-grid { gap: 6px; }
-    .dash-card { padding: 10px 10px; }
-    .dash-card h2 { font-size: 0.72em; }
-    .dash-mini-title { font-size: 0.95em; }
-  }
-
-  .article-cat-badge {
-    display: inline-block; font-size: 0.65em; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.4px; padding: 3px 9px; border-radius: 999px; margin-bottom: 8px;
-  }
   .article-title { font-weight: 800; font-size: 1.05em; margin-bottom: 6px; }
   .article-body { font-size: 0.92em; line-height: 1.5; opacity: 0.92; white-space: pre-line; }
   .article-time { font-size: 0.72em; opacity: 0.5; margin-top: 8px; }
   .article-media img { width: 100%; border-radius: 8px; margin-top: 10px; }
-  .article-card > .article-media:first-child { margin: -16px -16px 12px; width: auto; }
-  .article-card > .article-media:first-child svg { border-radius: 12px 12px 0 0; }
   .article-media audio { width: 100%; margin-top: 10px; }
   .bracket-session { margin-bottom: 14px; }
   .bracket-session h3 { color: var(--accent); font-size: 0.85em; text-transform: uppercase; margin: 0 0 6px; }
   .bracket-row { display: flex; justify-content: space-between; font-size: 0.88em; padding: 5px 0; border-bottom: 1px solid #22304333; }
 
   @media (max-width: 420px) {
-    .hub-grid { grid-template-columns: repeat(5, 1fr); gap: 4px; }
-    .hub-icon { font-size: 1.25em; }
-    .hub-title { font-size: 0.56em; }
+    .hub-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .hub-title { font-size: 0.62em; }
     .hub-sub { display: none; }
     /* Läuft-gerade / Als-Nächstes bleiben auch auf schmalen Screens
        nebeneinander (spart Höhe) — dafür kompakter statt gestapelt. */
@@ -211,8 +193,7 @@
     position: sticky; top: 0; float: right; width: auto; margin-left: 8px;
     background: #22304380; padding: 6px 12px; z-index: 2;
   }
-  /* Playoff-Grid-Scroll läuft jetzt über den Zoom/Pan-Wrapper (.mb-zoom-wrap
-     aus nav.js) statt über natives overflow-x — siehe buildPlayoffPictureHtml(). */
+  .modal-box .playoff-grid { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   /* Eigenständige, in sich geschlossene Bracket-Optik fürs Popup (unabhängig
      von etwaigen Styles aus styles.css), damit das Bild überall gleich aussieht. */
   .modal-box .wildcard-summary { display: grid; gap: 8px; margin-bottom: 4px; }
@@ -234,7 +215,10 @@
 </head>
 <body>
 
-<header></header>
+<header>
+  <h1>📰 Madden Bowl Blog</h1>
+  <span class="clock" id="clock"></span>
+</header>
 
 <div class="wrap" id="app"></div>
 
@@ -261,14 +245,16 @@
   let history = null;
   let recordMoments = []; // { id, type, payload, provider, imageUrl, canvasEl, loading, error }
   let articles = [];
-  let hofSummary = { allTime: [], records: [] };
   let editingArticleId = null; // Admin: Artikel-ID, die gerade inline bearbeitet wird
   let composingArticle = false; // Admin: "+ Neuer Beitrag"-Formular offen?
   // ?view=full erlaubt einen direkten Link/Tab, der sofort in der
   // Vollansicht startet (z.B. vom "📋 Spielplan"-Hub-Kachel-Link aus).
   let viewMode = new URLSearchParams(location.search).get('view') === 'full' ? 'full' : 'blog';
 
-  MB.Nav.mount({ current: 'dashboard', title: 'Madden Bowl', subtitle: 'Dashboard & Blog', showClock: true, state: null, onAuthChange: () => render() });
+  function tickClock() {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  }
+  setInterval(tickClock, 1000); tickClock();
 
   // Angepinnter Kopfbereich (.pinned-top) muss direkt unter dem Header
   // beginnen — Header-Höhe kann je nach Gerät/Schrift leicht variieren,
@@ -285,8 +271,12 @@
   // =========================================================
   function renderHubGrid() {
     return `
+      <div style="margin-bottom:10px; font-size:0.78em; opacity:0.7;">
+        ℹ️ Diese Seite ist ab jetzt das <b>Admin-Werkzeug</b> (Rekord-Momente, Musik, Auslosung, <code>?Altima</code>).
+        Für die normale Nutzung geht's hier zum <a href="dashboard.html" style="color:var(--accent);">neuen Dashboard →</a>
+      </div>
       <div class="hub-grid">
-        <a class="hub-card" href="live.html?view=full">
+        <a class="hub-card" href="spielplan.html">
           <div class="hub-icon">📋</div>
           <div class="hub-title">Spielplan</div>
           <div class="hub-sub">Tabelle & Bracket</div>
@@ -296,17 +286,12 @@
           <div class="hub-title">Tippspiel</div>
           <div class="hub-sub">Mittippen</div>
         </a>
-        <a class="hub-card" href="hall_of_fame_live.html">
-          <div class="hub-icon">👑</div>
-          <div class="hub-title">Hall of Fame</div>
-          <div class="hub-sub">Ewige Tabelle</div>
-        </a>
         <a class="hub-card" href="shop.html">
           <div class="hub-icon">🛍️</div>
           <div class="hub-title">Fan-Shop</div>
           <div class="hub-sub">Merch</div>
         </a>
-        <a class="hub-card" href="#blog" onclick="scrollToFeed(event)">
+        <a class="hub-card" href="blog.html">
           <div class="hub-icon">📰</div>
           <div class="hub-title">Blog</div>
           <div class="hub-sub">Alle Artikel</div>
@@ -314,11 +299,9 @@
       </div>`;
   }
 
-  function scrollToFeed(e) {
-    if (e) e.preventDefault();
+  function scrollToFeed() {
     if (viewMode !== 'blog') { viewMode = 'blog'; render(); }
-    if (location.hash !== '#blog') location.hash = 'blog';
-    setTimeout(() => document.getElementById('blog')?.scrollIntoView({ behavior: 'smooth' }), 50);
+    setTimeout(() => document.getElementById('articleFeed')?.scrollIntoView({ behavior: 'smooth' }), 50);
   }
 
   // Sofort sichtbare Grundstruktur (Hub + Platzhalter), bevor überhaupt
@@ -348,7 +331,6 @@
   async function boot() {
     try {
       state = await MB.fetchCloudState();
-      MB.Nav.refreshAuth(state);
     } catch (e) {
       document.getElementById('app').innerHTML = `<div class="card empty">Konnte Turnierdaten nicht laden. (${e.message})</div>`;
       return;
@@ -372,11 +354,6 @@
       await refreshArticles();
     } catch (e) { console.warn('Artikel laden fehlgeschlagen:', e); }
 
-    try {
-      const raw = await MB.loadHistorySeasons();
-      hofSummary = MB.computeHallOfFameSummary(raw || []);
-    } catch (e) { console.warn('Hall-of-Fame-Widget laden fehlgeschlagen:', e); }
-
     if (isAdmin) {
       try { await refreshRecordMoments(); } catch (e) { console.warn('Rekord-Momente laden fehlgeschlagen:', e); }
     }
@@ -391,7 +368,6 @@
     setInterval(async () => {
       try {
         state = await MB.fetchCloudState();
-        MB.Nav.refreshAuth(state);
         await refreshArticles();
         if (isAdmin) await refreshRecordMoments();
         await render();
@@ -704,42 +680,6 @@
 
   // Angepinnte Sammel-Kachel: aktuelle & kommende Spiele + Tippspiel-Spitze,
   // platzsparend an einem Ort statt über mehrere Karten verteilt.
-  // Zwei kompakte Dashboard-Kacheln: neueste Blog-Beiträge + Hall-of-Fame-
-  // Spitzenreiter — jeweils mit Link zur vollen Unterseite (Blog-Feed/HOF).
-  function renderDashWidgets() {
-    const blogItems = articles.slice(0, 3).map(a => {
-      const cat = MB.Blog.categoryFor(a.kind);
-      return `
-        <div class="dash-mini-row">
-          <span class="dash-dot" style="background:${cat.color};"></span>
-          <span class="dash-mini-title">${a.title}</span>
-          <span class="dash-mini-sub">${timeAgo(a.created_at)}</span>
-        </div>`;
-    }).join('') || '<div class="dash-mini-empty">Noch keine Beiträge.</div>';
-
-    const hofItems = hofSummary.allTime.slice(0, 3).map((p, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
-      return `
-        <div class="dash-mini-row">
-          <span class="dash-medal">${medal}</span>
-          <span class="dash-mini-title">${p.name}</span>
-          <span class="dash-mini-sub">${p.points} Pkt.</span>
-        </div>`;
-    }).join('') || '<div class="dash-mini-empty">Noch keine abgeschlossenen Saisons.</div>';
-
-    return `
-      <div class="dash-grid">
-        <a class="dash-card" href="#blog" onclick="scrollToFeed(event)">
-          <h2>📰 Neueste Beiträge</h2>
-          ${blogItems}
-        </a>
-        <a class="dash-card" href="hall_of_fame_live.html">
-          <h2>👑 Hall of Fame</h2>
-          ${hofItems}
-        </a>
-      </div>`;
-  }
-
   async function renderAktuellesCard() {
     const top3Html = await renderTippTop3Html();
     return `
@@ -837,9 +777,7 @@
 
     return `
       ${wcSummaryHtml}
-      <div class="mb-zoom-wrap" id="playoffZoomWrap" style="margin-top:14px; height:62vh; border:1px solid #22304355;">
-      <div class="mb-zoom-inner" id="playoffZoomInner">
-      <div class="playoff-grid">
+      <div class="playoff-grid" style="margin-top:14px;">
         <div class="bracket-row-flow">
           <div class="bracket-column">
             <div class="column-header"><div class="bracket-title">Contender Round</div></div>
@@ -866,16 +804,12 @@
             <div class="upper-floor" style="justify-content:center; height:100%;">${renderM(findId('gf'), idxOf('gf'), playoffLabels.gf.p1, playoffLabels.gf.p2)}</div>
           </div>
         </div>
-      </div>
-      </div></div>`;
+      </div>`;
   }
 
   function showPlayoffPictureModal() {
     document.getElementById('playoffPictureModalContent').innerHTML = buildPlayoffPictureHtml();
     document.getElementById('playoffPictureModal').classList.add('open');
-    const wrap = document.getElementById('playoffZoomWrap');
-    const inner = document.getElementById('playoffZoomInner');
-    if (wrap && inner) MB.Nav.enableZoom(wrap, inner, { minScale: 1, maxScale: 3 });
   }
 
   function closePlayoffPictureModal() {
@@ -933,16 +867,12 @@
             </div>
           </div>`;
       }
-      const cat = MB.Blog.categoryFor(a.kind);
-      const hasImage = a.media_type === 'image' && a.media_url;
       return `
       <div class="article-card">
-        ${!hasImage ? `<div class="article-media">${MB.Blog.placeholderSvgMarkup(a.kind)}</div>` : ''}
-        <span class="article-cat-badge" style="background:${cat.color}22; color:${cat.color}; border:1px solid ${cat.color}66;">${cat.icon} ${cat.label}</span>
         <div class="article-title">${a.title}</div>
         <div class="article-body">${a.body}</div>
         ${a.media_type === 'audio' ? `<div class="article-media"><audio controls src="${a.media_url}"></audio></div>` : ''}
-        ${hasImage ? `<div class="article-media"><img src="${a.media_url}"></div>` : ''}
+        ${a.media_type === 'image' ? `<div class="article-media"><img src="${a.media_url}"></div>` : ''}
         <div class="article-time">${timeAgo(a.created_at)}</div>
         ${isAdmin ? `
           <div style="display:flex; gap:8px; margin-top:8px;">
@@ -1002,15 +932,11 @@
     app.innerHTML = `
       ${renderHubGrid()}
       <div class="pinned-top">${aktuellesHtml}</div>
-      ${renderDashWidgets()}
       ${isAdmin ? `<div class="card"><h2>🏆 Rekord-Momente (Admin)</h2>${renderRecordMoments()}</div>` : ''}
-      <div id="blog">${mainContent}</div>
+      ${mainContent}
     `;
     setHeaderHeightVar();
     if (isAdmin) attachRecordMomentPreviews();
-    if (location.hash === '#blog' && viewMode === 'blog') {
-      setTimeout(() => document.getElementById('blog')?.scrollIntoView({ behavior: 'smooth' }), 80);
-    }
   }
 
   boot();

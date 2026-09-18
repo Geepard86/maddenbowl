@@ -3,88 +3,97 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl — Tippspiel</title>
+<title>Madden Bowl VI — Tippspiel</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
-<script src="nav.js"></script>
 <script src="tipp.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  /* Seiten-spezifisch: Variablen/Basis-Theme kommen aus styles.css.
-     Header/Burgermenü/Login kommen jetzt zentral aus nav.js (MB.Nav). */
-  body { padding-bottom: 60px; }
-  .wrap { max-width: 640px; margin: 0 auto; padding: 16px; }
+  /* Gleiche Klassennamen/Logik wie zuvor — nur die CSS-Regeln sind ans
+     neue v2-Design (dunkles Navy statt Rot als Grundfarbe, Gold als Akzent
+     statt Cyan) angeglichen, damit sich am JS nichts ändern musste. */
   select, input[type=number], input[type=password], input[type=text] {
-    background: #0e1622; color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
-    padding: 8px 10px; font-size: 1em; width: 100%;
+    background: var(--v2-bg); color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
+    padding: 8px 10px; font-size: 1em; width: 100%; box-sizing: border-box;
   }
   label { font-size: 0.8em; opacity: 0.75; display: block; margin-bottom: 4px; margin-top: 10px; }
   button {
-    background: var(--nfl-red); color: white; border: none; border-radius: 6px;
+    background: var(--v2-red); color: white; border: none; border-radius: 6px;
     padding: 10px 16px; font-weight: bold; cursor: pointer; margin-top: 12px; width: 100%;
   }
   button.secondary { background: #263449; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
   .match-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    background: #0e1622; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; flex-wrap: wrap;
+    background: var(--v2-surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; flex-wrap: wrap;
   }
   .match-teams { font-weight: bold; font-size: 0.95em; }
   .pick-result { font-size: 0.8em; }
-  .pick-correct { color: var(--accent); }
-  .pick-wrong { color: var(--nfl-red); }
+  .pick-correct { color: #22C55E; }
+  .pick-wrong { color: var(--v2-red); }
   .pick-pending { opacity: 0.6; }
   .ou-choice { display: flex; gap: 10px; margin-top: 6px; }
-  .ou-choice label { display: flex; align-items: center; gap: 6px; font-size: 0.9em; opacity: 1; margin: 0; flex: 1; background: #0e1622; padding: 8px; border-radius: 6px; }
+  .ou-choice label { display: flex; align-items: center; gap: 6px; font-size: 0.9em; opacity: 1; margin: 0; flex: 1; background: var(--v2-surface-2); padding: 8px; border-radius: 6px; }
   .leaderboard-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #22304333; }
   .leaderboard-row:last-child { border-bottom: none; }
-  .leaderboard-row.me { color: var(--accent); font-weight: bold; }
+  .leaderboard-row.me { color: var(--v2-gold); font-weight: bold; }
   .hint { font-size: 0.75em; opacity: 0.6; margin-top: 6px; }
-  .error { color: var(--nfl-red); font-size: 0.85em; margin-top: 8px; }
-  .points-badge { background: var(--accent); color: #06231d; font-weight: 800; border-radius: 10px; padding: 1px 8px; font-size: 0.75em; }
+  .error { color: var(--v2-red); font-size: 0.85em; margin-top: 8px; }
+  .points-badge { background: var(--v2-gold); color: #241c00; font-weight: 800; border-radius: 10px; padding: 1px 8px; font-size: 0.75em; }
 
-  /* Team-Kacheln fürs Tippen (statt Dropdown): Name + Record + Quote,
-     tippbar durch Antippen, mit @ dazwischen (Auswärts @ Heim, wie
-     überall sonst auch). */
   .tile-vs { display: flex; align-items: stretch; gap: 8px; margin-bottom: 4px; }
   .team-tile {
-    flex: 1; background: #0e1622; border: 2px solid #2a3a4d; border-radius: 8px;
+    flex: 1; background: var(--v2-surface-2); border: 2px solid #2a3a4d; border-radius: 8px;
     padding: 8px 6px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s;
   }
-  .team-tile.selected { border-color: var(--accent); background: #10241d; }
+  .team-tile.selected { border-color: var(--v2-gold); background: rgba(201,151,0,0.12); }
   .team-tile.locked { cursor: default; opacity: 0.85; }
-  .team-tile .tile-name { font-weight: bold; font-size: 0.95em; }
-  .team-tile .tile-record { font-size: 0.75em; opacity: 0.7; margin-top: 2px; }
-  .team-tile .tile-odds { font-size: 0.8em; color: var(--accent); margin-top: 2px; }
+  .team-tile .tile-logo img { width: 24px; height: 24px; object-fit: contain; }
+  .team-tile .tile-name { font-weight: bold; font-size: 0.9em; margin-top: 2px; }
+  .team-tile .tile-record { font-size: 0.72em; opacity: 0.7; margin-top: 2px; }
+  .team-tile .tile-odds { font-size: 0.78em; color: var(--v2-gold); margin-top: 2px; }
   .tile-at { align-self: center; font-size: 0.8em; opacity: 0.6; }
-  .community-tally { font-size: 0.75em; opacity: 0.65; margin: 4px 0 8px; text-align: center; }
-  .match-tile-row { background: #0e1622; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .match-tile-row { background: var(--v2-surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
   .subtle-save-btn {
     background: none; border: 1px solid #2a3a4d; color: #9db3c8; width: auto;
     padding: 3px 10px; font-size: 0.75em; font-weight: normal; margin-top: 4px;
   }
-  .subtle-save-btn.dirty { border-color: var(--accent); color: var(--accent); }
+  .subtle-save-btn.dirty { border-color: var(--v2-gold); color: var(--v2-gold); }
   .spieltag-badge { font-size: 0.7em; padding: 1px 8px; border-radius: 8px; margin-left: 8px; }
   .spieltag-badge.done { background: #263449; opacity: 0.8; }
-  .spieltag-badge.active { background: var(--accent); color: #06231d; font-weight: bold; }
+  .spieltag-badge.active { background: var(--v2-gold); color: #241c00; font-weight: bold; }
   .bulk-save-bar {
-    position: sticky; bottom: 0; background: #0b1119; border-top: 1px solid #22304366;
+    position: sticky; bottom: 0; background: var(--v2-bg); border-top: 1px solid #22304366;
     padding: 10px 0; margin-top: 10px; z-index: 5;
   }
+  .bulk-save-bar button { margin-top: 0; }
+
+  /* Neu: User-Übersicht + Sperr-Hinweis wie im Mockup */
+  .user-overview { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .user-overview .who { font-weight: 900; font-size: 1.05em; }
+  .user-overview .rank { font-size: 0.72em; color: var(--v2-silver); }
+  .user-stat { text-align: center; }
+  .user-stat .val { font-weight: 900; font-size: 1.1em; }
+  .user-stat .lbl { font-size: 0.62em; color: var(--v2-silver); text-transform: uppercase; }
+  .allget-badge { margin-left: auto; background: rgba(34,197,94,0.15); color: #22C55E; border: 1px solid #22C55E; border-radius: 10px; padding: 4px 10px; font-size: 0.7em; font-weight: 800; }
+  .allget-badge.pending { background: rgba(201,151,0,0.12); color: var(--v2-gold); border-color: var(--v2-gold); }
 </style>
 </head>
-<body>
+<body class="v2">
 
-<header></header>
+<div class="v2-wrap" id="app">
+  <div class="v2-card"><div class="v2-empty">Lade Tippspiel…</div></div>
+</div>
 
-<div class="wrap" id="app"></div>
-
+<script src="ui.js"></script>
 <script>
+  MB.UI.mountHeader({ active: 'tippspiel' });
+
   let state = null;
   let history = null;
-  let currentPlayer = MB.Auth.getPlayer();
   let ouLines = {}; // { spieltagIndex: line }
+  let activeTab = 'aktuell'; // aktuell | offen | alle | fertig | tabelle
 
   // Lokal gehaltene, NOCH NICHT gespeicherte Auswahl (Tippen auf eine Kachel
   // markiert nur, gespeichert wird erst per Klick — entweder dezent pro
@@ -99,19 +108,16 @@
   // neu, ohne erneut zu laden (kein Flackern, kein Refetch pro Klick).
   let cache = null;
 
+  function currentPlayer() { return MB.UI.currentPlayer(); }
+
   async function boot() {
     try {
       state = await MB.fetchCloudState();
-      MB.ensureWettbuero(state); // nur für PIN-Login-Accounts, kein Kapital mehr relevant
-      currentPlayer = MB.Auth.currentPlayer(state);
-      MB.Nav.mount({
-        current: 'tipp', title: 'Madden Bowl', subtitle: 'Tippspiel', state,
-        onAuthChange: () => { currentPlayer = MB.Auth.getPlayer(); render(); },
-      });
     } catch (e) {
-      document.getElementById('app').innerHTML = `<div class="card error">Konnte Turnierdaten nicht laden. Läuft aktuell ein Turnier? (${e.message})</div>`;
+      document.getElementById('app').innerHTML = `<div class="v2-card error">Konnte Turnierdaten nicht laden. Läuft aktuell ein Turnier? (${e.message})</div>`;
       return;
     }
+    MB.UI.setState(state, () => render());
     if (!history) {
       history = await MB.loadAndBuildHistory();
     }
@@ -123,30 +129,28 @@
       if (typing) return;
       try {
         state = await MB.fetchCloudState();
-        MB.ensureWettbuero(state);
-        MB.Nav.refreshAuth(state);
+        MB.UI.setState(state);
         await render();
       } catch (e) { /* still fine, keep last known state */ }
     }, 20000);
   }
 
-  async function persistAccounts() {
-    // Nur für neu gesetzte PINs nötig (kein Kapital mehr zu synchronisieren).
-    try { await MB.pushCloudState(state); } catch (e) { console.error('Speichern fehlgeschlagen', e); }
-  }
-
   async function render() {
     const app = document.getElementById('app');
-    MB.Nav.refreshAuth(state);
 
     if (!state.players || state.players.length === 0) {
-      app.innerHTML = `<div class="card">Es läuft aktuell kein Turnier. Sobald der Admin eins gestartet hat, kannst du hier tippen.</div>`;
+      app.innerHTML = `<div class="v2-card"><div class="v2-empty">Es läuft aktuell kein Turnier. Sobald der Admin eins gestartet hat, kannst du hier tippen.</div></div>`;
       return;
     }
 
-    if (!currentPlayer || !state.wettbuero.accounts[currentPlayer]) {
-      currentPlayer = null;
-      renderLogin(app);
+    if (!currentPlayer()) {
+      app.innerHTML = `
+        <div class="v2-card" style="text-align:center; padding:26px 16px;">
+          <div style="font-size:2em; margin-bottom:8px;">🏆</div>
+          <div style="font-weight:800; margin-bottom:6px;">Melde dich an, um mitzutippen</div>
+          <div class="hint" style="margin-bottom:12px;">Tippe auf Sieger, Over/Under und den Turniersieger — und miss dich mit der Community.</div>
+          <button style="width:auto;" onclick="MB.UI.openLogin()">Anmelden</button>
+        </div>`;
       return;
     }
 
@@ -154,55 +158,13 @@
     renderDashboardHtml(app);
   }
 
-  function renderLogin(app) {
-    const names = state.players.map(p => p.name);
-    app.innerHTML = `
-      <div class="card">
-        <h2>Anmelden</h2>
-        <label for="playerSelect">Spieler</label>
-        <select id="playerSelect">${names.map(n => `<option value="${n}">${n}</option>`).join('')}</select>
-        <label for="pinInput" id="pinLabel">PIN</label>
-        <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="4-6 stellige PIN" />
-        <div id="loginHint" class="hint"></div>
-        <button id="loginBtn">Anmelden / PIN festlegen</button>
-        <div id="loginError" class="error"></div>
-      </div>`;
-
-    const sel = document.getElementById('playerSelect');
-    const hint = document.getElementById('loginHint');
-    const updateHint = () => {
-      const acc = state.wettbuero.accounts[sel.value];
-      hint.textContent = (acc && acc.pin)
-        ? 'PIN eingeben zum Anmelden.'
-        : 'Für diesen Spieler ist noch keine PIN gesetzt — die eingegebene PIN wird jetzt festgelegt.';
-    };
-    sel.onchange = updateHint;
-    updateHint();
-
-    document.getElementById('loginBtn').onclick = async () => {
-      const name = sel.value;
-      const pin = document.getElementById('pinInput').value.trim();
-      const errEl = document.getElementById('loginError');
-      errEl.textContent = '';
-      const result = await MB.Auth.login(state, name, pin);
-      if (!result.ok) { errEl.textContent = result.error; return; }
-      currentPlayer = result.name;
-      render();
-    };
-  }
-
-  function logout() {
-    MB.Auth.logout();
-    currentPlayer = null;
-    render();
-  }
-
   // ---------------------------------------------------------
   // DATEN LADEN (nur bei echtem Reload — Boot/Poll, NICHT bei Klicks)
   // ---------------------------------------------------------
   async function loadDashboardData() {
     const tournamentId = MB.getCurrentTournamentId();
-    const myPicks = await MB.Tipp.fetchPicksForPlayer(tournamentId, currentPlayer);
+    const me = currentPlayer();
+    const myPicks = await MB.Tipp.fetchPicksForPlayer(tournamentId, me);
     const myPicksByKey = new Map(myPicks.map(p => [`${p.kind}:${p.ref_key}`, p.pick]));
 
     const spieltage = MB.Tipp.getSpieltage(state);
@@ -234,6 +196,11 @@
     return `(${p.wins || 0}-${losses})`;
   }
 
+  function playerLogo(name) {
+    const p = state.players.find(pl => pl.name === name);
+    return p ? (MB.getLogoHtml(p.team) || '') : '';
+  }
+
   function matchOdds(homeName, awayName) {
     try {
       const odds = MB.computeOddsForMatch(history, state, homeName, awayName);
@@ -241,22 +208,38 @@
     } catch (e) { return { home: '—', away: '—' }; }
   }
 
-  function communityTally(matchId, homeName, awayName) {
+  function communityCounts(matchId, homeName, awayName) {
     const counts = {}; counts[homeName] = 0; counts[awayName] = 0;
     cache.allPicks.forEach(p => {
       if (p.kind === 'match' && p.ref_key === matchId && (p.pick === homeName || p.pick === awayName)) {
         counts[p.pick] = (counts[p.pick] || 0) + 1;
       }
     });
+    return counts;
+  }
+
+  function renderVoteBar(matchId, homeName, awayName) {
+    const counts = communityCounts(matchId, homeName, awayName);
     const total = counts[homeName] + counts[awayName];
-    if (!total) return 'Noch keine Community-Tipps.';
-    return `So tippt die Community: ${awayName} ${counts[awayName]} · ${homeName} ${counts[homeName]}`;
+    if (!total) return `<div class="hint" style="text-align:center;">Noch keine Community-Tipps.</div>`;
+    const pctAway = Math.round((counts[awayName] / total) * 100);
+    const pctHome = 100 - pctAway;
+    return `
+      <div class="v2-votebar">
+        <span class="v2-votebar-pct">${pctAway}%</span>
+        <div class="v2-votebar-track">
+          <div class="v2-votebar-away" style="width:${pctAway}%"></div>
+          <div class="v2-votebar-home" style="width:${pctHome}%"></div>
+        </div>
+        <span class="v2-votebar-pct">${pctHome}%</span>
+      </div>`;
   }
 
   // ---------------------------------------------------------
   // EIN MATCH ALS KACHEL-ZEILE (Auswärts links @ Heim rechts)
   // ---------------------------------------------------------
   function renderMatchTile(m) {
+    const me = currentPlayer();
     const key = `match:${m.matchId}`;
     const savedPick = cache.myPicksByKey.get(key);
     const pending = pendingMatchPicks[m.matchId];
@@ -271,6 +254,7 @@
       const cls = `team-tile ${selected ? 'selected' : ''} ${pickable ? '' : 'locked'}`;
       const click = pickable ? `onclick="selectMatchPick('${m.matchId}','${name}')"` : '';
       return `<div class="${cls}" ${click}>
+        <div class="tile-logo">${playerLogo(name)}</div>
         <div class="tile-name">${name}</div>
         <div class="tile-record">${playerRecord(name)}</div>
         <div class="tile-odds">@ ${quote}</div>
@@ -297,7 +281,7 @@
           <div class="tile-at">@</div>
           ${tile(m.homeName, true)}
         </div>
-        <div class="community-tally">${communityTally(m.matchId, m.homeName, m.awayName)}</div>
+        ${renderVoteBar(m.matchId, m.homeName, m.awayName)}
         ${resultLine}
         ${pickable ? `
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
@@ -340,7 +324,7 @@
     const val = pendingMatchPicks[matchId];
     if (!val) return;
     try {
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'match', matchId, val);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'match', matchId, val);
       cache.myPicksByKey.set(`match:${matchId}`, val);
       delete pendingMatchPicks[matchId];
       renderDashboardHtml(document.getElementById('app'));
@@ -352,7 +336,7 @@
     const val = el ? el.value.trim() : pendingTiebreaker;
     if (!val) { alert('Bitte eine Zahl eingeben.'); return; }
     try {
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'tiebreaker', 'tiebreaker', val);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'tiebreaker', 'tiebreaker', val);
       cache.myPicksByKey.set('tiebreaker:tiebreaker', val);
       pendingTiebreaker = null;
       renderDashboardHtml(document.getElementById('app'));
@@ -368,7 +352,7 @@
     const val = pendingOuPicks[spieltagIndex];
     if (!val) return;
     try {
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'overunder', `spieltag-${spieltagIndex}`, val);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'overunder', `spieltag-${spieltagIndex}`, val);
       cache.myPicksByKey.set(`overunder:spieltag-${spieltagIndex}`, val);
       delete pendingOuPicks[spieltagIndex];
       renderDashboardHtml(document.getElementById('app'));
@@ -385,15 +369,15 @@
   async function saveAllPending() {
     const jobs = [];
     Object.entries(pendingMatchPicks).forEach(([matchId, val]) => {
-      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'match', matchId, val)
+      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'match', matchId, val)
         .then(() => { cache.myPicksByKey.set(`match:${matchId}`, val); delete pendingMatchPicks[matchId]; }));
     });
     Object.entries(pendingOuPicks).forEach(([idx, val]) => {
-      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'overunder', `spieltag-${idx}`, val)
+      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'overunder', `spieltag-${idx}`, val)
         .then(() => { cache.myPicksByKey.set(`overunder:spieltag-${idx}`, val); delete pendingOuPicks[idx]; }));
     });
     if (pendingTiebreaker !== null) {
-      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'tiebreaker', 'tiebreaker', pendingTiebreaker)
+      jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'tiebreaker', 'tiebreaker', pendingTiebreaker)
         .then(() => { cache.myPicksByKey.set('tiebreaker:tiebreaker', pendingTiebreaker); pendingTiebreaker = null; }));
     }
     try {
@@ -405,52 +389,114 @@
   }
 
   // ---------------------------------------------------------
+  // USER-ÜBERSICHT (Rang / Punkte / Quote / "alles getippt")
+  // ---------------------------------------------------------
+  function computeMyQuote() {
+    const me = currentPlayer();
+    let correct = 0, total = 0;
+    cache.spieltage.forEach(st => st.matches.forEach(m => {
+      if (!m.finished) return;
+      const pick = cache.myPicksByKey.get(`match:${m.matchId}`);
+      if (!pick) return;
+      total++;
+      const winner = m.s1 > m.s2 ? m.homeName : m.awayName;
+      if (pick === winner) correct++;
+    }));
+    return total ? Math.round((correct / total) * 100) : null;
+  }
+
+  function isAllTipped() {
+    let allDone = true;
+    cache.spieltage.forEach(st => {
+      st.matches.forEach(m => {
+        if (MB.Tipp.isMatchPickable(m, cache.schedule) && !m.finished && !cache.myPicksByKey.get(`match:${m.matchId}`) && pendingMatchPicks[m.matchId] === undefined) allDone = false;
+      });
+      const ouKey = `overunder:spieltag-${st.index}`;
+      if (MB.Tipp.isSpieltagOuPickable(st, cache.schedule) && !cache.myPicksByKey.get(ouKey) && pendingOuPicks[st.index] === undefined) allDone = false;
+    });
+    return allDone;
+  }
+
+  function renderUserOverview() {
+    const me = currentPlayer();
+    const idx = cache.standings.findIndex(r => r.name === me);
+    const myRow = idx >= 0 ? cache.standings[idx] : { points: 0 };
+    const quote = computeMyQuote();
+    const allTipped = isAllTipped();
+    return `
+      <div class="v2-card">
+        <div class="user-overview">
+          <div class="tile-logo">${playerLogo(me)}</div>
+          <div>
+            <div class="who">${me}</div>
+            <div class="rank">#${idx >= 0 ? idx + 1 : '—'} Gesamtrang</div>
+          </div>
+          <div class="user-stat"><div class="val">${myRow.points}</div><div class="lbl">Punkte</div></div>
+          <div class="user-stat"><div class="val">${quote != null ? quote + '%' : '—'}</div><div class="lbl">Richtige Tipps</div></div>
+          <span class="allget-badge ${allTipped ? '' : 'pending'}">${allTipped ? '✅ Alles getippt!' : '⏳ Tipps offen'}</span>
+        </div>
+      </div>`;
+  }
+
+  // ---------------------------------------------------------
   // DASHBOARD (rein synchron, arbeitet nur auf `cache` + pending*)
   // ---------------------------------------------------------
+  function setTab(tab) { activeTab = tab; renderDashboardHtml(document.getElementById('app')); }
+
   function renderDashboardHtml(app) {
     const seasonOpen = MB.Tipp.seasonPicksOpen(state);
+    const currentIdx = cache.spieltage.findIndex(st => MB.Tipp.getSpieltagStatus(st) !== 'done');
 
-    let html = `
-      <div class="card">
-        <button class="secondary" onclick="logout()">Abmelden (${currentPlayer})</button>
-      </div>
-
-      <div class="card">
-        <h2>🏆 Gesamt-Tipps</h2>
-        ${renderSeasonSection(seasonOpen)}
-      </div>
-    `;
-
-    cache.spieltage.forEach(st => {
-      const status = MB.Tipp.getSpieltagStatus(st);
-      html += `
-        <div class="card">
-          <h2>📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : 'läuft'}</span></h2>
-          ${renderSpieltagSection(st, status)}
+    let bodyHtml = '';
+    if (activeTab === 'aktuell') {
+      const st = currentIdx >= 0 ? cache.spieltage[currentIdx] : cache.spieltage[cache.spieltage.length - 1];
+      bodyHtml = st ? renderSpieltagCard(st) : `<div class="v2-card"><div class="v2-empty">Keine Partien terminiert.</div></div>`;
+      bodyHtml += `<div class="v2-card"><div class="v2-card-title">🏆 Gesamt-Tipps</div>${renderSeasonSection(seasonOpen)}</div>`;
+    } else if (activeTab === 'offen') {
+      const openMatches = [];
+      cache.spieltage.forEach(st => st.matches.forEach(m => { if (!m.finished && MB.Tipp.isMatchPickable(m, cache.schedule)) openMatches.push(m); }));
+      bodyHtml = `<div class="v2-card"><div class="v2-card-title">🕓 Offene Spiele</div>${openMatches.length ? openMatches.map(renderMatchTile).join('') : `<div class="v2-empty">Aktuell nichts zu tippen.</div>`}</div>`;
+    } else if (activeTab === 'alle') {
+      bodyHtml = `<div class="v2-card"><div class="v2-card-title">🏆 Gesamt-Tipps</div>${renderSeasonSection(seasonOpen)}</div>`;
+      cache.spieltage.forEach(st => { bodyHtml += renderSpieltagCard(st); });
+      if (!cache.spieltage.length) bodyHtml += `<div class="v2-card"><div class="hint">Noch keine Partien terminiert.</div></div>`;
+    } else if (activeTab === 'fertig') {
+      const done = cache.spieltage.filter(st => MB.Tipp.getSpieltagStatus(st) === 'done');
+      bodyHtml = done.length ? done.map(renderSpieltagCard).join('') : `<div class="v2-card"><div class="v2-empty">Noch kein Spieltag abgeschlossen.</div></div>`;
+    } else if (activeTab === 'tabelle') {
+      bodyHtml = `
+        <div class="v2-card">
+          <div class="v2-card-title">📊 Tabelle</div>
+          ${renderStandingsTable(cache.standings)}
+          <div class="hint">Sieger-Tipp 1P · Over/Under 2P · Season-Sieger 5P · Zweiter/Toilet-Bowl je 3P. Bei Punktegleichstand entscheidet die Tiebreaker-Schätzung (Gesamtpunkte im Finale).</div>
         </div>`;
-    });
-
-    if (!cache.spieltage.length) {
-      html += `<div class="card"><div class="hint">Noch keine Partien terminiert.</div></div>`;
     }
 
-    html += `
-      <div class="card">
-        <h2>📊 Tippstand</h2>
-        ${renderStandingsTable(cache.standings)}
-        <div class="hint">Sieger-Tipp 1P · Over/Under 2P · Season-Sieger 5P · Zweiter/Toilet-Bowl je 3P. Bei Punktegleichstand entscheidet die Tiebreaker-Schätzung (Gesamtpunkte im Finale).</div>
-      </div>
-    `;
-
     const pendingCount = countPendingSaves();
-    html += `
+    app.innerHTML = `
+      ${renderUserOverview()}
+      <div class="v2-tabbar">
+        <button class="v2-tab ${activeTab==='aktuell'?'active':''}" onclick="setTab('aktuell')">Aktueller Spieltag</button>
+        <button class="v2-tab ${activeTab==='offen'?'active':''}" onclick="setTab('offen')">Offene Spiele</button>
+        <button class="v2-tab ${activeTab==='alle'?'active':''}" onclick="setTab('alle')">Alle Tipps</button>
+        <button class="v2-tab ${activeTab==='fertig'?'active':''}" onclick="setTab('fertig')">Abgeschlossen</button>
+        <button class="v2-tab ${activeTab==='tabelle'?'active':''}" onclick="setTab('tabelle')">Tabelle</button>
+      </div>
+      ${bodyHtml}
       <div class="bulk-save-bar">
         <button onclick="saveAllPending()" ${pendingCount ? '' : 'disabled'}>
           💾 Alle Tipps speichern${pendingCount ? ` (${pendingCount})` : ''}
         </button>
       </div>`;
+  }
 
-    app.innerHTML = html;
+  function renderSpieltagCard(st) {
+    const status = MB.Tipp.getSpieltagStatus(st);
+    return `
+      <div class="v2-card">
+        <div class="v2-card-title">📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : 'läuft'}</span></div>
+        ${renderSpieltagSection(st, status)}
+      </div>`;
   }
 
   // ---------------------------------------------------------
@@ -470,7 +516,7 @@
         <div class="match-row"><span>Turniersieger</span><span>${champion || '—'}</span></div>
         <div class="match-row"><span>Zweiter Platz</span><span>${runnerUp || '—'}</span></div>
         <div class="match-row"><span>Toilet-Bowl-Sieger</span><span>${tb || '—'}</span></div>
-        <div class="hint">🎯 Der Tiebreaker (Gesamtpunkte im Finale) steht jetzt unten direkt beim Finalspiel.</div>
+        <div class="hint">🎯 Der Tiebreaker (Gesamtpunkte im Finale) steht jetzt oben direkt beim Finalspiel.</div>
       `;
     }
 
@@ -489,7 +535,7 @@
       <label>🚽 Toilet-Bowl-Sieger (3 Punkte)</label>
       <select id="seasonToiletBowl">${opt(cache.myPicksByKey.get('season:toiletBowlWinner'))}</select>
       <button onclick="saveSeasonPicks()">Speichern</button>
-      <div class="hint">🎯 Der Tiebreaker (Gesamtpunkte im Finale) ist weiter unten beim Finalspiel zu finden, sobald es feststeht.</div>
+      <div class="hint">🎯 Der Tiebreaker (Gesamtpunkte im Finale) ist beim Finalspiel zu finden, sobald es feststeht.</div>
     `;
   }
 
@@ -498,9 +544,9 @@
     const runnerUp = document.getElementById('seasonRunnerUp').value;
     const toiletBowl = document.getElementById('seasonToiletBowl').value;
     try {
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'season', 'champion', champion);
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'season', 'runnerUp', runnerUp);
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer, 'season', 'toiletBowlWinner', toiletBowl);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'champion', champion);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'runnerUp', runnerUp);
+      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'toiletBowlWinner', toiletBowl);
       cache.myPicksByKey.set('season:champion', champion);
       cache.myPicksByKey.set('season:runnerUp', runnerUp);
       cache.myPicksByKey.set('season:toiletBowlWinner', toiletBowl);
@@ -547,9 +593,10 @@
   // TIPPSTAND
   // ---------------------------------------------------------
   function renderStandingsTable(standings) {
+    const me = currentPlayer();
     return standings.map((row, i) => `
-      <div class="leaderboard-row ${row.name === currentPlayer ? 'me' : ''}">
-        <span>${i + 1}. ${row.name}${row.name === currentPlayer ? ' (du)' : ''}</span>
+      <div class="leaderboard-row ${row.name === me ? 'me' : ''}">
+        <span>${i + 1}. ${row.name}${row.name === me ? ' (du)' : ''}</span>
         <span class="points-badge">${row.points} P</span>
       </div>`).join('');
   }
