@@ -28,51 +28,64 @@
 </div>
 <script>
   /*
-   * Deep-Link aus dem Dashboard übernehmen.
+   * Deep-Link-Unterstützung
    *
-   * Die Produktkarten verlinken z.B. auf:
+   * Produktkarten auf der Dashboard-Seite verlinken z.B. auf:
    *   shop.html#!/articles/T2372...
    *
-   * Spreadshop verwendet bei eingebetteten Shops Hashbang-URLs.
-   * Wir übernehmen deshalb den Hash explizit und lassen ihn beim
-   * Laden des Shop-Clients unverändert bestehen.
+   * Spreadshop verwendet bei eingebetteten Shops Hashbang-Routen.
+   * Für die JS-Integration erwartet startToken den Pfad OHNE "#!/".
    */
   var incomingHash = window.location.hash || '';
+  var startToken = '';
+
+  if (incomingHash.indexOf('#!/') === 0) {
+    startToken = incomingHash.substring(3);
+  }
 
   var spread_shop_config = {
     shopName: 'maddenbowl',
     locale: 'de_DE',
     prefix: 'https://maddenbowl.myspreadshop.de',
-    baseId: 'myShop'
+    baseId: 'myShop',
+    startToken: startToken || undefined,
+    updateMetadata: false
   };
 
-  // FALLBACK: Das offizielle Spreadshop-Widget-Skript ersetzt #myShop nach
-  // dem Laden komplett. Läuft das aus irgendeinem Grund nicht durch (Skript
-  // blockiert/langsam/Fehler — z.B. durch einen Werbeblocker, der Domains
-  // mit "shop" im Namen filtert), bleibt sonst nur der nackte Platzhalter-
-  // Link stehen. Deshalb hier zusätzlich: läuft #myShop nach kurzer Zeit
-  // immer noch unverändert, oder schlägt das Skript direkt fehl (onerror
-  // unten), wird der Shop stattdessen per iframe direkt eingebettet —
-  // so ist er in jedem Fall "in der Seite", nie nur ein Link.
+  // FALLBACK:
+  // Falls das Spreadshop-Widget nicht geladen werden kann, wird der Shop
+  // weiterhin per iframe eingebettet. Auch dabei wird der Deep-Link erhalten.
   var shopEmbedded = false;
+
   function embedShopFallback() {
     if (shopEmbedded) return;
     shopEmbedded = true;
+
     var el = document.getElementById('myShop');
     if (!el) return;
+
     var iframe = document.createElement('iframe');
-    // Auch im Fallback den Deep-Link mitnehmen.
+
+    // Beispiel:
+    // shop.html#!/articles/ABC
+    // ->
+    // https://maddenbowl.myspreadshop.de#!/articles/ABC
     iframe.src = spread_shop_config.prefix + incomingHash;
+
     iframe.title = 'Madden Bowl Fan-Shop';
     iframe.loading = 'lazy';
-    iframe.style.cssText = 'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
+    iframe.style.cssText =
+      'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
+
     el.innerHTML = '';
     el.appendChild(iframe);
   }
+
   var shopFallbackTimer = setTimeout(function () {
     var el = document.getElementById('myShop');
-    // Wenn das Widget-Skript erfolgreich geladen hat, hat es den
-    // Platzhalter-Link längst ersetzt — dann hier nichts tun.
+
+    // Wenn das Widget erfolgreich geladen hat, hat es den Platzhalter-Link
+    // bereits ersetzt. Dann nichts weiter tun.
     if (el && el.querySelector('a[href="' + spread_shop_config.prefix + '"]')) {
       embedShopFallback();
     }
