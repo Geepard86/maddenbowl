@@ -21,21 +21,21 @@
 (function (global) {
   "use strict";
 
-  const IMAGE_URL_TEMPLATE = (id) =>
-    `https://image.spreadshirtmedia.net/image-server/v1/products/${id}/views/1?width=300&height=300`;
+  const IMAGE_URL_TEMPLATE = (id, view = 1) =>
+  `https://image.spreadshirtmedia.net/image-server/v1/products/${id}/views/${view}?width=300&height=300`;
 
   const SHOP_PREFIX = "shop.html#!/articles/";
 
   const PRODUCTS = [
-    { id: "6aa8d5135af448088cbc409c", name: "Lasse - The Playcaller", preis: "32,49 €" },
-    { id: "6aa8d05ee66f06035604722a", name: "Tobi - The Wildcard", preis: "32,49 €" },
-    { id: "6aa7edf9e66f0603564c94f4", name: "Markus - The Cold Blooded", preis: "32,49 €" },
-    { id: "6aa7edf9af48c111d2ab25fa", name: "Micha - The Chaos Factor", preis: "32,49 €" },
-    { id: "6aa7edf95af448088cf42320", name: "Alex - The Contender", preis: "32,49 €" },
-    { id: "6aa7edf9e66f0603564c8ee6", name: "The Rookie Class", preis: "32,49 €" },
-    { id: "6aa7edf95af448088cf41d12", name: "Tobi - The Mouth", preis: "32,49 €" },
-    { id: "6aa7edf9af48c111d2ab25eb", name: "Tim - The Defender", preis: "32,49 €" },
-    { id: "6aa7edf75af448088cf416ed", name: "Altima Bowl VI", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X15Y2D360161482W34913H41896", name: "Lasse - The Playcaller", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X40Y5D360161468W29900H44850", name: "Tobi - The Wildcard", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X40Y16D360155352W29899H44849", name: "Markus - The Cold Blooded", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X40Y16D360155245W29900H44850", name: "Micha - The Chaos Factor", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X40Y16D360155286W29900H44850", name: "Alex - The Contender", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X15Y31D360155248W34899H41880", name: "The Rookie Class", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X15Y8D360155311W34998H36743", name: "Tobi - The Mouth", preis: "32,49 €" },
+  { id: "T2372A2PA7710PT17X15Y11D360155283W34913H41896", name: "Tim - The Defender", preis: "32,49 €" },
+  { id: "T2372A2PA7711PT17X15Y10D360155285W34900H23266", name: "Altima Bowl VI", preis: "32,49 €", view: 2 },
   ];
 
   function getFeaturedProducts(count) {
@@ -48,15 +48,15 @@
     return picked;
   }
 
-  function renderProductCardHtml(prod) {
-    return `
-      <a class="v2-merch-item" href="${SHOP_PREFIX}${prod.id}">
-        <img src="${IMAGE_URL_TEMPLATE(prod.id)}" alt="${prod.name}" loading="lazy"
-             onerror="this.style.display='none'">
-        <div class="v2-merch-name">${prod.name}</div>
-        <div class="v2-merch-price">${prod.preis}</div>
-      </a>`;
-  }
+function renderProductCardHtml(prod) {
+  return `
+    <a class="v2-merch-item" href="${SHOP_PREFIX}${prod.id}">
+      <img src="${IMAGE_URL_TEMPLATE(prod.id, prod.view || 1)}" alt="${prod.name}" loading="lazy"
+           onerror="this.style.display='none'">
+      <div class="v2-merch-name">${prod.name}</div>
+      <div class="v2-merch-price">${prod.preis}</div>
+    </a>`;
+}
 
   global.MB = global.MB || {};
   global.MB.Shop = { PRODUCTS, getFeaturedProducts, renderProductCardHtml, IMAGE_URL_TEMPLATE };
