@@ -27,6 +27,18 @@
   <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
 </div>
 <script>
+  /*
+   * Deep-Link aus dem Dashboard übernehmen.
+   *
+   * Die Produktkarten verlinken z.B. auf:
+   *   shop.html#!/articles/T2372...
+   *
+   * Spreadshop verwendet bei eingebetteten Shops Hashbang-URLs.
+   * Wir übernehmen deshalb den Hash explizit und lassen ihn beim
+   * Laden des Shop-Clients unverändert bestehen.
+   */
+  var incomingHash = window.location.hash || '';
+
   var spread_shop_config = {
     shopName: 'maddenbowl',
     locale: 'de_DE',
@@ -49,7 +61,8 @@
     var el = document.getElementById('myShop');
     if (!el) return;
     var iframe = document.createElement('iframe');
-    iframe.src = spread_shop_config.prefix;
+    // Auch im Fallback den Deep-Link mitnehmen.
+    iframe.src = spread_shop_config.prefix + incomingHash;
     iframe.title = 'Madden Bowl Fan-Shop';
     iframe.loading = 'lazy';
     iframe.style.cssText = 'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
