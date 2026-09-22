@@ -1,109 +1,80 @@
 /* =========================================================================
    MADDEN BOWL — SHOP-PRODUKTE (shop-products.js)
    -------------------------------------------------------------------------
-   Produktliste fürs "Featured Merch"-Widget.
+   Statische Produktliste fürs "Featured Merch"-Widget im Dashboard.
 
-   Standard: view 1
-   Altima Bowl VI: view 2
+   WARUM DER LINK BISHER AUF DIE SHOP-STARTSEITE GING:
+   Das eingebettete Spreadshop-Widget (shopclient.nocache.js in shop.html)
+   ist eine eigene kleine App, die ihre Route beim Erststart aus der
+   Konfiguration "spread_shop_config.startToken" liest — NICHT aus dem
+   URL-Hash beim Laden ("#!/articles/<id>" wird nur erkannt, wenn man
+   *innerhalb* der schon laufenden Widget-App klickt, nicht bei einem
+   frischen Seitenaufruf von außen). Deshalb landete ein direkter Link
+   immer auf der Startseite.
 
-   Nur Tim – The Defender hat aktuell einen echten Spreadshop-Deep-Link.
+   DIE ECHTE LÖSUNG: shop.html liest jetzt "?p=<startToken>" aus der URL
+   und reicht das als spread_shop_config.startToken durch, BEVOR das
+   Widget-Skript lädt — dafür ist genau der Teil der Spreadshop-URL nötig,
+   den man per Rechtsklick -> "Link kopieren" auf einem Produkt im ECHTEN
+   Shop bekommt (also nicht diese Datei hier, sondern
+   https://maddenbowl.myspreadshop.de selbst), OHNE das
+   "https://maddenbowl.myspreadshop.de/" davor. Für "Tim - The Defender"
+   hast du das schon geliefert:
+     defender-A6aa7edf9af48c111d2ab25eb?sellable=oNVGVn7gybSkMG1a7JGJ-2372-8&appearance=2
+   → als startToken unten eingetragen.
+
+   Für die anderen 8 Produkte fehlt uns dieser Code (die IDs unten sind nur
+   Druck-/Bild-IDs, aus denen sich der Sellable-Code nicht ableiten lässt) —
+   bitte bei jedem Produkt im echten Shop einmal "Link kopieren" machen und
+   den Teil nach ".de/" hier als `startToken` eintragen. Ohne startToken
+   verlinkt die Kachel einfach auf die Shop-Startseite (kein kaputter Link,
+   nur kein Deep-Link).
    ========================================================================= */
 (function (global) {
   "use strict";
 
   const IMAGE_URL_TEMPLATE = (id, view = 1) =>
-    `https://image.spreadshirtmedia.net/image-server/v1/products/${id}/views/${view}?width=300&height=300`;
+  `https://image.spreadshirtmedia.net/image-server/v1/products/${id}/views/${view}?width=300&height=300`;
+
+  const SHOP_PAGE = "shop.html";
 
   const PRODUCTS = [
-    {
-      id: "T2372A2PA7710PT17X15Y2D360161482W34913H41896",
-      name: "Lasse - The Playcaller",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X40Y5D360161468W29900H44850",
-      name: "Tobi - The Wildcard",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X40Y16D360155352W29899H44849",
-      name: "Markus - The Cold Blooded",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X40Y16D360155245W29900H44850",
-      name: "Micha - The Chaos Factor",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X40Y16D360155286W29900H44850",
-      name: "Alex - The Contender",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X15Y31D360155248W34899H41880",
-      name: "The Rookie Class",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X15Y8D360155311W34998H36743",
-      name: "Tobi - The Mouth",
-      preis: "32,49 €",
-      view: 1
-    },
-    {
-      id: "T2372A2PA7710PT17X15Y11D360155283W34913H41896",
-      name: "Tim - The Defender",
-      preis: "32,49 €",
-      view: 1,
-      deeplink: "defender-A6aa7edf9af48c111d2ab25eb?sellable=oNVGVn7gybSkMG1a7JGJ-2372-8&appearance=2"
-    },
-    {
-      id: "T2372A2PA7711PT17X15Y10D360155285W34900H23266",
-      name: "Altima Bowl VI",
-      preis: "32,49 €",
-      view: 2
-    }
+  { id: "T2372A2PA7710PT17X15Y2D360161482W34913H41896", name: "Lasse - The Playcaller", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X40Y5D360161468W29900H44850", name: "Tobi - The Wildcard", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X40Y16D360155352W29899H44849", name: "Markus - The Cold Blooded", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X40Y16D360155245W29900H44850", name: "Micha - The Chaos Factor", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X40Y16D360155286W29900H44850", name: "Alex - The Contender", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X15Y31D360155248W34899H41880", name: "The Rookie Class", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X15Y8D360155311W34998H36743", name: "Tobi - The Mouth", preis: "32,49 €", startToken: null },
+  { id: "T2372A2PA7710PT17X15Y11D360155283W34913H41896", name: "Tim - The Defender", preis: "32,49 €",
+    startToken: "defender-A6aa7edf9af48c111d2ab25eb?sellable=oNVGVn7gybSkMG1a7JGJ-2372-8&appearance=2" },
+  { id: "T2372A2PA7711PT17X15Y10D360155285W34900H23266", name: "Altima Bowl VI", preis: "32,49 €", view: 2, startToken: null },
   ];
 
   function getFeaturedProducts(count) {
     const pool = [...PRODUCTS];
     const picked = [];
-
     for (let i = 0; i < count && pool.length; i++) {
       const idx = Math.floor(Math.random() * pool.length);
       picked.push(pool.splice(idx, 1)[0]);
     }
-
     return picked;
   }
 
-  function renderProductCardHtml(prod) {
-    const href = prod.deeplink
-      ? `shop.html#!/${prod.deeplink}`
-      : "shop.html";
+function productLink(prod) {
+  return prod.startToken ? `${SHOP_PAGE}?p=${encodeURIComponent(prod.startToken)}` : SHOP_PAGE;
+}
 
-    return `
-      <a class="v2-merch-item" href="${href}">
-        <img src="${IMAGE_URL_TEMPLATE(prod.id, prod.view || 1)}"
-             alt="${prod.name}" loading="lazy"
-             onerror="this.style.display='none'">
-        <div class="v2-merch-name">${prod.name}</div>
-        <div class="v2-merch-price">${prod.preis}</div>
-      </a>`;
-  }
+function renderProductCardHtml(prod) {
+  return `
+    <a class="v2-merch-item" href="${productLink(prod)}">
+      <img src="${IMAGE_URL_TEMPLATE(prod.id, prod.view || 1)}" alt="${prod.name}" loading="lazy"
+           onerror="this.style.display='none'">
+      <div class="v2-merch-name">${prod.name}</div>
+      <div class="v2-merch-price">${prod.preis}</div>
+    </a>`;
+}
 
   global.MB = global.MB || {};
-  global.MB.Shop = {
-    PRODUCTS,
-    getFeaturedProducts,
-    renderProductCardHtml,
-    IMAGE_URL_TEMPLATE
-  };
+  global.MB.Shop = { PRODUCTS, getFeaturedProducts, renderProductCardHtml, productLink, IMAGE_URL_TEMPLATE };
 })(window);

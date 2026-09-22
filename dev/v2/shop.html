@@ -27,21 +27,22 @@
   <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
 </div>
 <script>
-  // Deep-Link aus shop.html#!/... an den eingebetteten Spreadshop weitergeben.
-  var incomingHash = window.location.hash || '';
-  var startToken = '';
-
-  if (incomingHash.indexOf('#!/') === 0) {
-    startToken = incomingHash.substring(3);
-  }
+  // Deep-Link zu einem einzelnen Produkt: shop.html?p=<startToken>, wobei
+  // <startToken> exakt der Teil der Spreadshop-URL ist, der hinter der
+  // Shop-Domain steht (z.B. "defender-A6aa.....?sellable=...&appearance=2"
+  // — genau das, was "Rechtsklick -> Link kopieren" auf einem Produkt im
+  // echten Shop liefert, ohne "https://maddenbowl.myspreadshop.de/" davor).
+  // Ohne ?p= verhält sich alles wie bisher (Shop-Startseite).
+  var params = new URLSearchParams(window.location.search);
+  var startToken = params.get('p');
 
   var spread_shop_config = {
     shopName: 'maddenbowl',
     locale: 'de_DE',
     prefix: 'https://maddenbowl.myspreadshop.de',
-    baseId: 'myShop',
-    startToken: startToken
+    baseId: 'myShop'
   };
+  if (startToken) spread_shop_config.startToken = startToken;
 
   // FALLBACK: Das offizielle Spreadshop-Widget-Skript ersetzt #myShop nach
   // dem Laden komplett. Läuft das aus irgendeinem Grund nicht durch (Skript
@@ -58,7 +59,7 @@
     var el = document.getElementById('myShop');
     if (!el) return;
     var iframe = document.createElement('iframe');
-    iframe.src = spread_shop_config.prefix + incomingHash;
+    iframe.src = startToken ? (spread_shop_config.prefix + '/' + startToken) : spread_shop_config.prefix;
     iframe.title = 'Madden Bowl Fan-Shop';
     iframe.loading = 'lazy';
     iframe.style.cssText = 'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
