@@ -559,577 +559,111 @@
   // germanSource, years, mbValues, germanValues, r }.
   // ======================================================================
 
-  // ----------------------------------------------------------------------
-  // STORY ENGINE
-  // ----------------------------------------------------------------------
-  // Die 101 externen Statistiken bekommen hier jeweils eine feste semantische
-  // "Storyline": keine neue Statistik, keine neue Kausalität, sondern eine
-  // bewusst absurde Brücke zwischen dem Namen der Statistik und der Madden-
-  // Kennzahl. Die Texte werden deterministisch aus diesen Bausteinen erzeugt,
-  // sodass keine LLM-/API-Kosten entstehen.
-  //
-  // Spezifische IDs können mit overrides überschrieben werden. Für die übrigen
-  // Statistiken greift die Themenfamilie aus dem Namen + der Kategorie.
-  // ----------------------------------------------------------------------
-
-  // ----------------------------------------------------------------------
-  // Sprachliche Beschreibungen
-  // ----------------------------------------------------------------------
-  // Die Rohdaten liefern nur einen Statistiknamen. Für natürliche deutsche
-  // Sätze brauchen wir aber je nach Statistik unterschiedliche grammatische
-  // Formen (z. B. "die Zahl der Lebendgeborenen", "der Bierabsatz", ...).
-  // Deshalb speichern wir hier keine bloßen Wörter, sondern sprachliche
-  // Rollen. Die Engine kann dieselbe Statistik dadurch in verschiedenen
-  // Satzkonstruktionen verwenden, ohne Grammatik zu zerlegen.
-
-  const GERMAN_STORY_OVERRIDES = {
-    "lebendgeborene": {
-      subject: "die Zahl der Lebendgeborenen",
-      genitive: "der Lebendgeborenen",
-      rising: "steigenden Zahl der Lebendgeborenen",
-      object: "die Zahl der Lebendgeborenen",
-    },
-    "gesamtbevolkerung-deutschland": {
-      subject: "die Gesamtbevölkerung Deutschlands",
-      genitive: "der Gesamtbevölkerung Deutschlands",
-      rising: "wachsenden Gesamtbevölkerung Deutschlands",
-      object: "die Gesamtbevölkerung Deutschlands",
-    },
-    "bierabsatz-deutschland": {
-      subject: "der Bierabsatz in Deutschland",
-      genitive: "des Bierabsatzes in Deutschland",
-      rising: "steigenden Bierabsatzes in Deutschland",
-      object: "den Bierabsatz in Deutschland",
-    },
-    "bierverbrauch-je-einwohner": {
-      subject: "der Bierverbrauch pro Einwohner",
-      genitive: "des Bierverbrauchs pro Einwohner",
-      rising: "steigenden Bierverbrauchs pro Einwohner",
-      object: "den Bierverbrauch pro Einwohner",
-    },
-    "eheschlieungen": {
-      subject: "die Zahl der Eheschließungen",
-      genitive: "der Eheschließungen",
-      rising: "steigenden Zahl der Eheschließungen",
-      object: "die Zahl der Eheschließungen",
-    },
-    "ehescheidungen": {
-      subject: "die Zahl der Ehescheidungen",
-      genitive: "der Ehescheidungen",
-      rising: "steigenden Zahl der Ehescheidungen",
-      object: "die Zahl der Ehescheidungen",
-    },
-    "kinobesucher-deutschland": {
-      subject: "die Zahl der Kinobesucher in Deutschland",
-      genitive: "der Kinobesucher in Deutschland",
-      rising: "steigenden Zahl der Kinobesucher in Deutschland",
-      object: "die Zahl der Kinobesucher in Deutschland",
-    },
-    "paketsendungen": {
-      subject: "die Zahl der Paketsendungen",
-      genitive: "der Paketsendungen",
-      rising: "steigenden Zahl der Paketsendungen",
-      object: "die Zahl der Paketsendungen",
-    },
-    "paketmarkt-umsatz": {
-      subject: "der Umsatz des Paketmarkts",
-      genitive: "des Umsatzes des Paketmarkts",
-      rising: "steigenden Umsatzes des Paketmarkts",
-      object: "den Umsatz des Paketmarkts",
-    },
-    "onlinehandel-deutschland": {
-      subject: "der Onlinehandel in Deutschland",
-      genitive: "des Onlinehandels in Deutschland",
-      rising: "wachsenden Onlinehandels in Deutschland",
-      object: "den Onlinehandel in Deutschland",
-    },
-    "kartoffelernte-deutschland": {
-      subject: "die Kartoffelernte in Deutschland",
-      genitive: "der Kartoffelernte in Deutschland",
-      rising: "steigenden Kartoffelernte in Deutschland",
-      object: "die Kartoffelernte in Deutschland",
-    },
-    "super-bowl-zuschauer-usa": {
-      subject: "die Zahl der Super-Bowl-Zuschauer in den USA",
-      genitive: "der Super-Bowl-Zuschauer in den USA",
-      rising: "steigenden Zahl der Super-Bowl-Zuschauer in den USA",
-      object: "die Zahl der Super-Bowl-Zuschauer in den USA",
-    },
-    "super-bowl-werbung-30-sek-spot": {
-      subject: "der Preis eines 30-Sekunden-Werbespots beim Super Bowl",
-      genitive: "des Preises eines 30-Sekunden-Werbespots beim Super Bowl",
-      rising: "steigenden Preises eines 30-Sekunden-Werbespots beim Super Bowl",
-      object: "den Preis eines 30-Sekunden-Werbespots beim Super Bowl",
-    },
-    "fitnessstudio-mitglieder": {
-      subject: "die Zahl der Fitnessstudio-Mitglieder",
-      genitive: "der Fitnessstudio-Mitglieder",
-      rising: "steigenden Zahl der Fitnessstudio-Mitglieder",
-      object: "die Zahl der Fitnessstudio-Mitglieder",
-    },
-    "fahrrad-e-bike-durchschnittlicher-verkaufspreis": {
-      subject: "der durchschnittliche Verkaufspreis von Fahrrädern und E-Bikes",
-      genitive: "des durchschnittlichen Verkaufspreises von Fahrrädern und E-Bikes",
-      rising: "steigenden durchschnittlichen Verkaufspreises von Fahrrädern und E-Bikes",
-      object: "den durchschnittlichen Verkaufspreis von Fahrrädern und E-Bikes",
-    },
-    "durchschnittlicher-e-bike-preis": {
-      subject: "der durchschnittliche E-Bike-Preis",
-      genitive: "des durchschnittlichen E-Bike-Preises",
-      rising: "steigenden durchschnittlichen E-Bike-Preises",
-      object: "den durchschnittlichen E-Bike-Preis",
-    },
-    "globale-musikindustrie-recorded-music-umsatz": {
-      subject: "der Umsatz der globalen Musikindustrie mit Recorded Music",
-      genitive: "des Umsatzes der globalen Musikindustrie mit Recorded Music",
-      rising: "steigenden Umsatzes der globalen Musikindustrie mit Recorded Music",
-      object: "den Umsatz der globalen Musikindustrie mit Recorded Music",
-    },
-    "globale-musikindustrie-subscription-streaming-umsatz": {
-      subject: "der Umsatz mit Musik-Streaming-Abos weltweit",
-      genitive: "des Umsatzes mit Musik-Streaming-Abos weltweit",
-      rising: "steigenden Umsatzes mit Musik-Streaming-Abos weltweit",
-      object: "den Umsatz mit Musik-Streaming-Abos weltweit",
-    },
-    "unternehmensinsolvenzen": {
-      subject: "die Zahl der Unternehmensinsolvenzen",
-      genitive: "der Unternehmensinsolvenzen",
-      rising: "steigenden Zahl der Unternehmensinsolvenzen",
-      object: "die Zahl der Unternehmensinsolvenzen",
-    },
+  // Kategorie-abhängige Formulierung für die "Prognose": was ein weiterer
+  // Anstieg bzw. Rückgang bei einer deutschen Statistik dieser Art
+  // plausibel bedeuten würde. Bewusst nicht pauschal "Verknappung" für
+  // alles — bei Ereignis-Zählungen (Übernachtungen, Paketsendungen) gibt es
+  // keine "Knappheit", bei Preisen/Kosten ist "Verteuerung" treffender als
+  // "Engpass", usw. Kategorie kommt aus GERMAN_STATS in spurious.js
+  // (candidate.germanCategory); unbekannte/neutrale Kategorien (rate,
+  // infrastructure, other) fallen auf schlichtes Anstieg/Rückgang zurück.
+  const CATEGORY_TREND_WORDS = {
+    goods: { up: "ein Überangebot", down: "ein Engpass" },
+    price: { up: "eine Verteuerung", down: "eine Verbilligung" },
+    revenue: { up: "ein Boom", down: "ein Einbruch" },
+    events: { up: "ein Ansturm", down: "eine Flaute" },
+    population: { up: "ein Zuwachs", down: "ein Schwund" },
+    infrastructure: { up: "ein weiterer Ausbau", down: "ein Rückgang" },
+    rate: { up: "ein weiterer Anstieg", down: "ein weiterer Rückgang" },
+    other: { up: "ein weiterer Anstieg", down: "ein weiterer Rückgang" },
   };
 
-  function quoteName(name) {
-    return `„${name}“`;
+  function trendWordFor(category, direction) {
+    const words = CATEGORY_TREND_WORDS[category] || CATEGORY_TREND_WORDS.other;
+    return direction === "up" ? words.up : words.down;
   }
 
-  function germanDescriptor(candidate) {
-    const id = candidate.germanStatId || "";
-    if (GERMAN_STORY_OVERRIDES[id]) return GERMAN_STORY_OVERRIDES[id];
-
-    const name = candidate.germanName || "der Statistik";
-    const lower = name.toLowerCase();
-
-    // Häufige Wortformen, die sich zuverlässig aus dem Namen ableiten lassen.
-    if (/^(zahl|anzahl) /.test(lower) || /\b(anzahl|zahl)\b/.test(lower)) {
-      return { subject: `die ${name.replace(/^(die |der |das )/i, "")}`, genitive: name, rising: `steigenden ${name}`, object: `die ${name}` };
-    }
-    if (/^verbrauch /.test(lower) || /verbrauch/.test(lower)) {
-      return { subject: `der ${name}`, genitive: `des ${name}`, rising: `steigenden ${name}`, object: `den ${name}` };
-    }
-    if (/^(umsatz|preis|wert|betrag|absatz|ertrag|gewinn|verbrauch)/i.test(name)) {
-      const article = /^(umsatz|preis|wert|betrag|absatz|ertrag|gewinn|verbrauch)/i.test(name) ? "der" : "die";
-      const stem = name.replace(/^(der |die |das )/i, "");
-      return article === "der"
-        ? { subject: `der ${stem}`, genitive: `des ${stem}`, rising: `steigenden ${stem}`, object: `den ${stem}` }
-        : { subject: `die ${stem}`, genitive: `der ${stem}`, rising: `steigenden ${stem}`, object: `die ${stem}` };
-    }
-    if (/produktion|ernte|nachfrage|bevölkerung|fläche|leistung|produktion|wirtschaft/i.test(lower)) {
-      return { subject: `die ${name}`, genitive: `der ${name}`, rising: `steigenden ${name}`, object: `die ${name}` };
-    }
-
-    return {
-      subject: quoteName(name),
-      genitive: quoteName(name),
-      rising: `steigenden ${quoteName(name)}`,
-      object: quoteName(name),
-    };
-  }
-
-  const MB_STORY_OVERRIDES = {
-    totalPoints: {
-      subject: "die Gesamtpunkte des Madden Bowl",
-      afterMit: "den Gesamtpunkten des Madden Bowl",
-      rising: "steigenden Gesamtpunkten des Madden Bowl",
-      with: "mit den Gesamtpunkten des Madden Bowl",
-    },
-    avgPerGame: {
-      subject: "der Punkteschnitt pro Spiel",
-      afterMit: "dem Punkteschnitt pro Spiel",
-      rising: "steigenden Punkteschnitt pro Spiel",
-      with: "mit dem Punkteschnitt pro Spiel",
-    },
-    gamesPlayed: {
-      subject: "die Anzahl der gespielten Partien",
-      afterMit: "der Anzahl der gespielten Partien",
-      rising: "steigenden Anzahl der gespielten Partien",
-      with: "mit der Anzahl der gespielten Partien",
-    },
-    highestSingle: {
-      subject: "der höchste Einzel-Score der Saison",
-      afterMit: "dem höchsten Einzel-Score der Saison",
-      rising: "steigenden Einzel-Score der Saison",
-      with: "mit dem höchsten Einzel-Score der Saison",
-    },
-    biggestMargin: {
-      subject: "die größte Punktedifferenz der Saison",
-      afterMit: "der größten Punktedifferenz der Saison",
-      rising: "steigenden Punktedifferenz",
-      with: "mit der größten Punktedifferenz der Saison",
-    },
-    closestMargin: {
-      subject: "der knappste Sieg der Saison",
-      afterMit: "dem knappsten Sieg der Saison",
-      rising: "knapper werdenden Siegen",
-      with: "mit dem knappsten Sieg der Saison",
-    },
-    playerCount: {
-      subject: "die Anzahl der Teilnehmer",
-      afterMit: "der Anzahl der Teilnehmer",
-      rising: "steigenden Anzahl der Teilnehmer",
-      with: "mit der Anzahl der Teilnehmer",
-    },
-    championPoints: {
-      subject: "die Punkte des Champions",
-      afterMit: "den Punkten des Champions",
-      rising: "steigenden Punkten des Champions",
-      with: "mit den Punkten des Champions",
-    },
-  };
-
-  function mbDescriptor(candidate) {
-    const key = candidate.mbStatKey;
-    if (MB_STORY_OVERRIDES[key]) return MB_STORY_OVERRIDES[key];
-    const label = candidate.mbLabel || "der Madden-Bowl-Kennzahl";
-    return {
-      subject: label,
-      afterMit: label,
-      rising: `steigenden ${label}`,
-      with: `mit ${label}`,
-    };
-  }
-
-  const STORY_OVERRIDES = {
-    "lebendgeborene": {
-      subject: "Babys und Nachwuchs",
-      bridge: ({ mb, german }) => `Mit jedem neuen Erdenbürger wächst schließlich auch die Zahl der potenziellen Fans. ${german.subject} könnte damit auf höchst indirektem Weg beeinflussen, wie viel ${mb.subject} später auf dem virtuellen Football-Feld zusammenkommt. Was heute im Kreißsaal beginnt, könnte Jahre später in den Madden-Statistiken auftauchen.`,
-      punch: "Offenbar beginnt die Vorbereitung auf den nächsten Madden Bowl deutlich früher als gedacht."
-    },
-    "gesamtbevolkerung-deutschland": {
-      subject: "Mehr Menschen, mehr Madden",
-      bridge: ({ mb, german }) => `Mehr Menschen bedeuten auch mehr potenzielle Spieler, Zuschauer und Diskussionen über Madden. Wenn ${german.subject} wächst, gibt es schließlich mehr Menschen, die ${mb.subject} überhaupt erzeugen, verfolgen oder kommentieren können.`,
-      punch: "Demografisches Wachstum wird damit plötzlich zur Spieltagsstatistik."
-    },
-    "bierabsatz-deutschland": {
-      subject: "Football-Abende und Bier",
-      bridge: ({ mb, german }) => `Ein spannender Madden-Abend braucht schließlich die passende Getränkeversorgung. Wenn ${mb.subject} besonders viel Aufmerksamkeit bindet, kann man sich leicht vorstellen, dass auch ${german.subject} im Kühlschrank eine Rolle spielt.`,
-      punch: "Touchdowns rein, Bierabsatz raus – die Getränkewirtschaft dürfte genau hinschauen."
-    },
-    "bierverbrauch-je-einwohner": {
-      subject: "Madden-Abende und Getränke",
-      bridge: ({ mb, german }) => `Wer einen langen Abend mit Madden verbringt, braucht irgendwann eine Erfrischung. Ein besonders intensiver Spielverlauf könnte damit auf wundersame Weise mit ${german.subject} zusammenfallen.`,
-      punch: "Vielleicht ist der wahre Spielplan nicht auf dem Bildschirm, sondern im Kühlschrank."
-    },
-    "kinobesucher-deutschland": {
-      subject: "Unterhaltung und Publikum",
-      bridge: ({ mb, german }) => `Madden ist schließlich auch Unterhaltung. Wenn ${mb.subject} mehr Aufmerksamkeit erzeugt, könnte ein Teil dieses Publikums anschließend auf der Suche nach der nächsten großen Show direkt ins Kino weiterziehen – und damit ${german.subject} anschieben.`,
-      punch: "Vom virtuellen Rasen direkt auf die große Leinwand – ein überraschend kurzer Weg."
-    },
-    "paketsendungen": {
-      subject: "Online-Shopping und Belohnungen",
-      bridge: ({ mb, german }) => `Nach einem erfolgreichen Madden-Abend muss eine Belohnung her: ein neues Controller-Kabel, ein Trikot oder das nächste Gaming-Gadget. Irgendwann klingelt dafür der Paketbote, und schon lässt sich ${german.subject} wunderbar in die Geschichte einbauen.`,
-      punch: "Der Madden Bowl könnte damit indirekt zum Konjunkturprogramm für Paketboten werden."
-    },
-    "onlinehandel-deutschland": {
-      subject: "Shopping und Gaming",
-      bridge: ({ mb, german }) => `Wo gespielt wird, wird auch gekauft: Controller, Konsolen, Fernseher und Zubehör warten nur darauf, dass ${mb.subject} den nächsten Kaufimpuls auslöst. So landet ein Teil der virtuellen Spannung möglicherweise im ${german.subject}.`,
-      punch: "Der virtuelle Football-Platz könnte damit einen erstaunlich realen Warenkorb füllen."
-    },
-    "kartoffelernte-deutschland": {
-      subject: "Football-Snacks",
-      bridge: ({ mb, german }) => `Ein Madden-Abend ohne Snacks wäre kaum vorstellbar. Pommes, Chips und andere Kartoffelprodukte begleiten schließlich jede ernsthafte Analyse von ${mb.subject}. Wenn die Saison läuft, könnte das damit auf geheimnisvolle Weise sogar bei ${german.subject} Spuren hinterlassen.`,
-      punch: "Vielleicht wird die nächste Kartoffelernte deshalb bereits im Spielplan mitgerechnet."
-    },
-    "super-bowl-zuschauer-usa": {
-      subject: "Football-Euphorie",
-      bridge: ({ mb, german }) => `Mehr ${mb.subject} bedeutet mehr Aufmerksamkeit für Football – und Aufmerksamkeit ist bekanntlich ansteckend. Was mit einem virtuellen Spiel beginnt, könnte so bis zu ${german.subject} reichen.`,
-      punch: "Der Madden Bowl wäre damit überraschend nah am echten Football-Geschäft."
-    },
-    "super-bowl-werbung-30-sek-spot": {
-      subject: "Football und Werbemillionen",
-      bridge: ({ mb, german }) => `Wo ${mb.subject} für Aufmerksamkeit sorgt, wird auch Werbung interessant. Jeder zusätzliche Zuschauer ist schließlich eine weitere Gelegenheit, einen kurzen Werbespot zwischen zwei Spielzügen zu platzieren – und damit den Preis von ${german.subject} zumindest in dieser Geschichte mitzubewegen.`,
-      punch: "Aus ein paar virtuellen Punkten wird so im Extremfall ein Millionenmarkt für 30 Sekunden Sendezeit."
-    },
-    "fitnessstudio-mitglieder": {
-      subject: "Gaming und Fitness",
-      bridge: ({ mb, german }) => `Nach stundenlangem Madden kommt der klassische Gedanke: Jetzt noch schnell etwas für die Fitness tun. Vielleicht führt genau dieser Wechsel vom Controller zum Crosstrainer dazu, dass ${german.subject} und ${mb.subject} gemeinsam durch die Jahre marschieren.`,
-      punch: "Erst der virtuelle Sport, dann der reale Muskelkater."
-    },
-    "unternehmensinsolvenzen": {
-      subject: "Wirtschaftliche Nebenwirkungen",
-      bridge: ({ mb, german }) => `Ein intensiver Madden-Verlauf beschäftigt nicht nur Fans. Wenn Unternehmen ihre Aufmerksamkeit falsch aufteilen und zu viel Zeit mit ${mb.subject} verbringen, könnte das in einer besonders fantasievollen Erklärung irgendwann sogar ${german.subject} erreichen.`,
-      punch: "Zum Glück ist das nur eine Geschichte – und kein Sanierungsplan."
-    },
-    "eheschlieungen": {
-      subject: "Liebe und Madden",
-      bridge: ({ mb, german }) => `Gemeinsame Abende vor dem Madden-Spiel können schließlich zusammenschweißen. Vielleicht führt besonders viel ${mb.subject} deshalb indirekt zu mehr gemeinsamen Zukunftsplänen – und damit zu ${german.subject}.`,
-      punch: "Offenbar kann ein Touchdown nicht nur Spiele, sondern auch Beziehungen entscheiden."
-    },
-    "ehescheidungen": {
-      subject: "Beziehungsstress",
-      bridge: ({ mb, german }) => `Nicht jede Partie endet friedlich. Ein besonders intensiver Madden-Abend könnte auch für Diskussionen sorgen, wenn ${mb.subject} plötzlich wichtiger wird als der gemeinsame Abend. In dieser Geschichte wäre ${german.subject} dann die statistische Quittung.`,
-      punch: "Die Statistik beweist nichts – aber der nächste Controller könnte besser vorher abgesprochen werden."
-    }
-  };
-
-
-  // Individuelle Story-Kerne für jede der 101 externen Statistiken.
-  // Diese Ebene ist absichtlich explizit: jede Statistik hat ihren eigenen semantischen Aufhänger.
-  const INDIVIDUAL_STORY_HOOKS = {
-    "bierabsatz-deutschland": { subject: "Football-Abende und Kühlschranklogik", narrative: ({ mb, german }) => `Bierabsatz Deutschland liefert dabei die reale Alltagskulisse: football-abende und kühlschranklogik verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht wird der Getränkemarkt damit zum heimlichen Spielstatistiker." },
-    "bierverbrauch-je-einwohner": { subject: "Das Getränk zum Spieltag", narrative: ({ mb, german }) => `Bierverbrauch je Einwohner liefert dabei die reale Alltagskulisse: das getränk zum spieltag verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht läuft der eigentliche Spielplan ja über den Kühlschrank." },
-    "eierproduktion": { subject: "Frühstück und Football", narrative: ({ mb, german }) => `Eierproduktion liefert dabei die reale Alltagskulisse: frühstück und football verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ausgerechnet das Frühstücksei könnte damit zum stillen Begleiter des Madden Bowl werden." },
-    "apfelernte-deutschland": { subject: "Obst und Spielpause", narrative: ({ mb, german }) => `Apfelernte Deutschland liefert dabei die reale Alltagskulisse: obst und spielpause verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht entscheidet sich die Apfelernte ausgerechnet zwischen zwei Drives." },
-    "fleischersatzproduktion": { subject: "Der moderne Football-Snack", narrative: ({ mb, german }) => `Fleischersatzproduktion liefert dabei die reale Alltagskulisse: der moderne football-snack verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der Madden Bowl könnte damit sogar einen Finger am Puls der Snackindustrie haben." },
-    "unternehmensinsolvenzen": { subject: "Wirtschaft und Zeitmanagement", narrative: ({ mb, german }) => `Unternehmensinsolvenzen liefert dabei die reale Alltagskulisse: wirtschaft und zeitmanagement verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Zum Glück ist diese Erklärung wirtschaftlich genauso spekulativ wie sie klingt." },
-    "eheschlieungen": { subject: "Liebe und gemeinsame Abende", narrative: ({ mb, german }) => `Eheschließungen liefert dabei die reale Alltagskulisse: liebe und gemeinsame abende verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Offenbar kann ein virtueller Spielabend im Extremfall bis zum Standesamt reichen." },
-    "ehescheidungen": { subject: "Beziehungsstress am Controller", narrative: ({ mb, german }) => `Ehescheidungen liefert dabei die reale Alltagskulisse: beziehungsstress am controller verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht sollte man vor dem nächsten Madden-Abend einfach die Spielzeit abstimmen." },
-    "ubernachtungen-deutschland": { subject: "Hotels und Auswärtsspiele", narrative: ({ mb, german }) => `Übernachtungen Deutschland liefert dabei die reale Alltagskulisse: hotels und auswärtsspiele verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der Madden Bowl könnte damit sogar indirekt die Hotelrezeption beschäftigen." },
-    "aus-deutschland-abfliegende-passagiere": { subject: "Reiselust und Football", narrative: ({ mb, german }) => `Aus Deutschland abfliegende Passagiere liefert dabei die reale Alltagskulisse: reiselust und football verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht sitzt ein Teil der Madden-Energie irgendwann tatsächlich im Flugzeug." },
-    "patentanmeldungen-beim-dpma": { subject: "Erfindungen und Controller", narrative: ({ mb, german }) => `Patentanmeldungen beim DPMA liefert dabei die reale Alltagskulisse: erfindungen und controller verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht bringt jede neue Madden-Generation gleich eine neue Erfindungsidee hervor." },
-    "studierende-deutschland": { subject: "Campus und Gaming", narrative: ({ mb, german }) => `Studierende Deutschland liefert dabei die reale Alltagskulisse: campus und gaming verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Zwischen Vorlesung und Klausur findet sich offenbar immer noch Zeit für einen Drive." },
-    "treibhausgasemissionen-deutschland": { subject: "Virtueller Sport, realer Strom", narrative: ({ mb, german }) => `Treibhausgasemissionen Deutschland liefert dabei die reale Alltagskulisse: virtueller sport, realer strom verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Auch der virtuelle Football braucht schließlich Rechenleistung, Geräte und Energie." },
-    "smartphones-absatz-deutschland": { subject: "Der Madden-Check in der Hosentasche", narrative: ({ mb, german }) => `Smartphones – Absatz Deutschland liefert dabei die reale Alltagskulisse: der madden-check in der hosentasche verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht sorgt jeder spannende Spielstand für einen weiteren Blick aufs Smartphone." },
-    "deutsche-games-unternehmen": { subject: "Gaming-Ökosystem", narrative: ({ mb, german }) => `Deutsche Games-Unternehmen liefert dabei die reale Alltagskulisse: gaming-ökosystem verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Mehr Madden-Aufmerksamkeit könnte in dieser Geschichte auch den Appetit auf andere Games wecken." },
-    "globale-musikindustrie-recorded-music-umsatz": { subject: "Soundtrack zum Spieltag", narrative: ({ mb, german }) => `Globale Musikindustrie – Recorded-Music-Umsatz liefert dabei die reale Alltagskulisse: soundtrack zum spieltag verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ein großer Spielabend braucht schließlich Musik – beim Einlaufen, in der Pause und danach." },
-    "globale-musikindustrie-subscription-streaming-umsatz": { subject: "Streaming und Spielbetrieb", narrative: ({ mb, german }) => `Globale Musikindustrie – Subscription-Streaming-Umsatz liefert dabei die reale Alltagskulisse: streaming und spielbetrieb verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer Madden schaut, hört vielleicht danach noch den passenden Soundtrack im Stream." },
-    "oscar-werbung-30-sek-spot": { subject: "Werbung und große Bühnen", narrative: ({ mb, german }) => `Oscar-Werbung, 30-Sek.-Spot liefert dabei die reale Alltagskulisse: werbung und große bühnen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn virtuelle Football-Unterhaltung wächst, wird irgendwann auch die Werbefläche interessanter." },
-    "super-bowl-werbung-30-sek-spot": { subject: "Football und Werbemillionen", narrative: ({ mb, german }) => `Super-Bowl-Werbung, 30-Sek.-Spot liefert dabei die reale Alltagskulisse: football und werbemillionen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Aus virtuellen Punkten wird so in der Geschichte plötzlich ein Millionenmarkt für 30 Sekunden Sendezeit." },
-    "fahrrad-e-bike-durchschnittlicher-verkaufspreis": { subject: "Controller raus, Fahrrad raus", narrative: ({ mb, german }) => `Fahrrad/E-Bike – durchschnittlicher Verkaufspreis liefert dabei die reale Alltagskulisse: controller raus, fahrrad raus verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht führt ein langer Madden-Abend am nächsten Morgen direkt zur ersten Ausfahrt." },
-    "durchschnittlicher-e-bike-preis": { subject: "Gaming und Mobilität", narrative: ({ mb, german }) => `Durchschnittlicher E-Bike-Preis liefert dabei die reale Alltagskulisse: gaming und mobilität verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer beim Spielen auf den Geschmack von Hightech kommt, schaut vielleicht auch beim Fahrrad genauer hin." },
-    "pkw-bestand-deutschland": { subject: "Autofahrten zum Spielabend", narrative: ({ mb, german }) => `Pkw-Bestand Deutschland liefert dabei die reale Alltagskulisse: autofahrten zum spielabend verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Irgendjemand muss schließlich zum Madden-Abend fahren – Controller hin oder her." },
-    "gesamtbevolkerung-deutschland": { subject: "Mehr Menschen, mehr Madden", narrative: ({ mb, german }) => `Gesamtbevölkerung Deutschland liefert dabei die reale Alltagskulisse: mehr menschen, mehr madden verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wo mehr Menschen sind, gibt es schließlich auch mehr potenzielle Spieler und Zuschauer." },
-    "lebendgeborene": { subject: "Babys und Nachwuchs", narrative: ({ mb, german }) => `Lebendgeborene liefert dabei die reale Alltagskulisse: babys und nachwuchs verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Offenbar beginnt die Vorbereitung auf den nächsten Madden Bowl deutlich früher als gedacht." },
-    "gestorbene": { subject: "Generationen und Erinnerungen", narrative: ({ mb, german }) => `Gestorbene liefert dabei die reale Alltagskulisse: generationen und erinnerungen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht spiegelt sich im Spielbetrieb auf seltsame Weise auch der Wechsel der Generationen." },
-    "erwerbstatige": { subject: "Arbeit und Feierabend", narrative: ({ mb, german }) => `Erwerbstätige liefert dabei die reale Alltagskulisse: arbeit und feierabend verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Nach Feierabend bleibt schließlich immer noch Zeit für eine Partie." },
-    "erwerbslose": { subject: "Freie Zeit und Controller", narrative: ({ mb, german }) => `Erwerbslose liefert dabei die reale Alltagskulisse: freie zeit und controller verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Eine besonders großzügige Auslegung der Daten macht freie Zeit kurzerhand zur Madden-Ressource." },
-    "genehmigte-wohnungen": { subject: "Neue Wohnungen, neue Konsolen", narrative: ({ mb, german }) => `Genehmigte Wohnungen liefert dabei die reale Alltagskulisse: neue wohnungen, neue konsolen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Jede neue Wohnung braucht irgendwann ein Wohnzimmer – und vielleicht einen Fernseher für Madden." },
-    "holzeinschlag": { subject: "Holz, Möbel und Spielzimmer", narrative: ({ mb, german }) => `Holzeinschlag liefert dabei die reale Alltagskulisse: holz, möbel und spielzimmer verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht landet ein Teil des Holzes irgendwann genau dort, wo der nächste Madden-Abend stattfindet." },
-    "kinobesucher-deutschland": { subject: "Unterhaltung und Publikum", narrative: ({ mb, german }) => `Kinobesucher Deutschland liefert dabei die reale Alltagskulisse: unterhaltung und publikum verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vom virtuellen Rasen direkt auf die große Leinwand – ein überraschend kurzer Weg." },
-    "stromerzeugung-gesamt": { subject: "Strom und Spielbetrieb", narrative: ({ mb, german }) => `Stromerzeugung gesamt liefert dabei die reale Alltagskulisse: strom und spielbetrieb verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ohne Strom bleibt schließlich selbst der beste virtuelle Quarterback auf der Bank." },
-    "windstrom": { subject: "Wind und Gaming", narrative: ({ mb, german }) => `Windstrom liefert dabei die reale Alltagskulisse: wind und gaming verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht bläst der Wind nicht nur durch die Rotorblätter, sondern indirekt auch durch die Madden-Statistik." },
-    "erneuerbare-stromerzeugung": { subject: "Grüner Strom für virtuellen Football", narrative: ({ mb, german }) => `Erneuerbare Stromerzeugung liefert dabei die reale Alltagskulisse: grüner strom für virtuellen football verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Je mehr erneuerbarer Strom verfügbar ist, desto beruhigter kann man den nächsten langen Spielabend starten." },
-    "butterproduktion": { subject: "Butter und Stadion-Snacks", narrative: ({ mb, german }) => `Butterproduktion liefert dabei die reale Alltagskulisse: butter und stadion-snacks verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht beginnt der Madden-Spieltag kulinarisch schon beim Frühstück." },
-    "kaseproduktion": { subject: "Käseplatte und Kick-off", narrative: ({ mb, german }) => `Käseproduktion liefert dabei die reale Alltagskulisse: käseplatte und kick-off verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ein langer Spielabend braucht schließlich eine vernünftige Snackgrundlage." },
-    "zigarettenverbrauch": { subject: "Pausen und Zigaretten", narrative: ({ mb, german }) => `Zigarettenverbrauch liefert dabei die reale Alltagskulisse: pausen und zigaretten verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn das Spiel ruht, ist schließlich Zeit für eine kurze Pause – zumindest in dieser Geschichte." },
-    "fitnessstudio-mitglieder": { subject: "Gaming und Fitness", narrative: ({ mb, german }) => `Fitnessstudio-Mitglieder liefert dabei die reale Alltagskulisse: gaming und fitness verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Erst der virtuelle Sport, dann der reale Muskelkater." },
-    "e-bike-verkaufe-deutschland": { subject: "Gaming und Bewegung", narrative: ({ mb, german }) => `E-Bike-Verkäufe Deutschland liefert dabei die reale Alltagskulisse: gaming und bewegung verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Nach dem virtuellen Football folgt vielleicht die reale Runde ums Viertel." },
-    "weltweite-kino-bilanz-box-office": { subject: "Globale Unterhaltung", narrative: ({ mb, german }) => `Weltweite Kino-Bilanz (Box Office) liefert dabei die reale Alltagskulisse: globale unterhaltung verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht konkurriert Madden gar nicht mit dem Kino – sondern füttert denselben Unterhaltungshunger." },
-    "usa-kanada-kino-umsatz": { subject: "Entertainment auf amerikanisch", narrative: ({ mb, german }) => `USA/Kanada: Kino-Umsatz liefert dabei die reale Alltagskulisse: entertainment auf amerikanisch verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Was auf dem virtuellen Football-Feld passiert, könnte in dieser Geschichte bis zur Kinokasse reichen." },
-    "usa-kanada-kinobesuche": { subject: "Publikum sucht den nächsten Kick", narrative: ({ mb, german }) => `USA/Kanada: Kinobesuche liefert dabei die reale Alltagskulisse: publikum sucht den nächsten kick verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Nach einer Partie Madden ist die nächste Unterhaltung schließlich nur einen Kinosaal entfernt." },
-    "buchmarkt-deutschland-gesamtumsatz": { subject: "Madden und Geschichten", narrative: ({ mb, german }) => `Buchmarkt Deutschland – Gesamtumsatz liefert dabei die reale Alltagskulisse: madden und geschichten verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Jede Saison produziert schließlich genug Dramen für ein ganzes Bücherregal." },
-    "taylor-swift-ifpi-global-artist-of-the-year": { subject: "Popstar-Effekt", narrative: ({ mb, german }) => `Taylor Swift – IFPI Global Artist of the Year liefert dabei die reale Alltagskulisse: popstar-effekt verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn Musik und Madden gleichzeitig die Aufmerksamkeit dominieren, kann die Korrelation plötzlich alles miteinander verbinden." },
-    "kartoffelernte-deutschland": { subject: "Football-Snacks", narrative: ({ mb, german }) => `Kartoffelernte Deutschland liefert dabei die reale Alltagskulisse: football-snacks verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht wird die nächste Kartoffelernte deshalb bereits im Spielplan mitgerechnet." },
-    "getreideernte-insgesamt": { subject: "Getreide und Spieltagsessen", narrative: ({ mb, german }) => `Getreideernte insgesamt liefert dabei die reale Alltagskulisse: getreide und spieltagsessen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Irgendwo beginnt schließlich auch der Weg vom Feld zum Snackteller." },
-    "zuckerrubenernte": { subject: "Süße und Spannung", narrative: ({ mb, german }) => `Zuckerrübenernte liefert dabei die reale Alltagskulisse: süße und spannung verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ein intensiver Spielabend braucht Energie – und die Geschichte liefert sie direkt vom Feld." },
-    "weinerzeugung-deutschland": { subject: "Feierabend und Anstoß", narrative: ({ mb, german }) => `Weinerzeugung Deutschland liefert dabei die reale Alltagskulisse: feierabend und anstoß verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Nach dem letzten Spielzug beginnt schließlich der gemütliche Teil des Abends." },
-    "biersteuer-einnahmen": { subject: "Der Staat schaut mit", narrative: ({ mb, german }) => `Biersteuer-Einnahmen liefert dabei die reale Alltagskulisse: der staat schaut mit verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn mehr Bier fließt, schaut irgendwann sogar der Fiskus auf den Spieltag." },
-    "alkoholsteuer-einnahmen-insgesamt": { subject: "Feierabend mit Steuereffekt", narrative: ({ mb, german }) => `Alkoholsteuer-Einnahmen insgesamt liefert dabei die reale Alltagskulisse: feierabend mit steuereffekt verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht landet ein winziger Teil der Madden-Energie irgendwann sogar im Staatshaushalt." },
-    "paketsendungen": { subject: "Online-Shopping und Belohnungen", narrative: ({ mb, german }) => `Paketsendungen liefert dabei die reale Alltagskulisse: online-shopping und belohnungen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der Madden Bowl könnte damit indirekt zum Konjunkturprogramm für Paketboten werden." },
-    "paketmarkt-umsatz": { subject: "Der Paketbote kennt den Spielplan", narrative: ({ mb, german }) => `Paketmarkt-Umsatz liefert dabei die reale Alltagskulisse: der paketbote kennt den spielplan verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Controller, Headsets und Trikots kommen schließlich selten zu Fuß." },
-    "gema-gesamtertrage": { subject: "Musik und Lizenzkasse", narrative: ({ mb, german }) => `GEMA-Gesamterträge liefert dabei die reale Alltagskulisse: musik und lizenzkasse verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wo Musik läuft, ist die GEMA nicht weit – auch wenn der eigentliche Anlass ein Madden-Abend ist." },
-    "deutscher-musikmarkt-handelsumsatz": { subject: "Musik neben dem Spiel", narrative: ({ mb, german }) => `Deutscher Musikmarkt – Handelsumsatz liefert dabei die reale Alltagskulisse: musik neben dem spiel verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Zwischen Einlaufmusik und Siegesfeier findet sich genug Platz für einen ganzen Musikmarkt." },
-    "markenanmeldungen-beim-dpma": { subject: "Neue Marken, neue Madden-Ideen", narrative: ({ mb, german }) => `Markenanmeldungen beim DPMA liefert dabei die reale Alltagskulisse: neue marken, neue madden-ideen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht braucht jede neue Madden-Saison schließlich auch ihren eigenen Namen." },
-    "patenterteilungen-beim-dpma": { subject: "Innovation am Controller", narrative: ({ mb, german }) => `Patenterteilungen beim DPMA liefert dabei die reale Alltagskulisse: innovation am controller verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Aus einem virtuellen Spielzug wird in dieser Geschichte kurzerhand eine technische Innovation." },
-    "einwanderung-nach-deutschland": { subject: "Neue Menschen, neue Spieler", narrative: ({ mb, german }) => `Einwanderung nach Deutschland liefert dabei die reale Alltagskulisse: neue menschen, neue spieler verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Jede neue Bevölkerungsgruppe bringt schließlich auch neue Interessen und potenzielle Madden-Fans mit." },
-    "auswanderung-aus-deutschland": { subject: "Wenn Spieler weiterziehen", narrative: ({ mb, german }) => `Auswanderung aus Deutschland liefert dabei die reale Alltagskulisse: wenn spieler weiterziehen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht wandert mit den Menschen auch ein Teil der Madden-Leidenschaft aus." },
-    "auslandische-bevolkerung-in-deutschland": { subject: "Internationale Madden-Community", narrative: ({ mb, german }) => `Ausländische Bevölkerung in Deutschland liefert dabei die reale Alltagskulisse: internationale madden-community verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Madden kennt schließlich keine Landesgrenzen – und die Statistik offenbar auch nicht." },
-    "nettozuwanderung": { subject: "Demografie trifft Spielbetrieb", narrative: ({ mb, german }) => `Nettozuwanderung liefert dabei die reale Alltagskulisse: demografie trifft spielbetrieb verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Mehr Menschen im Land bedeuten auch mehr mögliche Spieler, Zuschauer und Gesprächspartner." },
-    "verkehrstote": { subject: "Verkehr und Spieltag", narrative: ({ mb, german }) => `Verkehrstote liefert dabei die reale Alltagskulisse: verkehr und spieltag verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der Weg zum Madden-Abend ist real, auch wenn das Spiel selbst virtuell ist." },
-    "verkehrsunfalle-insgesamt": { subject: "Unterwegs zum Controller", narrative: ({ mb, german }) => `Verkehrsunfälle insgesamt liefert dabei die reale Alltagskulisse: unterwegs zum controller verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht hinterlässt schon die Fahrt zum Spielabend statistische Spuren." },
-    "veranschlagte-baukosten-genehmigter-bauwerke": { subject: "Gebäude für die nächste Madden-Generation", narrative: ({ mb, german }) => `Veranschlagte Baukosten genehmigter Bauwerke liefert dabei die reale Alltagskulisse: gebäude für die nächste madden-generation verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wo Menschen spielen, braucht es schließlich Räume, Bildschirme und Infrastruktur." },
-    "fahrgaste-im-linienverkehr-busse-bahnen": { subject: "ÖPNV und Spielabend", narrative: ({ mb, german }) => `Fahrgäste im Linienverkehr Busse + Bahnen liefert dabei die reale Alltagskulisse: öpnv und spielabend verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Irgendjemand muss schließlich zum gemeinsamen Madden-Abend kommen." },
-    "landwirtschaftlicher-erzeugerpreisindex": { subject: "Vom Feld zum Spieltag", narrative: ({ mb, german }) => `Landwirtschaftlicher Erzeugerpreisindex liefert dabei die reale Alltagskulisse: vom feld zum spieltag verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht beginnt die Madden-Wirtschaft viel früher, als man denkt – nämlich beim Erzeugerpreis." },
-    "super-bowl-zuschauer-usa": { subject: "Football-Euphorie", narrative: ({ mb, german }) => `Super-Bowl-Zuschauer USA liefert dabei die reale Alltagskulisse: football-euphorie verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der Madden Bowl wäre damit überraschend nah am echten Football-Geschäft." },
-    "arbeitskosten-je-geleistete-stunde": { subject: "Arbeitszeit und Spielzeit", narrative: ({ mb, german }) => `Arbeitskosten je geleistete Stunde liefert dabei die reale Alltagskulisse: arbeitszeit und spielzeit verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Jede Stunde Arbeit steht schließlich einer Stunde Freizeit gegenüber – und irgendwo wartet Madden." },
-    "inflationsrate-deutschland": { subject: "Inflation und Controller", narrative: ({ mb, german }) => `Inflationsrate Deutschland liefert dabei die reale Alltagskulisse: inflation und controller verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn alles teurer wird, bleibt die Frage: Was kostet eigentlich ein weiterer Madden-Abend?" },
-    "bip-nominal": { subject: "Madden und Volkswirtschaft", narrative: ({ mb, german }) => `BIP nominal liefert dabei die reale Alltagskulisse: madden und volkswirtschaft verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Aus vier Madden-Saisons wird in dieser Geschichte plötzlich ein winziger Konjunkturindikator." },
-    "bip-wachstum-real": { subject: "Wachstum und Spieltempo", narrative: ({ mb, german }) => `BIP-Wachstum real liefert dabei die reale Alltagskulisse: wachstum und spieltempo verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht wächst eine Volkswirtschaft genauso überraschend wie ein Madden-Spielstand." },
-    "private-konsumausgaben": { subject: "Konsum auf dem Sofa", narrative: ({ mb, german }) => `Private Konsumausgaben liefert dabei die reale Alltagskulisse: konsum auf dem sofa verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Controller, Fernseher, Snacks – der private Konsum hat am Madden-Abend viele Berührungspunkte." },
-    "konsumausgaben-des-staates": { subject: "Der Staat spielt mit", narrative: ({ mb, german }) => `Konsumausgaben des Staates liefert dabei die reale Alltagskulisse: der staat spielt mit verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Selbst staatliche Ausgaben lassen sich mit etwas Fantasie an einen großen Spielbetrieb anschließen." },
-    "exporte": { subject: "Madden geht international", narrative: ({ mb, german }) => `Exporte liefert dabei die reale Alltagskulisse: madden geht international verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Was im Wohnzimmer beginnt, kann in der Story problemlos die Landesgrenze überschreiten." },
-    "importe": { subject: "Gaming-Zubehör aus aller Welt", narrative: ({ mb, german }) => `Importe liefert dabei die reale Alltagskulisse: gaming-zubehör aus aller welt verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Controller und Konsolen kommen schließlich nicht alle aus der Nachbarschaft." },
-    "kfz-bestand-insgesamt": { subject: "Mobilität rund um den Spieltag", narrative: ({ mb, german }) => `Kfz-Bestand insgesamt liefert dabei die reale Alltagskulisse: mobilität rund um den spieltag verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Mehr Fahrzeuge bedeuten mehr Wege – und irgendwo führt einer davon zum Madden-Abend." },
-    "pkw-neuzulassungen": { subject: "Neues Auto, neuer Spielabend", narrative: ({ mb, german }) => `Pkw-Neuzulassungen liefert dabei die reale Alltagskulisse: neues auto, neuer spielabend verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer ein neues Auto kauft, kann schließlich auch zum nächsten Madden-Turnier fahren." },
-    "autobahnnetz": { subject: "Die Straße zum Madden Bowl", narrative: ({ mb, german }) => `Autobahnnetz liefert dabei die reale Alltagskulisse: die straße zum madden bowl verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Je größer das Straßennetz, desto leichter lässt sich die nächste Partie besuchen – zumindest in dieser Geschichte." },
-    "bundesstraennetz": { subject: "Bundesstraßen und Spieltermine", narrative: ({ mb, german }) => `Bundesstraßennetz liefert dabei die reale Alltagskulisse: bundesstraßen und spieltermine verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Auch der Weg zum Controller kann manchmal über eine Bundesstraße führen." },
-    "onlinehandel-deutschland": { subject: "Shopping und Gaming", narrative: ({ mb, german }) => `Onlinehandel Deutschland liefert dabei die reale Alltagskulisse: shopping und gaming verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der virtuelle Football-Platz könnte damit einen erstaunlich realen Warenkorb füllen." },
-    "weltweite-rebflache": { subject: "Weinbau und Spielabend", narrative: ({ mb, german }) => `Weltweite Rebfläche liefert dabei die reale Alltagskulisse: weinbau und spielabend verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Vielleicht wird der nächste Madden-Abend irgendwo zwischen Rebstock und Controller vorbereitet." },
-    "verbrauch-versteuerter-zigaretten-je-einwohner": { subject: "Pausen pro Einwohner", narrative: ({ mb, german }) => `Verbrauch versteuerter Zigaretten je Einwohner liefert dabei die reale Alltagskulisse: pausen pro einwohner verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ein Spielabend besteht nicht nur aus Spielzügen, sondern auch aus Pausen." },
-    "kaffeesteuereinnahmen": { subject: "Kaffee und lange Nächte", narrative: ({ mb, german }) => `Kaffeesteuereinnahmen liefert dabei die reale Alltagskulisse: kaffee und lange nächte verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer bis spät spielt, braucht irgendwann Koffein – und der Staat bekommt seinen Anteil." },
-    "verbraucherpreisindex-besuch-von-kino-theater-konzert-zirkus-u-a": { subject: "Der Preis der Unterhaltung", narrative: ({ mb, german }) => `Verbraucherpreisindex: Besuch von Kino, Theater, Konzert, Zirkus u. Ä. liefert dabei die reale Alltagskulisse: der preis der unterhaltung verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn Unterhaltung teurer wird, verändert sich vielleicht auch die Art, wie Menschen ihre Freizeit zwischen Madden und anderen Shows aufteilen." },
-    "verbraucherpreisindex-fastfoodrestaurants": { subject: "Fast Food und Spielpausen", narrative: ({ mb, german }) => `Verbraucherpreisindex: Fastfoodrestaurants liefert dabei die reale Alltagskulisse: fast food und spielpausen verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Zwischen zwei Drives bleibt schließlich Zeit für eine Bestellung." },
-    "verbraucherpreisindex-hotelubernachtungen": { subject: "Hotel und Auswärtsspiel", narrative: ({ mb, german }) => `Verbraucherpreisindex: Hotelübernachtungen liefert dabei die reale Alltagskulisse: hotel und auswärtsspiel verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer zum Turnier reist, braucht vielleicht ein Zimmer – und plötzlich sitzt das Hotel im selben Datensatz." },
-    "verbraucherpreisindex-bestattungsleistungen-friedhofsgebuhren": { subject: "Die wirklich ungewöhnliche Korrelation", narrative: ({ mb, german }) => `Verbraucherpreisindex: Bestattungsleistungen/Friedhofsgebühren liefert dabei die reale Alltagskulisse: die wirklich ungewöhnliche korrelation verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Zwischen Madden und Friedhofsgebühren liegt nun wirklich keine offensichtliche Brücke – genau deshalb ist die Korrelation so bemerkenswert." },
-    "verbraucherpreisindex-bahntickets": { subject: "Mit der Bahn zum Spielabend", narrative: ({ mb, german }) => `Verbraucherpreisindex: Bahntickets liefert dabei die reale Alltagskulisse: mit der bahn zum spielabend verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Auch ein virtueller Spielabend kann eine reale Anreise haben." },
-    "goldschmuck-nachfrage-weltweit": { subject: "Schmuck und Siegerpose", narrative: ({ mb, german }) => `Goldschmuck-Nachfrage weltweit liefert dabei die reale Alltagskulisse: schmuck und siegerpose verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ein Champion braucht schließlich etwas Glänzendes – zumindest in unserer Geschichte." },
-    "goldnachfrage-der-zentralbanken-weltweit": { subject: "Goldreserven und Tabellenpunkte", narrative: ({ mb, german }) => `Goldnachfrage der Zentralbanken weltweit liefert dabei die reale Alltagskulisse: goldreserven und tabellenpunkte verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn es um Wert und Sicherheit geht, scheint der Weg zum Madden Bowl erstaunlich kurz." },
-    "goldverbrauch-fur-technologie-weltweit": { subject: "Gold in der Gaming-Technik", narrative: ({ mb, german }) => `Goldverbrauch für Technologie weltweit liefert dabei die reale Alltagskulisse: gold in der gaming-technik verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Ein Teil der Technik hinter virtuellen Welten braucht schließlich reale Materialien." },
-    "rohstahlproduktion-weltweit": { subject: "Stahl für die reale Infrastruktur", narrative: ({ mb, german }) => `Rohstahlproduktion weltweit liefert dabei die reale Alltagskulisse: stahl für die reale infrastruktur verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der virtuelle Football braucht zwar keinen Stahlhelm, aber die Welt dahinter jede Menge Infrastruktur." },
-    "stahlverbrauch-pro-kopf-in-deutschland": { subject: "Stahl und Alltag", narrative: ({ mb, german }) => `Stahlverbrauch pro Kopf in Deutschland liefert dabei die reale Alltagskulisse: stahl und alltag verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Von Gebäuden bis Fahrzeugen steckt Stahl überall dort, wo der Madden-Spieltag stattfindet." },
-    "mobelproduktion-in-deutschland-produktionswert": { subject: "Das Wohnzimmer als Stadion", narrative: ({ mb, german }) => `Möbelproduktion in Deutschland – Produktionswert liefert dabei die reale Alltagskulisse: das wohnzimmer als stadion verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Der Madden Bowl braucht keine Arena – nur ein Wohnzimmer mit einem guten Sitzplatz." },
-    "bekleidungsproduktion-in-deutschland-produktionswert": { subject: "Trikots und Spieltagslook", narrative: ({ mb, german }) => `Bekleidungsproduktion in Deutschland – Produktionswert liefert dabei die reale Alltagskulisse: trikots und spieltagslook verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer Madden spielt, braucht vielleicht irgendwann auch das passende Outfit." },
-    "pharmaindustrie-deutschland-produktionswert": { subject: "Spieltag und Gesundheit", narrative: ({ mb, german }) => `Pharmaindustrie Deutschland – Produktionswert liefert dabei die reale Alltagskulisse: spieltag und gesundheit verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Nach einem langen Abend muss irgendwann auch der Körper wieder mitspielen." },
-    "lederwaren-und-schuhindustrie-deutschland-produktionswert": { subject: "Schuhe für den virtuellen Sportler", narrative: ({ mb, german }) => `Lederwaren- und Schuhindustrie Deutschland – Produktionswert liefert dabei die reale Alltagskulisse: schuhe für den virtuellen sportler verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Auch wer virtuell spielt, kann sich für die nächste reale Runde passend ausstatten." },
-    "tabakverarbeitung-deutschland-produktionswert": { subject: "Pausenindustrie", narrative: ({ mb, german }) => `Tabakverarbeitung Deutschland – Produktionswert liefert dabei die reale Alltagskulisse: pausenindustrie verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Während das Spiel läuft, entstehen schließlich auch die klassischen Unterbrechungen." },
-    "staatliche-lotterien-spieleinsatze": { subject: "Risiko und Wettbewerb", narrative: ({ mb, german }) => `Staatliche Lotterien – Spieleinsätze liefert dabei die reale Alltagskulisse: risiko und wettbewerb verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Madden und Lotto teilen zumindest eine Zutat: die Spannung, wie sich die nächste Zahl entwickelt." },
-    "weltbevolkerung": { subject: "Die ganze Welt schaut zu", narrative: ({ mb, german }) => `Weltbevölkerung liefert dabei die reale Alltagskulisse: die ganze welt schaut zu verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wenn die Weltbevölkerung wächst, wächst theoretisch auch die Zahl potenzieller Madden-Fans." },
-    "zusammengefasste-geburtenziffer-deutschland": { subject: "Nachwuchs und lange Sicht", narrative: ({ mb, german }) => `Zusammengefasste Geburtenziffer Deutschland liefert dabei die reale Alltagskulisse: nachwuchs und lange sicht verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Eine Geburtenziffer wirkt langsam – der Madden-Spielbetrieb dagegen sofort. Irgendwie müssen die beiden trotzdem zusammenpassen." },
-    "weltweite-verkaufe-von-elektroautos-bev-plug-in-hybride": { subject: "Hightech auf Rädern", narrative: ({ mb, german }) => `Weltweite Verkäufe von Elektroautos (BEV + Plug-in-Hybride) liefert dabei die reale Alltagskulisse: hightech auf rädern verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Wer sich für neue Technik begeistert, ist vielleicht auch offen für neue digitale Spielwelten." },
-    "internationale-fuballtransfers-transferentschadigungen-weltweit": { subject: "Football trifft Fußball", narrative: ({ mb, german }) => `Internationale Fußballtransfers – Transferentschädigungen weltweit liefert dabei die reale Alltagskulisse: football trifft fußball verbindet sich in dieser Geschichte auf überraschend direktem Weg mit dem Spielgeschehen.`, punch: "Zwei Ballsportwelten, zwei Transferlogiken – und vier Jahre, in denen die Zahlen erstaunlich gut zusammenlaufen können." },
-  };
-  const STORY_FAMILIES = [
-    {
-      test: /baby|geburt|bevölkerung|einwanderung|auswanderung|zuwanderung|studierende|erwerbstätige|erwerbslose/i,
-      subject: "Menschen und Alltag",
-      bridge: ({ mb, german }) => `${german.subject} verändert den Alltag von Menschen. Und irgendwo zwischen Arbeit, Familie und Freizeit landet schließlich auch eine Partie Madden. Daraus lässt sich die Geschichte bauen, dass mehr oder weniger ${german.subject} irgendwann bei ${mb.subject} ankommt.`,
-      punch: "Damit wird eine nüchterne Bevölkerungs- oder Arbeitsmarktzahl plötzlich zur inoffiziellen Madden-Kennzahl."
-    },
-    {
-      test: /bier|alkohol|zigarett|kaffee|butter|käse|eier|kartoffel|apfel|fleisch|getreide|zucker|wein|lebensmittel|verbrauch/i,
-      subject: "Konsum und Spieltag",
-      bridge: ({ mb, german }) => `Ein Madden-Abend ist selten frei von Konsum. Snacks, Getränke und andere Alltagsprodukte begleiten schließlich jede ernsthafte Beschäftigung mit ${mb.subject}. So könnte ${german.subject} indirekt vom Spielgeschehen beeinflusst werden.`,
-      punch: "Der Spielstand steht auf dem Bildschirm, die mögliche Nebenwirkung steht im Einkaufswagen."
-    },
-    {
-      test: /kino|musik|buch|games|werbung|super-bowl|stream|unterhaltung/i,
-      subject: "Entertainment und Aufmerksamkeit",
-      bridge: ({ mb, german }) => `Madden ist selbst ein Unterhaltungsprodukt. Wenn ${mb.subject} mehr Aufmerksamkeit bindet, könnte ein Teil dieser Aufmerksamkeit in benachbarte Entertainment-Märkte wandern – und dort ${german.subject} bewegen.`,
-      punch: "Die Unterhaltungsbranche könnte damit stärker miteinander verbunden sein, als ihre Statistiken vermuten lassen."
-    },
-    {
-      test: /paket|onlinehandel|pkw|verkehr|fahrgäst|autobahn|bundesstraß|e-bike|fahrrad|mobilität/i,
-      subject: "Bewegung, Shopping und Madden",
-      bridge: ({ mb, german }) => `Wo viel Madden gespielt wird, entstehen auch Folgeaktivitäten: bestellt wird online, gefahren wird zum nächsten Termin und irgendwann landet all das in einer Statistik. Genau dort lässt sich ${german.subject} mit ${mb.subject} verbinden.`,
-      punch: "Der virtuelle Sport könnte damit erstaunlich reale Bewegungen auslösen."
-    },
-    {
-      test: /preis|inflation|arbeitskosten|kosten|preisindex|einnahmen|umsatz|bip|export|import|konsum/i,
-      subject: "Geld und Aufmerksamkeit",
-      bridge: ({ mb, german }) => `Hinter ${german.subject} steckt am Ende Geld, und Geld folgt häufig der Aufmerksamkeit. Wenn ${mb.subject} besonders viel davon bindet, lässt sich daraus eine wunderbar spekulative wirtschaftliche Verbindung konstruieren.`,
-      punch: "Der Madden Bowl wird damit vom Sportereignis zum überraschenden Wirtschaftsindikator."
-    },
-    {
-      test: /holz|strom|wind|erneuerbar|emission|stahl|gold|rohstoff|produktion|rebfläche/i,
-      subject: "Ressourcen und Spielbetrieb",
-      bridge: ({ mb, german }) => `Jede Partie ${mb.subject} braucht schließlich Energie, Hardware, Infrastruktur und Ressourcen. In einer ausreichend fantasievollen Kausalkette kann daraus sogar eine Verbindung zu ${german.subject} entstehen.`,
-      punch: "Offenbar hat selbst der virtuelle Football einen ökologischen und industriellen Fußabdruck."
-    },
-    {
-      test: /haus|wohnung|bau|baukosten|möbel|bekleidung|leder|schuh|pharma|tabak/i,
-      subject: "Alltag und Wirtschaft",
-      bridge: ({ mb, german }) => `Der Madden Bowl findet nicht im luftleeren Raum statt: Menschen wohnen, kaufen ein und investieren Geld, während sie ${mb.subject} verfolgen. Eine mögliche – und bewusst spekulative – Brücke führt deshalb zu ${german.subject}.`,
-      punch: "Der Spieltag endet damit nicht an der Seitenlinie, sondern mitten in der Volkswirtschaft."
-    }
+  const SPURIOUS_INTROS = [
+    "Die vorliegende Kurzanalyse untersucht den statistischen Zusammenhang zwischen zwei zunächst unabhängig erscheinenden Kennzahlen.",
+    "Im Rahmen einer fortlaufenden Datenbetrachtung wurde folgender Zusammenhang identifiziert.",
+    "Die folgende Auswertung dokumentiert eine bemerkenswert enge Übereinstimmung zweier Zeitreihen.",
+    "Gegenstand dieser Kurzmitteilung ist eine auffällige statistische Kovarianz zweier an sich themenfremder Datenreihen.",
   ];
 
-  const CATEGORY_STORY_FALLBACKS = {
-    goods: {
-      subject: "Konsum und Nachfrage",
-      bridge: ({ mb, german }) => `Wenn ${german.subject} steigt oder fällt, verändert sich damit ein Teil der realen Welt. Der vielleicht unerwartete Verbindungspunkt ist die Nachfrage rund um ${mb.subject}: mehr Aufmerksamkeit, mehr Aktivität, mehr Konsum.`,
-      punch: "Ob der Einkaufswagen tatsächlich dem Spielstand folgt, können die Daten allerdings nicht beantworten."
-    },
-    events: {
-      subject: "Menschen und Aktivität",
-      bridge: ({ mb, german }) => `${german.subject} zählt reale Ereignisse, während ${mb.subject} virtuelle Ereignisse beschreibt. Vielleicht reagiert die eine Welt auf die andere – zumindest wenn man der Korrelation für einen Moment freien Lauf lässt.`,
-      punch: "Zwei Zähler, vier Datenpunkte und eine erstaunlich überzeugende Scheinerklärung."
-    },
-    revenue: {
-      subject: "Geld und Aufmerksamkeit",
-      bridge: ({ mb, german }) => `Umsatz folgt normalerweise Nachfrage, und Nachfrage folgt Aufmerksamkeit. Wenn ${mb.subject} Aufmerksamkeit erzeugt, lässt sich daraus eine spekulative Verbindung zu ${german.subject} bauen.`,
-      punch: "Vielleicht ist der Madden Bowl also nicht nur Sport, sondern auch ein winziger Konjunkturindikator."
-    },
-    price: {
-      subject: "Preise und Spieltagsökonomie",
-      bridge: ({ mb, german }) => `Preise reagieren auf Angebot, Nachfrage und Erwartungen. In einer sehr großzügigen Interpretation könnte ${mb.subject} genau diese Erwartungen beeinflussen – und damit ${german.subject}.`,
-      punch: "Eine Preisprognose aus einem Madden-Spiel abzuleiten wäre gewagt. Genau deshalb passt sie so gut hierher."
-    },
-    population: {
-      subject: "Menschen und Madden",
-      bridge: ({ mb, german }) => `Menschen sind schließlich die gemeinsame Zutat: ${german.subject} beschreibt eine Bevölkerung oder Bevölkerungsbewegung, während ${mb.subject} von Menschen erzeugt wird. Daraus lässt sich eine wunderbar direkte Scheinkausalität bauen.`,
-      punch: "Die Statistik wird damit kurzerhand zum demografischen Spielbericht."
-    },
-    infrastructure: {
-      subject: "Infrastruktur und Spielbetrieb",
-      bridge: ({ mb, german }) => `Hinter ${mb.subject} stehen Geräte, Strom, Wege und Infrastruktur. Vielleicht spiegelt sich die Intensität des Spielbetriebs deshalb sogar in ${german.subject} wider.`,
-      punch: "Der virtuelle Rasen bekommt damit plötzlich eine sehr reale Infrastruktur."
-    },
-    rate: {
-      subject: "Trends und Spielverlauf",
-      bridge: ({ mb, german }) => `Beide Größen bewegen sich als Zeitreihen durch dieselben Jahre. Wenn ${mb.subject} steigt oder fällt, könnte ${german.subject} deshalb – zumindest in dieser kleinen Datenwelt – einfach mitziehen.`,
-      punch: "Eine Korrelation ist schnell gefunden; eine vernünftige Ursache deutlich schwerer."
-    },
-    other: {
-      subject: "Eine ungewöhnliche Verbindung",
-      bridge: ({ mb, german }) => `Zwischen ${german.subject} und ${mb.subject} gibt es auf den ersten Blick kaum eine Verbindung. Genau das macht die gefundene Korrelation so unterhaltsam: Mit etwas Fantasie lässt sich trotzdem eine Geschichte daraus bauen.`,
-      punch: "Die Daten liefern den Zusammenhang – die Geschichte liefert den Rest."
-    }
-  };
+  const SPURIOUS_CLOSERS = [
+    "Ein kausaler Mechanismus zwischen beiden Größen ist nicht belegt; die Prognose ist entsprechend mit Vorsicht zu genießen.",
+    "Weitere Erhebungszeiträume könnten diesen Befund erhärten oder widerlegen — belastbar ist er in der vorliegenden Form nicht.",
+    "Von einer verbindlichen Kausalaussage wird an dieser Stelle ausdrücklich abgesehen.",
+    "Für eine gesicherte Aussage wäre eine deutlich breitere Datenbasis erforderlich, als sie hier vorliegt.",
+  ];
 
-  function storylineFor(candidate) {
-    const override = STORY_OVERRIDES[candidate.germanStatId];
-    if (override) return override;
+  function buildSpuriousArticle(candidate) {
+    // Tyler-Vigen-Style-Baustein aus spurious.js: handgeschriebene
+    // Kausalgeschichte je deutscher Statistik + Richtung für die 10
+    // punktbasierten Kennzahlen, generische parametrisierte Bausteine für
+    // "Anzahl gespielter Partien"/"Anzahl Teilnehmer". Deckt damit alle 12
+    // Madden-Bowl-Kennzahlen ab. Der alte, neutrale Befund-Text weiter unten
+    // bleibt als Sicherheitsnetz, falls mal ein germanStatId ohne Baustein
+    // in GERMAN_STAT_STORIES landet (z.B. künftig neu ergänzte Statistik).
+    const story = MB.Spurious.buildSpuriousStory
+      ? MB.Spurious.buildSpuriousStory(candidate)
+      : null;
 
-    const individual = INDIVIDUAL_STORY_HOOKS[candidate.germanStatId];
-    if (individual) {
+    if (story) {
       return {
-        subject: individual.subject,
-        bridge: ({ mb, german }) => {
-          const relation = candidate.r >= 0
-            ? `Wenn ${mb.subject} mehr Aufmerksamkeit bekommt, könnte das in dieser Geschichte auch bei ${german.subject} Spuren hinterlassen.`
-            : `Wenn ${mb.subject} in die eine Richtung läuft, könnte ${german.subject} in dieser Geschichte einfach den entgegengesetzten Weg nehmen.`;
-          return `${relation} ${individual.narrative({ mb, german }) || "Mit etwas Fantasie lässt sich daraus eine überraschend plausible Alltagserklärung bauen."}`;
+        kind: "spurious",
+        title: story.title,
+        body: paragraphs([story.body]),
+        data: {
+          pairKey: candidate.pairKey,
+          mbStatKey: candidate.mbStatKey,
+          germanStatId: candidate.germanStatId,
+          player: candidate.player || null,
+          r: candidate.r,
         },
-        punch: individual.punch,
       };
     }
 
-    const name = candidate.germanName || "der Statistik";
-    const family = STORY_FAMILIES.find((x) => x.test.test(name));
-    if (family) return family;
-    return CATEGORY_STORY_FALLBACKS[candidate.germanCategory] || CATEGORY_STORY_FALLBACKS.other;
-  }
-
-  function buildSpuriousArticle(candidate) {
     const rStr = candidate.r.toFixed(6);
-    const strength = Math.abs(candidate.r) >= 0.99 ? "nahezu perfekten" : "sehr starken";
-    const direction = candidate.r >= 0 ? "gleichläufigen" : "gegenläufigen";
-    const german = germanDescriptor(candidate);
-    const mb = mbDescriptor(candidate);
+    const strength = Math.abs(candidate.r) >= 0.99 ? "nahezu perfekter" : "sehr starker";
+    const direction = candidate.r >= 0 ? "gleichläufiger" : "gegenläufiger";
     const hasOrdinalMapping = Array.isArray(candidate.xLabels) && candidate.xLabels.length === candidate.years.length;
-    const story = storylineFor(candidate);
 
     const spanDesc = candidate.isPlayer
       ? `über die letzten ${candidate.years.length} Spiele im Turnier`
       : `über die letzten ${candidate.years.length} Turnier-Saisons`;
 
-    const headline = candidate.r >= 0
-      ? `${german.subject} steht in Zusammenhang mit ${mb.subject}`
-      : `${german.subject} steht gegenläufig in Zusammenhang mit ${mb.subject}`;
-
-    const storyTitle = `${story.subject}: ${headline}`;
-    const directionPhrase = candidate.r >= 0
-      ? `${mb.subject} steigt und ${german.subject} steigt tendenziell mit`
-      : `${mb.subject} steigt und ${german.subject} bewegt sich tendenziell in die entgegengesetzte Richtung`;
-
     const parts = [
-      `<strong>Befund.</strong> ${headline}: ${spanDesc} zeigt sich ein ${strength} ${direction} Zusammenhang (r = ${rStr}). ${directionPhrase}.`,
-      `<strong>Die mögliche Erklärung.</strong> ${story.bridge({ mb, german, candidate })} ${story.punch}`,
+      pick(SPURIOUS_INTROS),
+      `<strong>Befund.</strong> ${candidate.mbLabel} scheint sich auf „${candidate.germanName}“ (${candidate.germanUnit}) auszuwirken — ${spanDesc} zeigt sich ein ${strength} ${direction} Zusammenhang (r = ${rStr}).`,
     ];
 
     if (hasOrdinalMapping) {
       const mapping = candidate.isPlayer
-        ? `${candidate.player}s Spielverlauf wird der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von ${german.subject} gegenübergestellt`
-        : `Die betrachteten Turnier-Saisons werden der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von ${german.subject} gegenübergestellt`;
-      parts.push(`<strong>Datengrundlage.</strong> ${mapping} (älteste Beobachtung zu ältestem Jahr, jüngste zu jüngstem Jahr) — nicht notwendigerweise demselben Kalenderjahr. Quelle: ${candidate.germanSource}.`);
+        ? `${candidate.player}s Spielverlauf wird der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`
+        : `Die betrachteten Turnier-Saisons werden der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`;
+      parts.push(
+        `<strong>Datengrundlage.</strong> ${mapping} (älteste Beobachtung zu ältestem Jahr, jüngste zu jüngstem Jahr) — nicht notwendigerweise demselben Kalenderjahr. Quelle: ${candidate.germanSource}.`
+      );
     } else {
-      parts.push(`<strong>Datengrundlage.</strong> Quelle ${german.subject}: ${candidate.germanSource}.`);
+      parts.push(`<strong>Datengrundlage.</strong> Quelle „${candidate.germanName}“: ${candidate.germanSource}.`);
     }
 
+    // Prognose: "steigt mbStat weiter" -> was das für den deutschen Wert
+    // laut diesem (Zufalls-)Befund bedeuten würde, passend zur Kategorie
+    // der deutschen Statistik formuliert (siehe CATEGORY_TREND_WORDS).
+    const germanDirection = candidate.r >= 0 ? "up" : "down";
+    const trendWord = trendWordFor(candidate.germanCategory, germanDirection);
+    const nextScopeLabel = candidate.isPlayer ? "im nächsten Spiel" : "in der nächsten Saison";
+    parts.push(
+      `<strong>Prognose.</strong> Sollte sich ${candidate.mbLabel} ${nextScopeLabel} noch weiter erhöhen, wäre nach diesem Befund ${trendWord} bei „${candidate.germanName}“ zu erwarten.`
+    );
+
+    parts.push(`<strong>Einordnung.</strong> ${pick(SPURIOUS_CLOSERS)}`);
 
     return {
       kind: "spurious",
-      title: storyTitle,
+      title: `📊 Spurious Correlation: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“`,
       body: paragraphs(parts),
       data: {
         pairKey: candidate.pairKey,
