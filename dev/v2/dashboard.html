@@ -21,13 +21,12 @@
 <link rel="stylesheet" href="styles.css" />
 <style>
   .v2-footer { text-align: center; font-size: 0.7em; color: var(--v2-silver); text-transform: uppercase; letter-spacing: 1px; margin-top: 18px; opacity: 0.6; }
-  .v2-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-  .v2-row-2col .v2-card { min-width: 0; }
+  .v2-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+  .v2-row-2col .v2-card { min-width: 0; margin-bottom: 0; }
   @media (max-width: 380px) { .v2-row-2col { grid-template-columns: 1fr; } }
-  .v2-record-row { padding: 8px 0; border-bottom: 1px solid var(--v2-border, rgba(255,255,255,0.08)); }
-  .v2-record-row:last-child { border-bottom: none; }
-  .v2-record-k { font-weight: 800; font-size: 0.8em; }
-  .v2-record-v { font-size: 0.76em; opacity: 0.85; margin-top: 2px; }
+  .v2-card-title a { color: inherit; text-decoration: none; }
+  .v2-tab.v2-tab-compact { padding: 7px 10px; font-size: 0.76em; }
+  .v2-tabbar.v2-tabbar-compact { margin-bottom: 8px; }
   .skel { height: 12px; border-radius: 6px; margin: 6px 0; background: linear-gradient(90deg, #1c2231 25%, #2a3145 50%, #1c2231 75%); background-size: 200% 100%; animation: v2shimmer 1.3s infinite; }
   @keyframes v2shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 </style>
@@ -47,6 +46,10 @@
   function nowTimeStr() {
     const d = new Date();
     return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+  }
+
+  function linkedTitle(label, href) {
+    return `<a href="${href}">${label}</a>`;
   }
 
   function renderGameRow(m) {
@@ -82,13 +85,13 @@
           : `<div class="v2-empty">Keine weiteren Spiele geplant.</div>`}
       </div>`;
 
-    return liveCard + nextCard;
+    return `<div class="v2-row-2col">${liveCard}${nextCard}</div>`;
   }
 
   async function renderTippspielCard() {
     const tid = MB.getCurrentTournamentId();
     const me = MB.UI.currentPlayer();
-    if (!tid) return `<div class="v2-card"><div class="v2-card-title">🏆 Tippspiel</div><div class="v2-empty">Kein aktives Turnier.</div></div>`;
+    if (!tid) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('🏆 Tippspiel', 'wettbuero.html')}</div><div class="v2-empty">Kein aktives Turnier.</div></div>`;
     try {
       const allPicks = await MB.Tipp.fetchAllPicks(tid);
       const ouLines = await MB.Tipp.fetchAllOuLines(tid);
@@ -106,12 +109,12 @@
       }
       return `
         <div class="v2-card">
-          <div class="v2-card-title">🏆 Tippspiel<a class="v2-card-link" href="wettbuero.html">Mittippen →</a></div>
+          <div class="v2-card-title">${linkedTitle('🏆 Tippspiel', 'wettbuero.html')}</div>
           ${rows || `<div class="v2-empty">Noch keine Tipps abgegeben.</div>`}
         </div>`;
     } catch (e) {
       console.warn('Tippspiel-Stand laden fehlgeschlagen:', e);
-      return `<div class="v2-card"><div class="v2-card-title">🏆 Tippspiel</div><div class="v2-empty">Konnte Tippstand nicht laden.</div></div>`;
+      return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('🏆 Tippspiel', 'wettbuero.html')}</div><div class="v2-empty">Konnte Tippstand nicht laden.</div></div>`;
     }
   }
 
@@ -127,16 +130,16 @@
   }
 
   function renderBlogCard() {
-    if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">📰 Neueste Blog-Beiträge</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
+    if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
     const items = articles.slice(0, 3).map(a => `
       <a href="blog.html?post=${encodeURIComponent(a.id)}" style="display:block; margin-bottom:10px; color:inherit; text-decoration:none;">
-        <div style="font-weight:800; font-size:0.92em;">${a.title}</div>
-        <div style="font-size:0.72em; color:var(--v2-silver); margin:2px 0 4px;">${formatArticleDate(a.created_at)}</div>
-        <div style="font-size:0.84em; opacity:0.85;">${excerpt(a.body, 70)}</div>
+        <div style="font-weight:800; font-size:0.84em;">${excerpt(a.title, 42)}</div>
+        <div style="font-size:0.7em; color:var(--v2-silver); margin:2px 0 4px;">${formatArticleDate(a.created_at)}</div>
+        <div style="font-size:0.82em; opacity:0.85;">${excerpt(a.body, 70)}</div>
       </a>`).join('');
     return `
       <div class="v2-card">
-        <div class="v2-card-title">📰 Neueste Blog-Beiträge<a class="v2-card-link" href="blog.html">Zum Blog →</a></div>
+        <div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div>
         ${items}
       </div>`;
   }
@@ -203,43 +206,16 @@
       });
     });
     const table = [...all.values()];
+    if (!table.length) return [];
 
-    const allMatches = [];
-    seasons.forEach(s => s.matches.forEach(m => {
-      if (m.homeScore == null || m.awayScore == null || !m.homePlayer || !m.awayPlayer) return;
-      allMatches.push({ ...m, season: s.season });
-    }));
-
-    const rec = [];
-    const pushRec = (k, v, tag = '') => rec.push({ k, v, tag });
     const pickMax = (arr, valFn) => arr.length ? arr.reduce((a, b) => valFn(b) > valFn(a) ? b : a) : null;
-
-    if (allMatches.length) {
-      const byTotal = [...allMatches].sort((a, b) => ((b.homeScore + b.awayScore) - (a.homeScore + a.awayScore)));
-      const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
-      const t = byTotal[0];
-      pushRec('🎆 Höchste Gesamtpunkte', `${t.season}: ${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore}`, t.stage);
-      const d = byDiff[0];
-      pushRec('🧱 Größter Blowout', `${d.season}: ${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore}`, d.stage);
-    }
-
-    const pairMap = new Map();
-    const keyPair = (a, b) => { const A = hofNormName(a), B = hofNormName(b); return (A < B) ? `${A}|${B}` : `${B}|${A}`; };
-    allMatches.forEach(m => {
-      const k = keyPair(m.homePlayer, m.awayPlayer);
-      if (!pairMap.has(k)) pairMap.set(k, { A: m.homePlayer, B: m.awayPlayer, games: 0 });
-      pairMap.get(k).games++;
-    });
-    const mostPlayed = pickMax([...pairMap.values()], x => x.games);
-    if (mostPlayed) pushRec('🤝 Größte Rivalität', `${mostPlayed.A} vs ${mostPlayed.B} – ${mostPlayed.games} Spiele`, 'h2h');
-
-    if (table.length) {
-      const mostTitles = pickMax(table, x => x.championships);
-      if (mostTitles) pushRec('👑 Meiste Titel', `${mostTitles.name} – ${mostTitles.championships}`, 'awards');
-      const ironman = pickMax(table, x => x.games);
-      if (ironman) pushRec('🧱 Meiste Spiele', `${ironman.name} – ${ironman.games} Spiele`, 'volume');
-    }
-
+    const rec = [];
+    const mostTitles = pickMax(table, x => x.championships);
+    if (mostTitles) rec.push({ icon: '👑', label: mostTitles.name, value: `${mostTitles.championships} Titel` });
+    const mostWins = pickMax(table, x => x.wins);
+    if (mostWins) rec.push({ icon: '✅', label: mostWins.name, value: `${mostWins.wins} Siege` });
+    const ironman = pickMax(table, x => x.games);
+    if (ironman) rec.push({ icon: '🧱', label: ironman.name, value: `${ironman.games} Spiele` });
     return rec;
   }
 
@@ -253,7 +229,7 @@
 
   function renderHallOfFameCard(randomizeTab) {
     if (!history || !history.ringsByPlayer || !history.ringsByPlayer.size) {
-      return `<div class="v2-card"><div class="v2-card-title">👑 Hall of Fame</div><div class="v2-empty">Noch keine abgeschlossene Saison.</div></div>`;
+      return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('👑 Hall of Fame', 'hall_of_fame.html')}</div><div class="v2-empty">Noch keine abgeschlossene Saison.</div></div>`;
     }
     if (randomizeTab) hofTab = Math.random() < 0.5 ? 'alltime' : 'records';
 
@@ -262,32 +238,31 @@
     const tableHtml = top3.map(([name, rings], i) => `
       <div class="v2-lb-row">
         <span class="v2-lb-rank">${medals[i] || i + 1}</span><span class="v2-lb-name">${name}</span><span class="v2-lb-pts">${rings} 🏆</span>
-      </div>`).join('') + `<div style="font-size:0.68em; color:var(--v2-silver); margin-top:8px;">Nach Anzahl Titeln.</div>`;
+      </div>`).join('');
 
     const recordsHtml = allTimeRecords.length
-      ? allTimeRecords.slice(0, 4).map(r => `
-          <div class="v2-record-row">
-            <div class="v2-record-k">${r.k}</div>
-            <div class="v2-record-v">${r.v}</div>
+      ? allTimeRecords.slice(0, 3).map(r => `
+          <div class="v2-lb-row">
+            <span class="v2-lb-rank">${r.icon}</span><span class="v2-lb-name">${r.label}</span><span class="v2-lb-pts">${r.value}</span>
           </div>`).join('')
       : `<div class="v2-empty">Noch keine Rekorde berechenbar.</div>`;
 
     return `
       <div class="v2-card">
-        <div class="v2-card-title">👑 Hall of Fame<a class="v2-card-link" href="hall_of_fame.html">Zur Hall of Fame →</a></div>
-        <div class="v2-tabbar">
-          <button class="v2-tab ${hofTab === 'alltime' ? 'active' : ''}" onclick="setHofTab('alltime')">Ewige Tabelle</button>
-          <button class="v2-tab ${hofTab === 'records' ? 'active' : ''}" onclick="setHofTab('records')">Neueste Rekorde</button>
+        <div class="v2-card-title">${linkedTitle('👑 Hall of Fame', 'hall_of_fame.html')}</div>
+        <div class="v2-tabbar v2-tabbar-compact">
+          <button class="v2-tab v2-tab-compact ${hofTab === 'alltime' ? 'active' : ''}" onclick="setHofTab('alltime')">Tabelle</button>
+          <button class="v2-tab v2-tab-compact ${hofTab === 'records' ? 'active' : ''}" onclick="setHofTab('records')">Rekorde</button>
         </div>
         ${hofTab === 'alltime' ? tableHtml : recordsHtml}
       </div>`;
   }
 
   function renderMerchCard() {
-    const products = MB.Shop.getFeaturedProducts(2);
+    const products = MB.Shop.getFeaturedProducts(1);
     return `
       <div class="v2-card">
-        <div class="v2-card-title">🛍️ Featured Merch<a class="v2-card-link" href="shop.html">Zum Shop →</a></div>
+        <div class="v2-card-title">${linkedTitle('🛍️ Merch', 'shop.html')}</div>
         <div class="v2-merch-grid">${products.map(MB.Shop.renderProductCardHtml).join('')}</div>
       </div>`;
   }
