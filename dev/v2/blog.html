@@ -28,6 +28,7 @@
   .v2-admin-box input[type=text] { width:100%; box-sizing:border-box; background:var(--v2-bg); color:#fff; border:1px solid #2a3a4d; border-radius:8px; padding:8px; margin-bottom:8px; }
   .v2-admin-actions { display:flex; gap:6px; margin-top:6px; }
   .v2-admin-actions button { font-size:0.75em; padding:4px 8px; border-radius:6px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
+  .v2-article-highlight { outline: 2px solid var(--v2-gold); outline-offset: 3px; }
 </style>
 </head>
 <body class="v2">
@@ -73,7 +74,7 @@
         <button onclick="removeArticle('${a.id}')">🗑️ Löschen</button>
       </div>` : '';
     return `
-      <div class="v2-article">
+      <div class="v2-article" id="post-${a.id}">
         <img class="thumb" src="${meta.image}" alt="">
         <div class="v2-article-body">
           <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
@@ -162,10 +163,33 @@
     renderList();
   }
 
+  function deepLinkedPostId() {
+    return new URLSearchParams(window.location.search).get('post');
+  }
+
+  function applyDeepLinkTab() {
+    const postId = deepLinkedPostId();
+    if (!postId) return;
+    const target = articles.find(a => String(a.id) === String(postId));
+    if (target) activeTab = target.kind === 'retrospective' ? 'rueckblick' : 'aktuell';
+  }
+
+  function scrollToDeepLinkedPost() {
+    const postId = deepLinkedPostId();
+    if (!postId) return;
+    const el = document.getElementById('post-' + postId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('v2-article-highlight');
+    setTimeout(() => el.classList.remove('v2-article-highlight'), 2500);
+  }
+
   async function reload() {
     const tid = MB.getCurrentTournamentId();
     articles = tid ? await MB.Blog.fetchArticles(tid, 100) : [];
+    applyDeepLinkTab();
     renderShell();
+    scrollToDeepLinkedPost();
   }
 
   async function boot() {

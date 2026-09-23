@@ -21,6 +21,13 @@
 <link rel="stylesheet" href="styles.css" />
 <style>
   .v2-footer { text-align: center; font-size: 0.7em; color: var(--v2-silver); text-transform: uppercase; letter-spacing: 1px; margin-top: 18px; opacity: 0.6; }
+  .v2-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .v2-row-2col .v2-card { min-width: 0; }
+  @media (max-width: 380px) { .v2-row-2col { grid-template-columns: 1fr; } }
+  .v2-record-row { padding: 8px 0; border-bottom: 1px solid var(--v2-border, rgba(255,255,255,0.08)); }
+  .v2-record-row:last-child { border-bottom: none; }
+  .v2-record-k { font-weight: 800; font-size: 0.8em; }
+  .v2-record-v { font-size: 0.76em; opacity: 0.85; margin-top: 2px; }
   .skel { height: 12px; border-radius: 6px; margin: 6px 0; background: linear-gradient(90deg, #1c2231 25%, #2a3145 50%, #1c2231 75%); background-size: 200% 100%; animation: v2shimmer 1.3s infinite; }
   @keyframes v2shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 </style>
@@ -122,11 +129,11 @@
   function renderBlogCard() {
     if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">📰 Neueste Blog-Beiträge</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
     const items = articles.slice(0, 3).map(a => `
-      <div style="margin-bottom:10px;">
+      <a href="blog.html?post=${encodeURIComponent(a.id)}" style="display:block; margin-bottom:10px; color:inherit; text-decoration:none;">
         <div style="font-weight:800; font-size:0.92em;">${a.title}</div>
         <div style="font-size:0.72em; color:var(--v2-silver); margin:2px 0 4px;">${formatArticleDate(a.created_at)}</div>
-        <div style="font-size:0.84em; opacity:0.85;">${excerpt(a.body, 90)}</div>
-      </div>`).join('');
+        <div style="font-size:0.84em; opacity:0.85;">${excerpt(a.body, 70)}</div>
+      </a>`).join('');
     return `
       <div class="v2-card">
         <div class="v2-card-title">📰 Neueste Blog-Beiträge<a class="v2-card-link" href="blog.html">Zum Blog →</a></div>
@@ -134,26 +141,150 @@
       </div>`;
   }
 
-  function renderHallOfFameCard() {
+  // ---------------------------------------------------------------
+  // All-Time-Rekorde: schlanke Variante von computeAllTime() aus
+  // hall_of_fame.html (nur der Teil, der für die "Neueste Rekorde"-
+  // Kachel gebraucht wird — Rendering/Tabelle bleibt dort). Bei
+  // Änderungen an der Rekord-Logik in hall_of_fame.html ggf. hier
+  // mitziehen.
+  // ---------------------------------------------------------------
+  function hofNormName(s) { return (s || '').trim(); }
+
+  function hofNormalizeSeason(raw) {
+    const t = raw?.tournament || raw;
+    const season = Number(raw?.season ?? t?.season);
+    const players = Array.isArray(t?.players) ? t.players : [];
+    const standings = Array.isArray(t?.standings) ? t.standings : [];
+    const matches = Array.isArray(t?.matches) ? t.matches : [];
+    const teamToPlayer = new Map();
+    players.forEach(p => { const n = hofNormName(p.name); if (n && p.team) teamToPlayer.set(p.team, n); });
+    const nm = matches.map(m => {
+      const homeTeam = m.homeTeam ?? m.home ?? null;
+      const awayTeam = m.awayTeam ?? m.away ?? null;
+      const homePlayer = hofNormName(m.homePlayer) || (homeTeam ? (teamToPlayer.get(homeTeam) || null) : null);
+      const awayPlayer = hofNormName(m.awayPlayer) || (awayTeam ? (teamToPlayer.get(awayTeam) || null) : null);
+      const hs = (m.homeScore ?? m.s1 ?? null), as = (m.awayScore ?? m.s2 ?? null);
+      return { stage: (m.stage || 'group'), homePlayer, awayPlayer,
+               homeScore: (hs === null ? null : Number(hs)), awayScore: (as === null ? null : Number(as)) };
+    });
+    const st = standings.map(x => ({ rank: Number(x.rank), name: hofNormName(x.name) }))
+      .filter(x => x.name && Number.isFinite(x.rank));
+    return { season, players, standings: st, matches: nm };
+  }
+
+  function hofEnsureAgg(map, name) {
+    const n = hofNormName(name);
+    if (!n) return null;
+    if (!map.has(n)) map.set(n, { name: n, games: 0, wins: 0, championships: 0 });
+    return map.get(n);
+  }
+
+  function hofSeasonPlayerStats(s) {
+    const map = new Map();
+    s.players.forEach(p => hofEnsureAgg(map, p.name));
+    s.standings.forEach(x => hofEnsureAgg(map, x.name));
+    s.matches.forEach(m => {
+      if (!m.homePlayer || !m.awayPlayer || m.homeScore == null || m.awayScore == null) return;
+      const A = hofEnsureAgg(map, m.homePlayer), B = hofEnsureAgg(map, m.awayPlayer);
+      A.games++; B.games++;
+      if (m.homeScore > m.awayScore) A.wins++; else B.wins++;
+    });
+    s.standings.forEach(x => { if (x.rank === 1) hofEnsureAgg(map, x.name).championships++; });
+    return map;
+  }
+
+  function computeAllTimeRecords(seasonsRaw) {
+    const seasons = (seasonsRaw || []).map(hofNormalizeSeason).filter(s => Number.isFinite(s.season));
+    const all = new Map();
+    seasons.forEach(s => {
+      hofSeasonPlayerStats(s).forEach(p => {
+        const a = hofEnsureAgg(all, p.name);
+        a.games += p.games; a.wins += p.wins; a.championships += p.championships;
+      });
+    });
+    const table = [...all.values()];
+
+    const allMatches = [];
+    seasons.forEach(s => s.matches.forEach(m => {
+      if (m.homeScore == null || m.awayScore == null || !m.homePlayer || !m.awayPlayer) return;
+      allMatches.push({ ...m, season: s.season });
+    }));
+
+    const rec = [];
+    const pushRec = (k, v, tag = '') => rec.push({ k, v, tag });
+    const pickMax = (arr, valFn) => arr.length ? arr.reduce((a, b) => valFn(b) > valFn(a) ? b : a) : null;
+
+    if (allMatches.length) {
+      const byTotal = [...allMatches].sort((a, b) => ((b.homeScore + b.awayScore) - (a.homeScore + a.awayScore)));
+      const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
+      const t = byTotal[0];
+      pushRec('🎆 Höchste Gesamtpunkte', `${t.season}: ${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore}`, t.stage);
+      const d = byDiff[0];
+      pushRec('🧱 Größter Blowout', `${d.season}: ${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore}`, d.stage);
+    }
+
+    const pairMap = new Map();
+    const keyPair = (a, b) => { const A = hofNormName(a), B = hofNormName(b); return (A < B) ? `${A}|${B}` : `${B}|${A}`; };
+    allMatches.forEach(m => {
+      const k = keyPair(m.homePlayer, m.awayPlayer);
+      if (!pairMap.has(k)) pairMap.set(k, { A: m.homePlayer, B: m.awayPlayer, games: 0 });
+      pairMap.get(k).games++;
+    });
+    const mostPlayed = pickMax([...pairMap.values()], x => x.games);
+    if (mostPlayed) pushRec('🤝 Größte Rivalität', `${mostPlayed.A} vs ${mostPlayed.B} – ${mostPlayed.games} Spiele`, 'h2h');
+
+    if (table.length) {
+      const mostTitles = pickMax(table, x => x.championships);
+      if (mostTitles) pushRec('👑 Meiste Titel', `${mostTitles.name} – ${mostTitles.championships}`, 'awards');
+      const ironman = pickMax(table, x => x.games);
+      if (ironman) pushRec('🧱 Meiste Spiele', `${ironman.name} – ${ironman.games} Spiele`, 'volume');
+    }
+
+    return rec;
+  }
+
+  let allTimeRecords = [];
+  let hofTab = 'alltime';
+
+  function setHofTab(tab) {
+    hofTab = tab;
+    render({ randomizeHofTab: false });
+  }
+
+  function renderHallOfFameCard(randomizeTab) {
     if (!history || !history.ringsByPlayer || !history.ringsByPlayer.size) {
       return `<div class="v2-card"><div class="v2-card-title">👑 Hall of Fame</div><div class="v2-empty">Noch keine abgeschlossene Saison.</div></div>`;
     }
+    if (randomizeTab) hofTab = Math.random() < 0.5 ? 'alltime' : 'records';
+
     const top3 = [...history.ringsByPlayer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     const medals = ['🥇', '🥈', '🥉'];
-    const rows = top3.map(([name, rings], i) => `
+    const tableHtml = top3.map(([name, rings], i) => `
       <div class="v2-lb-row">
         <span class="v2-lb-rank">${medals[i] || i + 1}</span><span class="v2-lb-name">${name}</span><span class="v2-lb-pts">${rings} 🏆</span>
-      </div>`).join('');
+      </div>`).join('') + `<div style="font-size:0.68em; color:var(--v2-silver); margin-top:8px;">Nach Anzahl Titeln.</div>`;
+
+    const recordsHtml = allTimeRecords.length
+      ? allTimeRecords.slice(0, 4).map(r => `
+          <div class="v2-record-row">
+            <div class="v2-record-k">${r.k}</div>
+            <div class="v2-record-v">${r.v}</div>
+          </div>`).join('')
+      : `<div class="v2-empty">Noch keine Rekorde berechenbar.</div>`;
+
     return `
       <div class="v2-card">
         <div class="v2-card-title">👑 Hall of Fame<a class="v2-card-link" href="hall_of_fame.html">Zur Hall of Fame →</a></div>
-        ${rows}
-        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:8px;">Nach Anzahl Titeln — vollständige ewige Tabelle (Punkte, Bilanzen) in der Hall of Fame.</div>
+        <div class="v2-tabbar">
+          <button class="v2-tab ${hofTab === 'alltime' ? 'active' : ''}" onclick="setHofTab('alltime')">Ewige Tabelle</button>
+          <button class="v2-tab ${hofTab === 'records' ? 'active' : ''}" onclick="setHofTab('records')">Neueste Rekorde</button>
+        </div>
+        ${hofTab === 'alltime' ? tableHtml : recordsHtml}
       </div>`;
   }
 
   function renderMerchCard() {
-    const products = MB.Shop.getFeaturedProducts(3);
+    const products = MB.Shop.getFeaturedProducts(2);
     return `
       <div class="v2-card">
         <div class="v2-card-title">🛍️ Featured Merch<a class="v2-card-link" href="shop.html">Zum Shop →</a></div>
@@ -161,7 +292,8 @@
       </div>`;
   }
 
-  async function render() {
+  async function render(opts = {}) {
+    const randomizeHofTab = opts.randomizeHofTab !== false;
     const app = document.getElementById('app');
     if (!state.players || !state.players.length) {
       app.innerHTML = `<div class="v2-card"><div class="v2-empty">Es läuft aktuell kein Turnier.</div></div>` + renderMerchCard();
@@ -169,10 +301,14 @@
     }
     app.innerHTML = `
       ${renderCurrentUpcoming()}
-      ${await renderTippspielCard()}
-      ${renderBlogCard()}
-      ${renderHallOfFameCard()}
-      ${renderMerchCard()}
+      <div class="v2-row-2col">
+        ${await renderTippspielCard()}
+        ${renderBlogCard()}
+      </div>
+      <div class="v2-row-2col">
+        ${renderHallOfFameCard(randomizeHofTab)}
+        ${renderMerchCard()}
+      </div>
       <div class="v2-footer">Same Game. Different People.</div>
     `;
   }
@@ -186,6 +322,10 @@
     }
     MB.UI.setState(state, () => render());
     try { history = await MB.loadAndBuildHistory(); } catch (e) { console.warn('History laden fehlgeschlagen:', e); }
+    try {
+      const rawSeasons = await MB.loadHistorySeasons();
+      allTimeRecords = computeAllTimeRecords(rawSeasons);
+    } catch (e) { console.warn('All-Time-Rekorde laden fehlgeschlagen:', e); }
     try { await MB.loadTeamRatings(state.config?.year || '2026'); } catch (e) {}
     try {
       const tid = MB.getCurrentTournamentId();
