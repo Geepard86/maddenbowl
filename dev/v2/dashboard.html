@@ -28,10 +28,25 @@
   .v2-card-title a { color: inherit; text-decoration: none; }
   .v2-tab.v2-tab-compact { padding: 7px 10px; font-size: 0.76em; }
   .v2-tabbar.v2-tabbar-compact { margin-bottom: 8px; }
-  .v2-game-compact { display: flex; align-items: center; gap: 8px; padding: 6px 0; cursor: pointer; font-size: 0.82em; border-bottom: 1px solid var(--v2-border, rgba(255,255,255,0.08)); }
+  .v2-game-compact {
+    display: grid;
+    grid-template-columns: 44px minmax(0,1fr) auto auto auto minmax(0,1fr) minmax(0,60px);
+    align-items: center;
+    gap: 5px;
+    padding: 7px 0;
+    cursor: pointer;
+    font-size: 0.8em;
+    border-bottom: 1px solid var(--v2-border, rgba(255,255,255,0.08));
+  }
   .v2-game-compact:last-child { border-bottom: none; }
-  .v2-game-compact .v2-game-time { min-width: 34px; color: var(--v2-silver); font-size: 0.85em; }
-  .v2-game-compact .v2-game-teams-inline { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2-game-compact .v2-live-tag { font-size: 0.68em; padding: 2px 6px; justify-self: start; }
+  .v2-game-status { display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); color: var(--v2-silver); padding: 2px 6px; border-radius: 8px; font-weight: 800; font-size: 0.68em; white-space: nowrap; justify-self: start; }
+  .v2-game-compact .v2-name-away, .v2-game-compact .v2-name-home { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2-game-compact .v2-name-away { text-align: right; }
+  .v2-game-compact .v2-name-home { text-align: left; }
+  .v2-game-compact .v2-at { color: var(--v2-silver); font-size: 0.78em; }
+  .v2-game-compact .v2-stadium { text-align: right; color: var(--v2-silver); font-size: 0.68em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2-game-compact img.logo-img { width: 18px; height: 18px; object-fit: contain; }
   .v2-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; }
   .v2-modal { background: var(--v2-surface); border: 1px solid var(--v2-border); border-radius: 14px; padding: 16px; max-width: 380px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; }
   .v2-modal-close { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--v2-silver); font-size: 1.2em; cursor: pointer; line-height: 1; padding: 6px; }
@@ -104,8 +119,13 @@
           <div class="v2-game-compact" onclick="showGameModal(${i})">
             ${m._live
               ? `<span class="v2-live-tag"><span class="v2-live-dot"></span>LIVE</span>`
-              : `<span class="v2-game-time">${m.time || '?'}</span>`}
-            <span class="v2-game-teams-inline">${MB.getLogoHtml(m.p2.team)}${m.p2.name} @ ${MB.getLogoHtml(m.p1.team)}${m.p1.name}</span>
+              : `<span class="v2-game-status">${m.time || '?'}</span>`}
+            <span class="v2-name-away">${m.p2.name}</span>
+            ${MB.getLogoHtml(m.p2.team)}
+            <span class="v2-at">@</span>
+            ${MB.getLogoHtml(m.p1.team)}
+            <span class="v2-name-home">${m.p1.name}</span>
+            <span class="v2-stadium">${m.stadium || ''}</span>
           </div>`).join('')
       : `<div class="v2-empty">Keine Spiele geplant.</div>`;
 
@@ -195,13 +215,13 @@
       const allPicks = await MB.Tipp.fetchAllPicks(tid);
       const ouLines = await MB.Tipp.fetchAllOuLines(tid);
       const standings = MB.Tipp.computeTippStandings(state, allPicks, ouLines);
-      const top5 = standings.slice(0, 5);
+      const top4 = standings.slice(0, 4);
       const myIdx = standings.findIndex(r => r.name === me);
-      let rows = top5.map((r, i) => `
+      let rows = top4.map((r, i) => `
         <div class="v2-lb-row ${r.name === me ? 'me' : ''}">
           <span class="v2-lb-rank">${i + 1}</span><span class="v2-lb-name">${r.name}</span><span class="v2-lb-pts">${r.points} Pkt.</span>
         </div>`).join('');
-      if (me && myIdx >= 5) {
+      if (me && myIdx >= 4) {
         rows += `<div class="v2-lb-row me" style="margin-top:4px;">
           <span class="v2-lb-rank">${myIdx + 1}</span><span class="v2-lb-name">${me} (du)</span><span class="v2-lb-pts">${standings[myIdx].points} Pkt.</span>
         </div>`;
@@ -314,6 +334,33 @@
     if (mostWins) rec.push({ icon: '✅', label: mostWins.name, value: `${mostWins.wins} Siege` });
     const ironman = pickMax(table, x => x.games);
     if (ironman) rec.push({ icon: '🧱', label: ironman.name, value: `${ironman.games} Spiele` });
+
+    const allMatches = [];
+    seasons.forEach(s => s.matches.forEach(m => {
+      if (m.homeScore == null || m.awayScore == null || !m.homePlayer || !m.awayPlayer) return;
+      allMatches.push({ ...m, season: s.season });
+    }));
+
+    if (allMatches.length) {
+      const byTotal = [...allMatches].sort((a, b) => ((b.homeScore + b.awayScore) - (a.homeScore + a.awayScore)));
+      const t = byTotal[0];
+      rec.push({ icon: '🎆', label: 'Höchste Punktzahl', value: `${t.homeScore}:${t.awayScore} (${t.season})` });
+
+      const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
+      const d = byDiff[0];
+      rec.push({ icon: '🧨', label: 'Größter Blowout', value: `${Math.abs(d.homeScore - d.awayScore)} Pkt. Diff. (${d.season})` });
+
+      const pairMap = new Map();
+      const keyPair = (a, b) => { const A = hofNormName(a), B = hofNormName(b); return (A < B) ? `${A}|${B}` : `${B}|${A}`; };
+      allMatches.forEach(m => {
+        const k = keyPair(m.homePlayer, m.awayPlayer);
+        if (!pairMap.has(k)) pairMap.set(k, { A: m.homePlayer, B: m.awayPlayer, games: 0 });
+        pairMap.get(k).games++;
+      });
+      const mostPlayed = pickMax([...pairMap.values()], x => x.games);
+      if (mostPlayed) rec.push({ icon: '🤝', label: `${mostPlayed.A} vs ${mostPlayed.B}`, value: `${mostPlayed.games} Spiele` });
+    }
+
     return rec;
   }
 
@@ -323,6 +370,15 @@
   function setHofTab(tab) {
     hofTab = tab;
     render({ randomizeHofTab: false });
+  }
+
+  function pickRandomRecords(pool, n) {
+    const shuffled = [...pool];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, n);
   }
 
   function renderHallOfFameCard(randomizeTab) {
@@ -339,7 +395,7 @@
       </div>`).join('');
 
     const recordsHtml = allTimeRecords.length
-      ? allTimeRecords.slice(0, 3).map(r => `
+      ? pickRandomRecords(allTimeRecords, 3).map(r => `
           <div class="v2-lb-row">
             <span class="v2-lb-rank">${r.icon}</span><span class="v2-lb-name">${r.label}</span><span class="v2-lb-pts">${r.value}</span>
           </div>`).join('')
