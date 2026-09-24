@@ -20,6 +20,7 @@
 <script src="shop-products.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
+  .v2 .v2-wrap { padding-bottom: 14px; }
   .v2-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; margin-bottom: 10px; }
   .v2-row-2col:last-child { margin-bottom: 0; }
   .v2-row-2col .v2-card { min-width: 0; margin-bottom: 0; }
@@ -32,7 +33,7 @@
   .v2-game-compact .v2-game-time { min-width: 34px; color: var(--v2-silver); font-size: 0.85em; }
   .v2-game-compact .v2-game-teams-inline { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .v2-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; }
-  .v2-modal { background: var(--v2-surface); border: 1px solid var(--v2-border); border-radius: 14px; padding: 16px; max-width: 340px; width: 100%; position: relative; }
+  .v2-modal { background: var(--v2-surface); border: 1px solid var(--v2-border); border-radius: 14px; padding: 16px; max-width: 380px; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; }
   .v2-modal-close { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--v2-silver); font-size: 1.2em; cursor: pointer; line-height: 1; padding: 6px; }
   .skel { height: 12px; border-radius: 6px; margin: 6px 0; background: linear-gradient(90deg, #1c2231 25%, #2a3145 50%, #1c2231 75%); background-size: 200% 100%; animation: v2shimmer 1.3s infinite; }
   @keyframes v2shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
@@ -57,22 +58,45 @@
 
   let state = null, history = null, articles = [];
 
-  function nowTimeStr() {
-    const d = new Date();
-    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
-  }
-
   function linkedTitle(label, href) {
     return `<a href="${href}">${label}</a>`;
   }
 
   let scheduleMatches = [];
 
+  // Mirrort renderNextGames() aus index.html: state.matches +
+  // state.playoffMatches nach "nicht beendet" filtern, erste 2 = live,
+  // nächste 2 = upcoming — kein Uhrzeit-Vergleich nötig/zuverlässig.
+  function buildScheduleMatches() {
+    const playoffTimes = MB.computePlayoffTimes(state);
+    const getMatchTime = (m, type) => (type === 'g') ? MB.getGroupMatchTime(state, m) : (playoffTimes.byId[m.id] || playoffTimes.groupEndTime);
+
+    const allMatches = [
+      ...state.matches.filter(m => !MB.isFinished(m)).map(m => ({ ...m, t: 'g' })),
+      ...state.playoffMatches.filter(m => !MB.isFinished(m) && m.p1 && m.p2 && m.p2.id !== -1).map(m => ({ ...m, t: 'p' })),
+    ];
+
+    return allMatches.map(m => {
+      const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;
+      const p2 = m.t === 'g' ? state.players[m.p2] : m.p2;
+      let stadium = state.config.s1;
+      if (m.t === 'g') {
+        const slot = state.slots.find(s => s.includes(m));
+        const idxInSlot = slot ? slot.indexOf(m) : 0;
+        stadium = idxInSlot === 1 ? state.config.s2 : state.config.s1;
+      } else {
+        stadium = (state.playoffMatches.indexOf(m) % 2 === 0) ? state.config.s1 : state.config.s2;
+      }
+      return { p1, p2, stadium, time: getMatchTime(m, m.t), phase: m.phase || (m.t === 'p' ? 'Playoffs' : 'Gruppenphase') };
+    }).filter(m => m.p1 && m.p2);
+  }
+
   function renderSpielplanCard() {
-    const upcoming = MB.getUpcomingMatches(state);
-    const now = nowTimeStr();
-    const live = upcoming.filter(m => m.time && m.time <= now).slice(0, 2).map(m => ({ ...m, _live: true }));
-    const next = upcoming.filter(m => !m.time || m.time > now).slice(0, 2).map(m => ({ ...m, _live: false }));
+    let matches = [];
+    try { matches = buildScheduleMatches(); } catch (e) { console.warn('Spielplan-Daten nicht verfügbar:', e); }
+
+    const live = matches.slice(0, 2).map(m => ({ ...m, _live: true }));
+    const next = matches.slice(2, 4).map(m => ({ ...m, _live: false }));
     scheduleMatches = [...live, ...next];
 
     const rowsHtml = scheduleMatches.length
@@ -81,7 +105,7 @@
             ${m._live
               ? `<span class="v2-live-tag"><span class="v2-live-dot"></span>LIVE</span>`
               : `<span class="v2-game-time">${m.time || '?'}</span>`}
-            <span class="v2-game-teams-inline">${MB.getLogoHtml(m.awayTeam)}${m.awayName} @ ${MB.getLogoHtml(m.homeTeam)}${m.homeName}</span>
+            <span class="v2-game-teams-inline">${MB.getLogoHtml(m.p2.team)}${m.p2.name} @ ${MB.getLogoHtml(m.p1.team)}${m.p1.name}</span>
           </div>`).join('')
       : `<div class="v2-empty">Keine Spiele geplant.</div>`;
 
@@ -96,22 +120,71 @@
     const m = scheduleMatches[idx];
     if (!m) return;
     const statusHtml = m._live
-      ? `<span class="v2-live-tag"><span class="v2-live-dot"></span>LIVE — läuft seit ${m.time} Uhr</span>`
+      ? `<span class="v2-live-tag"><span class="v2-live-dot"></span>LIVE — Anstoß war ${m.time} Uhr</span>`
       : `<span class="v2-game-meta">Anstoß ${m.time || '?'} Uhr</span>`;
     document.getElementById('gameModalBody').innerHTML = `
       <div class="v2-game-top"><span>${m.phase || ''}</span><span>${m.stadium || ''}</span></div>
       <div class="v2-game-teams">
-        <div class="v2-team">${MB.getLogoHtml(m.awayTeam)}<span class="v2-team-name">${m.awayName}</span></div>
+        <div class="v2-team">${MB.getLogoHtml(m.p2.team)}<span class="v2-team-name">${m.p2.name}</span></div>
         <span class="v2-vs">@</span>
-        <div class="v2-team">${MB.getLogoHtml(m.homeTeam)}<span class="v2-team-name">${m.homeName}</span></div>
+        <div class="v2-team">${MB.getLogoHtml(m.p1.team)}<span class="v2-team-name">${m.p1.name}</span></div>
       </div>
       <div style="margin-top:10px;">${statusHtml}</div>
+      ${renderMatchMeta(m.p1.name, m.p2.name, false)}
     `;
     document.getElementById('gameModalOverlay').style.display = 'flex';
   }
 
   function closeGameModal() {
     document.getElementById('gameModalOverlay').style.display = 'none';
+  }
+
+  // Quote/O-U/Titelchance/Insights je Match — 1:1 aus index.html
+  // (dort renderMatchMeta) bzw. spielplan.html übernommen.
+  function renderMatchMeta(homeName, awayName, finished) {
+    const H = (homeName || '').trim();
+    const A = (awayName || '').trim();
+    if (!H || !A || !history) return '';
+
+    let odds;
+    try { odds = MB.computeOddsForMatch(history, state, H, A); } catch (e) { odds = null; }
+    if (!odds) return '';
+
+    const qHome = MB.decimalOdds(odds.pHome);
+    const qAway = MB.decimalOdds(odds.pAway);
+
+    const badges = [
+      `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
+      `O/U ${odds.ouLine}`,
+    ];
+
+    if (!finished) {
+      let titleOdds = {};
+      try { titleOdds = MB.computeTitleOdds(history, state) || {}; } catch (e) {}
+      const tHome = titleOdds[H] || 0;
+      const tAway = titleOdds[A] || 0;
+      badges.push(
+        `🏆 Titelchance: <b>${H}</b> ${tHome.toFixed(1)}% <span style="color:#aaa; font-weight:800;">→ +0.0%</span> &nbsp;|&nbsp; <b>${A}</b> ${tAway.toFixed(1)}% <span style="color:#aaa; font-weight:800;">→ +0.0%</span>`
+      );
+    }
+
+    const badgeHtml = badges.filter(Boolean).map(b => `<div class="badge wide">${b}</div>`).join('');
+
+    let insightsSection = '';
+    if (!finished) {
+      let insightsArr = [];
+      try { insightsArr = MB.pickFlavourFacts(history, state, H, A) || []; } catch (e) { insightsArr = []; }
+      const insightsHtml = insightsArr.slice(0, 3).map(t => `
+        <div style="margin-top:6px; padding:8px 10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); border-left:3px solid var(--accent); border-radius:8px; font-size:0.78em; line-height:1.25;">${t}</div>
+      `).join('');
+      insightsSection = insightsHtml ? `<div class="meta-insights">${insightsHtml}</div>` : '';
+    }
+
+    return `
+      <div class="match-meta" style="padding-left:0;">
+        <div class="meta-badges">${badgeHtml}</div>
+        ${insightsSection}
+      </div>`;
   }
 
   async function renderTippspielCard() {

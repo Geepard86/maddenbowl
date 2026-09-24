@@ -45,6 +45,56 @@
 
   let state = null, history = null, activeTab = 'tabelle';
 
+  // Odds/Titelchance/Insights je Match — 1:1 aus index.html übernommen
+  // (dort renderMatchMeta), nutzt dieselben MB.*-Funktionen aus shared.js.
+  function renderMatchMeta(homeName, awayName, finished) {
+    const H = (homeName || '').trim();
+    const A = (awayName || '').trim();
+    if (!H || !A || !history) return '';
+
+    let odds;
+    try { odds = MB.computeOddsForMatch(history, state, H, A); } catch (e) { odds = null; }
+    if (!odds) return '';
+
+    const qHome = MB.decimalOdds(odds.pHome);
+    const qAway = MB.decimalOdds(odds.pAway);
+
+    const badges = [
+      `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
+      `O/U ${odds.ouLine}`,
+    ];
+
+    if (!finished) {
+      let titleOdds = {};
+      try { titleOdds = MB.computeTitleOdds(history, state) || {}; } catch (e) {}
+      const tHome = titleOdds[H] || 0;
+      const tAway = titleOdds[A] || 0;
+      badges.push(
+        `🏆 Titelchance: <b>${H}</b> ${tHome.toFixed(1)}% <span style="color:#aaa; font-weight:800;">→ +0.0%</span> &nbsp;|&nbsp; <b>${A}</b> ${tAway.toFixed(1)}% <span style="color:#aaa; font-weight:800;">→ +0.0%</span>`
+      );
+    }
+
+    const badgeHtml = badges.filter(Boolean).map(b => `
+      <div class="badge wide">${b}</div>
+    `).join('');
+
+    let insightsSection = '';
+    if (!finished) {
+      let insightsArr = [];
+      try { insightsArr = MB.pickFlavourFacts(history, state, H, A) || []; } catch (e) { insightsArr = []; }
+      const insightsHtml = insightsArr.slice(0, 3).map(t => `
+        <div style="margin-top:6px; padding:8px 10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); border-left:3px solid var(--accent); border-radius:8px; font-size:0.78em; line-height:1.25;">${t}</div>
+      `).join('');
+      insightsSection = insightsHtml ? `<div class="meta-insights">${insightsHtml}</div>` : '';
+    }
+
+    return `
+      <div class="match-meta">
+        <div class="meta-badges">${badgeHtml}</div>
+        ${insightsSection}
+      </div>`;
+  }
+
   function renderTitleOdds() {
     if (!state.players || !state.players.length) return '<div class="empty">—</div>';
     const odds = MB.computeTitleOdds(history, state);
@@ -78,7 +128,11 @@
       if (!p1 || !p2) return '';
       const played = m.s1 != null && m.s2 != null;
       const time = MB.getGroupMatchTime(state, m);
-      return `<div class="bracket-row"><span>${p1.name} vs ${p2.name}</span><span>${played ? `${m.s1}:${m.s2}` : `${time} Uhr`}</span></div>`;
+      return `
+        <div style="margin-bottom:6px;">
+          <div class="bracket-row"><span>${p1.name} vs ${p2.name}</span><span>${played ? `${m.s1}:${m.s2}` : `${time} Uhr`}</span></div>
+          ${renderMatchMeta(p1.name, p2.name, played)}
+        </div>`;
     }).join('');
   }
 
@@ -93,7 +147,12 @@
         const p2Name = m?.p2 ? (m.p2.id === -1 ? 'Freilos' : m.p2.name) : (label.p2 || 'TBD');
         const played = m && m.s1 != null && m.s2 != null;
         const right = played ? `${m.s1}:${m.s2}` : `${times.byId[id] || times.groupEndTime} Uhr`;
-        return `<div class="bracket-row"><span>${p1Name} vs ${p2Name}</span><span>${right}</span></div>`;
+        const isRealMatchup = m?.p1 && m?.p2 && m.p1.id !== -1 && m.p2.id !== -1;
+        return `
+          <div style="margin-bottom:6px;">
+            <div class="bracket-row"><span>${p1Name} vs ${p2Name}</span><span>${right}</span></div>
+            ${isRealMatchup ? renderMatchMeta(p1Name, p2Name, played) : ''}
+          </div>`;
       }).join('');
       return `<div class="bracket-session"><h3>${slotDef.session}</h3>${rows}</div>`;
     }).join('');
