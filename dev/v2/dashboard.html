@@ -28,8 +28,6 @@
   .v2-card-title a { color: inherit; text-decoration: none; }
   .v2-tab.v2-tab-compact { padding: 7px 10px; font-size: 0.76em; }
   .v2-tabbar.v2-tabbar-compact { margin-bottom: 8px; }
-  .v2-record-line { font-size: 0.72em; padding: 5px 0; border-bottom: 1px solid var(--v2-border, rgba(255,255,255,0.08)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .v2-record-line:last-child { border-bottom: none; }
   .v2-game-compact {
     display: grid;
     grid-template-columns: 44px minmax(0,1fr) auto auto auto minmax(0,1fr) minmax(0,60px);
@@ -335,23 +333,23 @@
     const pickMin = (arr, valFn) => arr.length ? arr.reduce((a, b) => valFn(b) < valFn(a) ? b : a) : null;
     const rec = [];
     const mostTitles = pickMax(table, x => x.championships);
-    if (mostTitles) rec.push({ text: `Meiste Titel: ${mostTitles.name} (${mostTitles.championships})` });
+    if (mostTitles) rec.push({ icon: '👑', name: mostTitles.name, value: `${mostTitles.championships} Titel` });
     const mostWins = pickMax(table, x => x.wins);
-    if (mostWins) rec.push({ text: `Meiste Siege: ${mostWins.name} (${mostWins.wins})` });
+    if (mostWins) rec.push({ icon: '✅', name: mostWins.name, value: `${mostWins.wins} Siege` });
     const ironman = pickMax(table, x => x.games);
-    if (ironman) rec.push({ text: `Meiste Spiele: ${ironman.name} (${ironman.games})` });
+    if (ironman) rec.push({ icon: '🧱', name: ironman.name, value: `${ironman.games} Spiele` });
     const mostLosses = pickMax(table, x => x.games - x.wins);
-    if (mostLosses) rec.push({ text: `Meiste Niederlagen: ${mostLosses.name} (${mostLosses.games - mostLosses.wins})` });
+    if (mostLosses) rec.push({ icon: '📉', name: mostLosses.name, value: `${mostLosses.games - mostLosses.wins} Niederl.` });
 
     const qualified = table.filter(x => x.games >= 10);
     const bestWinPct = pickMax(qualified, x => x.wins / x.games);
-    if (bestWinPct) rec.push({ text: `Beste Win-Quote: ${bestWinPct.name} (${(bestWinPct.wins / bestWinPct.games * 100).toFixed(0)}%)` });
+    if (bestWinPct) rec.push({ icon: '📈', name: bestWinPct.name, value: `${(bestWinPct.wins / bestWinPct.games * 100).toFixed(0)}% Siege` });
     const bestOffense = pickMax(qualified, x => x.pf / x.games);
-    if (bestOffense) rec.push({ text: `Beste Offense: ${bestOffense.name} (${(bestOffense.pf / bestOffense.games).toFixed(1)} Pkt./Spiel)` });
+    if (bestOffense) rec.push({ icon: '🎯', name: bestOffense.name, value: `${(bestOffense.pf / bestOffense.games).toFixed(1)} Pkt./Spiel` });
     const bestDefense = pickMin(qualified, x => x.pa / x.games);
-    if (bestDefense) rec.push({ text: `Beste Defense: ${bestDefense.name} (${(bestDefense.pa / bestDefense.games).toFixed(1)} Pkt. zugelassen/Spiel)` });
+    if (bestDefense) rec.push({ icon: '🛡️', name: bestDefense.name, value: `${(bestDefense.pa / bestDefense.games).toFixed(1)} zu/Spiel` });
     const topScorer = pickMax(table, x => x.pf);
-    if (topScorer) rec.push({ text: `Meiste Punkte (Karriere): ${topScorer.name} (${topScorer.pf})` });
+    if (topScorer) rec.push({ icon: '💰', name: topScorer.name, value: `${topScorer.pf} Pkt.` });
 
     const allMatches = [];
     seasons.forEach(s => s.matches.forEach(m => {
@@ -362,11 +360,11 @@
     if (allMatches.length) {
       const byTotal = [...allMatches].sort((a, b) => ((b.homeScore + b.awayScore) - (a.homeScore + a.awayScore)));
       const t = byTotal[0];
-      rec.push({ text: `Meiste Punkte (Spiel): ${t.homePlayer} ${t.homeScore} @ ${t.awayScore} ${t.awayPlayer}` });
+      rec.push({ icon: '🎆', name: `${t.homePlayer} vs ${t.awayPlayer}`, value: `${t.homeScore}:${t.awayScore}` });
 
       const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
       const d = byDiff[0];
-      rec.push({ text: `Blowout: ${d.homePlayer} ${d.homeScore} @ ${d.awayScore} ${d.awayPlayer}` });
+      rec.push({ icon: '🧨', name: `${d.homePlayer} vs ${d.awayPlayer}`, value: `${d.homeScore}:${d.awayScore}` });
 
       const pairMap = new Map();
       const keyPair = (a, b) => { const A = hofNormName(a), B = hofNormName(b); return (A < B) ? `${A}|${B}` : `${B}|${A}`; };
@@ -376,7 +374,7 @@
         pairMap.get(k).games++;
       });
       const mostPlayed = pickMax([...pairMap.values()], x => x.games);
-      if (mostPlayed) rec.push({ text: `Rivalität: ${mostPlayed.games}x ${mostPlayed.A} vs. ${mostPlayed.B}` });
+      if (mostPlayed) rec.push({ icon: '🤝', name: `${mostPlayed.A} vs ${mostPlayed.B}`, value: `${mostPlayed.games}x` });
     }
 
     return rec;
@@ -413,7 +411,12 @@
       </div>`).join('');
 
     const recordsHtml = allTimeRecords.length
-      ? pickRandomRecords(allTimeRecords, 3).map(r => `<div class="v2-record-line">${r.text}</div>`).join('')
+      ? pickRandomRecords(allTimeRecords, 3).map(r => `
+          <div class="v2-lb-row">
+            <span class="v2-lb-rank">${r.icon}</span>
+            <span class="v2-lb-name" style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.name}</span>
+            <span class="v2-lb-pts" style="white-space:nowrap;">${r.value}</span>
+          </div>`).join('')
       : `<div class="v2-empty">Noch keine Rekorde berechenbar.</div>`;
 
     return `
