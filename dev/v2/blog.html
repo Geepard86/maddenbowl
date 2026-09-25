@@ -25,6 +25,11 @@
   .v2-admin-actions { display:flex; gap:6px; margin-top:6px; }
   .v2-admin-actions button { font-size:0.75em; padding:4px 8px; border-radius:6px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
   .v2-article-highlight { outline: 2px solid var(--v2-gold); outline-offset: 3px; }
+  .v2-article-full { font-size:0.86em; opacity:0.92; margin-bottom:6px; line-height:1.5; white-space:pre-line; }
+  .v2-article-toggle { background:none; border:none; padding:0; margin-bottom:6px; font-size:0.75em; font-weight:700; color:var(--v2-gold); cursor:pointer; display:inline-block; }
+  .v2-article-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
+  .v2-share-btn { font-size:0.7em; padding:4px 10px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+  .v2-share-btn:hover { border-color:var(--v2-gold); color:var(--v2-gold); }
 </style>
 </head>
 <body class="v2">
@@ -50,6 +55,7 @@
   function catMeta(kind) { return CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: 'assets/images/Blog_WhoIs.png' }; }
 
   let state = null, articles = [], activeTab = 'aktuell';
+  const expandedIds = new Set();
 
   function excerpt(text, n) {
     const clean = (text || '').replace(/\s+/g, ' ').trim();
@@ -61,6 +67,20 @@
            d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
 
+  function toggleArticle(id) {
+    if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
+    renderList();
+  }
+
+  async function shareArticle(id, title, text, url) {
+    const shareData = { title, text, url };
+    if (navigator.share) {
+      try { await navigator.share(shareData); return; } catch (e) { /* user cancelled or unsupported, fall through */ }
+    }
+    const waText = encodeURIComponent(`${title}\n\n${text}\n\n${url}`);
+    window.open(`https://wa.me/?text=${waText}`, '_blank');
+  }
+
   function renderArticle(a) {
     const meta = catMeta(a.kind);
     const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
@@ -69,14 +89,30 @@
         <button onclick="editArticle('${a.id}')">✏️ Bearbeiten</button>
         <button onclick="removeArticle('${a.id}')">🗑️ Löschen</button>
       </div>` : '';
+    const fullBody = (a.body || '');
+    const isLong = fullBody.replace(/\s+/g, ' ').trim().length > 140;
+    const isExpanded = expandedIds.has(String(a.id));
+    const bodyHtml = isExpanded
+      ? `<div class="v2-article-full">${fullBody}</div>`
+      : `<div class="v2-article-excerpt">${excerpt(fullBody, 140)}</div>`;
+    const toggleBtn = isLong
+      ? `<button class="v2-article-toggle" onclick="toggleArticle('${a.id}')">${isExpanded ? 'Weniger anzeigen ▴' : 'Mehr anzeigen ▾'}</button>`
+      : '';
+    const shareUrl = `${window.location.origin}${window.location.pathname}?post=${a.id}`;
+    const shareTitle = (a.title || '').replace(/'/g, "\\'");
+    const shareText = excerpt(fullBody, 200).replace(/'/g, "\\'");
     return `
       <div class="v2-article" id="post-${a.id}">
         <img class="thumb" src="${meta.image}" alt="">
         <div class="v2-article-body">
           <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
           <div class="v2-article-title">${a.title || ''}</div>
-          <div class="v2-article-excerpt">${excerpt(a.body, 140)}</div>
-          <div class="v2-article-meta">📅 ${formatDate(a.created_at)}</div>
+          ${bodyHtml}
+          ${toggleBtn}
+          <div class="v2-article-footer">
+            <div class="v2-article-meta">📅 ${formatDate(a.created_at)}</div>
+            <button class="v2-share-btn" onclick="shareArticle('${a.id}', '${shareTitle}', '${shareText}', '${shareUrl}')">📤 Teilen</button>
+          </div>
           ${audio}
           ${adminBtns}
         </div>
@@ -131,6 +167,9 @@
 
   function setTab(tab) {
     activeTab = tab;
+    document.querySelectorAll('.v2-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
     renderList();
   }
 
@@ -144,8 +183,8 @@
     document.getElementById('app').innerHTML = `
       ${renderAdminBox()}
       <div class="v2-tabbar">
-        <button class="v2-tab ${activeTab === 'aktuell' ? 'active' : ''}" onclick="setTab('aktuell')">👑 Aktuelles Turnier</button>
-        <button class="v2-tab ${activeTab === 'rueckblick' ? 'active' : ''}" onclick="setTab('rueckblick')">📚 Saisonrückblicke</button>
+        <button class="v2-tab ${activeTab === 'aktuell' ? 'active' : ''}" data-tab="aktuell" onclick="setTab('aktuell')">👑 Aktuelles Turnier</button>
+        <button class="v2-tab ${activeTab === 'rueckblick' ? 'active' : ''}" data-tab="rueckblick" onclick="setTab('rueckblick')">📚 Saisonrückblicke</button>
       </div>
       <div id="mbArticleList"></div>
     `;
