@@ -30,12 +30,20 @@
   .v2-article-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
   .v2-share-btn { font-size:0.7em; padding:4px 10px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
   .v2-share-btn:hover { border-color:var(--v2-gold); color:var(--v2-gold); }
-  .v2-article-media { display:block; width:100%; max-height:320px; object-fit:contain; border-radius:8px; margin-bottom:8px; background:#0007; }
+  .v2-article-media { display:block; width:100%; max-height:320px; object-fit:contain; border-radius:8px; margin-bottom:8px; background:#0007; cursor:zoom-in; }
+  .v2-lightbox { position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1000; display:none; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; cursor:zoom-out; }
+  .v2-lightbox.open { display:flex; }
+  .v2-lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; }
+  .v2-lightbox-close { position:absolute; top:16px; right:20px; background:none; border:none; color:#fff; font-size:2em; line-height:1; cursor:pointer; }
 </style>
 </head>
 <body class="v2">
 <div class="v2-wrap" id="app">
   <div class="v2-card"><div class="v2-empty">Lade Blog…</div></div>
+</div>
+<div class="v2-lightbox" id="mbLightbox" onclick="closeLightbox()">
+  <button class="v2-lightbox-close" onclick="closeLightbox()">&times;</button>
+  <img id="mbLightboxImg" src="" alt="">
 </div>
 
 <script>
@@ -58,6 +66,11 @@
   let state = null, articles = [], activeTab = 'aktuell';
   const expandedIds = new Set();
 
+  // TODO: nach dem Deployen des Cloudflare Workers hier die echte
+  // *.workers.dev-URL eintragen (siehe Anleitung), z.B.:
+  // "https://maddenbowl-share.deinaccount.workers.dev"
+  const SHARE_BASE_URL = "https://maddenbowl-share.DEIN-ACCOUNT.workers.dev";
+
   function excerpt(text, n) {
     const clean = (text || '').replace(/\s+/g, ' ').trim();
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
@@ -73,6 +86,20 @@
     renderList();
   }
 
+  function openLightbox(url) {
+    document.getElementById('mbLightboxImg').src = url;
+    document.getElementById('mbLightbox').classList.add('open');
+  }
+
+  function closeLightbox() {
+    document.getElementById('mbLightbox').classList.remove('open');
+    document.getElementById('mbLightboxImg').src = '';
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
+  });
+
   async function shareArticle(id, title, url) {
     const shareData = { title, url };
     if (navigator.share) {
@@ -86,7 +113,7 @@
     const meta = catMeta(a.kind);
     const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
     const media = (a.media_type === 'image' && a.media_url)
-      ? `<img class="v2-article-media" src="${a.media_url}" alt="" loading="lazy">`
+      ? `<img class="v2-article-media" src="${a.media_url}" alt="" loading="lazy" onclick="openLightbox('${a.media_url}')">`
       : '';
     const adminBtns = isAdmin ? `
       <div class="v2-admin-actions">
@@ -102,7 +129,7 @@
     const toggleBtn = isLong
       ? `<button class="v2-article-toggle" onclick="toggleArticle('${a.id}')">${isExpanded ? 'Weniger anzeigen ▴' : 'Mehr anzeigen ▾'}</button>`
       : '';
-    const shareUrl = `${window.location.origin}${window.location.pathname}?post=${a.id}`;
+    const shareUrl = `${SHARE_BASE_URL}/?post=${a.id}`;
     const shareTitle = (a.title || '').replace(/'/g, "\\'");
     return `
       <div class="v2-article" id="post-${a.id}">
