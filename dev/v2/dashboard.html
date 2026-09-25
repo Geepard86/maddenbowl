@@ -335,21 +335,21 @@
     const mostTitles = pickMax(table, x => x.championships);
     if (mostTitles) rec.push({ icon: '👑', name: mostTitles.name, value: `${mostTitles.championships} Titel` });
     const mostWins = pickMax(table, x => x.wins);
-    if (mostWins) rec.push({ icon: '✅', name: mostWins.name, value: `${mostWins.wins} Siege` });
+    if (mostWins) rec.push({ icon: '✅', name: mostWins.name, value: `${mostWins.wins} W.` });
     const ironman = pickMax(table, x => x.games);
-    if (ironman) rec.push({ icon: '🧱', name: ironman.name, value: `${ironman.games} Spiele` });
+    if (ironman) rec.push({ icon: '🧱', name: ironman.name, value: `${ironman.games} G.` });
     const mostLosses = pickMax(table, x => x.games - x.wins);
-    if (mostLosses) rec.push({ icon: '📉', name: mostLosses.name, value: `${mostLosses.games - mostLosses.wins} Niederl.` });
+    if (mostLosses) rec.push({ icon: '📉', name: mostLosses.name, value: `${mostLosses.games - mostLosses.wins} L.` });
 
     const qualified = table.filter(x => x.games >= 10);
     const bestWinPct = pickMax(qualified, x => x.wins / x.games);
-    if (bestWinPct) rec.push({ icon: '📈', name: bestWinPct.name, value: `${(bestWinPct.wins / bestWinPct.games * 100).toFixed(0)}% Siege` });
+    if (bestWinPct) rec.push({ icon: '📈', name: bestWinPct.name, value: `${(bestWinPct.wins / bestWinPct.games * 100).toFixed(0)}%` });
     const bestOffense = pickMax(qualified, x => x.pf / x.games);
-    if (bestOffense) rec.push({ icon: '🎯', name: bestOffense.name, value: `${(bestOffense.pf / bestOffense.games).toFixed(1)} Pkt./Spiel` });
+    if (bestOffense) rec.push({ icon: '🎯', name: bestOffense.name, value: `${(bestOffense.pf / bestOffense.games).toFixed(1)}Ø` });
     const bestDefense = pickMin(qualified, x => x.pa / x.games);
-    if (bestDefense) rec.push({ icon: '🛡️', name: bestDefense.name, value: `${(bestDefense.pa / bestDefense.games).toFixed(1)} zu/Spiel` });
+    if (bestDefense) rec.push({ icon: '🛡️', name: bestDefense.name, value: `${(bestDefense.pa / bestDefense.games).toFixed(1)}Ø` });
     const topScorer = pickMax(table, x => x.pf);
-    if (topScorer) rec.push({ icon: '💰', name: topScorer.name, value: `${topScorer.pf} Pkt.` });
+    if (topScorer) rec.push({ icon: '💰', name: topScorer.name, value: `${topScorer.pf} P.` });
 
     const allMatches = [];
     seasons.forEach(s => s.matches.forEach(m => {
@@ -364,7 +364,9 @@
 
       const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
       const d = byDiff[0];
-      rec.push({ icon: '🧨', name: `${d.homePlayer} vs ${d.awayPlayer}`, value: `${d.homeScore}:${d.awayScore}` });
+      const dWinner = d.homeScore > d.awayScore ? d.homePlayer : d.awayPlayer;
+      const dWinnerScore = Math.max(d.homeScore, d.awayScore), dLoserScore = Math.min(d.homeScore, d.awayScore);
+      rec.push({ icon: '🧨', name: dWinner, value: `${dWinnerScore}:${dLoserScore}` });
 
       const pairMap = new Map();
       const keyPair = (a, b) => { const A = hofNormName(a), B = hofNormName(b); return (A < B) ? `${A}|${B}` : `${B}|${A}`; };
