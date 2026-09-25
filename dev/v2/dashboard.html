@@ -316,6 +316,16 @@
     return map;
   }
 
+  // "Tobi F." -> "T.F." (Vorname+Nachname/Initiale -> zusammengezogene Initialen);
+  // einzelne, längere Namen wie "Micha" -> "Mic." (erste 3 Buchstaben + Punkt).
+  function abbreviatePlayerName(name) {
+    const n = (name || '').trim();
+    if (!n) return n;
+    const parts = n.split(/\s+/).filter(Boolean);
+    if (parts.length > 1) return parts.map(p => p.charAt(0).toUpperCase() + '.').join('');
+    return n.length > 3 ? n.slice(0, 3) + '.' : n;
+  }
+
   function computeAllTimeRecords(seasonsRaw) {
     const seasons = (seasonsRaw || []).map(hofNormalizeSeason).filter(s => Number.isFinite(s.season));
     const all = new Map();
@@ -360,7 +370,7 @@
     if (allMatches.length) {
       const byTotal = [...allMatches].sort((a, b) => ((b.homeScore + b.awayScore) - (a.homeScore + a.awayScore)));
       const t = byTotal[0];
-      rec.push({ icon: '🎆', name: `${t.homePlayer} vs ${t.awayPlayer}`, value: `${t.homeScore}:${t.awayScore}` });
+      rec.push({ icon: '🎆', name: `${abbreviatePlayerName(t.homePlayer)} vs ${abbreviatePlayerName(t.awayPlayer)}`, value: `${t.homeScore}:${t.awayScore}` });
 
       const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
       const d = byDiff[0];
@@ -376,7 +386,7 @@
         pairMap.get(k).games++;
       });
       const mostPlayed = pickMax([...pairMap.values()], x => x.games);
-      if (mostPlayed) rec.push({ icon: '🤝', name: `${mostPlayed.A} vs ${mostPlayed.B}`, value: `${mostPlayed.games}x` });
+      if (mostPlayed) rec.push({ icon: '🤝', name: `${abbreviatePlayerName(mostPlayed.A)} vs ${abbreviatePlayerName(mostPlayed.B)}`, value: `${mostPlayed.games}x` });
     }
 
     return rec;
