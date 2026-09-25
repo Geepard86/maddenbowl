@@ -9,14 +9,20 @@
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="shared.js"></script>
+  <script src="ui.js"></script>
   <style>
     :root{
       /* Basis-Palette (nfl-blue/red, bg, card, accent, gray) kommt aus styles.css;
          hier nur die zwei Variablen, die styles.css nicht kennt. */
       --slot:#1c2431; --border:#2d3748;
+      /* An die gemeinsame v2-Optik (Navy/Gold statt Blau/Cyan) angeglichen —
+         alle bestehenden var(--accent)/var(--nfl-blue)-Verwendungen unten
+         übernehmen dadurch automatisch die neue Farbgebung. */
+      --accent: var(--v2-gold);
+      --nfl-blue: var(--v2-navy);
     }
-    body{font-family:'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:12px;overflow-x:hidden;}
-    .container{max-width:1200px;margin:0 auto;}
+    body{font-family:-apple-system,'Inter','Segoe UI',Roboto,sans-serif;background:var(--bg);color:#fff;margin:0;padding:0;overflow-x:hidden;}
+    .container{max-width:1200px;margin:0 auto;padding:12px 12px 24px;}
     h1{margin:10px 0 6px;text-align:center;letter-spacing:2px;text-transform:uppercase;border-bottom:3px solid var(--nfl-red);padding-bottom:6px;}
     .topbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin:10px 0 16px;}
     .chip{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:999px;padding:6px 10px;font-size:12px;display:inline-flex;gap:8px;align-items:center;}
@@ -63,7 +69,7 @@
     .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(0,0,0,0.25);font-family:monospace;font-size:11px;}
     .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}
     .tab{cursor:pointer;user-select:none;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:rgba(0,0,0,0.18);font-weight:800;font-size:12px;}
-    .tab.active{border-color:var(--accent);box-shadow:0 0 12px rgba(0,255,204,0.12);}
+    .tab.active{border-color:var(--accent);box-shadow:0 0 12px rgba(201,151,0,0.18);}
     .slot{background:var(--slot);border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0;}
     .slothead{display:flex;justify-content:space-between;gap:10px;color:var(--accent);font-family:monospace;font-size:12px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:8px;}
     .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;background:#232d3d;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px;margin:8px 0;}
@@ -75,9 +81,17 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>MADDEN BOWL – HALL OF FAME</h1>
+  <script>
+    MB.UI.mountHeader({ active: 'hallOfFame' });
+    (async () => {
+      try {
+        const state = await MB.fetchCloudState();
+        MB.UI.setState(state);
+      } catch (e) { /* Hall of Fame liest ohnehin aus den Archiv-JSONs */ }
+    })();
+  </script>
 
+  <div class="container">
     <div class="card" style="margin-bottom:12px;">
       <h2>Navigation</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">

@@ -538,6 +538,25 @@
 .v2-burger { background: none; border: none; padding: 4px; cursor: pointer; display: flex; }
 .v2-burger img { width: 22px; height: 22px; }
 
+/* --- PAGE BAR: zeigt auf jeder Unterseite (außer Dashboard) an, wo man
+   sich befindet, und bietet einen direkten Weg zurück zum Dashboard.
+   Wird von MB.UI.mountHeader() automatisch unter den Header gesetzt. --- */
+.v2-page-bar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  background: var(--v2-surface); border-bottom: 1px solid var(--v2-border);
+}
+.v2-page-back {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+  background: rgba(255,255,255,0.06); color: var(--v2-gold);
+  text-decoration: none; font-size: 1.05em; font-weight: 900; line-height: 1;
+}
+.v2-page-bar img { width: 16px; height: 16px; flex-shrink: 0; }
+.v2-page-bar-title {
+  font-weight: 900; text-transform: uppercase; letter-spacing: 0.4px;
+  font-size: 0.82em; color: #F5F5F5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* --- NAV DRAWER --- */
 .v2-nav-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 40; display: none; }
 .v2-nav-backdrop.open { display: block; }

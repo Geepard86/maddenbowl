@@ -3,29 +3,37 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl — Fan-Shop</title>
+<title>Madden Bowl VI — Fan-Shop</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<script src="ui.js"></script>
 <link rel="stylesheet" href="styles.css" />
-<style>
-  body { padding: 16px; }
-  header { padding: 12px 4px 16px; border-bottom: 1px solid #22304366; margin-bottom: 16px; max-width: 900px; margin-left: auto; margin-right: auto; }
-  header h1 { margin: 0; font-size: 1.15em; text-transform: uppercase; letter-spacing: 0.5px; }
-  header a { color: var(--accent); font-size: 0.85em; text-decoration: none; }
-  #myShop { max-width: 900px; margin: 0 auto; }
-</style>
 </head>
-<body>
+<body class="v2">
 
-<header>
-  <h1>🛍️ Madden Bowl Fan-Shop</h1>
-  <div style="margin-top:6px;"><a href="live.html">← Zurück zum Turnierblog</a></div>
-</header>
-
-<!-- Spreadshop-Einbindung. WICHTIG: baseId ("myShop") muss exakt zur ID
-     dieses div passen, sonst rendert der Shop nichts hinein. -->
-<div id="myShop">
-  <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
+<div class="v2-wrap wide">
+  <!-- Spreadshop-Einbindung. WICHTIG: baseId ("myShop") muss exakt zur ID
+       dieses div passen, sonst rendert der Shop nichts hinein. -->
+  <div id="myShop">
+    <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
+  </div>
 </div>
+
+<script>
+  MB.UI.mountHeader({ active: 'shop' });
+  // Best-effort: Login-Status im Header korrekt anzeigen (wie auf den
+  // anderen Seiten). Scheitert das (z.B. kein aktives Turnier), bleibt
+  // einfach der "Anmelden"-Button ohne Funktion — der Shop selbst
+  // braucht dafür nichts.
+  (async () => {
+    try {
+      const state = await MB.fetchCloudState();
+      MB.UI.setState(state);
+    } catch (e) { /* Shop funktioniert auch ohne Turnierdaten */ }
+  })();
+</script>
+
 <script>
   // Deep-Link zu einem einzelnen Produkt: shop.html?p=<startToken>, wobei
   // <startToken> exakt der Teil der Spreadshop-URL ist, der hinter der

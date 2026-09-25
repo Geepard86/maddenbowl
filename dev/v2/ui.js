@@ -21,6 +21,7 @@
     { key: "spielplan", label: "Spielplan", href: "spielplan.html", icon: "assets/icons/calendar.svg" },
     { key: "tippspiel", label: "Tippspiel", href: "wettbuero.html", icon: "assets/icons/trophy.svg" },
     { key: "blog", label: "Blog", href: "blog.html", icon: "assets/icons/blog.svg" },
+    { key: "hallOfFame", label: "Hall of Fame", href: "hall_of_fame.html", icon: "assets/icons/crown.svg" },
     { key: "shop", label: "Shop", href: "shop.html", icon: "assets/icons/cart.svg" },
   ];
 
@@ -50,6 +51,17 @@
         <img src="${item.icon}" alt=""> ${item.label}
       </a>`).join("");
 
+    // Page-Bar: zeigt Icon + Name der aktuellen Seite und einen Zurück-Pfeil
+    // zum Dashboard. Nur auf Unterseiten — auf dem Dashboard selbst (active
+    // === "dashboard") weglassen, da man dort schon "zuhause" ist.
+    const activeItem = NAV_ITEMS.find(item => item.key === active);
+    const pageBarHtml = (activeItem && active !== "dashboard") ? `
+      <div class="v2-page-bar">
+        <a class="v2-page-back" href="dashboard.html" aria-label="Zurück zum Dashboard">←</a>
+        <img src="${activeItem.icon}" alt="">
+        <span class="v2-page-bar-title">${activeItem.label}</span>
+      </div>` : "";
+
     const headerHtml = `
       <header class="v2-header">
         <a class="v2-logo" href="dashboard.html">
@@ -63,6 +75,7 @@
           </button>
         </div>
       </header>
+      ${pageBarHtml}
       <div class="v2-nav-backdrop" id="mbNavBackdrop" onclick="MB.UI.closeNav()"></div>
       <nav class="v2-nav-drawer" id="mbNavDrawer">
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>

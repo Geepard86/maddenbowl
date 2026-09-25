@@ -12,10 +12,6 @@
 <script src="ui.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  .v2-blog-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
-  .v2-blog-header img.crown { width:26px; height:26px; }
-  .v2-blog-header h1 { font-size:1.3em; margin:0; }
-  .v2-blog-header .sub { font-size:0.62em; letter-spacing:2px; text-transform:uppercase; color:var(--v2-silver); margin-top:2px; }
   .v2-article { display:flex; gap:12px; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; align-items:flex-start; }
   .v2-article img.thumb { width:88px; height:66px; object-fit:cover; border-radius:8px; flex-shrink:0; background:#0007; }
   .v2-article-body { min-width:0; flex:1; }
@@ -146,13 +142,6 @@
 
   function renderShell() {
     document.getElementById('app').innerHTML = `
-      <div class="v2-blog-header">
-        <img class="crown" src="assets/icons/crown.svg" alt="">
-        <div>
-          <h1>Blog</h1>
-          <div class="sub">News. Stories. Highlights.</div>
-        </div>
-      </div>
       ${renderAdminBox()}
       <div class="v2-tabbar">
         <button class="v2-tab ${activeTab === 'aktuell' ? 'active' : ''}" onclick="setTab('aktuell')">👑 Aktuelles Turnier</button>
