@@ -30,6 +30,7 @@
   .v2-article-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
   .v2-share-btn { font-size:0.7em; padding:4px 10px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
   .v2-share-btn:hover { border-color:var(--v2-gold); color:var(--v2-gold); }
+  .v2-article-media { display:block; width:100%; max-height:320px; object-fit:contain; border-radius:8px; margin-bottom:8px; background:#0007; }
 </style>
 </head>
 <body class="v2">
@@ -72,18 +73,21 @@
     renderList();
   }
 
-  async function shareArticle(id, title, text, url) {
-    const shareData = { title, text, url };
+  async function shareArticle(id, title, url) {
+    const shareData = { title, url };
     if (navigator.share) {
       try { await navigator.share(shareData); return; } catch (e) { /* user cancelled or unsupported, fall through */ }
     }
-    const waText = encodeURIComponent(`${title}\n\n${text}\n\n${url}`);
+    const waText = encodeURIComponent(`${title}\n${url}`);
     window.open(`https://wa.me/?text=${waText}`, '_blank');
   }
 
   function renderArticle(a) {
     const meta = catMeta(a.kind);
     const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
+    const media = (a.media_type === 'image' && a.media_url)
+      ? `<img class="v2-article-media" src="${a.media_url}" alt="" loading="lazy">`
+      : '';
     const adminBtns = isAdmin ? `
       <div class="v2-admin-actions">
         <button onclick="editArticle('${a.id}')">✏️ Bearbeiten</button>
@@ -100,18 +104,18 @@
       : '';
     const shareUrl = `${window.location.origin}${window.location.pathname}?post=${a.id}`;
     const shareTitle = (a.title || '').replace(/'/g, "\\'");
-    const shareText = excerpt(fullBody, 200).replace(/'/g, "\\'");
     return `
       <div class="v2-article" id="post-${a.id}">
         <img class="thumb" src="${meta.image}" alt="">
         <div class="v2-article-body">
           <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
           <div class="v2-article-title">${a.title || ''}</div>
+          ${media}
           ${bodyHtml}
           ${toggleBtn}
           <div class="v2-article-footer">
             <div class="v2-article-meta">📅 ${formatDate(a.created_at)}</div>
-            <button class="v2-share-btn" onclick="shareArticle('${a.id}', '${shareTitle}', '${shareText}', '${shareUrl}')">📤 Teilen</button>
+            <button class="v2-share-btn" onclick="shareArticle('${a.id}', '${shareTitle}', '${shareUrl}')">📤 Teilen</button>
           </div>
           ${audio}
           ${adminBtns}
