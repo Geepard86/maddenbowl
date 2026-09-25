@@ -28,6 +28,8 @@
   .v2-card-title a { color: inherit; text-decoration: none; }
   .v2-tab.v2-tab-compact { padding: 7px 10px; font-size: 0.76em; }
   .v2-tabbar.v2-tabbar-compact { margin-bottom: 8px; }
+  .v2-record-line { font-size: 0.72em; padding: 5px 0; border-bottom: 1px solid var(--v2-border, rgba(255,255,255,0.08)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v2-record-line:last-child { border-bottom: none; }
   .v2-game-compact {
     display: grid;
     grid-template-columns: 44px minmax(0,1fr) auto auto auto minmax(0,1fr) minmax(0,60px);
@@ -296,7 +298,7 @@
   function hofEnsureAgg(map, name) {
     const n = hofNormName(name);
     if (!n) return null;
-    if (!map.has(n)) map.set(n, { name: n, games: 0, wins: 0, championships: 0 });
+    if (!map.has(n)) map.set(n, { name: n, games: 0, wins: 0, championships: 0, pf: 0, pa: 0 });
     return map.get(n);
   }
 
@@ -308,6 +310,8 @@
       if (!m.homePlayer || !m.awayPlayer || m.homeScore == null || m.awayScore == null) return;
       const A = hofEnsureAgg(map, m.homePlayer), B = hofEnsureAgg(map, m.awayPlayer);
       A.games++; B.games++;
+      A.pf += m.homeScore; A.pa += m.awayScore;
+      B.pf += m.awayScore; B.pa += m.homeScore;
       if (m.homeScore > m.awayScore) A.wins++; else B.wins++;
     });
     s.standings.forEach(x => { if (x.rank === 1) hofEnsureAgg(map, x.name).championships++; });
@@ -321,19 +325,33 @@
       hofSeasonPlayerStats(s).forEach(p => {
         const a = hofEnsureAgg(all, p.name);
         a.games += p.games; a.wins += p.wins; a.championships += p.championships;
+        a.pf += p.pf; a.pa += p.pa;
       });
     });
     const table = [...all.values()];
     if (!table.length) return [];
 
     const pickMax = (arr, valFn) => arr.length ? arr.reduce((a, b) => valFn(b) > valFn(a) ? b : a) : null;
+    const pickMin = (arr, valFn) => arr.length ? arr.reduce((a, b) => valFn(b) < valFn(a) ? b : a) : null;
     const rec = [];
     const mostTitles = pickMax(table, x => x.championships);
-    if (mostTitles) rec.push({ icon: '👑', label: mostTitles.name, value: `${mostTitles.championships} Titel` });
+    if (mostTitles) rec.push({ text: `Meiste Titel: ${mostTitles.name} (${mostTitles.championships})` });
     const mostWins = pickMax(table, x => x.wins);
-    if (mostWins) rec.push({ icon: '✅', label: mostWins.name, value: `${mostWins.wins} Siege` });
+    if (mostWins) rec.push({ text: `Meiste Siege: ${mostWins.name} (${mostWins.wins})` });
     const ironman = pickMax(table, x => x.games);
-    if (ironman) rec.push({ icon: '🧱', label: ironman.name, value: `${ironman.games} Spiele` });
+    if (ironman) rec.push({ text: `Meiste Spiele: ${ironman.name} (${ironman.games})` });
+    const mostLosses = pickMax(table, x => x.games - x.wins);
+    if (mostLosses) rec.push({ text: `Meiste Niederlagen: ${mostLosses.name} (${mostLosses.games - mostLosses.wins})` });
+
+    const qualified = table.filter(x => x.games >= 10);
+    const bestWinPct = pickMax(qualified, x => x.wins / x.games);
+    if (bestWinPct) rec.push({ text: `Beste Win-Quote: ${bestWinPct.name} (${(bestWinPct.wins / bestWinPct.games * 100).toFixed(0)}%)` });
+    const bestOffense = pickMax(qualified, x => x.pf / x.games);
+    if (bestOffense) rec.push({ text: `Beste Offense: ${bestOffense.name} (${(bestOffense.pf / bestOffense.games).toFixed(1)} Pkt./Spiel)` });
+    const bestDefense = pickMin(qualified, x => x.pa / x.games);
+    if (bestDefense) rec.push({ text: `Beste Defense: ${bestDefense.name} (${(bestDefense.pa / bestDefense.games).toFixed(1)} Pkt. zugelassen/Spiel)` });
+    const topScorer = pickMax(table, x => x.pf);
+    if (topScorer) rec.push({ text: `Meiste Punkte (Karriere): ${topScorer.name} (${topScorer.pf})` });
 
     const allMatches = [];
     seasons.forEach(s => s.matches.forEach(m => {
@@ -344,11 +362,11 @@
     if (allMatches.length) {
       const byTotal = [...allMatches].sort((a, b) => ((b.homeScore + b.awayScore) - (a.homeScore + a.awayScore)));
       const t = byTotal[0];
-      rec.push({ icon: '🎆', label: 'Höchste Punktzahl', value: `${t.homeScore}:${t.awayScore} (${t.season})` });
+      rec.push({ text: `Meiste Punkte (Spiel): ${t.homePlayer} ${t.homeScore} @ ${t.awayScore} ${t.awayPlayer}` });
 
       const byDiff = [...allMatches].sort((a, b) => Math.abs(b.homeScore - b.awayScore) - Math.abs(a.homeScore - a.awayScore));
       const d = byDiff[0];
-      rec.push({ icon: '🧨', label: 'Größter Blowout', value: `${Math.abs(d.homeScore - d.awayScore)} Pkt. Diff. (${d.season})` });
+      rec.push({ text: `Blowout: ${d.homePlayer} ${d.homeScore} @ ${d.awayScore} ${d.awayPlayer}` });
 
       const pairMap = new Map();
       const keyPair = (a, b) => { const A = hofNormName(a), B = hofNormName(b); return (A < B) ? `${A}|${B}` : `${B}|${A}`; };
@@ -358,7 +376,7 @@
         pairMap.get(k).games++;
       });
       const mostPlayed = pickMax([...pairMap.values()], x => x.games);
-      if (mostPlayed) rec.push({ icon: '🤝', label: `${mostPlayed.A} vs ${mostPlayed.B}`, value: `${mostPlayed.games} Spiele` });
+      if (mostPlayed) rec.push({ text: `Rivalität: ${mostPlayed.games}x ${mostPlayed.A} vs. ${mostPlayed.B}` });
     }
 
     return rec;
@@ -395,10 +413,7 @@
       </div>`).join('');
 
     const recordsHtml = allTimeRecords.length
-      ? pickRandomRecords(allTimeRecords, 3).map(r => `
-          <div class="v2-lb-row">
-            <span class="v2-lb-rank">${r.icon}</span><span class="v2-lb-name">${r.label}</span><span class="v2-lb-pts">${r.value}</span>
-          </div>`).join('')
+      ? pickRandomRecords(allTimeRecords, 3).map(r => `<div class="v2-record-line">${r.text}</div>`).join('')
       : `<div class="v2-empty">Noch keine Rekorde berechenbar.</div>`;
 
     return `
