@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="maddenbowl.ico" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="shared.js"></script>
+  <script src="ui.js"></script>
   <script src="announcer.js"></script>
   <script src="music.js"></script>
   <script src="records.js"></script>
@@ -46,17 +47,10 @@
 </head>
 
 <body>
+  <script>MB.UI.mountHeader({ active: '' });</script>
   <div class="container">
     <div id="live-header">
       <h1>MADDEN BOWL LIVE</h1>
-
-      <div id="hofPublicWrap" style="text-align:center; margin-bottom:10px;">
-  <button class="btn-secondary"
-          style="background:var(--nfl-blue)"
-          onclick="window.open('hall_of_fame.html','_blank')">
-    🏛️ Hall of Fame
-  </button>
-</div>
 
       <div id="nextUp" class="next-games">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
@@ -161,7 +155,6 @@
       <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
         <button class="btn-secondary" onclick="window.print()">PDF Export</button>
         <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
-        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('hall_of_fame.html','_blank')">🏛️ Hall of Fame</button>
         <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
         <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
       </div>
@@ -377,12 +370,6 @@
         osc.stop(start + 0.4);
       });
     }
-
-
-    function toggleHallOfFameButtons() {
-  const pub = document.getElementById("hofPublicWrap");
-  if (pub) pub.style.display = isAdmin ? "none" : "block";
-}
 
 
     const nflTeams = MB.nflTeams;
@@ -2471,7 +2458,6 @@ function renderRanking() {
       }
 
       renderAll();
-      toggleHallOfFameButtons();
       recalcTitleOddsSnapshots();
       updatePlayoffLogic();
       MB.syncPlayoffOffsets(state); // Bugfix: Bye-bereinigte Zeiten auch beim ersten Laden

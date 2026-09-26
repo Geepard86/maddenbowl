@@ -1,9 +1,12 @@
     :root {
-      --nfl-blue: #013369;
-      --nfl-red: #D50A0A;
-      --bg: #0b1119;
-      --card: #161f2c;
-      --accent: #00ffcc;
+      /* An die v2-Palette (Dashboard/Blog/Spielplan) angeglichen, damit
+         index.html farblich zum Rest der Seite passt, ohne dass sich am
+         Layout selbst etwas ändert. */
+      --nfl-blue: #0B162A;   /* = --v2-navy */
+      --nfl-red: #D50A0A;    /* = --v2-red (war bereits identisch) */
+      --bg: #0F1115;         /* = --v2-bg */
+      --card: #1A1F2B;       /* = --v2-surface */
+      --accent: #C99700;     /* = --v2-gold (ersetzt das alte Neon-Türkis) */
       --gray: #4a5568;
       --slot-bg: #1c2431;
     }
@@ -13,12 +16,12 @@
       background: var(--bg);
       color: white;
       margin: 0;
-      padding: 10px;
+      padding: 0;
       overflow-x: hidden;
       scroll-behavior: smooth;
     }
 
-    .container { max-width: 1200px; margin: auto; }
+    .container { max-width: 1200px; margin: auto; padding: 10px; }
 
     h1 {
       text-align: center;
