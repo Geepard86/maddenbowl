@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Madden Bowl VI — Fan-Shop</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<script src="ui.js"></script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body class="v2">
+
+<div class="v2-wrap wide">
+  <!-- Spreadshop-Einbindung. WICHTIG: baseId ("myShop") muss exakt zur ID
+       dieses div passen, sonst rendert der Shop nichts hinein. -->
+  <div id="myShop">
+    <a href="https://maddenbowl.myspreadshop.de">MaddenBowl</a>
+  </div>
+</div>
+
+<script>
+  MB.UI.mountHeader({ active: 'shop' });
+  // Best-effort: Login-Status im Header korrekt anzeigen (wie auf den
+  // anderen Seiten). Scheitert das (z.B. kein aktives Turnier), bleibt
+  // einfach der "Anmelden"-Button ohne Funktion — der Shop selbst
+  // braucht dafür nichts.
+  (async () => {
+    try {
+      const state = await MB.fetchCloudState();
+      MB.UI.setState(state);
+    } catch (e) { /* Shop funktioniert auch ohne Turnierdaten */ }
+  })();
+</script>
+
+<script>
+  // Deep-Link zu einem einzelnen Produkt: shop.html?p=<startToken>, wobei
+  // <startToken> exakt der Teil der Spreadshop-URL ist, der hinter der
+  // Shop-Domain steht (z.B. "defender-A6aa.....?sellable=...&appearance=2"
+  // — genau das, was "Rechtsklick -> Link kopieren" auf einem Produkt im
+  // echten Shop liefert, ohne "https://maddenbowl.myspreadshop.de/" davor).
+  // Ohne ?p= verhält sich alles wie bisher (Shop-Startseite).
+  var params = new URLSearchParams(window.location.search);
+  var startToken = params.get('p');
+
+  var spread_shop_config = {
+    shopName: 'maddenbowl',
+    locale: 'de_DE',
+    prefix: 'https://maddenbowl.myspreadshop.de',
+    baseId: 'myShop'
+  };
+  if (startToken) spread_shop_config.startToken = startToken;
+
+  // FALLBACK: Das offizielle Spreadshop-Widget-Skript ersetzt #myShop nach
+  // dem Laden komplett. Läuft das aus irgendeinem Grund nicht durch (Skript
+  // blockiert/langsam/Fehler — z.B. durch einen Werbeblocker, der Domains
+  // mit "shop" im Namen filtert), bleibt sonst nur der nackte Platzhalter-
+  // Link stehen. Deshalb hier zusätzlich: läuft #myShop nach kurzer Zeit
+  // immer noch unverändert, oder schlägt das Skript direkt fehl (onerror
+  // unten), wird der Shop stattdessen per iframe direkt eingebettet —
+  // so ist er in jedem Fall "in der Seite", nie nur ein Link.
+  var shopEmbedded = false;
+  function embedShopFallback() {
+    if (shopEmbedded) return;
+    shopEmbedded = true;
+    var el = document.getElementById('myShop');
+    if (!el) return;
+    var iframe = document.createElement('iframe');
+    iframe.src = startToken ? (spread_shop_config.prefix + '/' + startToken) : spread_shop_config.prefix;
+    iframe.title = 'Madden Bowl Fan-Shop';
+    iframe.loading = 'lazy';
+    iframe.style.cssText = 'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
+    el.innerHTML = '';
+    el.appendChild(iframe);
+  }
+  var shopFallbackTimer = setTimeout(function () {
+    var el = document.getElementById('myShop');
+    // Wenn das Widget-Skript erfolgreich geladen hat, hat es den
+    // Platzhalter-Link längst ersetzt — dann hier nichts tun.
+    if (el && el.querySelector('a[href="' + spread_shop_config.prefix + '"]')) {
+      embedShopFallback();
+    }
+  }, 4000);
+</script>
+<script type="text/javascript"
+        src="https://maddenbowl.myspreadshop.de/shopfiles/shopclient/shopclient.nocache.js"
+        onerror="clearTimeout(shopFallbackTimer); embedShopFallback();">
+</script>
+
+</body>
+</html>
