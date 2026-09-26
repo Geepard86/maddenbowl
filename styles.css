@@ -379,6 +379,31 @@
     .playoff-grid { touch-action: pan-x pan-y pinch-zoom; -webkit-overflow-scrolling: touch; }
     .bracket-row-flow { flex-wrap: nowrap; }
 
+    /* --- PLAYOFF PICTURE: QUERFORMAT AUF DEM HANDY --- */
+    /* Erkennung über kurze Höhe (statt fixer Breite), damit auch große
+       Handys im Querformat erfasst werden, echte Desktop-/Tablet-Fenster
+       aber unangetastet bleiben. Wildcard-Spiele dann alle 4 in einer Reihe. */
+    @media (orientation: landscape) and (max-height: 500px) {
+      .wildcard-summary { grid-template-columns: repeat(4, 1fr) !important; gap: 8px; }
+      .wildcard-summary .bracket-match-header { font-size: 0.55em; padding: 4px 6px; }
+      .wildcard-summary .bracket-team { font-size: 0.72em; padding: 4px 6px; min-height: 26px; }
+    }
+
+    /* --- PLAYOFF PICTURE: ECHTES VOLLBILD (Fullscreen API) --- */
+    /* Funktioniert vollständig auf Android Chrome/Desktop-Browsern und blendet
+       dort auch die Adress-/Tableiste aus. iPhone-Safari erlaubt Websites aus
+       Sicherheitsgründen generell kein Ausblenden der eigenen Browser-UI —
+       dort hilft nur "Zum Home-Bildschirm hinzufügen" (siehe Hinweistext). */
+    .modal-box:fullscreen, .modal-box:-webkit-full-screen {
+      max-width: 100vw !important; width: 100vw !important;
+      max-height: 100vh !important; height: 100vh !important; max-height: 100dvh !important; height: 100dvh !important;
+      border-radius: 0; margin: 0;
+      padding: 14px 14px calc(14px + env(safe-area-inset-bottom,0px));
+      padding-top: calc(14px + env(safe-area-inset-top,0px));
+      box-sizing: border-box;
+    }
+    #playoffFsBtn { display: none; }
+
     /* --- MOBILE OPTIMIERUNG --- */
     @media (max-width: 800px) {
       .next-grid-container { grid-template-columns: 1fr; }

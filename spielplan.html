@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Madden Bowl VI — Spielplan</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Madden Bowl">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
 <script src="tipp.js"></script>
@@ -83,12 +89,15 @@
 </div>
 
 <div class="v2-modal-overlay" id="playoffPictureModal" onclick="if(event.target===this) closePlayoffPictureModal()">
-  <div class="modal-box" style="max-width: 900px; width: 96vw; max-height: 92vh; overflow:auto;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+  <div class="modal-box" id="playoffPictureBox" style="max-width: 900px; width: 96vw; max-height: 92vh; max-height: 92dvh; overflow:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
       <h2 style="margin:0;">Playoff Picture</h2>
-      <button class="btn-secondary" onclick="closePlayoffPictureModal()">✕ Schließen</button>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button class="btn-secondary" id="playoffFsBtn" onclick="togglePlayoffFullscreen()">⛶ Vollbild</button>
+        <button class="btn-secondary" onclick="closePlayoffPictureModal()">✕ Schließen</button>
+      </div>
     </div>
-    <div class="playoff-picture-hint">📱 Am Handy am besten quer halten und mit zwei Fingern zoomen/scrollen.</div>
+    <div class="playoff-picture-hint">📱 Am Handy am besten quer halten und mit zwei Fingern zoomen/scrollen. Auf dem iPhone blendet Safari die Tableiste nur weg, wenn die Seite über „Zum Home-Bildschirm hinzufügen" gestartet wird — echtes Vollbild geht dort aus Sicherheitsgründen nicht direkt im Browser.</div>
     <div id="playoffPictureModalContent"></div>
   </div>
 </div>
@@ -383,7 +392,44 @@
     document.getElementById('playoffPictureModalContent').innerHTML = buildPlayoffPictureHtml();
     document.getElementById('playoffPictureModal').classList.add('open');
   }
-  function closePlayoffPictureModal() { document.getElementById('playoffPictureModal').classList.remove('open'); }
+  function closePlayoffPictureModal() {
+    document.getElementById('playoffPictureModal').classList.remove('open');
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    }
+  }
+
+  // Echtes Vollbild per Fullscreen-API: blendet auf Android Chrome/Desktop
+  // auch die Browser-UI aus. iPhone-Safari unterstützt requestFullscreen für
+  // normale Elemente grundsätzlich nicht (Apple-Einschränkung) — der Button
+  // wird dort per Feature-Detection gar nicht erst eingeblendet.
+  function fullscreenSupported() {
+    const el = document.documentElement;
+    return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+  }
+  function togglePlayoffFullscreen() {
+    const box = document.getElementById('playoffPictureBox');
+    const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!isFs) {
+      (box.requestFullscreen || box.webkitRequestFullscreen)?.call(box);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    }
+  }
+  function updatePlayoffFsButton() {
+    const btn = document.getElementById('playoffFsBtn');
+    if (!btn) return;
+    const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+    btn.textContent = isFs ? '↙️ Vollbild verlassen' : '⛶ Vollbild';
+  }
+  document.addEventListener('fullscreenchange', updatePlayoffFsButton);
+  document.addEventListener('webkitfullscreenchange', updatePlayoffFsButton);
+  if (fullscreenSupported()) {
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('playoffFsBtn');
+      if (btn) btn.style.display = 'inline-block';
+    });
+  }
 
   function setTab(tab) {
     activeTab = tab;
