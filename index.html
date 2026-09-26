@@ -47,7 +47,16 @@
 </head>
 
 <body>
-  <script>MB.UI.mountHeader({ active: '' });</script>
+  <script>
+    MB.UI.mountHeader({
+      active: '',
+      showAdminLogin: true,
+      // Admin-Status wird als const beim Laden ausgewertet (siehe isAdmin
+      // weiter unten) -> nach Login/Logout einfach neu laden, statt jede
+      // einzelne isAdmin-Verzweigung im Script live umzuschalten.
+      onAdminChange: () => location.reload()
+    });
+  </script>
   <div class="container">
     <div id="live-header">
       <h1>MADDEN BOWL LIVE</h1>
@@ -152,64 +161,62 @@
         </div>
       </div>
 
-      <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
-        <button class="btn-secondary" onclick="window.print()">PDF Export</button>
-        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
-        <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
-        <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+      <!-- Tab-Leiste: trennt Turnier-Setup, laufenden Spielplan/Ergebnisse
+           und alle Settings/Export/Tools voneinander, statt dass alles
+           untereinander auf einer Seite steht (bisher musste man an allen
+           Settings vorbeiscrollen, um zur Ergebniseintragung zu kommen). -->
+      <div class="v2-tabbar admin-tabbar" id="adminTabbar">
+        <button class="v2-tab" id="adminTabBtn-setup" onclick="setAdminTab('setup')">🏈 Turnier-Setup</button>
+        <button class="v2-tab" id="adminTabBtn-schedule" onclick="setAdminTab('schedule')">📅 Spielplan &amp; Ergebnisse</button>
+        <button class="v2-tab" id="adminTabBtn-settings" onclick="setAdminTab('settings')">⚙️ Einstellungen</button>
       </div>
 
-      <!-- Standardmäßig eingeklappt: diese Einstellungen (Ansage-Provider,
-           API-Keys, Song-Generierung) sollen nicht auf dem Beamer zu sehen
-           sein, z.B. während der Auslosung. Der eigentliche API-Key ist
-           zusätzlich per Passwort gesperrt (siehe ttsUnlocked weiter unten) —
-           dieser Ein-/Ausklapper blendet aber schon die ganze Karte (inkl.
-           harmloser Status-Zeile) aus, bis man sie aktiv braucht. -->
-      <div style="margin-bottom:15px;">
-        <button class="btn-secondary" style="width:auto; font-size:0.8em;"
-                onclick="document.getElementById('advancedAudioSettings').classList.toggle('hidden')">
-          ⚙️ Ansage/Musik-Einstellungen ein-/ausblenden
-        </button>
-        <div id="advancedAudioSettings" class="hidden" style="margin-top:10px;">
-          <div class="card" style="margin-bottom:15px;">
-            <h2>🎙️ Ansage-Engine</h2>
-            <div id="ttsSettingsPanel"></div>
-          </div>
+      <div id="adminTab-settings" class="admin-tab-panel hidden">
+        <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
+          <button class="btn-secondary" onclick="window.print()">PDF Export</button>
+          <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
+          <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
+          <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+        </div>
 
-          <div class="card" style="margin-bottom:15px;">
-            <h2>🎵 Song-Momente</h2>
-            <div id="songMomentsPanel"></div>
-          </div>
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🎙️ Ansage-Engine</h2>
+          <div id="ttsSettingsPanel"></div>
+        </div>
 
-          <!-- Testet die Song-Engine für JEDEN Meilenstein, unabhängig vom
-               echten Turnierstand — mit Platzhalter-Fakten (TEST_FACTS).
-               "Testweise senden" erzeugt einen ECHTEN Song zum Anhören
-               (kostet Credits), speichert ihn aber NIE als offiziellen
-               Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht
-               oben in "Song-Momente" nicht auf). -->
-          <div class="card" style="margin-bottom:15px;">
-            <h2>🧪 Song-Engine testen</h2>
-            <div id="songTestPanel"></div>
-          </div>
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🎵 Song-Momente</h2>
+          <div id="songMomentsPanel"></div>
+        </div>
 
-          <div class="card" style="margin-bottom:15px;">
-            <h2>🖼️ Meme-Einstellungen</h2>
-            <div id="memeSettingsPanel"></div>
+        <!-- Testet die Song-Engine für JEDEN Meilenstein, unabhängig vom
+             echten Turnierstand — mit Platzhalter-Fakten (TEST_FACTS).
+             "Testweise senden" erzeugt einen ECHTEN Song zum Anhören
+             (kostet Credits), speichert ihn aber NIE als offiziellen
+             Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht
+             oben in "Song-Momente" nicht auf). -->
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🧪 Song-Engine testen</h2>
+          <div id="songTestPanel"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🖼️ Meme-Einstellungen</h2>
+          <div id="memeSettingsPanel"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🏆 Rekord-Momente</h2>
+          <div id="recordMomentsPanel">
+            <div class="hint" style="font-size:0.85em; opacity:0.7;">
+              Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore,
+              Allzeit-/Turnier-Klatsche, Siegesserie) — komplett kostenlos, kein API-Key nötig.
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:15px;">
-        <h2>🏆 Rekord-Momente</h2>
-        <div id="recordMomentsPanel">
-          <div class="hint" style="font-size:0.85em; opacity:0.7;">
-            Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore,
-            Allzeit-/Turnier-Klatsche, Siegesserie) — komplett kostenlos, kein API-Key nötig.
-          </div>
-        </div>
-      </div>
-
-      <div id="setup-view" class="card">
+      <div id="setup-view" class="card admin-tab-panel">
         <h2>Tournament Setup</h2>
 
         <div class="config-grid">
@@ -261,7 +268,7 @@
       </div>
     </div>
 
-    <div id="main-content">
+    <div id="main-content" class="admin-tab-panel">
       <div id="standingsCard" class="card">
   <div class="card-topbar">
     <h2 style="margin:0;">Regular Season Standing</h2>
@@ -319,7 +326,10 @@
     //  statt Duplikate in jeder Seite. Backend ist jetzt Supabase,
     //  siehe MB.fetchCloudState/pushCloudState in shared.js.)
     // =========================================================
-    const isAdmin = window.location.search.includes('Altima');
+    // Admin-Zugang läuft jetzt über den Login im Header (Passwort einmalig
+    // pro Browser vergeben, siehe MB.UI.doAdminLogin in ui.js) statt über
+    // den alten "?Altima"-Query-Parameter.
+    const isAdmin = MB.UI.isAdminUnlocked();
 
     // =========================================================
     // AUSLOSUNGS-SOUNDEFFEKTE (Web Audio API, keine externen Dateien)
@@ -2387,21 +2397,43 @@ function renderRanking() {
 }
 
     
+    // Welcher der drei Admin-Tabs (Turnier-Setup / Spielplan & Ergebnisse /
+    // Einstellungen) gerade sichtbar ist. Solange nicht manuell umgeschaltet
+    // wurde (setAdminTab), richtet sich das nach state.currentView, damit
+    // beim Turnierstart automatisch auf den Spielplan gesprungen wird.
+    let activeAdminTab = null;
+
+    function setAdminTab(tab) {
+      activeAdminTab = tab;
+      renderAdminTabs();
+    }
+
+    function renderAdminTabs() {
+      const tab = activeAdminTab || (state.currentView === 'setup' ? 'setup' : 'schedule');
+      document.getElementById('setup-view').classList.toggle('hidden', tab !== 'setup');
+      document.getElementById('main-content').classList.toggle('hidden', tab !== 'schedule');
+      document.getElementById('adminTab-settings').classList.toggle('hidden', tab !== 'settings');
+      ['setup', 'schedule', 'settings'].forEach(t => {
+        document.getElementById('adminTabBtn-' + t).classList.toggle('active', t === tab);
+      });
+    }
+
     function renderAll() {
+      MB.UI.setState(state); // Spielerliste im Header/Login immer aktuell halten
       const table = document.getElementById('tableContainer');
       const bracket = document.getElementById('playoff-picture');
       const groupMatches = document.getElementById('groupPhase');
       const playoffAdmin = document.getElementById('playoffs');
 
-      if (state.currentView === 'setup' && isAdmin) {
+      if (isAdmin) {
         document.getElementById('admin-panel').classList.remove('hidden');
-        document.getElementById('setup-view').classList.remove('hidden');
-        document.getElementById('main-content').classList.add('hidden');
+        renderAdminTabs();
       } else {
-        if (isAdmin) document.getElementById('admin-panel').classList.remove('hidden');
         document.getElementById('setup-view').classList.add('hidden');
-        document.getElementById('main-content').classList.remove('hidden');
+        document.getElementById('main-content').classList.toggle('hidden', state.currentView === 'setup');
+      }
 
+      if (state.currentView !== 'setup') {
         applyLayoutRules();
         renderTable();
         renderGroupMatches();
@@ -2446,6 +2478,7 @@ function renderRanking() {
       }
 
       state.currentView = (state.players && state.players.length > 0) ? 'running' : 'setup';
+      MB.UI.setState(state); // Header/Login kennt jetzt die aktuelle Spielerliste
 
       // Team-Ratings für die Quoten-Engine laden (jetzt aus Supabase, editierbar via seasons.html)
       await MB.loadTeamRatings(state.config.year || '2026');

@@ -1400,12 +1400,39 @@
   }
 
   // ======================================================================
+  // APP-CONFIG (generische Key-Value-Ablage in Supabase für geräteübergreifende
+  // Einstellungen — Tabelle: app_config(key text primary key, value text).
+  // Start: Admin-Passwort-Hash; später auch Ziel für Regeln/Settings aus
+  // index.html, die aktuell noch pro Browser in localStorage liegen.
+  // ======================================================================
+  async function getAppConfig(key) {
+    const sb = getSupabaseClient();
+    if (!sb) return null;
+    try {
+      const { data, error } = await sb.from("app_config").select("value").eq("key", key).maybeSingle();
+      if (error) throw error;
+      return data ? data.value : null;
+    } catch (e) {
+      console.warn("app_config laden fehlgeschlagen (" + key + "):", e);
+      return null;
+    }
+  }
+
+  async function setAppConfig(key, value) {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error("Supabase-Client nicht verfügbar");
+    const { error } = await sb.from("app_config").upsert({ key, value }, { onConflict: "key" });
+    if (error) throw error;
+  }
+
+  // ======================================================================
   // EXPORT
   // ======================================================================
   global.MB = {
     nflTeams, maddenRatings, schedules, playoffLabels, PLAYOFF_STRUCTURE,
     getSupabaseClient, getCurrentTournamentId, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
     loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
+    getAppConfig, setAppConfig,
     loadHistorySeasons, loadAndBuildHistory, buildHistoryIndex,
     normName, pairKey, computeDraftOrder, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,

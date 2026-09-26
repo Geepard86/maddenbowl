@@ -626,6 +626,8 @@
 .v2-btn-primary { background: var(--v2-red); color: #fff; border: none; border-radius: 8px; padding: 10px 14px; font-weight: 800; cursor: pointer; flex: 1; }
 .v2-btn-ghost { background: transparent; border: 1px solid var(--v2-border); color: #F5F5F5; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
 .v2-modal-error { color: var(--v2-red); font-size: 0.8em; margin-top: 8px; min-height: 1em; }
+.v2-modal-altlink { text-align: center; margin-top: 12px; }
+.v2-modal-altlink a { color: var(--v2-silver); font-size: 0.82em; text-decoration: underline; cursor: pointer; }
 .v2-user-pill-menu { position: absolute; top: 58px; right: 16px; background: var(--v2-surface); border: 1px solid var(--v2-border); border-radius: 10px; padding: 6px; z-index: 45; display: none; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
 .v2-user-pill-menu.open { display: block; }
 .v2-user-pill-menu a, .v2-user-pill-menu button { display: block; width: 100%; box-sizing: border-box; text-align: left; padding: 9px 10px; border-radius: 6px; background: none; border: none; color: #F5F5F5; font-size: 0.88em; text-decoration: none; cursor: pointer; font-weight: 600; }

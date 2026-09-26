@@ -26,12 +26,31 @@
   ];
 
   let _state = null;
-  let _onChange = null; // optionaler Callback, den die Seite bei Login/Logout ausführen kann
+  let _onChange = null; // optionaler Callback, den die Seite bei Spieler-Login/Logout ausführen kann
+  let _showAdminLogin = false; // nur auf Seiten mit Admin-Bereich (aktuell index.html)
+  let _onAdminChange = null; // optionaler Callback bei Admin-Login/Logout
+
+  const ADMIN_SESSION_KEY = "mb_admin_session";
+  const ADMIN_PW_HASH_KEY = "mb_admin_pw_hash"; // altes, geräte-lokales Passwort (nur noch für Migration gelesen)
+  const ADMIN_PW_CONFIG_KEY = "admin_pw_hash"; // Schlüssel in Supabase app_config — jetzt die Quelle der Wahrheit
 
   function currentPlayer() {
     const name = sessionStorage.getItem("mb_tipp_player");
     if (!name || !_state || !_state.wettbuero || !_state.wettbuero.accounts[name]) return null;
     return name;
+  }
+
+  // Admin-Status ist geräte-/browserunabhängig vom laufenden Turnier: das
+  // Passwort liegt gehasht in Supabase (app_config, Schlüssel "admin_pw_hash"),
+  // pro Tab per sessionStorage freigeschaltet. Löst das alte "?Altima"-
+  // Query-Flag ab (und den ersten, rein lokalen Login-Entwurf).
+  function isAdminUnlocked() {
+    return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+  }
+
+  async function sha256Hex(str) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 
   function setState(state, onChange) {
@@ -46,6 +65,8 @@
   // ---------------------------------------------------------------
   function mountHeader(opts) {
     const active = (opts && opts.active) || "";
+    _showAdminLogin = !!(opts && opts.showAdminLogin);
+    _onAdminChange = (opts && opts.onAdminChange) || null;
     const navHtml = NAV_ITEMS.map(item => `
       <a class="v2-nav-link ${item.key === active ? "active" : ""}" href="${item.href}">
         <img src="${item.icon}" alt=""> ${item.label}
@@ -81,10 +102,7 @@
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
       </nav>
-      <div class="v2-user-pill-menu" id="mbUserMenu">
-        <a href="wettbuero.html">🎯 Zum Tippspiel</a>
-        <button onclick="MB.UI.doLogout()">Abmelden</button>
-      </div>
+      <div class="v2-user-pill-menu" id="mbUserMenu"></div>
       <div class="v2-modal-overlay" id="mbLoginModal" onclick="if(event.target===this) MB.UI.closeLogin()">
         <div class="v2-modal-box" id="mbLoginModalContent"></div>
       </div>`;
@@ -108,8 +126,13 @@
   function renderAuthArea() {
     const el = document.getElementById("mbAuthArea");
     if (!el) return;
+    const admin = isAdminUnlocked();
     const player = currentPlayer();
-    if (player) {
+    if (admin) {
+      el.innerHTML = `<button class="v2-btn-login is-user" onclick="MB.UI.toggleUserMenu()">
+        🛡️ Admin
+      </button>`;
+    } else if (player) {
       el.innerHTML = `<button class="v2-btn-login is-user" onclick="MB.UI.toggleUserMenu()">
         <img src="assets/icons/user.svg" alt=""> ${player}
       </button>`;
@@ -117,6 +140,19 @@
       el.innerHTML = `<button class="v2-btn-login" onclick="MB.UI.openLogin()">
         <img src="assets/icons/user.svg" alt=""> Anmelden
       </button>`;
+    }
+    renderUserMenu();
+  }
+
+  function renderUserMenu() {
+    const el = document.getElementById("mbUserMenu");
+    if (!el) return;
+    if (isAdminUnlocked()) {
+      el.innerHTML = `<button onclick="MB.UI.doAdminLogout()">Admin abmelden</button>`;
+    } else {
+      el.innerHTML = `
+        <a href="wettbuero.html">🎯 Zum Tippspiel</a>
+        <button onclick="MB.UI.doLogout()">Abmelden</button>`;
     }
   }
 
@@ -128,7 +164,9 @@
   // LOGIN-MODAL (Spieler wählen + PIN — legt beim ersten Mal die PIN an)
   // ---------------------------------------------------------------
   function openLogin() {
-    if (!_state || !_state.players || !_state.players.length) {
+    const hasPlayers = !!(_state && _state.players && _state.players.length);
+    if (!hasPlayers) {
+      if (_showAdminLogin) { openAdminLogin(); return; }
       alert("Es läuft aktuell kein Turnier — Anmeldung ist gerade nicht möglich.");
       return;
     }
@@ -143,8 +181,79 @@
       <div class="v2-modal-actions">
         <button class="v2-btn-ghost" onclick="MB.UI.closeLogin()">Abbrechen</button>
         <button class="v2-btn-primary" onclick="MB.UI.doLogin()">Anmelden</button>
-      </div>`;
+      </div>
+      ${_showAdminLogin ? `<div class="v2-modal-altlink"><a href="#" onclick="MB.UI.openAdminLogin();return false;">Als Admin anmelden</a></div>` : ""}`;
     document.getElementById("mbLoginModal").classList.add("open");
+  }
+
+  // ---------------------------------------------------------------
+  // ADMIN-LOGIN (geräteweites Passwort statt "?Altima"-URL-Flag)
+  // ---------------------------------------------------------------
+  function openAdminLogin() {
+    const hasPlayers = !!(_state && _state.players && _state.players.length);
+    document.getElementById("mbLoginModalContent").innerHTML = `
+      <h3>Admin-Login</h3>
+      <label for="mbAdminPw">Passwort</label>
+      <input type="password" id="mbAdminPw" placeholder="Admin-Passwort">
+      <div class="v2-modal-error" id="mbAdminError"></div>
+      <div class="v2-modal-actions">
+        <button class="v2-btn-ghost" onclick="MB.UI.closeLogin()">Abbrechen</button>
+        <button class="v2-btn-primary" onclick="MB.UI.doAdminLogin()">Anmelden</button>
+      </div>
+      ${hasPlayers ? `<div class="v2-modal-altlink"><a href="#" onclick="MB.UI.openLogin();return false;">Zurück zur Spieler-Anmeldung</a></div>` : ""}`;
+    document.getElementById("mbLoginModal").classList.add("open");
+    setTimeout(() => document.getElementById("mbAdminPw")?.focus(), 0);
+  }
+
+  async function doAdminLogin() {
+    const pw = document.getElementById("mbAdminPw").value;
+    const errEl = document.getElementById("mbAdminError");
+    errEl.textContent = "";
+    if (!pw) { errEl.textContent = "Bitte Passwort eingeben."; return; }
+    const hash = await sha256Hex(pw);
+
+    // Quelle der Wahrheit ist jetzt Supabase (app_config), nicht mehr
+    // localStorage — dadurch funktioniert derselbe Admin-Login auf jedem
+    // Gerät/Browser. War auf diesem Gerät vorher schon ein Passwort lokal
+    // gesetzt, wird das einmalig in die DB gehoben statt einfach ignoriert.
+    let stored = null;
+    try {
+      stored = await MB.getAppConfig(ADMIN_PW_CONFIG_KEY);
+    } catch (e) {
+      errEl.textContent = "Datenbank gerade nicht erreichbar, bitte später erneut versuchen.";
+      return;
+    }
+    const localLegacy = localStorage.getItem(ADMIN_PW_HASH_KEY);
+    if (!stored && localLegacy) stored = localLegacy;
+
+    if (!stored) {
+      // Allererstes Admin-Login überhaupt: die aktuelle Eingabe wird DAS Passwort.
+      try {
+        await MB.setAppConfig(ADMIN_PW_CONFIG_KEY, hash);
+      } catch (e) {
+        errEl.textContent = "Konnte Passwort nicht in der Datenbank speichern: " + e.message;
+        return;
+      }
+    } else if (stored !== hash) {
+      errEl.textContent = "Falsches Passwort.";
+      return;
+    } else if (localLegacy) {
+      // Passwort stimmte über den lokalen Alt-Wert -> in die DB heben.
+      try { await MB.setAppConfig(ADMIN_PW_CONFIG_KEY, hash); } catch (e) { /* nicht kritisch */ }
+    }
+
+    localStorage.removeItem(ADMIN_PW_HASH_KEY); // geräte-lokales Passwort nicht mehr nötig
+    sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+    closeLogin();
+    renderAuthArea();
+    if (_onAdminChange) _onAdminChange(true);
+  }
+
+  function doAdminLogout() {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    document.getElementById("mbUserMenu").classList.remove("open");
+    renderAuthArea();
+    if (_onAdminChange) _onAdminChange(false);
   }
 
   function closeLogin() {
@@ -181,8 +290,9 @@
 
   global.MB = global.MB || {};
   global.MB.UI = {
-    NAV_ITEMS, mountHeader, setState, currentPlayer,
+    NAV_ITEMS, mountHeader, setState, currentPlayer, isAdminUnlocked,
     toggleNav, closeNav, toggleUserMenu,
     openLogin, closeLogin, doLogin, doLogout,
+    openAdminLogin, doAdminLogin, doAdminLogout,
   };
 })(window);
