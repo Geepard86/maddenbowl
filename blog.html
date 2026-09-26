@@ -253,8 +253,7 @@
   }
 
   async function reload() {
-    const tid = MB.getCurrentTournamentId();
-    articles = tid ? await MB.Blog.fetchArticles(tid, 100) : [];
+    articles = await MB.Blog.fetchAllArticles(200);
     applyDeepLinkTab();
     renderShell();
     scrollToDeepLinkedPost();

@@ -520,8 +520,7 @@
     } catch (e) { console.warn('All-Time-Rekorde laden fehlgeschlagen:', e); }
     try { await MB.loadTeamRatings(state.config?.year || '2026'); } catch (e) {}
     try {
-      const tid = MB.getCurrentTournamentId();
-      articles = tid ? await MB.Blog.fetchArticles(tid, 10) : [];
+      articles = await MB.Blog.fetchAllArticles(10);
     } catch (e) { console.warn('Artikel laden fehlgeschlagen:', e); }
 
     await render();
@@ -530,8 +529,7 @@
       try {
         state = await MB.fetchCloudState();
         MB.UI.setState(state);
-        const tid = MB.getCurrentTournamentId();
-        articles = tid ? await MB.Blog.fetchArticles(tid, 10) : [];
+        articles = await MB.Blog.fetchAllArticles(10);
         await render();
       } catch (e) { console.warn('Auto-Refresh fehlgeschlagen:', e); }
     }, 15000);

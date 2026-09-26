@@ -825,6 +825,33 @@
     return data || [];
   }
 
+  // Wie fetchArticles(), aber ohne Turnier-Filter -- der Blog ist ein
+  // seitenweiter Feed uber alle Saisons hinweg (Saisonrueckblicke etc.
+  // sollen auch nach Turnierwechsel/-abschluss weiter auftauchen).
+  async function fetchAllArticles(limit) {
+    const sb = MB.getSupabaseClient();
+
+    if (!sb) return [];
+
+    const { data, error } = await sb
+      .from("blog_articles")
+      .select("*")
+      .order("created_at", {
+        ascending: false,
+      })
+      .limit(limit || 50);
+
+    if (error) {
+      console.warn(
+        "Artikel laden fehlgeschlagen:",
+        error
+      );
+      return [];
+    }
+
+    return data || [];
+  }
+
   async function countArticlesByKind(
     tournamentId,
     kind
@@ -911,6 +938,7 @@
     updateArticle,
     deleteArticle,
     fetchArticles,
+    fetchAllArticles,
     countArticlesByKind,
     countFinishedMatches,
     isProgressArticleDue,
