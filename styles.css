@@ -407,7 +407,6 @@
     /* --- MOBILE OPTIMIERUNG --- */
     @media (max-width: 800px) {
       .next-grid-container { grid-template-columns: 1fr; }
-      .wildcard-summary { grid-template-columns: 1fr !important; }
 
       .match-row {
         padding: 8px;

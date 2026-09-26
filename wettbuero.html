@@ -94,6 +94,11 @@
   let history = null;
   let ouLines = {}; // { spieltagIndex: line }
   let activeTab = 'aktuell'; // aktuell | offen | alle | fertig | tabelle
+  // Im Tab "Aktueller Spieltag" normalerweise automatisch der laufende
+  // Spieltag (null = "folge automatisch"). Über die Pfeile/Auswahl kann
+  // man sich aber auch schon zukünftige (oder vergangene) Spieltage ansehen
+  // und dort tippen, ohne dass sie standardmäßig direkt angezeigt werden.
+  let viewSpieltagIndex = null;
 
   // Lokal gehaltene, NOCH NICHT gespeicherte Auswahl (Tippen auf eine Kachel
   // markiert nur, gespeichert wird erst per Klick — entweder dezent pro
@@ -449,8 +454,13 @@
 
     let bodyHtml = '';
     if (activeTab === 'aktuell') {
-      const st = currentIdx >= 0 ? cache.spieltage[currentIdx] : cache.spieltage[cache.spieltage.length - 1];
-      bodyHtml = st ? renderSpieltagCard(st) : `<div class="v2-card"><div class="v2-empty">Keine Partien terminiert.</div></div>`;
+      const total = cache.spieltage.length;
+      const autoIdx = currentIdx >= 0 ? currentIdx : total - 1;
+      const isAuto = viewSpieltagIndex == null;
+      const idx = isAuto ? autoIdx : Math.max(0, Math.min(total - 1, viewSpieltagIndex));
+      const st = cache.spieltage[idx];
+      bodyHtml = renderSpieltagNav(idx, total, isAuto);
+      bodyHtml += st ? renderSpieltagCard(st) : `<div class="v2-card"><div class="v2-empty">Keine Partien terminiert.</div></div>`;
       bodyHtml += `<div class="v2-card"><div class="v2-card-title">🏆 Gesamt-Tipps</div>${renderSeasonSection(seasonOpen)}</div>`;
     } else if (activeTab === 'offen') {
       const openMatches = [];
@@ -475,6 +485,7 @@
     const pendingCount = countPendingSaves();
     app.innerHTML = `
       ${renderUserOverview()}
+      ${activeTab === 'tabelle' ? '' : renderMiniStandings()}
       <div class="v2-tabbar">
         <button class="v2-tab ${activeTab==='aktuell'?'active':''}" onclick="setTab('aktuell')">Aktueller Spieltag</button>
         <button class="v2-tab ${activeTab==='offen'?'active':''}" onclick="setTab('offen')">Offene Spiele</button>
@@ -488,6 +499,30 @@
           💾 Alle Tipps speichern${pendingCount ? ` (${pendingCount})` : ''}
         </button>
       </div>`;
+  }
+
+  // Pfeil-Navigation + Dropdown-Auswahl, damit man sich auch schon
+  // zukünftige (oder vergangene) Spieltage ansehen und dort tippen kann,
+  // ohne dass sie im Tab "Aktueller Spieltag" standardmäßig direkt
+  // angezeigt werden — nur der laufende Spieltag ist der Default.
+  function renderSpieltagNav(idx, total, isAuto) {
+    if (total <= 1) return '';
+    const options = cache.spieltage.map((st, i) => {
+      const status = MB.Tipp.getSpieltagStatus(st);
+      return `<option value="${i}" ${i === idx ? 'selected' : ''}>Spieltag ${st.index}${status === 'done' ? ' ✅' : ''}</option>`;
+    }).join('');
+    return `
+      <div class="v2-card" style="display:flex; align-items:center; gap:8px; padding:10px 12px;">
+        <button class="secondary" style="width:auto; margin:0; padding:6px 12px;" ${idx <= 0 ? 'disabled' : ''} onclick="setViewSpieltag(${idx - 1})">◀</button>
+        <select style="flex:1; margin:0;" onchange="setViewSpieltag(parseInt(this.value,10))">${options}</select>
+        <button class="secondary" style="width:auto; margin:0; padding:6px 12px;" ${idx >= total - 1 ? 'disabled' : ''} onclick="setViewSpieltag(${idx + 1})">▶</button>
+        ${!isAuto ? `<button class="secondary" style="width:auto; margin:0; padding:6px 12px;" onclick="setViewSpieltag(null)">Aktuell</button>` : ''}
+      </div>`;
+  }
+
+  function setViewSpieltag(idx) {
+    viewSpieltagIndex = idx;
+    renderDashboardHtml(document.getElementById('app'));
   }
 
   function renderSpieltagCard(st) {
@@ -522,7 +557,7 @@
 
     const preview = MB.Tipp.seasonLockPreview(state, cache.schedule);
     const previewHtml = preview
-      ? `<div class="hint">Sperrt voraussichtlich, sobald ${preview.player}s erstes Spiel läuft${preview.anchorIsReal ? ` (ca. ab ${preview.anchorDate.getHours().toString().padStart(2,'0')}:${preview.anchorDate.getMinutes().toString().padStart(2,'0')} Uhr)` : ' (geschätzter Turnierstart, kann noch abweichen)'}.</div>`
+      ? `<div class="hint">Sperrt voraussichtlich, sobald ${preview.player}s erstes Spiel läuft (ca. ab ${preview.anchorDate.getHours().toString().padStart(2,'0')}:${preview.anchorDate.getMinutes().toString().padStart(2,'0')} Uhr).</div>`
       : `<div class="hint">Offen, bis jeder Spieler mindestens ein Spiel hatte.</div>`;
 
     const opt = (selectedName) => names.map(n => `<option value="${n}" ${n === selectedName ? 'selected' : ''}>${n}</option>`).join('');
@@ -583,10 +618,41 @@
       : `<div class="match-row"><span>Over/Under (Linie ${line ?? '?'})</span><span>${savedOu || '—'}</span></div>`;
 
     return `
-      <div class="hint">Tipp auf den Sieger jedes Spiels (auch deine eigenen!) — sperrt einzeln, 5 Min. nachdem das vorherige Spiel auf demselben Feld eingetragen wurde.</div>
+      <div class="hint">Tipp auf den Sieger jedes Spiels (auch deine eigenen!) — sperrt einzeln mit Kickoff, sobald das vorherige Spiel auf demselben Feld eingetragen wurde.</div>
       ${matchRows}
       ${ouHtml}
     `;
+  }
+
+  // ---------------------------------------------------------
+  // GESAMTSTAND (Kurzfassung direkt unter der User-Übersicht, auf allen
+  // Tabs sichtbar — die volle Tabelle bleibt im Tab "Tabelle").
+  // ---------------------------------------------------------
+  function renderMiniStandings() {
+    const me = currentPlayer();
+    const top = cache.standings.slice(0, 5);
+    const meIdx = cache.standings.findIndex(r => r.name === me);
+    const meInTop = top.some(r => r.name === me);
+    let rowsHtml = top.map((row, i) => `
+      <div class="leaderboard-row ${row.name === me ? 'me' : ''}">
+        <span>${i + 1}. ${row.name}${row.name === me ? ' (du)' : ''}</span>
+        <span class="points-badge">${row.points} P</span>
+      </div>`).join('');
+    if (!meInTop && meIdx >= 0) {
+      const myRow = cache.standings[meIdx];
+      rowsHtml += `
+        <div class="hint" style="text-align:center;">···</div>
+        <div class="leaderboard-row me">
+          <span>${meIdx + 1}. ${myRow.name} (du)</span>
+          <span class="points-badge">${myRow.points} P</span>
+        </div>`;
+    }
+    return `
+      <div class="v2-card">
+        <div class="v2-card-title">📊 Gesamtstand</div>
+        ${rowsHtml || '<div class="v2-empty">Noch keine Punkte vergeben.</div>'}
+        <button class="secondary" onclick="setTab('tabelle')">Volle Tabelle ansehen</button>
+      </div>`;
   }
 
   // ---------------------------------------------------------

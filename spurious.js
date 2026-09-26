@@ -561,29 +561,78 @@
     },
   };
 
-  // Für die Titelgenerierung: "Anzahl gespielter Partien"/"Anzahl
-  // Teilnehmer" klingen nach "Mehr Anzahl ..." doppelt gemoppelt — hier auf
-  // eine im Titel besser lesbare Kurzform gemappt.
+  // Kurzformen der MB_STAT_DEFS/PLAYER_STAT_DEFS-Labels für die (kurze)
+  // Schlagzeile "X vs. Y" — die langen Original-Labels ("Punkteschnitt pro
+  // Spiel", "Größte Punktedifferenz der Saison", …) sind als Fließtext
+  // gedacht, nicht als Überschrift. Fehlt ein Key hier, wird ersatzweise
+  // das volle Label verwendet (nie ein Absturz, nur eine längere Zeile).
   const MB_LABEL_TITLE_OVERRIDES = {
+    totalPoints: "Gesamtpunkte",
+    avgPerGame: "Punkteschnitt",
     gamesPlayed: "gespielte Partien",
+    highestSingle: "Höchster Einzel-Score",
+    biggestMargin: "Größte Punktedifferenz",
+    closestMargin: "Knappster Sieg",
     playerCount: "Teilnehmer",
+    championPoints: "Punkte des Champions",
+    scored: "erzielte Punkte",
+    allowed: "zugelassene Gegnerpunkte",
+    diff: "Punktedifferenz",
+    cumulative: "kumulierte Punkte",
   };
 
-  // Baut Titel + Fließtext für einen Kandidaten. Richtung (r >= 0 -> "up"/
-  // "mehr", r < 0 -> "down"/"weniger") entscheidet, welcher Baustein
-  // verwendet wird. Nutzt für "gamesPlayed"/"playerCount" die generischen
-  // NON_POINT_STORY_TEMPLATES, sonst GERMAN_STAT_STORIES. Liefert null, nur
-  // wenn zur germanStatId wirklich kein Baustein hinterlegt ist.
+  // Schneidet gängige, sich wiederholende Anhängsel deutscher Statistik-
+  // namen ab ("... in Deutschland", "... pro Kopf in Deutschland", ...),
+  // damit aus "Stahlverbrauch pro Kopf in Deutschland" schlicht
+  // "Stahlverbrauch" wird. Rein kosmetisch für die Kurz-Schlagzeile — greift
+  // die Regel nicht, bleibt einfach der volle Name stehen (nie falsch,
+  // höchstens etwas länger).
+  const GERMAN_NAME_TITLE_SUFFIXES = [
+    " pro Kopf in Deutschland",
+    " je Einwohner in Deutschland",
+    " in Deutschland insgesamt",
+    " in Deutschland",
+    " in den USA und Kanada",
+    " beim Deutschen Patent- und Markenamt (DPMA)",
+    " bei den Oscars",
+    " beim Super Bowl",
+  ];
+  function shortGermanTitle(fullName) {
+    for (const suffix of GERMAN_NAME_TITLE_SUFFIXES) {
+      if (fullName.endsWith(suffix)) return fullName.slice(0, -suffix.length);
+    }
+    return fullName;
+  }
+
+  // Kurze Schlagzeile ("X vs. Y") + separater Lead-Satz für den Beitrag
+  // (kommt im Blog über dem Bild zu stehen). Getrennt von buildSpuriousStory,
+  // damit auch der neutrale Fallback-Artikel (kein handgeschriebener
+  // Baustein vorhanden) dieselbe kurze Überschrift bekommt.
+  function buildSpuriousHeadline(candidate) {
+    const mbShort = candidate.isPlayer
+      ? `${possessive(candidate.player)} ${MB_LABEL_TITLE_OVERRIDES[candidate.mbStatKey] || candidate.mbLabel}`
+      : (MB_LABEL_TITLE_OVERRIDES[candidate.mbStatKey] || candidate.mbLabel);
+    const germanShort = shortGermanTitle(candidate.germanName);
+    return {
+      title: `${mbShort} vs. ${germanShort}`,
+      subtitle: `Was der Madden Bowl mit ${candidate.germanName} zu tun hat`,
+    };
+  }
+
+  // Baut Fließtext für einen Kandidaten (Titel/Subtitle kommen separat aus
+  // buildSpuriousHeadline). Richtung (r >= 0 -> "up"/"mehr", r < 0 ->
+  // "down"/"weniger") entscheidet, welcher Baustein verwendet wird. Nutzt
+  // für "gamesPlayed"/"playerCount" die generischen NON_POINT_STORY_
+  // TEMPLATES, sonst GERMAN_STAT_STORIES. Liefert null, nur wenn zur
+  // germanStatId wirklich kein Baustein hinterlegt ist.
   function buildSpuriousStory(candidate) {
     const nonPointTemplate = NON_POINT_STORY_TEMPLATES[candidate.mbStatKey];
     const isUp = candidate.r >= 0;
-    const dirWord = isUp ? "mehr" : "weniger";
-    const titleLabel = MB_LABEL_TITLE_OVERRIDES[candidate.mbStatKey] || candidate.mbLabel;
-    const title = `Mehr ${titleLabel}, ${dirWord} ${candidate.germanName}: Was der Madden Bowl mit ${candidate.germanName} zu tun hat`;
+    const { title, subtitle } = buildSpuriousHeadline(candidate);
 
     if (nonPointTemplate) {
       const body = isUp ? nonPointTemplate.up(candidate.germanName) : nonPointTemplate.down(candidate.germanName);
-      return { title, body };
+      return { title, subtitle, body };
     }
 
     const stories = GERMAN_STAT_STORIES[candidate.germanStatId];
@@ -591,7 +640,7 @@
 
     const body = isUp ? stories.up : stories.down;
 
-    return { title, body };
+    return { title, subtitle, body };
   }
 
   // ======================================================================
@@ -1349,5 +1398,6 @@
     findBestOverallCandidate,
     findAllOverallCandidates,
     renderChartCanvas,
+    buildSpuriousHeadline,
   };
 })(window);

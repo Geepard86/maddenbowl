@@ -620,9 +620,17 @@
           germanStatId: candidate.germanStatId,
           player: candidate.player || null,
           r: candidate.r,
+          subtitle: story.subtitle,
         },
       };
     }
+
+    // Kein handgeschriebener Baustein vorhanden -> neutraler Befund-Text
+    // unten, aber dieselbe kurze "X vs. Y"-Schlagzeile + Lead-Satz wie beim
+    // Story-Pfad (siehe buildSpuriousHeadline in spurious.js).
+    const headline = MB.Spurious.buildSpuriousHeadline
+      ? MB.Spurious.buildSpuriousHeadline(candidate)
+      : { title: `📊 Spurious Correlation: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“`, subtitle: null };
 
     const rStr = candidate.r.toFixed(6);
     const strength = Math.abs(candidate.r) >= 0.99 ? "nahezu perfekter" : "sehr starker";
@@ -663,13 +671,14 @@
 
     return {
       kind: "spurious",
-      title: `📊 Spurious Correlation: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“`,
+      title: headline.title,
       body: paragraphs(parts),
       data: {
         pairKey: candidate.pairKey,
         mbStatKey: candidate.mbStatKey,
         germanStatId: candidate.germanStatId,
         player: candidate.player || null,
+        subtitle: headline.subtitle,
         r: candidate.r,
       },
     };

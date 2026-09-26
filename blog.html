@@ -16,6 +16,7 @@
   .v2-article img.thumb { width:88px; height:66px; object-fit:cover; border-radius:8px; flex-shrink:0; background:#0007; }
   .v2-article-body { min-width:0; flex:1; }
   .v2-article-title { font-weight:900; font-size:0.98em; margin:2px 0 4px; }
+  .v2-article-subtitle { font-size:0.82em; opacity:0.72; font-style:italic; margin:0 0 6px; }
   .v2-article-excerpt { font-size:0.84em; opacity:0.82; margin-bottom:6px; }
   .v2-article-meta { display:flex; align-items:center; gap:10px; font-size:0.7em; color:var(--v2-silver); }
   .v2-article audio { width:100%; margin-top:6px; height:32px; }
@@ -131,12 +132,17 @@
       : '';
     const shareUrl = `${SHARE_BASE_URL}/?post=${a.id}`;
     const shareTitle = (a.title || '').replace(/'/g, "\\'");
+    // Optionaler Lead-Satz (aktuell nur bei Spurious-Correlation-Beiträgen,
+    // wo die frühere lange Schlagzeile jetzt hier über dem Bild steht statt
+    // im Titel) — kommt aus der JSONB-Spalte data.subtitle.
+    const subtitle = (a.data && a.data.subtitle) ? `<div class="v2-article-subtitle">${a.data.subtitle}</div>` : '';
     return `
       <div class="v2-article" id="post-${a.id}">
         <img class="thumb" src="${meta.image}" alt="">
         <div class="v2-article-body">
           <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
           <div class="v2-article-title">${a.title || ''}</div>
+          ${subtitle}
           ${media}
           ${bodyHtml}
           ${toggleBtn}

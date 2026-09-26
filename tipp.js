@@ -22,18 +22,8 @@
   "use strict";
 
   const SPIELTAG_SIZE = 4;
-  const LOCK_BUFFER_MINUTES = 5; // Tipp-Sperre: 5 Min. nachdem das Ergebnis des vorherigen Spiels auf demselben Feld eingetragen wurde
+  const LOCK_BUFFER_MINUTES = 0; // Tipp-Sperre: mit Kickoff, sobald das Ergebnis des vorherigen Spiels auf demselben Feld eingetragen wurde (kein Gnaden-Puffer mehr)
   const POINTS = { match: 1, overunder: 2, champion: 5, runnerUp: 3, toiletBowlWinner: 3 };
-
-  // "HH:MM" -> Date von HEUTE mit dieser Uhrzeit (gleiche Konvention wie
-  // MB.addMinutes — geht von einem Turnier an einem Abend aus, kein
-  // Tag-Übertrag über Mitternacht).
-  function timeStrToDate(timeStr) {
-    const [h, m] = String(timeStr).split(":").map(Number);
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d;
-  }
 
   // ======================================================================
   // MATCH-HELPER — vereinheitlicht Gruppen-/Playoff-Spiele auf dieselbe Form
@@ -92,10 +82,17 @@
   // nicht (Spiele dauern mal länger, mal kürzer). Stattdessen: ein Spiel
   // "beginnt" auf einem Feld praktisch erst, wenn das Ergebnis des
   // VORHERIGEN Spiels auf demselben Feld eingetragen wurde — das ist der
-  // einzige verlässliche Zeitpunkt, den wir haben. Gesperrt wird jeweils
-  // LOCK_BUFFER_MINUTES danach. Für das jeweils ERSTE Spiel eines Feldes
-  // gibt's noch kein "vorheriges Ergebnis" — dafür wird ersatzweise die
-  // angekündigte Turnier-Startzeit als grobe Schätzung verwendet.
+  // einzige verlässliche Zeitpunkt, den wir haben, und wird als Kickoff
+  // des nächsten Spiels behandelt. Gesperrt wird direkt mit diesem Kickoff
+  // (LOCK_BUFFER_MINUTES = 0, siehe oben).
+  //
+  // WICHTIG: Für das jeweils ERSTE Spiel eines Feldes gibt es noch kein
+  // "vorheriges Ergebnis" — hier NICHT auf die angekündigte Turnier-
+  // Startzeit zurückfallen (der Zeitplan verschiebt sich in der Praxis
+  // ständig), sondern den Sperrzeitpunkt schlicht unbekannt lassen, bis
+  // es tatsächlich ein reales Ergebnis gibt, an dem sich das nächste Spiel
+  // festmachen kann. So sperrt nie ein Tipp nur deshalb, weil wir dem
+  // angekündigten Zeitplan gerade hinterherlaufen.
   // Liefert eine Map matchId -> { anchorDate, anchorIsReal, lockDate }.
   function computeFieldSchedule(state) {
     const seq = getMatchSequence(state);
@@ -104,21 +101,15 @@
 
     const schedule = new Map();
     [1, 2].forEach((field) => {
-      let anchor = timeStrToDate(state.config.start);
-      let anchorIsReal = false; // erstes Spiel je Feld: nur eine Schätzung
+      let anchor = null; // real bekannter Kickoff-Zeitpunkt des nächsten Spiels auf diesem Feld
       byField[field].forEach((info) => {
         const lockDate = anchor ? new Date(anchor.getTime() + LOCK_BUFFER_MINUTES * 60000) : null;
-        schedule.set(info.matchId, { anchorDate: anchor, anchorIsReal, lockDate });
+        schedule.set(info.matchId, { anchorDate: anchor, anchorIsReal: !!anchor, lockDate });
 
-        if (info.finishedAt) {
-          anchor = new Date(info.finishedAt);
-          anchorIsReal = true;
-        } else {
-          // Dieses Spiel hat noch kein Ergebnis -> für alles Weitere auf
-          // diesem Feld ist der nächste Ankerzeitpunkt noch unbekannt.
-          anchor = null;
-          anchorIsReal = false;
-        }
+        // Der nächste Anker ist erst wieder bekannt, sobald DIESES Spiel
+        // sein Ergebnis hat — genau der Moment, an dem die Kickoff-Zeit
+        // des nächsten Spiels auf diesem Feld neu berechnet werden soll.
+        anchor = info.finishedAt ? new Date(info.finishedAt) : null;
       });
     });
     return schedule;
@@ -134,10 +125,10 @@
   function formatLockTime(matchInfo, schedule) {
     const entry = schedule.get(matchInfo.matchId);
     if (!entry || !entry.lockDate) {
-      return `sperrt 5 Min., nachdem das vorherige Spiel auf Feld ${matchInfo.field} eingetragen wurde`;
+      return `sperrt mit Kickoff, sobald das vorherige Ergebnis auf Feld ${matchInfo.field} eingetragen wurde`;
     }
     const hhmm = entry.lockDate.getHours().toString().padStart(2, "0") + ":" + entry.lockDate.getMinutes().toString().padStart(2, "0");
-    return entry.anchorIsReal ? `sperrt um ${hhmm} Uhr` : `sperrt ca. ${hhmm} Uhr (geschätzt, Turnierstart)`;
+    return `sperrt mit Kickoff um ${hhmm} Uhr`;
   }
 
   // Over/Under gilt für den ganzen Spieltag -> sperrt zusammen mit dem
@@ -154,10 +145,10 @@
 
   function formatSpieltagOuLockTime(spieltag, schedule) {
     const entries = spieltag.matches.map((m) => schedule.get(m.matchId)).filter((e) => e && e.lockDate);
-    if (!entries.length) return "sperrt, sobald das erste Spiel dieses Spieltags eingetragen wurde";
+    if (!entries.length) return "sperrt, sobald das erste Ergebnis dieses Spieltags eingetragen wurde";
     const earliest = entries.reduce((min, e) => (e.lockDate < min.lockDate ? e : min), entries[0]);
     const hhmm = earliest.lockDate.getHours().toString().padStart(2, "0") + ":" + earliest.lockDate.getMinutes().toString().padStart(2, "0");
-    return earliest.anchorIsReal ? `sperrt um ${hhmm} Uhr` : `sperrt ca. ${hhmm} Uhr (geschätzt)`;
+    return `sperrt mit Kickoff um ${hhmm} Uhr`;
   }
 
   // 'done' = alle Spiele im Block fertig -> ausgewertet, sonst 'active'
@@ -186,9 +177,10 @@
 
   // Zeigt VORAB, wann das Gesamt-Tipps-Fenster voraussichtlich schließt:
   // sobald der Spieler mit dem spätesten ersten Spiel dieses gespielt hat.
-  // Da wir Kickoff-Zeiten nur noch schätzen (siehe computeFieldSchedule),
-  // ist das eine Schätzung, keine Garantie — wird als "ca." gekennzeichnet,
-  // solange kein Spiel auf dem jeweiligen Feld schon real gestartet ist.
+  // Liefert nur etwas, sobald für dieses Spiel bereits ein REALER Kickoff
+  // bekannt ist (siehe computeFieldSchedule) — für noch komplett
+  // unbekannte Kickoffs (insb. das jeweils erste Spiel eines Feldes) bleibt
+  // das Fenster ohne konkrete Uhrzeit "offen, bis ...".
   function seasonLockPreview(state, schedule) {
     if (!state.players || !state.players.length) return null;
     const played = new Set();
