@@ -459,9 +459,14 @@
       const isAuto = viewSpieltagIndex == null;
       const idx = isAuto ? autoIdx : Math.max(0, Math.min(total - 1, viewSpieltagIndex));
       const st = cache.spieltage[idx];
-      bodyHtml = renderSpieltagNav(idx, total, isAuto);
+      const seasonHtml = `<div class="v2-card"><div class="v2-card-title">🏆 Gesamt-Tipps</div>${renderSeasonSection(seasonOpen)}</div>`;
+      // Solange die Gesamt-Tipps noch offen sind, gehören sie prominent
+      // nach oben (vor den Spieltag) — sind sie einmal gesperrt, wandern
+      // die abgegebenen Tipps nur noch als Rückblick ganz nach unten.
+      if (seasonOpen) bodyHtml += seasonHtml;
+      bodyHtml += renderSpieltagNav(idx, total, isAuto);
       bodyHtml += st ? renderSpieltagCard(st) : `<div class="v2-card"><div class="v2-empty">Keine Partien terminiert.</div></div>`;
-      bodyHtml += `<div class="v2-card"><div class="v2-card-title">🏆 Gesamt-Tipps</div>${renderSeasonSection(seasonOpen)}</div>`;
+      if (!seasonOpen) bodyHtml += seasonHtml;
     } else if (activeTab === 'offen') {
       const openMatches = [];
       cache.spieltage.forEach(st => st.matches.forEach(m => { if (!m.finished && MB.Tipp.isMatchPickable(m, cache.schedule)) openMatches.push(m); }));
@@ -627,25 +632,28 @@
   // ---------------------------------------------------------
   // GESAMTSTAND (Kurzfassung direkt unter der User-Übersicht, auf allen
   // Tabs sichtbar — die volle Tabelle bleibt im Tab "Tabelle").
+  // Insgesamt maximal 3 Zeilen: die ersten Drei, wenn man selbst schon
+  // dabei ist — sonst nur die ersten Zwei plus die eigene Position.
   // ---------------------------------------------------------
+  function rowHtml(row, rank, isMe) {
+    return `
+      <div class="leaderboard-row ${isMe ? 'me' : ''}">
+        <span>${rank}. ${row.name}${isMe ? ' (du)' : ''}</span>
+        <span class="points-badge">${row.points} P</span>
+      </div>`;
+  }
+
   function renderMiniStandings() {
     const me = currentPlayer();
-    const top = cache.standings.slice(0, 5);
     const meIdx = cache.standings.findIndex(r => r.name === me);
-    const meInTop = top.some(r => r.name === me);
-    let rowsHtml = top.map((row, i) => `
-      <div class="leaderboard-row ${row.name === me ? 'me' : ''}">
-        <span>${i + 1}. ${row.name}${row.name === me ? ' (du)' : ''}</span>
-        <span class="points-badge">${row.points} P</span>
-      </div>`).join('');
-    if (!meInTop && meIdx >= 0) {
+    const meInTopThree = meIdx >= 0 && meIdx < 3;
+    const top = cache.standings.slice(0, meInTopThree ? 3 : 2);
+    let rowsHtml = top.map((row, i) => rowHtml(row, i + 1, row.name === me)).join('');
+    if (!meInTopThree && meIdx >= 0) {
       const myRow = cache.standings[meIdx];
       rowsHtml += `
         <div class="hint" style="text-align:center;">···</div>
-        <div class="leaderboard-row me">
-          <span>${meIdx + 1}. ${myRow.name} (du)</span>
-          <span class="points-badge">${myRow.points} P</span>
-        </div>`;
+        ${rowHtml(myRow, meIdx + 1, true)}`;
     }
     return `
       <div class="v2-card">
