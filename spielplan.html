@@ -13,15 +13,58 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
   th, td { padding: 6px 4px; text-align: center; border-bottom: 1px solid #22304333; }
   .empty { opacity: 0.6; font-size: 0.9em; }
-  .bracket-session { margin-bottom: 14px; }
-  .bracket-session h3 { color: var(--v2-gold); font-size: 0.85em; text-transform: uppercase; margin: 0 0 6px; }
-  .bracket-row { display: flex; justify-content: space-between; font-size: 0.88em; padding: 5px 0; border-bottom: 1px solid #22304333; }
+
+  /* Playoff-Runden: klar voneinander abgegrenzte Panels statt loser Liste */
+  .bracket-session {
+    margin-bottom: 16px; padding: 10px 10px 4px; background: rgba(255,255,255,0.025);
+    border: 1px solid var(--v2-border, rgba(255,255,255,0.08)); border-radius: 12px;
+  }
+  .bracket-session:last-child { margin-bottom: 0; }
+  .bracket-session h3 {
+    color: var(--v2-gold); font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
   .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .title-name { width: 110px; font-size: 0.9em; }
   .title-bar-bg { flex: 1; background: #0e1622; border-radius: 6px; overflow: hidden; height: 14px; }
   .title-bar-fill { background: var(--v2-gold); height: 100%; }
   .title-pct { width: 50px; text-align: right; font-size: 0.85em; }
   .btn-secondary { background: transparent; border: 1px solid var(--v2-border); color: var(--v2-silver); border-radius: 6px; padding: 4px 10px; font-size: 0.7em; cursor: pointer; }
+
+  /* Kompakte, klar getrennte Spielzeilen (Regular Season + Playoffs):
+     nur Uhrzeit/Ergebnis, Spieler+Team, Spielfeld — Details per Klick. */
+  .mb-match-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--v2-border, rgba(255,255,255,0.08));
+    border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; cursor: pointer;
+    transition: background .15s;
+  }
+  .mb-match-row:last-child { margin-bottom: 0; }
+  .mb-match-row:hover, .mb-match-row:active { background: rgba(255,255,255,0.07); }
+  .mb-match-row.disabled { cursor: default; opacity: 0.55; }
+  .mb-match-row.disabled:hover { background: rgba(255,255,255,0.03); }
+  .mb-match-time {
+    flex: 0 0 60px; font-size: 0.72em; font-weight: 800; color: var(--v2-gold); text-align: center; line-height: 1.2;
+  }
+  .mb-match-teams {
+    flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    font-size: 0.86em; font-weight: 700;
+  }
+  .mb-team { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
+  .mb-team.away { flex-direction: row-reverse; text-align: right; }
+  .mb-team .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mb-team img.logo-img { width: 16px; height: 16px; flex: 0 0 auto; }
+  .mb-score-or-vs { flex: 0 0 auto; opacity: 0.5; font-size: 0.82em; font-weight: 800; padding: 0 2px; }
+  .mb-match-row.played .mb-score-or-vs { opacity: 1; color: var(--v2-gold); font-family: monospace; }
+  .mb-match-stadium {
+    flex: 0 0 auto; max-width: 84px; font-size: 0.66em; color: var(--v2-silver);
+    text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  @media (max-width: 420px) {
+    .mb-match-stadium { display: none; }
+    .mb-match-time { flex-basis: 48px; }
+  }
 </style>
 </head>
 <body class="v2">
@@ -36,6 +79,17 @@
       <button class="btn-secondary" onclick="closePlayoffPictureModal()">✕ Schließen</button>
     </div>
     <div id="playoffPictureModalContent"></div>
+  </div>
+</div>
+
+<div class="v2-modal-overlay" id="matchDetailModal" onclick="if(event.target===this) closeMatchDetailModal()">
+  <div class="v2-modal-box" style="max-width: 420px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:10px;">
+      <h3 style="margin:0; font-size:1em;" id="matchDetailTitle"></h3>
+      <button class="btn-secondary" onclick="closeMatchDetailModal()">✕</button>
+    </div>
+    <div id="matchDetailMeta" style="font-size:0.78em; opacity:0.65; margin-bottom:10px;"></div>
+    <div id="matchDetailContent"></div>
   </div>
 </div>
 
@@ -121,23 +175,79 @@
     return html + `</table>`;
   }
 
+  // Kompakte Spielzeile: nur Uhrzeit/Ergebnis, Spieler+Team, Spielfeld.
+  // Alles Weitere (Quoten, Titelchancen, Insights) gibt's per Klick im
+  // Detail-Modal — vorher stand das immer sichtbar unter jeder Partie.
+  function renderMatchRow(opts) {
+    const { p1Name, p2Name, p1Team, p2Team, played, bye, timeLabel, score, stadium, clickable, onClick } = opts;
+    const logo1 = p1Team ? MB.getLogoHtml(p1Team) : '';
+    const logo2 = p2Team ? MB.getLogoHtml(p2Team) : '';
+    const rowClass = `mb-match-row${played ? ' played' : ''}${clickable === false ? ' disabled' : ''}`;
+    const clickAttr = clickable === false ? '' : ` onclick="${onClick}"`;
+    const middle = bye ? '—' : (played ? score : 'vs');
+    return `
+      <div class="${rowClass}"${clickAttr}>
+        <div class="mb-match-time">${timeLabel}</div>
+        <div class="mb-match-teams">
+          <span class="mb-team home">${logo1}<span class="name">${p1Name}</span></span>
+          <span class="mb-score-or-vs">${middle}</span>
+          <span class="mb-team away">${logo2}<span class="name">${p2Name}</span></span>
+        </div>
+        ${stadium ? `<div class="mb-match-stadium">${stadium}</div>` : ''}
+      </div>`;
+  }
+
+  // Speichert die Match-Infos hinterm jeweils zuletzt gerenderten Tab, damit
+  // die Klick-Handler der Zeilen (per Index) ohne Quoting-Ärger an
+  // openMatchDetail() übergeben werden können.
+  let groupDetailRows = [];
+  let playoffDetailRows = [];
+
+  function openMatchDetail(p1Name, p2Name, played, metaLine) {
+    document.getElementById('matchDetailTitle').textContent = `${p1Name} vs ${p2Name}`;
+    document.getElementById('matchDetailMeta').textContent = metaLine || '';
+    document.getElementById('matchDetailContent').innerHTML =
+      renderMatchMeta(p1Name, p2Name, played) || '<div class="empty">Keine Zusatzinfos verfügbar.</div>';
+    document.getElementById('matchDetailModal').classList.add('open');
+  }
+  function closeMatchDetailModal() { document.getElementById('matchDetailModal').classList.remove('open'); }
+  function openGroupMatchDetail(i) {
+    const d = groupDetailRows[i];
+    if (!d) return;
+    openMatchDetail(d.p1Name, d.p2Name, d.played, d.metaLine);
+  }
+  function openPlayoffMatchDetail(i) {
+    const d = playoffDetailRows[i];
+    if (!d) return;
+    openMatchDetail(d.p1Name, d.p2Name, d.played, d.metaLine);
+  }
+
   function renderGroupSchedule() {
     if (!state.matches || !state.matches.length) return '<div class="empty">Noch kein Spielplan.</div>';
     // Kickoff-Zeiten kommen aus dem LIVE-Zeitplan (verschiebt sich, sobald
     // auf einem Feld Ergebnisse eingetragen werden), Fallback auf die
     // statische Planzeit falls (sollte nicht vorkommen) kein Live-Eintrag da ist.
     const live = MB.computeLiveKickoffSchedule(state);
+    groupDetailRows = [];
     return state.matches.map((m, idx) => {
       const p1 = state.players[m.p1], p2 = state.players[m.p2];
       if (!p1 || !p2) return '';
       const played = m.s1 != null && m.s2 != null;
       const liveEntry = live.byMatchId.get(`g-${idx}`);
       const time = liveEntry ? liveEntry.time : MB.getGroupMatchTime(state, m);
-      return `
-        <div style="margin-bottom:6px;">
-          <div class="bracket-row"><span>${p1.name} vs ${p2.name}</span><span>${played ? `${m.s1}:${m.s2}` : `${time} Uhr`}</span></div>
-          ${renderMatchMeta(p1.name, p2.name, played)}
-        </div>`;
+      const slot = state.slots.find(s => s.includes(m));
+      const idxInSlot = slot ? slot.indexOf(m) : 0;
+      const stadium = idxInSlot === 1 ? state.config.s2 : state.config.s1;
+      const timeLabel = played ? 'Beendet' : `${time} Uhr`;
+
+      const detailIdx = groupDetailRows.length;
+      groupDetailRows.push({ p1Name: p1.name, p2Name: p2.name, played, metaLine: `${timeLabel}${stadium ? ' · ' + stadium : ''}` });
+
+      return renderMatchRow({
+        p1Name: p1.name, p2Name: p2.name, p1Team: p1.team, p2Team: p2.team,
+        played, timeLabel, score: played ? `${m.s1}:${m.s2}` : null, stadium,
+        onClick: `openGroupMatchDetail(${detailIdx})`,
+      });
     }).join('');
   }
 
@@ -145,22 +255,38 @@
     if (!state.playoffMatches || !state.playoffMatches.length) return '<div class="empty">Playoffs noch nicht gestartet.</div>';
     const times = MB.computePlayoffTimes(state);
     const live = MB.computeLiveKickoffSchedule(state);
+    playoffDetailRows = [];
     return MB.PLAYOFF_STRUCTURE.map(slotDef => {
       const rows = slotDef.ids.map(id => {
         const m = MB.getPlayoffMatch(state, id);
         const label = MB.playoffLabels[id] || {};
+        const bye = m ? MB.isByeMatch(m) : false;
         const p1Name = m?.p1 ? (m.p1.id === -1 ? 'Freilos' : m.p1.name) : (label.p1 || 'TBD');
         const p2Name = m?.p2 ? (m.p2.id === -1 ? 'Freilos' : m.p2.name) : (label.p2 || 'TBD');
-        const played = m && m.s1 != null && m.s2 != null;
+        const played = !bye && m && m.s1 != null && m.s2 != null;
         const liveEntry = live.byMatchId.get(`p-${id}`);
         const plannedTime = times.byId[id] || times.groupEndTime;
-        const right = played ? `${m.s1}:${m.s2}` : `${liveEntry ? liveEntry.time : plannedTime} Uhr`;
+        const time = liveEntry ? liveEntry.time : plannedTime;
+        const timeLabel = bye ? 'Freilos' : (played ? 'Beendet' : `${time} Uhr`);
         const isRealMatchup = m?.p1 && m?.p2 && m.p1.id !== -1 && m.p2.id !== -1;
-        return `
-          <div style="margin-bottom:6px;">
-            <div class="bracket-row"><span>${p1Name} vs ${p2Name}</span><span>${right}</span></div>
-            ${isRealMatchup ? renderMatchMeta(p1Name, p2Name, played) : ''}
-          </div>`;
+
+        const idxInAll = m ? state.playoffMatches.findIndex(x => x.id === id) : -1;
+        const stadium = (isRealMatchup && idxInAll >= 0) ? (idxInAll % 2 === 0 ? state.config.s1 : state.config.s2) : null;
+
+        let onClick = null;
+        if (isRealMatchup) {
+          const detailIdx = playoffDetailRows.length;
+          playoffDetailRows.push({ p1Name, p2Name, played, metaLine: `${timeLabel}${stadium ? ' · ' + stadium : ''}` });
+          onClick = `openPlayoffMatchDetail(${detailIdx})`;
+        }
+
+        return renderMatchRow({
+          p1Name, p2Name,
+          p1Team: (isRealMatchup && m.p1) ? m.p1.team : null,
+          p2Team: (isRealMatchup && m.p2) ? m.p2.team : null,
+          played, bye, timeLabel, score: played ? `${m.s1}:${m.s2}` : null, stadium,
+          clickable: isRealMatchup, onClick,
+        });
       }).join('');
       return `<div class="bracket-session"><h3>${slotDef.session}</h3>${rows}</div>`;
     }).join('');
@@ -248,12 +374,21 @@
   }
   function closePlayoffPictureModal() { document.getElementById('playoffPictureModal').classList.remove('open'); }
 
-  function setTab(tab) { activeTab = tab; renderBody(); }
+  function setTab(tab) {
+    activeTab = tab;
+    // Farbliche Markierung der Reiter selbst aktualisieren — vorher wurde
+    // beim Tab-Wechsel nur #mbTabContent neu gerendert, die Tabbar-Buttons
+    // (mit ihrer .active-Klasse) blieben dabei unangetastet.
+    document.querySelectorAll('#mbTabbar [data-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    renderBody();
+  }
 
   function renderBody() {
     let inner = '';
     if (activeTab === 'tabelle') inner = `<div class="v2-card"><div class="v2-card-title">📊 Tabelle</div>${renderStandings()}</div>`;
-    else if (activeTab === 'spielplan') inner = `<div class="v2-card"><div class="v2-card-title">📅 Gruppenspielplan</div>${renderGroupSchedule()}</div>`;
+    else if (activeTab === 'spielplan') inner = `<div class="v2-card"><div class="v2-card-title">📅 Regular Season</div>${renderGroupSchedule()}</div>`;
     else if (activeTab === 'playoff') inner = `<div class="v2-card"><div class="v2-card-title">🏆 Playoff Picture <button class="btn-secondary" style="margin-left:auto;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></div>${renderBracket()}</div>`;
     else if (activeTab === 'titel') inner = `<div class="v2-card"><div class="v2-card-title">🎯 Titelchancen</div>${renderTitleOdds()}</div>`;
     document.getElementById('mbTabContent').innerHTML = inner;
@@ -261,11 +396,11 @@
 
   function renderShell() {
     document.getElementById('app').innerHTML = `
-      <div class="v2-tabbar">
-        <button class="v2-tab ${activeTab==='tabelle'?'active':''}" onclick="setTab('tabelle')">📊 Tabelle</button>
-        <button class="v2-tab ${activeTab==='spielplan'?'active':''}" onclick="setTab('spielplan')">📅 Spielplan</button>
-        <button class="v2-tab ${activeTab==='playoff'?'active':''}" onclick="setTab('playoff')">🏆 Playoffs</button>
-        <button class="v2-tab ${activeTab==='titel'?'active':''}" onclick="setTab('titel')">🎯 Titelchancen</button>
+      <div class="v2-tabbar" id="mbTabbar">
+        <button class="v2-tab ${activeTab==='tabelle'?'active':''}" data-tab="tabelle" onclick="setTab('tabelle')">📊 Tabelle</button>
+        <button class="v2-tab ${activeTab==='spielplan'?'active':''}" data-tab="spielplan" onclick="setTab('spielplan')">📅 Regular Season</button>
+        <button class="v2-tab ${activeTab==='playoff'?'active':''}" data-tab="playoff" onclick="setTab('playoff')">🏆 Playoffs</button>
+        <button class="v2-tab ${activeTab==='titel'?'active':''}" data-tab="titel" onclick="setTab('titel')">🎯 Titelchancen</button>
       </div>
       <div id="mbTabContent"></div>
     `;

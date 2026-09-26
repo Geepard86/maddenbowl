@@ -370,6 +370,21 @@
       margin-bottom: 15px;
     }
 
+    /* --- PLAYOFF PICTURE: HANDY-LAYOUT --- */
+    /* Statt der 5-6 Spalten nebeneinander (nur per Horizontal-Scroll auf dem
+       Handy erreichbar) werden die Runden auf schmalen Screens untereinander
+       gestapelt — dadurch bleibt alles ohne Scrollen in beide Richtungen
+       lesbar. Die verbindende gestrichelte Linie ergibt in der gestapelten
+       Ansicht keinen Sinn mehr und wird ausgeblendet. */
+    @media (max-width: 700px) {
+      .bracket-row-flow { flex-direction: column; gap: 22px; padding: 6px 0; }
+      .bracket-row-flow::before { display: none; }
+      .bracket-column { min-width: 0; width: 100%; }
+      .upper-floor { margin-bottom: 12px; }
+      .lower-floor { margin-top: 0; }
+      .bracket-column[style*="margin-left"] { margin-left: 0 !important; border-left: none !important; padding-left: 0 !important; border-top: 2px solid var(--nfl-red, var(--v2-red)); padding-top: 12px; }
+    }
+
     /* --- MOBILE OPTIMIERUNG --- */
     @media (max-width: 800px) {
       .next-grid-container { grid-template-columns: 1fr; }
