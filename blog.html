@@ -48,8 +48,10 @@
 </div>
 
 <script>
-  MB.UI.mountHeader({ active: 'blog' });
-  const isAdmin = window.location.search.includes('Altima');
+  MB.UI.mountHeader({ active: 'blog', showAdminLogin: true, onAdminChange: () => location.reload() });
+  // Admin-Zugang läuft jetzt über den Login im Header statt über den alten
+  // "?Altima"-Query-Parameter (siehe MB.UI.doAdminLogin in ui.js).
+  const isAdmin = MB.UI.isAdminUnlocked();
 
   const CATEGORY_META = {
     kickoff:      { label: 'Turnierstart',    color: '#0EA5E9', image: 'assets/images/Blog_Kickoff.png' },
@@ -167,8 +169,9 @@
           <button class="v2-btn-primary" style="flex:none;" onclick="publishManual()">Veröffentlichen</button>
         </div>
         <div style="font-size:0.7em; color:var(--v2-silver); margin-top:8px;">
-          Weitere Admin-Werkzeuge (Rekord-Momente, Musik, Auslosung) findest du weiterhin unter
-          <a href="live.html?Altima" style="color:var(--v2-gold);">live.html?Altima</a>.
+          Weitere Admin-Werkzeuge (Rekord-Momente, Musik, Auslosung, Saisonrückblicke) findest du weiterhin unter
+          <a href="index.html" style="color:var(--v2-gold);">index.html</a> bzw.
+          <a href="seasons.html" style="color:var(--v2-gold);">seasons.html</a>.
         </div>
       </div>`;
   }

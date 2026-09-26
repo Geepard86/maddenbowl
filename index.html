@@ -175,6 +175,7 @@
         <div style="display:flex; justify-content: space-between; gap:10px; margin-bottom: 15px;">
           <button class="btn-secondary" onclick="window.print()">PDF Export</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
+          <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportAllSeasonsJson(this)">🗄️ Gesamtexport (alle Saisons)</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
           <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
         </div>
@@ -668,12 +669,7 @@ function buildStandingsExport() {
   return arr;
 }
 
-function exportHistoryJson() {
-  if (!state?.players?.length) {
-    alert("Kein aktives Turnier zum Exportieren gefunden.");
-    return;
-  }
-
+function buildCurrentSeasonExport() {
   const season = getSeasonForHistoryExport();
 
   // players
@@ -684,72 +680,94 @@ function exportHistoryJson() {
   // matches (nur fertige, ohne BYE)
   const matches = [];
 
-// group matches: p1 = home, p2 = away
-(state.matches || []).forEach(m => {
-  if (m?.s1 == null || m?.s2 == null) return;
+  // group matches: p1 = home, p2 = away
+  (state.matches || []).forEach(m => {
+    if (m?.s1 == null || m?.s2 == null) return;
 
-  const home = state.players[m.p1];
-  const away = state.players[m.p2];
-  if (!home || !away) return;
+    const home = state.players[m.p1];
+    const away = state.players[m.p2];
+    if (!home || !away) return;
 
-  matches.push({
-    stage: "group",
-    homeTeam: home.team || null,   // <- nicht mehr skippen
-    awayTeam: away.team || null,
-    homePlayer: (home.name || "").trim(),
-    awayPlayer: (away.name || "").trim(),
-    homeScore: Number(m.s1),
-    awayScore: Number(m.s2)
+    matches.push({
+      stage: "group",
+      homeTeam: home.team || null,
+      awayTeam: away.team || null,
+      homePlayer: (home.name || "").trim(),
+      awayPlayer: (away.name || "").trim(),
+      homeScore: Number(m.s1),
+      awayScore: Number(m.s2)
+    });
   });
-});
 
-// playoff matches: p1 = home, p2 = away (BYE rausfiltern)
-(state.playoffMatches || []).forEach(pm => {
-  if (!pm?.p1 || !pm?.p2) return;
-  if (pm.p1.id === -1 || pm.p2.id === -1) return;   // BYE
-  if (pm?.s1 == null || pm?.s2 == null) return;     // nur fertige
+  // playoff matches: p1 = home, p2 = away (BYE rausfiltern)
+  (state.playoffMatches || []).forEach(pm => {
+    if (!pm?.p1 || !pm?.p2) return;
+    if (pm.p1.id === -1 || pm.p2.id === -1) return;   // BYE
+    if (pm?.s1 == null || pm?.s2 == null) return;     // nur fertige
 
-  matches.push({
-    stage: "playoff",
-    homeTeam: pm.p1.team || null,                   // <- nicht mehr skippen
-    awayTeam: pm.p2.team || null,
-    homePlayer: (pm.p1.name || "").trim(),
-    awayPlayer: (pm.p2.name || "").trim(),
-    homeScore: Number(pm.s1),
-    awayScore: Number(pm.s2)
+    matches.push({
+      stage: "playoff",
+      homeTeam: pm.p1.team || null,
+      awayTeam: pm.p2.team || null,
+      homePlayer: (pm.p1.name || "").trim(),
+      awayPlayer: (pm.p2.name || "").trim(),
+      homeScore: Number(pm.s1),
+      awayScore: Number(pm.s2)
+    });
   });
-});
 
-  // standings
   const standings = buildStandingsExport();
 
-  // final object
-  const out = {
-    schemaVersion: 1,
-    season,
-    tournament: {
-      season,
-      players,
-      matches,
-      standings
-    }
-  };
+  return { season, players, matches, standings };
+}
 
-  // Download als Datei
-  const filename = `maddenbowl_${season}.json`;
-  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+function downloadJson(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
-
   URL.revokeObjectURL(url);
+}
 
-  console.log("History JSON exported:", filename, out);
+function exportHistoryJson() {
+  if (!state?.players?.length) {
+    alert("Kein aktives Turnier zum Exportieren gefunden.");
+    return;
+  }
+
+  const current = buildCurrentSeasonExport();
+  const out = { schemaVersion: 1, season: current.season, tournament: current };
+  downloadJson(out, `maddenbowl_${current.season}.json`);
+  console.log("History JSON exported:", out);
+}
+
+// Gesamtexport: alle abgeschlossenen Saisons aus Supabase (MB.loadHistorySeasons)
+// PLUS die aktuell laufende (falls eine existiert und noch nicht Teil der
+// Historie ist) in eine einzige lokale JSON-Datei — für ein komplettes
+// Offline-Backup statt Saison für Saison einzeln zu exportieren.
+async function exportAllSeasonsJson(btn) {
+  const label = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Lädt…"; }
+  try {
+    const seasons = await MB.loadHistorySeasons();
+    if (state?.players?.length) {
+      const current = buildCurrentSeasonExport();
+      const alreadyIncluded = seasons.some(s => Number(s.season) === Number(current.season));
+      if (!alreadyIncluded) seasons.push(current);
+    }
+    seasons.sort((a, b) => Number(a.season) - Number(b.season));
+    const out = { schemaVersion: 1, exportedAt: new Date().toISOString(), seasons };
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadJson(out, `maddenbowl_gesamtexport_${stamp}.json`);
+  } catch (e) {
+    alert("Gesamtexport fehlgeschlagen: " + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
 }
 
     
@@ -2449,6 +2467,33 @@ function renderRanking() {
     // =========================================================
     // LOAD
     // =========================================================
+    // Lädt die in seasons.html gepflegten Turnier-Regeln/Standard-Einstellungen
+    // (app_config-Key "tournament_defaults") und belegt damit die Setup-Felder
+    // vor, statt der fest im HTML stehenden Werte. Kein Eintrag in der DB ->
+    // die HTML-Defaults bleiben einfach stehen.
+    async function applyTournamentDefaults() {
+      try {
+        const raw = await MB.getAppConfig('tournament_defaults');
+        if (!raw) return;
+        const d = JSON.parse(raw);
+        if (d.startTime) document.getElementById('startTime').value = d.startTime;
+        if (d.durGroup) document.getElementById('durGroup').value = d.durGroup;
+        if (d.durPlayoff) document.getElementById('durPlayoff').value = d.durPlayoff;
+        if (d.durBreak) document.getElementById('durBreak').value = d.durBreak;
+        if (d.stadium1) document.getElementById('stadium1').value = d.stadium1;
+        if (d.stadium1Prep) document.getElementById('stadium1Prep').value = d.stadium1Prep;
+        if (d.stadium2) document.getElementById('stadium2').value = d.stadium2;
+        if (d.stadium2Prep) document.getElementById('stadium2Prep').value = d.stadium2Prep;
+        if (d.playerCount) {
+          const countSelect = document.getElementById('playerCount');
+          const match = [...countSelect.options].find(o => parseInt(o.value) === Number(d.playerCount));
+          if (match) countSelect.value = String(d.playerCount);
+        }
+      } catch (e) {
+        console.warn('tournament_defaults laden fehlgeschlagen:', e);
+      }
+    }
+
     window.onload = async () => {
       // Load historical data first (for suggestions + stats)
       await loadHistory();
@@ -2462,6 +2507,10 @@ function renderRanking() {
       }
 
       if (!state.players || state.players.length === 0) {
+        // Regeln/Standard-Einstellungen aus seasons.html VOR der Ziehreihenfolge
+        // anwenden, damit ein evtl. vorbereiteter Spieler-Count (s.u.) Vorrang hat.
+        await applyTournamentDefaults();
+
         // Vorbereitete Ziehreihenfolge aus seasons.html übernehmen, falls
         // vorhanden — Spieleranzahl passend vorauswählen, wenn möglich.
         presetDraftQueue = Array.isArray(state.config?.draftOrder) ? state.config.draftOrder : [];

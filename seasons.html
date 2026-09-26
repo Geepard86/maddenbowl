@@ -8,9 +8,11 @@
 <link rel="stylesheet" href="styles.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
+<script src="ui.js"></script>
 <script src="blog.js"></script>
 <style>
-  body { padding: 16px; max-width: 900px; margin: 0 auto; padding-bottom: 60px; }
+  body { margin: 0; padding: 0; }
+  #app { padding: 16px; max-width: 900px; margin: 0 auto; padding-bottom: 60px; }
   h1 { border-bottom: 3px solid var(--nfl-red); padding-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
   table.list { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-top: 10px; }
   table.list th, table.list td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #22304333; }
@@ -35,18 +37,23 @@
 </style>
 </head>
 <body>
+<script>
+  MB.UI.mountHeader({ active: '', showAdminLogin: true, onAdminChange: () => location.reload() });
+</script>
 
 <div id="app"><div class="not-admin">Lade…</div></div>
 
 <script>
-  const isAdmin = window.location.search.includes('Altima');
+  // Admin-Zugang läuft jetzt über den Login im Header statt über den alten
+  // "?Altima"-Query-Parameter (siehe MB.UI.doAdminLogin in ui.js).
+  const isAdmin = MB.UI.isAdminUnlocked();
   let tournaments = [];
   let editingId = null;
 
   async function boot() {
     const app = document.getElementById('app');
     if (!isAdmin) {
-      app.innerHTML = `<div class="not-admin">🔒 Nur für Admins (Link mit <code>?Altima</code> aufrufen).</div>`;
+      app.innerHTML = `<div class="not-admin">🔒 Nur für Admins — oben rechts anmelden.</div>`;
       return;
     }
     // Löst als Nebeneffekt MB.getCurrentTournamentId() aus (wird für den
@@ -57,13 +64,18 @@
       <h1>🗂️ Saison-Verwaltung</h1>
       <div class="card" id="ratingsCard"></div>
       <div class="card">
+        <h2>⚙️ Turnier-Regeln &amp; Standard-Einstellungen</h2>
+        <div class="hint">Vorbelegung für das "Tournament Setup" in index.html — einmal hier pflegen statt bei jedem neuen Turnier von Hand nachzutragen. Bereits laufende/abgeschlossene Turniere sind davon nicht betroffen.</div>
+        <div id="rulesCard">Lade…</div>
+      </div>
+      <div class="card">
         <h2>🎲 Nächstes Turnier vorbereiten</h2>
         <div class="hint">Spielerliste vorab festlegen — die Ziehreihenfolge für die Live-Auslosung in index.html wird automatisch aus der Vorsaison berechnet (ToiletBowl-Sieger zuerst, dann Neulinge, Titelverteidiger zuletzt) und lässt sich per Drag &amp; Drop anpassen.</div>
         <div id="draftOrderCard">Lade…</div>
       </div>
       <div class="card">
         <h2>✍️ Artikel verfassen</h2>
-        <div class="hint">Freier Editor für redaktionelle Blog-Beiträge (Rückblicke, Ankündigungen, alles) — landet direkt im Turnierblog (live.html). Zwei Entwürfe sind schon vorausgefüllt.</div>
+        <div class="hint">Freier Editor für redaktionelle Blog-Beiträge (Saisonrückblicke, Ankündigungen, alles) — Saison und Beitragsart frei wählbar, landet direkt im Turnierblog (blog.html). Zwei Entwürfe sind schon vorausgefüllt.</div>
         <div id="composerCard"></div>
       </div>
       <div class="card">
@@ -73,9 +85,10 @@
       </div>
     `;
     await renderRatingsCard();
+    await renderRulesCard();
     await renderDraftOrderCard();
-    renderComposerCard();
     await loadSeasons();
+    renderComposerCard();
   }
 
   // =========================================================
@@ -196,8 +209,18 @@
   // =========================================================
   // ARTIKEL-EDITOR (frei, für redaktionelle Beiträge)
   // =========================================================
+  // Beitragsarten, die man hier sinnvoll von Hand verfassen kann (Auszug aus
+  // blog.js' CATEGORY_META — automatisch generierte Arten wie "record" oder
+  // "song" lässt man besser die Engine selbst schreiben).
+  const ARTICLE_KIND_OPTIONS = [
+    { value: 'retrospective', label: 'Rückblick (Saisonrückblick)' },
+    { value: 'kickoff', label: 'Turnierstart / Ankündigung' },
+    { value: 'manual', label: 'Sonstiges' },
+  ];
+
   const draftArticles = [
     {
+      kind: "retrospective",
       title: "Fünf Seasons Madden Bowl – und was bleibt",
       body: `Fünf Seasons, vier Champions und jede Menge Spiele, die inzwischen ihre eigene kleine Geschichte erzählen. Der Madden Bowl hat sich vom Turnier unter Freunden zu einem Wettbewerb mit Hall of Fame, ewiger Tabelle und inzwischen durchaus ernstzunehmender Rekordliste entwickelt.
 
@@ -214,6 +237,7 @@ Was also bleibt nach fünf Seasons? Vor allem die Erkenntnis, dass beim Madden B
 2027 kann kommen.`,
     },
     {
+      kind: "kickoff",
       title: "Madden Bowl 2027 – jetzt wird mitgetippt",
       body: `Der Madden Bowl geht in die nächste Runde. Und diesmal bleibt es nicht beim Zuschauen.
 
@@ -234,37 +258,58 @@ Madden Bowl 2027 – wir sind dabei.`,
 
   function renderComposerCard() {
     const el = document.getElementById('composerCard');
-    const tid = MB.getCurrentTournamentId();
+    const currentTid = MB.getCurrentTournamentId();
+    // Vorauswahl: laufendes/setup-Turnier falls vorhanden, sonst die
+    // zuletzt abgeschlossene Saison (tournaments ist bereits nach Jahr
+    // absteigend sortiert) — deckt genau den Fall ab, in dem eine Saison
+    // gerade zu Ende ist und noch keine neue gestartet wurde.
+    const defaultTid = currentTid || (tournaments.find(t => t.status === 'completed') || {}).id || '';
+    const selectedTid = (typeof _composerTid !== 'undefined' && _composerTid) ? _composerTid : defaultTid;
+    const draft = activeDraftIndex >= 0 ? draftArticles[activeDraftIndex] : null;
+    const selectedKind = (typeof _composerKind !== 'undefined' && _composerKind) ? _composerKind : (draft ? draft.kind : 'manual');
     el.innerHTML = `
       <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
         ${draftArticles.map((d, i) => `<button class="small ${i === activeDraftIndex ? '' : 'secondary'}" onclick="loadDraft(${i})">Entwurf ${i + 1}</button>`).join('')}
         <button class="small secondary" onclick="loadDraft(-1)">Leer</button>
       </div>
+      <label>Saison</label>
+      <select id="articleTournament" onchange="_composerTid = this.value" ${tournaments.length ? '' : 'disabled'}>
+        ${tournaments.map(t => `<option value="${t.id}" ${t.id === selectedTid ? 'selected' : ''}>${t.year ?? '?'} (${t.status})</option>`).join('')}
+      </select>
+      <label>Beitragsart</label>
+      <select id="articleKind" onchange="_composerKind = this.value">
+        ${ARTICLE_KIND_OPTIONS.map(o => `<option value="${o.value}" ${o.value === selectedKind ? 'selected' : ''}>${o.label}</option>`).join('')}
+      </select>
       <label>Titel</label>
-      <input type="text" id="articleTitle" value="${activeDraftIndex >= 0 ? draftArticles[activeDraftIndex].title : ''}">
+      <input type="text" id="articleTitle" value="${draft ? draft.title : ''}">
       <label>Text</label>
-      <textarea id="articleBody" rows="14" style="width:100%; box-sizing:border-box; background:#0e1622; color:#eee; border:1px solid #2a3a4d; border-radius:6px; padding:8px; font-family:inherit;">${activeDraftIndex >= 0 ? draftArticles[activeDraftIndex].body : ''}</textarea>
+      <textarea id="articleBody" rows="14" style="width:100%; box-sizing:border-box; background:#0e1622; color:#eee; border:1px solid #2a3a4d; border-radius:6px; padding:8px; font-family:inherit;">${draft ? draft.body : ''}</textarea>
       <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-        <button class="small" ${tid ? '' : 'disabled'} onclick="publishArticle()">Im Blog veröffentlichen</button>
+        <button class="small" ${tournaments.length ? '' : 'disabled'} onclick="publishArticle()">Im Blog veröffentlichen</button>
       </div>
-      ${!tid ? '<div class="hint">Kein aktives Turnier — erst eins starten, dann lässt sich der Artikel dort veröffentlichen. Der Text bleibt hier stehen, bis du auf ein anderes Gerät/einen anderen Tab wechselst.</div>' : ''}
+      ${!tournaments.length ? '<div class="hint">Noch keine Saison vorhanden — erst ein Turnier starten, dann lässt sich hier ein Beitrag dazu veröffentlichen.</div>' : ''}
     `;
   }
 
+  let _composerTid = null; // merkt sich die manuelle Saison-Auswahl über Re-Renders hinweg
+  let _composerKind = null; // dito für die Beitragsart
+
   function loadDraft(i) {
     activeDraftIndex = i;
+    if (i >= 0) _composerKind = draftArticles[i].kind; // Entwurf bringt seine passende Beitragsart mit
     renderComposerCard();
   }
 
   async function publishArticle() {
-    const tid = MB.getCurrentTournamentId();
-    if (!tid) { alert('Kein aktives Turnier.'); return; }
+    const tid = document.getElementById('articleTournament').value;
+    if (!tid) { alert('Keine Saison ausgewählt.'); return; }
+    const kind = document.getElementById('articleKind').value;
     const title = document.getElementById('articleTitle').value.trim();
     const body = document.getElementById('articleBody').value.trim();
     if (!title || !body) { alert('Titel und Text dürfen nicht leer sein.'); return; }
     try {
-      await MB.Blog.pushArticle(tid, { kind: 'kickoff', title, body });
-      alert('Veröffentlicht — erscheint jetzt im Turnierblog (live.html).');
+      await MB.Blog.pushArticle(tid, { kind, title, body });
+      alert('Veröffentlicht — erscheint jetzt im Turnierblog (blog.html).');
     } catch (e) {
       alert('Fehlgeschlagen: ' + e.message);
     }
@@ -453,6 +498,68 @@ Madden Bowl 2027 – wir sind dabei.`,
       alert('Gespeichert.');
       editingId = null;
       await loadSeasons();
+    } catch (e) {
+      alert('Speichern fehlgeschlagen: ' + e.message);
+    }
+  }
+
+  // =========================================================
+  // TURNIER-REGELN / STANDARD-EINSTELLUNGEN (app_config: "tournament_defaults")
+  // -------------------------------------------------------------------
+  // Werden von index.html beim Öffnen des Tournament-Setups geladen und dort
+  // als Vorbelegung der Formularfelder verwendet (siehe applyTournamentDefaults
+  // in index.html). Diese Defaults hier — falls in der DB noch nichts liegt.
+  // =========================================================
+  const RULES_CONFIG_KEY = 'tournament_defaults';
+  const RULES_DEFAULTS = {
+    startTime: '10:00', durGroup: 30, durPlayoff: 45, durBreak: 15,
+    stadium1: 'Altima Field', stadium1Prep: 'im',
+    stadium2: 'KEVAG Stadium', stadium2Prep: 'im',
+    playerCount: 8,
+  };
+  const STADIUM_PREP_OPTIONS = ['im', 'in der', 'in', 'auf dem'];
+
+  async function renderRulesCard() {
+    const card = document.getElementById('rulesCard');
+    let saved = {};
+    try {
+      const raw = await MB.getAppConfig(RULES_CONFIG_KEY);
+      if (raw) saved = JSON.parse(raw);
+    } catch (e) { console.warn('tournament_defaults laden fehlgeschlagen:', e); }
+    const v = { ...RULES_DEFAULTS, ...saved };
+    const prepOptions = (selected) => STADIUM_PREP_OPTIONS
+      .map(p => `<option value="${p}" ${p === selected ? 'selected' : ''}>${p} ...</option>`).join('');
+
+    card.innerHTML = `
+      <div class="row-line"><span class="label">Start</span><input type="time" id="ruleStart" value="${v.startTime}"></div>
+      <div class="row-line"><span class="label">Min/Gruppe</span><input type="number" id="ruleDurGroup" value="${v.durGroup}" style="width:80px;"></div>
+      <div class="row-line"><span class="label">Min/Playoff</span><input type="number" id="ruleDurPlayoff" value="${v.durPlayoff}" style="width:80px;"></div>
+      <div class="row-line"><span class="label">Pause</span><input type="number" id="ruleDurBreak" value="${v.durBreak}" style="width:80px;"></div>
+      <div class="row-line"><span class="label">Stadion 1</span><input type="text" id="ruleStadium1" value="${v.stadium1}"><select id="ruleStadium1Prep">${prepOptions(v.stadium1Prep)}</select></div>
+      <div class="row-line"><span class="label">Stadion 2</span><input type="text" id="ruleStadium2" value="${v.stadium2}"><select id="ruleStadium2Prep">${prepOptions(v.stadium2Prep)}</select></div>
+      <div class="row-line"><span class="label">Spieler</span><input type="number" id="rulePlayerCount" value="${v.playerCount}" min="6" max="10" style="width:80px;"></div>
+      <div style="margin-top:10px;"><button class="small" onclick="saveRules()">Speichern</button></div>
+      <div class="hint" id="rulesSavedHint" style="display:none;">Gespeichert.</div>
+    `;
+  }
+
+  async function saveRules() {
+    const values = {
+      startTime: document.getElementById('ruleStart').value || RULES_DEFAULTS.startTime,
+      durGroup: parseInt(document.getElementById('ruleDurGroup').value) || RULES_DEFAULTS.durGroup,
+      durPlayoff: parseInt(document.getElementById('ruleDurPlayoff').value) || RULES_DEFAULTS.durPlayoff,
+      durBreak: parseInt(document.getElementById('ruleDurBreak').value) || RULES_DEFAULTS.durBreak,
+      stadium1: document.getElementById('ruleStadium1').value.trim() || RULES_DEFAULTS.stadium1,
+      stadium1Prep: document.getElementById('ruleStadium1Prep').value,
+      stadium2: document.getElementById('ruleStadium2').value.trim() || RULES_DEFAULTS.stadium2,
+      stadium2Prep: document.getElementById('ruleStadium2Prep').value,
+      playerCount: parseInt(document.getElementById('rulePlayerCount').value) || RULES_DEFAULTS.playerCount,
+    };
+    try {
+      await MB.setAppConfig(RULES_CONFIG_KEY, JSON.stringify(values));
+      const hint = document.getElementById('rulesSavedHint');
+      hint.style.display = 'block';
+      setTimeout(() => { hint.style.display = 'none'; }, 2500);
     } catch (e) {
       alert('Speichern fehlgeschlagen: ' + e.message);
     }
