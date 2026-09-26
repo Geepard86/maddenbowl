@@ -65,6 +65,16 @@
     .mb-match-stadium { display: none; }
     .mb-match-time { flex-basis: 48px; }
   }
+
+  /* Hinweis im Playoff-Picture-Modal: nur auf schmalen Screens sichtbar,
+     da dort Drehen ins Querformat + Zoomen die beste Übersicht gibt. */
+  .playoff-picture-hint { display: none; }
+  @media (max-width: 700px) {
+    .playoff-picture-hint {
+      display: block; font-size: 0.78em; opacity: 0.75; margin-bottom: 10px;
+      padding: 6px 10px; background: rgba(255,255,255,0.04); border-radius: 8px;
+    }
+  }
 </style>
 </head>
 <body class="v2">
@@ -73,11 +83,12 @@
 </div>
 
 <div class="v2-modal-overlay" id="playoffPictureModal" onclick="if(event.target===this) closePlayoffPictureModal()">
-  <div class="modal-box" style="max-width: 900px; width: 96vw; max-height: 90vh; overflow:auto;">
+  <div class="modal-box" style="max-width: 900px; width: 96vw; max-height: 92vh; overflow:auto;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
       <h2 style="margin:0;">Playoff Picture</h2>
       <button class="btn-secondary" onclick="closePlayoffPictureModal()">✕ Schließen</button>
     </div>
+    <div class="playoff-picture-hint">📱 Am Handy am besten quer halten und mit zwei Fingern zoomen/scrollen.</div>
     <div id="playoffPictureModalContent"></div>
   </div>
 </div>
