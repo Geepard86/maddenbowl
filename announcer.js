@@ -74,7 +74,7 @@
   // Rudi/Mona sind nur Default-Werte. Wird lokal gespeichert, damit die
   // Namen einen Reload überleben.
   // ======================================================================
-  const DEFAULT_SPEAKER_NAMES = { commentator: "Rudi", moderator: "Mona" };
+  const DEFAULT_SPEAKER_NAMES = { commentator: "Rudi", moderator: "Mona", announcer: "Enzo" };
   const SPEAKER_NAMES_KEY = "mb_announcer_speakers";
   let _speakerNamesCache = null;
 
@@ -86,14 +86,16 @@
     _speakerNamesCache = {
       commentator: stored.commentator || DEFAULT_SPEAKER_NAMES.commentator,
       moderator: stored.moderator || DEFAULT_SPEAKER_NAMES.moderator,
+      announcer: stored.announcer || DEFAULT_SPEAKER_NAMES.announcer,
     };
     return _speakerNamesCache;
   }
 
-  function setSpeakerNames({ commentator, moderator } = {}) {
+  function setSpeakerNames({ commentator, moderator, announcer } = {}) {
     const next = {
       commentator: (commentator || "").trim() || DEFAULT_SPEAKER_NAMES.commentator,
       moderator: (moderator || "").trim() || DEFAULT_SPEAKER_NAMES.moderator,
+      announcer: (announcer || "").trim() || DEFAULT_SPEAKER_NAMES.announcer,
     };
     _speakerNamesCache = next;
     try { localStorage.setItem(SPEAKER_NAMES_KEY, JSON.stringify(next)); }
@@ -114,6 +116,150 @@
   }
 
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // ======================================================================
+  // RING-ANSAGER (Draft-Vorstellung + Finale) — Textbausteine mit {name}
+  // als einzig freier Variable, Auswahl der Kategorie kommt aus
+  // MB.computeRingIntroBadges() (shared.js). Ein Baustein pro Vorstellung,
+  // Priorität: Champion > Serien-Champion > Rekordhalter > Contender >
+  // Toilet-Bowl-Sieger > Rookie > Routinier (Fallback).
+  // ======================================================================
+  const RING_ANNOUNCER_INTROS = {
+    champion: [
+      (n) => `Und hier kommt er... der amtierende Champion... ${n}!`,
+      (n) => `Er hat den Ring, und er will ihn verteidigen... ${n}!`,
+      (n) => `Der Titelträger persönlich... ${n}!`,
+    ],
+    championRings: [
+      (n, rings) => `Und hier kommt er, mit bereits ${rings} Ringen am Controller, der amtierende Champion... ${n}!`,
+      (n, rings) => `${rings}-facher Champion und aktueller Titelträger in einem... ${n}!`,
+    ],
+    seriesChampion: [
+      (n, rings) => `Der einzige Head Coach mit ${rings} Ringen... ${n}!`,
+      (n, rings) => `${rings} Titel — niemand sonst hat so viele geholt... ${n}!`,
+    ],
+    recordHolder: [
+      (n) => `Der Mann mit dem Allzeit-Highscore dieser Liga... ${n}!`,
+      (n) => `Niemand hat je mehr Punkte in einem einzigen Spiel gemacht als er... ${n}!`,
+    ],
+    contender: [
+      (n) => `Der ewige Herausforderer, immer ganz nah dran am Ring... ${n}!`,
+      (n) => `Der Vize-Champion der letzten Saison — diesmal soll's ganz nach oben gehen... ${n}!`,
+    ],
+    toiletBowlFirstPick: [
+      (n) => `Und der Sieger des letztjährigen Toilet Bowls, mit dem ersten Pick... ${n}!`,
+    ],
+    toiletBowl: [
+      (n) => `Er will die Kloschüssel diesmal weit hinter sich lassen... ${n}!`,
+    ],
+    rookie: [
+      (n) => `Und hier kommt der Rookie... ${n}!`,
+      (n) => `Sein allererstes Madden Bowl... ${n}!`,
+    ],
+    veteran: [
+      (n) => `Am Start... ${n}!`,
+      (n) => `Bereit für eine neue Saison... ${n}!`,
+    ],
+  };
+
+  // badge = ein Eintrag aus MB.computeRingIntroBadges(...).get(name.toLowerCase())
+  function buildRingIntroLine(badge, { isFirstPick } = {}) {
+    if (!badge) return "";
+    const n = speechName(badge.name);
+    if (badge.isDefendingChampion) {
+      return badge.titles > 1
+        ? pick(RING_ANNOUNCER_INTROS.championRings)(n, numberWordsDE(badge.titles))
+        : pick(RING_ANNOUNCER_INTROS.champion)(n);
+    }
+    if (badge.isSoleRecordChampion) return pick(RING_ANNOUNCER_INTROS.seriesChampion)(n, numberWordsDE(badge.titles));
+    if (badge.isAllTimeHighScoreHolder) return pick(RING_ANNOUNCER_INTROS.recordHolder)(n);
+    if (badge.isRunnerUpLastSeason || badge.finalsWithoutTitleCount >= 2) return pick(RING_ANNOUNCER_INTROS.contender)(n);
+    if (badge.isToiletBowlLastSeason) return isFirstPick ? pick(RING_ANNOUNCER_INTROS.toiletBowlFirstPick)(n) : pick(RING_ANNOUNCER_INTROS.toiletBowl)(n);
+    if (badge.isRookie) return pick(RING_ANNOUNCER_INTROS.rookie)(n);
+    return pick(RING_ANNOUNCER_INTROS.veteran)(n);
+  }
+
+  async function announceRingIntro(name, badge, isFirstPick) {
+    const line = buildRingIntroLine(badge, { isFirstPick });
+    if (!line) return;
+    const settings = getTtsSettings();
+    const voiceId = settings.provider === "elevenlabs" ? (settings.voiceIdAnnouncer || settings.voiceIdResult) : null;
+    await speakSequence([{ text: line, voiceId }]);
+  }
+
+  // ======================================================================
+  // TEAM-PICK-KOMMENTAR (Draft) — Kommentator/Moderator im Wechsel, nachdem
+  // ein Spieler sein Team gewählt hat. Bausteine: Team-Titelhistorie +
+  // (falls Gruppengegner schon feststehen) eine Einschätzung des Spielplans.
+  // ======================================================================
+  const TEAM_PICK_GOOD_CHOICE = ["Gute Wahl.", "Starke Ansage.", "Interessante Wahl.", "Na, das kann was werden."];
+
+  const TEAM_TITLE_LINES = {
+    none: [
+      (team) => `${team} wartet noch auf den ersten Titel in dieser Liga.`,
+      (team) => `Mit ${team} hat noch niemand den Ring geholt — vielleicht ändert sich das ja jetzt.`,
+    ],
+    withOtherCoach: [
+      (team, count, lastWinner) => `${team} hat schon ${count === 1 ? "einmal" : numberWordsDE(count) + " Mal"} den Ring geholt, zuletzt aber mit einem anderen Head Coach${lastWinner ? " — " + lastWinner : ""}. Mal schauen, ob er sie auch zum Erfolg führen kann.`,
+    ],
+  };
+
+  const SCHEDULE_HARD_LINES = [
+    (n) => `Und der Spielplan hat's gleich in sich: ${n}`,
+    (n) => `Harter Auftakt: ${n}`,
+  ];
+  const SCHEDULE_EASY_LINES = [
+    (n) => `Dafür sieht die Gruppenphase machbar aus: ${n}`,
+    (n) => `Der Spielplan lässt sich erstmal ganz entspannt an: ${n}`,
+  ];
+  const SCHEDULE_NEUTRAL_LINES = [
+    (n) => `In der Gruppenphase geht's unter anderem gegen ${n}.`,
+  ];
+
+  // opponentBadges: Array von { name, badge } für die schon feststehenden
+  // Gruppengegner dieses Slots (badge = Eintrag aus computeRingIntroBadges).
+  function describeOpponentForSchedule(o) {
+    const n = speechName(o.name);
+    if (o.badge?.isDefendingChampion) return `den amtierenden Champion ${n}`;
+    if (o.badge?.isRookie) return `Neuling ${n}`;
+    if (o.badge?.isToiletBowlLastSeason) return `den Vorjahres-Letzten ${n}`;
+    return n;
+  }
+
+  function buildScheduleFact(opponentBadges) {
+    if (!opponentBadges || !opponentBadges.length) return "";
+    const descs = opponentBadges.map(describeOpponentForSchedule);
+    const joined = descs.length > 1 ? descs.slice(0, -1).join(", ") + " und " + descs[descs.length - 1] : descs[0];
+    const toughCount = opponentBadges.filter((o) => o.badge?.isDefendingChampion || o.badge?.isSoleRecordChampion || o.badge?.titles > 0).length;
+    const easyCount = opponentBadges.filter((o) => o.badge?.isRookie).length;
+    if (toughCount >= 2) return pick(SCHEDULE_HARD_LINES)(joined);
+    if (easyCount >= 2) return pick(SCHEDULE_EASY_LINES)(joined);
+    return pick(SCHEDULE_NEUTRAL_LINES)(joined);
+  }
+
+  // teamTitleInfo: Eintrag aus MB.computeTeamTitleHistory(history).get(teamId) oder undefined
+  function buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges }) {
+    const n = speechName(name);
+    const parts = [pick(TEAM_PICK_GOOD_CHOICE)];
+    if (teamTitleInfo && teamTitleInfo.count > 0) {
+      parts.push(pick(TEAM_TITLE_LINES.withOtherCoach)(teamName, teamTitleInfo.count, speechName(teamTitleInfo.lastWinnerName)));
+    } else {
+      parts.push(pick(TEAM_TITLE_LINES.none)(teamName));
+    }
+    const scheduleFact = buildScheduleFact(opponentBadges);
+    if (scheduleFact) parts.push(scheduleFact);
+    return parts.join(" ");
+  }
+
+  // speakerIndex: 0 = Kommentator, 1 = Moderator (im Wechsel von index.html gesteuert)
+  async function announceTeamPick(text, speakerIndex) {
+    if (!text) return;
+    const settings = getTtsSettings();
+    const useElevenLabs = settings.provider === "elevenlabs";
+    const voiceId = useElevenLabs ? (speakerIndex === 1 ? settings.voiceIdPreview : settings.voiceIdResult) : null;
+    await speakSequence([{ text, voiceId }]);
+  }
+
   function fmt(tpl, vars) { return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? ""); }
 
   // Fakten aus shared.js (MB.pickFlavourFactsTyped/getAnnouncerResultImpacts)
@@ -979,6 +1125,29 @@
       say("moderator", buildUpcomingLine({ state, history, homeName: "Alex", awayName: "Tim", time: "19:00", stadium: "Altima Field", stadiumPreposition: "im", usedFactTypes: new Set() }));
     }
 
+    // 13) Ring-Ansager: Draft-Vorstellung + Team-Pick-Kommentar --------------
+    heading(13, "RING-ANSAGER: DRAFT-VORSTELLUNG + TEAM-PICK-KOMMENTAR");
+    {
+      const say2 = (role, text) => lines.push(`[${role === "announcer" ? names.announcer : (role === "commentator" ? names.commentator : names.moderator)}] ${sanitizeForSpeech(text)}`);
+      note("Ein Baustein pro Vorstellung, Auswahl kommt aus MB.computeRingIntroBadges() — hier mit erfundenen Badges demonstriert.");
+      say2("announcer", buildRingIntroLine({ name: "Tim", isDefendingChampion: true, titles: 2 }, { isFirstPick: false }));
+      say2("announcer", buildRingIntroLine({ name: "Alex", isSoleRecordChampion: true, titles: 3 }, {}));
+      say2("announcer", buildRingIntroLine({ name: "Marco", isAllTimeHighScoreHolder: true }, {}));
+      say2("announcer", buildRingIntroLine({ name: "Jonas", isRunnerUpLastSeason: true }, {}));
+      say2("announcer", buildRingIntroLine({ name: "Kevin", isToiletBowlLastSeason: true }, { isFirstPick: true }));
+      say2("announcer", buildRingIntroLine({ name: "Nico", isRookie: true }, {}));
+      note("Team-Pick-Kommentar (Kommentator/Moderator im Wechsel), inkl. Spielplan-Einschätzung:");
+      say2("commentator", buildTeamPickLine({
+        name: "Tim", teamName: "Baltimore Ravens",
+        teamTitleInfo: { count: 2, lastWinnerName: "Alex" },
+        opponentBadges: [
+          { name: "Alex", badge: { isSoleRecordChampion: true, titles: 3 } },
+          { name: "Nico", badge: { isRookie: true } },
+        ],
+      }));
+      say2("moderator", buildTeamPickLine({ name: "Nico", teamName: "Detroit Lions", teamTitleInfo: null, opponentBadges: [] }));
+    }
+
     return lines.join("\n");
   }
 
@@ -1019,5 +1188,6 @@
     speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
     getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
     buildDryRunTranscript,
+    buildRingIntroLine, announceRingIntro, buildTeamPickLine, announceTeamPick,
   };
 })(window);

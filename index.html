@@ -394,6 +394,10 @@
     // Vorbereitete Ziehreihenfolge aus seasons.html (state.config.draftOrder),
     // [{name, reason}] — siehe initSetupInputs()/finalizeDraw() weiter unten.
     let presetDraftQueue = [];
+    // Ring-Ansager-Status für den laufenden Draft: verhindert Doppel-Ansagen,
+    // wenn updateTeamAvailability() mehrfach für dieselbe Team-Wahl feuert,
+    // und sorgt für den Kommentator/Moderator-Wechsel nach jedem Pick.
+    let draftAnnounceState = { announcedTeamSlots: new Set(), teamPickSpeakerToggle: 0 };
     let titleOddsPrev = null; // Map name -> %
     let titleOddsNow  = null; // Map name -> %
     // Tabellen-Rang VOR/NACH dem letzten Score-Commit (Map name -> Platz),
@@ -870,6 +874,7 @@ function isFinished(match) { return MB.isFinished(match); }
       container.innerHTML = '';
 
       availableSlots = Array.from({length: parseInt(count)}, (_, i) => i);
+      draftAnnounceState = { announcedTeamSlots: new Set(), teamPickSpeakerToggle: 0 };
 
       const year = document.getElementById('maddenYear').value;
       const ratings = maddenRatings[year] || {};
@@ -885,6 +890,7 @@ function isFinished(match) { return MB.isFinished(match); }
           <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
           <div style="display: flex; gap: 10px;">
             <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="announceNextCandidate()">📣 Kandidat vorstellen</button>
             <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
           </div>
           <small style="display:block; opacity:.7; margin-top:8px;">
@@ -1088,6 +1094,22 @@ for (let i = 0; i < totalSlots; i++) {
       }, 80);
     }
 
+    // Ring-Ansager: dramatische Vorstellung des nächsten Kandidaten, BEVOR
+    // der Slot gezogen wird. isFirstPick = niemand wurde in diesem Draft
+    // bisher gezogen -> steuert die "...mit dem ersten Pick"-Variante beim
+    // Toilet-Bowl-Baustein.
+    async function announceNextCandidate() {
+      const name = (document.getElementById('nextPlayerName').value || '').trim();
+      if (!name) { alert('Bitte erst einen Namen eingeben!'); return; }
+      const isFirstPick = availableSlots.length === parseInt(document.getElementById('playerCount').value);
+      const badge = MB.computeRingIntroBadges(history, [name]).get(name.trim().toLowerCase());
+      try {
+        await MB.Announcer.announceRingIntro(name, badge, isFirstPick);
+      } catch (e) {
+        console.warn('Ring-Ansage fehlgeschlagen:', e);
+      }
+    }
+
     function updateTeamAvailability() {
       const selects = document.querySelectorAll('.team-select');
       const selectedTeams = Array.from(selects).map(s => s.value).filter(v => v !== "");
@@ -1118,6 +1140,10 @@ document.querySelectorAll('.draft-row').forEach(row => {
       nameDisplay.style.color = "var(--accent)";
       nameDisplay.style.fontWeight = "bold";
     }
+    if (!draftAnnounceState.announcedTeamSlots.has(id)) {
+      draftAnnounceState.announcedTeamSlots.add(id);
+      announceTeamPickForSlot(id, nameVal, teamVal);
+    }
   } else if (nameVal && !teamVal) {
     row.classList.remove("assigned");
     row.classList.add("await-team");
@@ -1127,6 +1153,45 @@ document.querySelectorAll('.draft-row').forEach(row => {
     }
   }
 });
+    }
+
+    // Namen der (Gruppen-)Gegner eines Slots, soweit deren Slot schon
+    // gezogen wurde — unabhängig davon, ob die Team-Wahl dort schon
+    // abgeschlossen ist (für den Team-Pick-Kommentar reicht der Name).
+    function getOpponentNamesForSlot(count, slotIdx) {
+      const schedule = schedules[count] || [];
+      const names = [];
+      schedule.forEach(round => {
+        round.forEach(match => {
+          if (match[0] === slotIdx || match[1] === slotIdx) {
+            const oppSlot = (match[0] === slotIdx) ? match[1] : match[0];
+            const oppName = (document.getElementById(`pName${oppSlot}`)?.value || '').trim();
+            if (oppName) names.push(oppName);
+          }
+        });
+      });
+      return names;
+    }
+
+    // Kommentator/Moderator im Wechsel: Kommentar zur gerade getroffenen
+    // Team-Wahl (Team-Titelhistorie + ggf. Einschätzung der Gruppengegner).
+    async function announceTeamPickForSlot(slotId, name, teamId) {
+      try {
+        const count = parseInt(document.getElementById('playerCount').value);
+        const teamMeta = nflTeams.find(t => String(t.id) === String(teamId));
+        const teamName = teamMeta ? teamMeta.n : teamId;
+        const titleHistory = MB.computeTeamTitleHistory(history);
+        const teamTitleInfo = titleHistory.get(teamId) || titleHistory.get(Number(teamId)) || titleHistory.get(String(teamId));
+        const oppNames = getOpponentNamesForSlot(count, parseInt(slotId));
+        const badgeMap = MB.computeRingIntroBadges(history, oppNames);
+        const opponentBadges = oppNames.map(n => ({ name: n, badge: badgeMap.get(n.trim().toLowerCase()) }));
+        const line = MB.Announcer.buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges });
+        const speakerIdx = draftAnnounceState.teamPickSpeakerToggle % 2;
+        draftAnnounceState.teamPickSpeakerToggle++;
+        await MB.Announcer.announceTeamPick(line, speakerIdx);
+      } catch (e) {
+        console.warn('Team-Pick-Kommentar fehlgeschlagen:', e);
+      }
     }
 
     // getPlayerFacts/fallbackInsights: zentral in shared.js (MB.getPlayerFacts,
@@ -2084,6 +2149,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
                <span class="status-tag tag-next" style="font-size:.65em;">AUTO ADVANCE</span>
              </div>`
           : `<div class="score-area">
+               ${(match.id === 'gf' && isAdmin && match.p1 && match.p2 && !isFinished(match)) ? `<button type="button" class="score-save-btn" onclick="announceFinaleIntro()" title="Finalisten per Ring-Ansager vorstellen">📣</button>` : ''}
                <input type="number" class="score-input" id="score-playoff-${index}-away" value="${match.s2 !== null ? match.s2 : ''}"
                       oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
@@ -2341,6 +2407,22 @@ function applyLayoutRules() {
 function getGroupSeedsFinal() { return MB.getGroupSeedsFinal(state); }
 
 function getPlayoffMatch(id) { return MB.getPlayoffMatch(state, id); }
+
+// Ring-Ansager auch vorm Finale: kurze Anmoderation + Vorstellung beider
+// Finalisten, dieselben Textbausteine wie beim Draft.
+async function announceFinaleIntro() {
+  const gf = getPlayoffMatch("gf");
+  if (!gf || !gf.p1 || !gf.p2) { alert('Beide Finalisten müssen erst feststehen.'); return; }
+  const names = [gf.p1.name, gf.p2.name];
+  const badgeMap = MB.computeRingIntroBadges(history, names);
+  try {
+    await MB.Announcer.announceTeamPick('Und hier ist er... der Finaltag! Das Madden Bowl steht an.', 0);
+    await MB.Announcer.announceRingIntro(gf.p1.name, badgeMap.get(gf.p1.name.trim().toLowerCase()), false);
+    await MB.Announcer.announceRingIntro(gf.p2.name, badgeMap.get(gf.p2.name.trim().toLowerCase()), false);
+  } catch (e) {
+    console.warn('Finale-Ansage fehlgeschlagen:', e);
+  }
+}
 
 function winnerOf(match) { return MB.winnerOf(match); }
 
@@ -3657,6 +3739,10 @@ function renderRanking() {
               <label style="font-size:0.7em; opacity:0.6;">Moderator</label>
               <input type="text" id="speakerModerator" value="${speakerNames.moderator}" style="width:100%;">
             </div>
+            <div style="flex:1; min-width:140px;">
+              <label style="font-size:0.7em; opacity:0.6;">Ring-Ansager (Draft/Finale)</label>
+              <input type="text" id="speakerAnnouncer" value="${speakerNames.announcer}" style="width:100%;">
+            </div>
           </div>
         </div>
 
@@ -3701,6 +3787,11 @@ function renderRanking() {
           <label style="font-size:0.8em; opacity:0.75; display:block; margin:10px 0 4px;">Stimme für Vorschau-Ansage</label>
           <select id="elVoicePreview" style="width:100%;">
             <option value="${settings.voiceIdPreview || ''}">${settings.voiceIdPreview ? '(gespeichert) ' + settings.voiceIdPreview : '– zuerst Stimmen laden –'}</option>
+          </select>
+
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin:10px 0 4px;">Stimme für Ring-Ansager (Draft-Vorstellung/Finale)</label>
+          <select id="elVoiceAnnouncer" style="width:100%;">
+            <option value="${settings.voiceIdAnnouncer || ''}">${settings.voiceIdAnnouncer ? '(gespeichert) ' + settings.voiceIdAnnouncer : '– zuerst Stimmen laden –'}</option>
           </select>
 
           <div style="margin-top:10px; display:flex; gap:10px;">
@@ -3767,6 +3858,7 @@ function renderRanking() {
         const opts = voices.map(v => `<option value="${v.voice_id}">${v.name}</option>`).join('');
         document.getElementById('elVoiceResult').innerHTML = opts;
         document.getElementById('elVoicePreview').innerHTML = opts;
+        document.getElementById('elVoiceAnnouncer').innerHTML = opts;
       } catch (e) {
         alert('Stimmen laden fehlgeschlagen: ' + e.message);
       }
@@ -3776,6 +3868,7 @@ function renderRanking() {
       MB.Announcer.setSpeakerNames({
         commentator: document.getElementById('speakerCommentator').value,
         moderator: document.getElementById('speakerModerator').value,
+        announcer: document.getElementById('speakerAnnouncer').value,
       });
       const provider = document.getElementById('ttsProvider').value;
       const settings = { provider };
@@ -3784,6 +3877,7 @@ function renderRanking() {
         settings.modelId = document.getElementById('elModel').value;
         settings.voiceIdResult = document.getElementById('elVoiceResult').value || null;
         settings.voiceIdPreview = document.getElementById('elVoicePreview').value || null;
+        settings.voiceIdAnnouncer = document.getElementById('elVoiceAnnouncer').value || null;
       }
       MB.Announcer.setTtsSettings(settings);
       alert('Gespeichert.');

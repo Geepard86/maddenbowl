@@ -1426,6 +1426,101 @@
   }
 
   // ======================================================================
+  // RING-ANSAGER: Klassifiziert Spieler für die dramatische Vorstellung vor
+  // dem Draft (Champion / Rekordhalter / Contender / Toilet-Bowl / Rookie).
+  // Ein Satz = ein Baustein, Priorität von oben nach unten (siehe announcer.js
+  // buildRingIntroLine). Alles rein aus history (Supabase-Saisons) berechnet.
+  // ======================================================================
+  function computeRingIntroBadges(history, names) {
+    const cleanNames = (names || []).map((n) => normName(n)).filter(Boolean);
+    const seasons = [...((history && history.seasons) || [])].sort((a, b) => (b.season || 0) - (a.season || 0));
+    const lastSeason = seasons[0] || null;
+    const lastStandings = (lastSeason && Array.isArray(lastSeason.standings)) ? lastSeason.standings : [];
+    const lastMaxRank = lastStandings.length;
+    const lastByName = new Map(lastStandings.map((s) => [normName(s.name).toLowerCase(), s]));
+
+    // Titel & Finalteilnahmen ohne Titel, über die komplette Historie
+    const titleCounts = new Map();
+    const finalsNoTitleCounts = new Map();
+    seasons.forEach((s) => {
+      const st = Array.isArray(s.standings) ? s.standings : [];
+      const champ = st.find((x) => Number(x.rank) === 1);
+      const runnerUp = st.find((x) => Number(x.rank) === 2);
+      if (champ) {
+        const key = normName(champ.name).toLowerCase();
+        titleCounts.set(key, (titleCounts.get(key) || 0) + 1);
+      }
+      if (runnerUp) {
+        const key = normName(runnerUp.name).toLowerCase();
+        finalsNoTitleCounts.set(key, (finalsNoTitleCounts.get(key) || 0) + 1);
+      }
+    });
+    titleCounts.forEach((_, key) => finalsNoTitleCounts.delete(key)); // wer je Titel hatte, ist kein "ewiger Zweiter" mehr
+
+    const maxTitles = titleCounts.size ? Math.max(...titleCounts.values()) : 0;
+    const soleRecordHolders = new Set();
+    if (maxTitles > 1) {
+      const leaders = [...titleCounts.entries()].filter(([, c]) => c === maxTitles).map(([k]) => k);
+      if (leaders.length === 1) soleRecordHolders.add(leaders[0]);
+    }
+
+    // Allzeit-Highscore (aus den geflatteten Matches aller Saisons)
+    let bestScore = -1, bestScoreHolder = null;
+    (history.matches || []).forEach((m) => {
+      if (typeof m.homeScore === "number" && m.homeScore > bestScore) { bestScore = m.homeScore; bestScoreHolder = normName(m.homePlayer).toLowerCase(); }
+      if (typeof m.awayScore === "number" && m.awayScore > bestScore) { bestScore = m.awayScore; bestScoreHolder = normName(m.awayPlayer).toLowerCase(); }
+    });
+
+    const seasonsPlayedCount = new Map();
+    seasons.forEach((s) => (s.players || []).forEach((p) => {
+      const key = normName(p.name).toLowerCase();
+      seasonsPlayedCount.set(key, (seasonsPlayedCount.get(key) || 0) + 1);
+    }));
+
+    const out = new Map();
+    cleanNames.forEach((name) => {
+      const key = name.toLowerCase();
+      const lastRow = lastByName.get(key);
+      out.set(key, {
+        name,
+        isRookie: !seasonsPlayedCount.has(key),
+        seasonsPlayed: seasonsPlayedCount.get(key) || 0,
+        isDefendingChampion: !!(lastRow && Number(lastRow.rank) === 1),
+        titles: titleCounts.get(key) || 0,
+        isSoleRecordChampion: soleRecordHolders.has(key),
+        isAllTimeHighScoreHolder: bestScore > 0 && bestScoreHolder === key,
+        allTimeHighScore: bestScore,
+        isRunnerUpLastSeason: !!(lastRow && Number(lastRow.rank) === 2),
+        finalsWithoutTitleCount: finalsNoTitleCounts.get(key) || 0,
+        isToiletBowlLastSeason: !!(lastRow && lastMaxRank > 0 && Number(lastRow.rank) === lastMaxRank),
+        lastSeasonYear: lastSeason ? lastSeason.season : null,
+      });
+    });
+    return out;
+  }
+
+  // Wie oft hat ein Team (per Team-ID) in der Historie schon den Titel
+  // geholt, und mit wem zuletzt — für den Team-Pick-Kommentar der beiden
+  // Kommentatoren nach der Team-Wahl im Draft.
+  function computeTeamTitleHistory(history) {
+    const seasons = [...((history && history.seasons) || [])].sort((a, b) => (a.season || 0) - (b.season || 0));
+    const out = new Map(); // teamId -> { count, lastWinnerName, lastSeason }
+    seasons.forEach((s) => {
+      const st = Array.isArray(s.standings) ? s.standings : [];
+      const champ = st.find((x) => Number(x.rank) === 1);
+      if (!champ) return;
+      const champPlayer = (s.players || []).find((p) => normName(p.name).toLowerCase() === normName(champ.name).toLowerCase());
+      if (!champPlayer || champPlayer.team == null) return;
+      const entry = out.get(champPlayer.team) || { count: 0, lastWinnerName: null, lastSeason: null };
+      entry.count += 1;
+      entry.lastWinnerName = champ.name;
+      entry.lastSeason = s.season;
+      out.set(champPlayer.team, entry);
+    });
+    return out;
+  }
+
+  // ======================================================================
   // EXPORT
   // ======================================================================
   global.MB = {
@@ -1433,6 +1528,7 @@
     getSupabaseClient, getCurrentTournamentId, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
     loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
     getAppConfig, setAppConfig,
+    computeRingIntroBadges, computeTeamTitleHistory,
     loadHistorySeasons, loadAndBuildHistory, buildHistoryIndex,
     normName, pairKey, computeDraftOrder, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
