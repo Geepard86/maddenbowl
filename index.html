@@ -220,6 +220,7 @@
       <div id="setup-view" class="card admin-tab-panel">
         <h2>Tournament Setup</h2>
 
+        <div id="setupConfigStep">
         <div class="config-grid">
           <div class="config-item"><label>Start:</label><input type="time" id="startTime" value="10:00" onchange="updateModeInfo()"></div>
           <div class="config-item"><label>Min/G:</label><input type="number" id="durGroup" value="30" onchange="updateModeInfo()"></div>
@@ -255,7 +256,7 @@
 
         <div id="dynamicInfoBox" style="background: rgba(0,255,204,0.05); border: 1px solid var(--accent); padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; line-height: 1.6;"></div>
 
-        <select id="playerCount" onchange="updateModeInfo()" style="width:100%; margin-bottom: 10px;">
+        <select id="playerCount" onchange="updateModeInfo(); renderPlayerInputs(); renderShowOrderCard();" style="width:100%; margin-bottom: 10px;">
           <option value="8" selected>8 Spieler (Standard)</option>
           <option value="6">6 Spieler</option>
           <option value="7">7 Spieler</option>
@@ -263,9 +264,21 @@
           <option value="10">10 Spieler</option>
         </select>
 
-        <div id="playerInputs"></div>
-        <button class="btn" onclick="startTournament()" style="margin-top:15px;">MADDEN BOWL STARTEN</button>
+        <div class="card" style="background: rgba(0,0,0,0.2); margin-bottom:15px;">
+          <h3 style="margin-bottom:8px;">📋 Draft-Reihenfolge festlegen</h3>
+          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-bottom:8px;">Per Drag &amp; Drop sortierbar. Aus seasons.html vorbereitete Reihenfolge ist schon eingetragen, kann hier kurzfristig noch angepasst werden (Absage/Ersatz).</div>
+          <div id="showOrderCard"></div>
+        </div>
+
+        <button class="btn" onclick="goToDraftShow()" style="margin-top:15px;">🎬 Weiter zur Draft-Show</button>
         <button class="btn-secondary" onclick="createRandomTournament()" style="margin-top:8px;">🎲 Zufalls-Turnier erstellen (Testzwecke)</button>
+        </div>
+
+        <div id="draftShowStep" class="hidden">
+          <div id="draftOrderStrip" style="display:flex; gap:6px; overflow-x:auto; padding:8px 0; margin-bottom:14px;"></div>
+          <div id="draftShowStageBox" class="card" style="border:2px solid var(--v2-gold); text-align:center; padding:24px; margin-bottom:15px;"></div>
+          <div id="playerInputs"></div>
+        </div>
       </div>
     </div>
 
@@ -394,6 +407,17 @@
     // Vorbereitete Ziehreihenfolge aus seasons.html (state.config.draftOrder),
     // [{name, reason}] — siehe initSetupInputs()/finalizeDraw() weiter unten.
     let presetDraftQueue = [];
+    // Vom Admin in Schritt 1 bestätigte/angepasste Draft-Reihenfolge für DIESE
+    // Show — startet als Kopie von presetDraftQueue, bleibt aber unabhängig
+    // editierbar (Absage/Ersatz kurz vor knapp).
+    let showOrderList = [];
+    let _showOrderDragFromIndex = null;
+    let draftShowIndex = 0;
+    // true, während die Draft-Show selbst gerade eine Team-Wahl committet —
+    // unterdrückt die normale automatische Team-Pick-Ansage an der Stelle,
+    // weil die Show den Kommentar selbst anstößt und auf ihn wartet, bevor
+    // sie zum nächsten Spieler weitergeht.
+    let showDrivenPick = false;
     // Ring-Ansager-Status für den laufenden Draft: verhindert Doppel-Ansagen,
     // wenn updateTeamAvailability() mehrfach für dieselbe Team-Wahl feuert,
     // und sorgt für den Kommentator/Moderator-Wechsel nach jedem Pick.
@@ -886,32 +910,35 @@ function isFinished(match) { return MB.isFinished(match); }
       ).join('');
 
       let html = `
-        <div class="card" style="border: 2px solid var(--accent); margin-bottom: 20px;">
-          <h3 style="margin-bottom:10px">🎲 Draft-Auslosung</h3>
-          <div style="display: flex; gap: 10px;">
-            <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
-            <button class="btn-secondary" style="width:auto; margin:0;" onclick="announceNextCandidate()">📣 Kandidat vorstellen</button>
-            <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
-          </div>
-          <small style="display:block; opacity:.7; margin-top:8px;">
-            Tipp: alte Spielernamen werden vorgeschlagen – neue Namen gehen natürlich auch.
-          </small>
-        </div>
-
-        ${presetDraftQueue.length ? `
-        <div class="card" style="background: rgba(0,255,204,0.04); font-size: 0.85em; margin-bottom: 15px;">
-          <b>📋 Vorbereitete Ziehreihenfolge</b> <span style="opacity:0.6;">(aus Saison-Setup — nur ein Vorschlag, oben frei änderbar)</span>
-          ${presetDraftQueue.length !== count ? `<div style="color:var(--nfl-red); margin-top:4px;">⚠️ ${presetDraftQueue.length} vorbereitete Spieler, aber ${count} Slots gewählt.</div>` : ''}
-          <div id="presetQueueRows" style="margin-top:6px;">${presetQueueRowsHtml()}</div>
-        </div>` : ''}
-
-        <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.85em; min-height: 50px;">
+        <div id="draftPreview" class="card" style="background: rgba(0,0,0,0.3); font-size: 0.95em; min-height: 50px; border: 1px solid var(--v2-gold);">
           <div id="liveSchedulePreview" style="display: flex; flex-direction: column; gap: 5px;">
             <div style="color:var(--gray); text-align:center;">Noch kein Slot gezogen...</div>
           </div>
         </div>
 
-        <div id="draftBoard">`;
+        <details style="margin: 15px 0;">
+          <summary style="cursor:pointer; opacity:0.7; font-size:0.85em;">🔧 Manuelle Steuerung / Rohdaten (Fallback, z.B. falls die Sprachausgabe mal ausfällt)</summary>
+
+          <div class="card" style="border: 2px solid var(--accent); margin: 10px 0;">
+            <h3 style="margin-bottom:10px">🎲 Draft-Auslosung (manuell)</h3>
+            <div style="display: flex; gap: 10px;">
+              <input type="text" id="nextPlayerName" placeholder="Wer zieht jetzt?" style="flex: 1;">
+              <button class="btn-secondary" style="width:auto; margin:0;" onclick="announceNextCandidate()">📣 Kandidat vorstellen</button>
+              <button class="btn" onclick="drawSlot()" style="margin:0; width: auto; background:var(--nfl-blue)">SLOT ZIEHEN</button>
+            </div>
+            <small style="display:block; opacity:.7; margin-top:8px;">
+              Tipp: alte Spielernamen werden vorgeschlagen – neue Namen gehen natürlich auch.
+            </small>
+          </div>
+
+          ${presetDraftQueue.length ? `
+          <div class="card" style="background: rgba(0,255,204,0.04); font-size: 0.85em; margin-bottom: 15px;">
+            <b>📋 Vorbereitete Ziehreihenfolge</b> <span style="opacity:0.6;">(aus Saison-Setup — nur ein Vorschlag)</span>
+            ${presetDraftQueue.length !== count ? `<div style="color:var(--nfl-red); margin-top:4px;">⚠️ ${presetDraftQueue.length} vorbereitete Spieler, aber ${count} Slots gewählt.</div>` : ''}
+            <div id="presetQueueRows" style="margin-top:6px;">${presetQueueRowsHtml()}</div>
+          </div>` : ''}
+
+          <div id="draftBoard">`;
 
       for (let i = 0; i < count; i++) {
         html += `
@@ -926,7 +953,8 @@ function isFinished(match) { return MB.isFinished(match); }
           </div>`;
       }
 
-      container.innerHTML = html + `</div>`;
+      container.innerHTML = html + `</div>
+        </details>`;
 
       buildPlayerDatalist();
       if (presetDraftQueue.length) document.getElementById('nextPlayerName').value = nextPresetName();
@@ -969,6 +997,282 @@ function isFinished(match) { return MB.isFinished(match); }
       }
       const next = presetDraftQueue.find((e) => !drawnNames.has(e.name.trim().toLowerCase()));
       return next ? next.name : '';
+    }
+
+    // =========================================================
+    // SCHRITT 1: DRAFT-REIHENFOLGE (editierbar, Drag & Drop)
+    // =========================================================
+    function renderShowOrderCard() {
+      const el = document.getElementById('showOrderCard');
+      if (!el) return;
+      const count = parseInt(document.getElementById('playerCount')?.value || 8);
+      const rowsHtml = showOrderList.length
+        ? showOrderList.map((entry, i) => `
+            <div class="row-line" draggable="true" data-index="${i}"
+                 ondragstart="showOrderDragStart(event)" ondragover="showOrderDragOver(event)"
+                 ondrop="showOrderDrop(event)" ondragend="showOrderDragEnd(event)"
+                 style="cursor:grab; background:#161f2c; border-radius:6px; padding:8px 10px; display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+              <span style="width:22px; opacity:0.6; font-weight:bold;">${i + 1}.</span>
+              <span style="flex:1;"><b>${entry.name}</b> ${entry.reason ? `<span style="opacity:0.6; font-size:0.85em;">— ${entry.reason}</span>` : ''}</span>
+              <button type="button" class="btn-secondary" style="width:auto; margin:0; padding:2px 8px;" onclick="removeShowOrderEntry(${i})">✕</button>
+            </div>`).join('')
+        : `<div class="hint" style="opacity:0.6;">Noch keine Spieler eingetragen.</div>`;
+
+      el.innerHTML = `
+        ${showOrderList.length !== count ? `<div style="color:var(--nfl-red); font-size:0.85em; margin-bottom:8px;">⚠️ ${showOrderList.length} Spieler eingetragen, aber ${count} Slots gewählt.</div>` : ''}
+        <div id="showOrderRows">${rowsHtml}</div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="text" id="showOrderNewName" list="playerNameSuggestions" placeholder="Spielername" style="flex:1;"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();addShowOrderEntry();}">
+          <button type="button" class="btn-secondary" style="width:auto; margin:0;" onclick="addShowOrderEntry()">+ Hinzufügen</button>
+        </div>`;
+    }
+
+    function addShowOrderEntry() {
+      const input = document.getElementById('showOrderNewName');
+      const name = (input.value || '').trim();
+      if (!name) return;
+      if (showOrderList.some(e => e.name.toLowerCase() === name.toLowerCase())) { input.value = ''; return; }
+      showOrderList.push({ name, reason: 'manuell hinzugefügt' });
+      input.value = '';
+      renderShowOrderCard();
+      document.getElementById('showOrderNewName').focus();
+    }
+
+    function removeShowOrderEntry(i) {
+      showOrderList.splice(i, 1);
+      renderShowOrderCard();
+    }
+
+    function showOrderDragStart(ev) {
+      _showOrderDragFromIndex = Number(ev.currentTarget.dataset.index);
+      ev.currentTarget.style.opacity = '0.4';
+      ev.dataTransfer.effectAllowed = 'move';
+    }
+    function showOrderDragOver(ev) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+    }
+    function showOrderDrop(ev) {
+      ev.preventDefault();
+      const toIndex = Number(ev.currentTarget.dataset.index);
+      if (_showOrderDragFromIndex === null || _showOrderDragFromIndex === toIndex) return;
+      const [moved] = showOrderList.splice(_showOrderDragFromIndex, 1);
+      showOrderList.splice(toIndex, 0, moved);
+      _showOrderDragFromIndex = null;
+      renderShowOrderCard();
+    }
+    function showOrderDragEnd(ev) {
+      ev.currentTarget.style.opacity = '1';
+    }
+
+    // =========================================================
+    // SCHRITT 2: DRAFT-SHOW (automatisch, Ansager-gesteuert)
+    // =========================================================
+    function goToDraftShow() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      if (showOrderList.length !== count) {
+        alert(`Die Draft-Reihenfolge hat ${showOrderList.length} Namen, aber ${count} Spieler sind ausgewählt. Bitte angleichen.`);
+        return;
+      }
+      const lowerNames = showOrderList.map(e => e.name.trim().toLowerCase());
+      if (new Set(lowerNames).size !== lowerNames.length) {
+        alert('Ein Name kommt in der Draft-Reihenfolge doppelt vor.');
+        return;
+      }
+
+      document.getElementById('setupConfigStep').classList.add('hidden');
+      document.getElementById('draftShowStep').classList.remove('hidden');
+      initSetupInputs(count); // frisches, leeres Engine-Board für die Show
+      draftShowIndex = 0;
+      renderDraftOrderStrip();
+      startDraftShowMusic();
+      renderDraftShowStage({ intro: true });
+
+      (async () => {
+        try {
+          await MB.Announcer.announceTournamentStart({ athleteNames: showOrderList.map(e => e.name), context: 'draft' });
+        } catch (e) { console.warn('Willkommensansage fehlgeschlagen:', e); }
+        advanceDraftShow();
+      })();
+    }
+
+    // Hintergrundmusik für die Show — Dateien liegen nicht im Repo, Tim lädt
+    // sie manuell hoch (siehe Prompt-Vorschläge im Chat). Fehlt die Datei
+    // (404), bleibt die Show einfach stumm — kein Show-Stopper.
+    function startDraftShowMusic() {
+      let audio = document.getElementById('draftShowMusic');
+      if (!audio) {
+        audio = document.createElement('audio');
+        audio.id = 'draftShowMusic';
+        audio.src = 'assets/audio/draft-show-loop.m4a';
+        audio.loop = true;
+        audio.volume = 0.35;
+        document.body.appendChild(audio);
+      }
+      audio.play().catch(e => console.warn('Hintergrundmusik konnte nicht automatisch starten:', e));
+    }
+    function stopDraftShowMusic() {
+      const audio = document.getElementById('draftShowMusic');
+      if (audio) { audio.pause(); audio.currentTime = 0; }
+    }
+    // Kurzer Stinger, wenn eine Team-Wahl bestätigt wurde ("Pick is in").
+    // Läuft parallel zur gesprochenen Kommentar-Ansage, nicht davor.
+    function playPickIsInSting() {
+      try {
+        const sting = new Audio('assets/audio/PickIsIn.m4a');
+        sting.volume = 0.8;
+        sting.play().catch(() => {});
+      } catch (e) { /* kein Show-Stopper, falls die Datei fehlt */ }
+    }
+    // Fanfare beim Übergang von der Draft-Show ins eigentliche Turnier.
+    function playAltimaBowlFanfare() {
+      return new Promise((resolve) => {
+        try {
+          const fanfare = new Audio('assets/audio/AltimaBowl.m4a');
+          fanfare.volume = 0.9;
+          fanfare.onended = resolve;
+          fanfare.onerror = resolve;
+          fanfare.play().catch(resolve);
+        } catch (e) { resolve(); }
+      });
+    }
+
+    async function advanceDraftShow() {
+      if (draftShowIndex >= showOrderList.length) {
+        renderDraftShowStage({ done: true });
+        return;
+      }
+      const name = showOrderList[draftShowIndex].name;
+      renderDraftShowStage({ calling: name });
+      renderDraftOrderStrip();
+
+      const isFirstPick = draftShowIndex === 0;
+      const isLastPick = draftShowIndex === showOrderList.length - 1;
+      const badge = MB.computeRingIntroBadges(history, [name]).get(name.trim().toLowerCase());
+      try {
+        await MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick);
+      } catch (e) { console.warn('Ring-Ansage fehlgeschlagen:', e); }
+
+      document.getElementById('nextPlayerName').value = name;
+      await performSlotDraw(name);
+
+      renderDraftShowStage({ picking: { name, slot: lastDrawnPlayer.slot } });
+    }
+
+    let showPickedTeamId = null;
+
+    function renderTeamPickerHtml(name, slot) {
+      const year = document.getElementById('maddenYear').value;
+      const ratings = maddenRatings[year] || {};
+      const count = parseInt(document.getElementById('playerCount').value);
+      const takenIds = new Set();
+      for (let i = 0; i < count; i++) {
+        const v = document.getElementById(`pTeam${i}`)?.value;
+        if (v) takenIds.add(String(v));
+      }
+      const sortedTeams = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 })).sort((a, b) => b.rating - a.rating);
+      showPickedTeamId = null;
+
+      const btns = sortedTeams.map(t => {
+        const disabled = takenIds.has(String(t.id));
+        return `<button type="button" class="team-pick-btn" data-team="${t.id}" ${disabled ? 'disabled' : ''}
+                   onclick="selectShowTeam('${t.id}', this)"
+                   style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; background:#161f2c; border:2px solid transparent; border-radius:8px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? 0.25 : 1};">
+                   <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" style="width:32px;height:32px;object-fit:contain;">
+                   <div style="font-size:0.7em; color:#fff;">${t.n}</div>
+                 </button>`;
+      }).join('');
+
+      return `
+        <div style="font-size:0.85em; opacity:0.7; letter-spacing:2px;">TEAM WÄHLEN FÜR</div>
+        <div style="font-size:1.6em; font-weight:900; color:var(--v2-gold); margin-bottom:12px;">${name}</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(76px,1fr)); gap:8px; max-height:320px; overflow-y:auto; text-align:left;">${btns}</div>
+        <button type="button" class="btn" id="confirmShowTeamBtn" disabled style="margin-top:16px; opacity:0.4;" onclick="confirmShowTeamPick()">✅ Team bestätigen</button>`;
+    }
+
+    function selectShowTeam(teamId, btnEl) {
+      showPickedTeamId = teamId;
+      document.querySelectorAll('.team-pick-btn').forEach(b => b.style.borderColor = 'transparent');
+      btnEl.style.borderColor = 'var(--v2-gold)';
+      const confirmBtn = document.getElementById('confirmShowTeamBtn');
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = '1';
+    }
+
+    async function confirmShowTeamPick() {
+      const teamId = showPickedTeamId;
+      if (!teamId) return;
+      const slot = lastDrawnPlayer.slot;
+      const name = lastDrawnPlayer.name;
+
+      document.getElementById(`pTeam${slot}`).value = teamId;
+      showDrivenPick = true;
+      updateTeamAvailability();
+      showDrivenPick = false;
+
+      playPickIsInSting();
+      renderDraftShowStage({ commentating: name });
+      try {
+        await announceTeamPickForSlot(slot, name, teamId);
+      } catch (e) { console.warn('Team-Pick-Kommentar fehlgeschlagen:', e); }
+
+      draftShowIndex++;
+      renderDraftOrderStrip();
+      advanceDraftShow();
+    }
+
+    function finishDraftShow() {
+      stopDraftShowMusic();
+      playAltimaBowlFanfare().then(() => startTournament());
+    }
+
+    function renderDraftShowStage(mode) {
+      const box = document.getElementById('draftShowStageBox');
+      if (!box) return;
+      if (mode?.intro) {
+        box.innerHTML = `<div style="font-size:1.3em; font-weight:800; color:var(--v2-gold);">🎙️ Willkommen zum Madden Bowl Draft!</div>`;
+      } else if (mode?.calling) {
+        box.innerHTML = `
+          <div style="font-size:0.85em; opacity:0.7; letter-spacing:2px;">JETZT AUF DER BÜHNE</div>
+          <div style="font-size:2em; font-weight:900; color:var(--v2-gold); margin:8px 0;">${mode.calling}</div>
+          <div style="opacity:0.6;">Der Slot wird gezogen...</div>`;
+      } else if (mode?.picking) {
+        box.innerHTML = renderTeamPickerHtml(mode.picking.name, mode.picking.slot);
+      } else if (mode?.commentating) {
+        box.innerHTML = `<div style="font-size:1.2em; font-weight:700;">🎤 ${mode.commentating} ist dabei — die Kommentatoren sagen ihre Meinung...</div>`;
+      } else if (mode?.done) {
+        box.innerHTML = `
+          <div style="font-size:1.4em; font-weight:900; color:var(--v2-gold);">🏆 Draft komplett!</div>
+          <div style="margin:12px 0; opacity:0.8;">Alle Plätze vergeben — bereit für den Anpfiff?</div>
+          <button type="button" class="btn" onclick="finishDraftShow()">✅ Bestätigen &amp; Madden Bowl starten</button>`;
+      }
+    }
+
+    function renderDraftOrderStrip() {
+      const el = document.getElementById('draftOrderStrip');
+      if (!el || !showOrderList.length) return;
+      const count = parseInt(document.getElementById('playerCount')?.value || showOrderList.length);
+      el.innerHTML = showOrderList.map((entry, i) => {
+        const status = i < draftShowIndex ? 'done' : (i === draftShowIndex ? 'active' : 'upcoming');
+        let teamLogo = '';
+        if (status === 'done') {
+          for (let s = 0; s < count; s++) {
+            const nm = (document.getElementById(`pName${s}`)?.value || '').trim().toLowerCase();
+            if (nm === entry.name.trim().toLowerCase()) {
+              const tid = document.getElementById(`pTeam${s}`)?.value;
+              if (tid) teamLogo = `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${tid}.png" style="width:20px;height:20px;object-fit:contain;">`;
+            }
+          }
+        }
+        const bg = status === 'active' ? 'var(--v2-gold)' : 'transparent';
+        const fg = status === 'active' ? '#000' : (status === 'done' ? 'var(--v2-silver)' : 'var(--gray)');
+        return `<div style="flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 10px; border-radius:8px; min-width:64px; background:${bg}; color:${fg};">
+                  <span style="font-size:0.65em;">${i + 1}</span>
+                  ${teamLogo}
+                  <span style="font-size:0.72em; font-weight:${status === 'active' ? '900' : '400'};">${entry.name}</span>
+                </div>`;
+      }).join('');
     }
 
     function updateLivePreview() {
@@ -1071,27 +1375,38 @@ for (let i = 0; i < totalSlots; i++) {
         }
       }
 
-      document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const btn = document.querySelector('button[onclick="drawSlot()"]');
-      btn.disabled = true;
-      getDrawAudioCtx(); // Audio-Context innerhalb des Klick-Handlers "entsperren" (Autoplay-Policy)
+      performSlotDraw(name);
+    }
 
-      let counter = 0;
-      const maxSpins = 15;
-      const spinInterval = setInterval(() => {
-        document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
-        const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
-        document.getElementById(`row-${tempSlot}`).classList.add('spinning');
-        playDrawTick(counter / maxSpins); // wird zum Ende hin leicht höher — mehr Spannung
+    // Kern der Slot-Ziehung (Spin-Animation + Zuweisung), als Promise nutzbar
+    // — von drawSlot() (manueller Fallback) UND von der automatischen
+    // Draft-Show (advanceDraftShow()) verwendet. Keine Validierung hier,
+    // die liegt beim jeweiligen Aufrufer.
+    function performSlotDraw(name) {
+      return new Promise((resolve) => {
+        document.getElementById('draftBoard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const btn = document.querySelector('button[onclick="drawSlot()"]');
+        if (btn) btn.disabled = true;
+        getDrawAudioCtx(); // Audio-Context innerhalb des Klick-Handlers "entsperren" (Autoplay-Policy)
 
-        counter++;
-        if (counter >= maxSpins) {
-          clearInterval(spinInterval);
-          finalizeDraw(name);
-          buildPlayerDatalist();
-          btn.disabled = false;
-        }
-      }, 80);
+        let counter = 0;
+        const maxSpins = 15;
+        const spinInterval = setInterval(() => {
+          document.querySelectorAll('.draft-row').forEach(r => r.classList.remove('spinning'));
+          const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+          document.getElementById(`row-${tempSlot}`).classList.add('spinning');
+          playDrawTick(counter / maxSpins); // wird zum Ende hin leicht höher — mehr Spannung
+
+          counter++;
+          if (counter >= maxSpins) {
+            clearInterval(spinInterval);
+            finalizeDraw(name);
+            buildPlayerDatalist();
+            if (btn) btn.disabled = false;
+            resolve();
+          }
+        }, 80);
+      });
     }
 
     // Ring-Ansager: dramatische Vorstellung des nächsten Kandidaten, BEVOR
@@ -1102,9 +1417,10 @@ for (let i = 0; i < totalSlots; i++) {
       const name = (document.getElementById('nextPlayerName').value || '').trim();
       if (!name) { alert('Bitte erst einen Namen eingeben!'); return; }
       const isFirstPick = availableSlots.length === parseInt(document.getElementById('playerCount').value);
+      const isLastPick = availableSlots.length === 1;
       const badge = MB.computeRingIntroBadges(history, [name]).get(name.trim().toLowerCase());
       try {
-        await MB.Announcer.announceRingIntro(name, badge, isFirstPick);
+        await MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick);
       } catch (e) {
         console.warn('Ring-Ansage fehlgeschlagen:', e);
       }
@@ -1142,7 +1458,10 @@ document.querySelectorAll('.draft-row').forEach(row => {
     }
     if (!draftAnnounceState.announcedTeamSlots.has(id)) {
       draftAnnounceState.announcedTeamSlots.add(id);
-      announceTeamPickForSlot(id, nameVal, teamVal);
+      // Während die Draft-Show selbst gerade committet, übernimmt sie die
+      // Ansage selbst (awaited, damit sie vor dem nächsten Spieler fertig
+      // ist) — hier nur die Doppel-Ansage verhindern.
+      if (!showDrivenPick) announceTeamPickForSlot(id, nameVal, teamVal);
     }
   } else if (nameVal && !teamVal) {
     row.classList.remove("assigned");
@@ -1325,9 +1644,8 @@ document.querySelectorAll('.draft-row').forEach(row => {
         MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state));
         progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
         songMomentFlags = {}; // neues Turnier -> alte Song-Momente-Flags verwerfen
-        // Announcer-Intro: beide Rollen stellen sich mit den konfigurierten
-        // Namen vor (Anforderungen 26-28).
-        MB.Announcer.announceTournamentStart({ athleteNames: state.players.map(p => p.name) });
+        // Willkommensansage läuft jetzt zu Beginn der Draft-Show (siehe
+        // goToDraftShow()), nicht mehr erst hier am Ende.
       }
     }
 
@@ -2509,7 +2827,13 @@ function renderRanking() {
     }
 
     function renderAdminTabs() {
-      const tab = activeAdminTab || (state.currentView === 'setup' ? 'setup' : 'schedule');
+      // Turnier-Setup nur verfügbar, solange kein Turnier läuft (bzw. nach
+      // Full Reset) — sonst raus aus der Tab-Leiste, damit man es während
+      // eines laufenden Turniers nicht aus Versehen wieder aufmacht.
+      const setupAvailable = state.currentView === 'setup';
+      document.getElementById('adminTabBtn-setup').classList.toggle('hidden', !setupAvailable);
+      let tab = activeAdminTab || (setupAvailable ? 'setup' : 'schedule');
+      if (tab === 'setup' && !setupAvailable) tab = 'schedule';
       document.getElementById('setup-view').classList.toggle('hidden', tab !== 'setup');
       document.getElementById('main-content').classList.toggle('hidden', tab !== 'schedule');
       document.getElementById('adminTab-settings').classList.toggle('hidden', tab !== 'settings');
@@ -2596,12 +2920,14 @@ function renderRanking() {
         // Vorbereitete Ziehreihenfolge aus seasons.html übernehmen, falls
         // vorhanden — Spieleranzahl passend vorauswählen, wenn möglich.
         presetDraftQueue = Array.isArray(state.config?.draftOrder) ? state.config.draftOrder : [];
+        showOrderList = presetDraftQueue.map(e => ({ ...e }));
         if (presetDraftQueue.length) {
           const countSelect = document.getElementById('playerCount');
           const match = [...countSelect.options].find(o => parseInt(o.value) === presetDraftQueue.length);
           if (match) countSelect.value = String(presetDraftQueue.length);
         }
         updateModeInfo();
+        renderShowOrderCard();
       }
 
       if (state.slots && state.slots.length > 0) {
@@ -2628,7 +2954,6 @@ function renderRanking() {
       renderAll();
       applyLayoutRules();
 
-      MB.Announcer.warmupVoices(); // Stimmen für Web Speech API vorladen
       // Bereits erreichte Meilensteine beim Laden als "schon entschieden"
       // markieren - sonst würde ein Reload mitten im Turnier sofort wieder
       // ein Song-Popup für längst vergangene Momente aufreißen.
@@ -3720,7 +4045,7 @@ function renderRanking() {
       if (!ttsUnlocked) {
         el.innerHTML = `
           <div style="font-size:0.85em; opacity:0.75; margin-bottom:10px;">
-            Aktuell: <b>${settings.provider === 'elevenlabs' ? 'ElevenLabs (kostenpflichtig)' : 'Browser (kostenlos)'}</b>
+            Aktuell: <b>${settings.apiKey ? 'ElevenLabs konfiguriert' : 'Keine Sprachausgabe eingerichtet'}</b>
           </div>
           <button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren zum Bearbeiten</button>`;
         return;
@@ -3746,25 +4071,12 @@ function renderRanking() {
           </div>
         </div>
 
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-          <select id="ttsProvider" onchange="onTtsProviderChange()">
-            <option value="browser" ${settings.provider !== 'elevenlabs' ? 'selected' : ''}>Browser (kostenlos)</option>
-            <option value="elevenlabs" ${settings.provider === 'elevenlabs' ? 'selected' : ''}>ElevenLabs (kostenpflichtig)</option>
-          </select>
+        <div class="hint" style="font-size:0.8em; opacity:0.7; margin-bottom:10px;">
+          Sprachausgabe läuft ausschließlich über ElevenLabs. Ohne API-Key bzw. ohne gewählte Stimme bleibt die App
+          einfach stumm — bewusst kein Rückfall auf die Browser-Stimme mehr.
         </div>
 
-        <div id="browserVoiceFields" style="${settings.provider === 'elevenlabs' ? 'display:none;' : ''}">
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <select id="ttsVoiceSelect" style="flex:1; min-width:220px;"></select>
-            <button class="btn-secondary" onclick="testTtsVoice()">Testen</button>
-            <button class="btn-secondary" onclick="refreshTtsVoiceList()">Liste aktualisieren</button>
-          </div>
-          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-top:6px;">
-            Stimmen mit "Online (Natural)" im Namen klingen am natürlichsten (kostenlos, kommt von Edge/Chrome unter Windows 11).
-          </div>
-        </div>
-
-        <div id="elevenLabsFields" style="${settings.provider === 'elevenlabs' ? '' : 'display:none;'}">
+        <div id="elevenLabsFields">
           <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">API-Key</label>
           <input type="password" id="elApiKey" value="${settings.apiKey || ''}" placeholder="sk_..." style="width:100%;">
 
@@ -3823,14 +4135,6 @@ function renderRanking() {
           <button class="btn-secondary" style="width:auto;" onclick="downloadAnnouncerDryRun()">📄 Testlauf herunterladen</button>
         </div>
       `;
-
-      refreshTtsVoiceList();
-    }
-
-    function onTtsProviderChange() {
-      const provider = document.getElementById('ttsProvider').value;
-      document.getElementById('browserVoiceFields').style.display = provider === 'elevenlabs' ? 'none' : '';
-      document.getElementById('elevenLabsFields').style.display = provider === 'elevenlabs' ? '' : 'none';
     }
 
     // Reines Text-Testprotokoll aller Ansage-Varianten (siehe
@@ -3870,15 +4174,14 @@ function renderRanking() {
         moderator: document.getElementById('speakerModerator').value,
         announcer: document.getElementById('speakerAnnouncer').value,
       });
-      const provider = document.getElementById('ttsProvider').value;
-      const settings = { provider };
-      if (provider === 'elevenlabs') {
-        settings.apiKey = document.getElementById('elApiKey').value.trim();
-        settings.modelId = document.getElementById('elModel').value;
-        settings.voiceIdResult = document.getElementById('elVoiceResult').value || null;
-        settings.voiceIdPreview = document.getElementById('elVoicePreview').value || null;
-        settings.voiceIdAnnouncer = document.getElementById('elVoiceAnnouncer').value || null;
-      }
+      const settings = {
+        provider: 'elevenlabs',
+        apiKey: document.getElementById('elApiKey').value.trim(),
+        modelId: document.getElementById('elModel').value,
+        voiceIdResult: document.getElementById('elVoiceResult').value || null,
+        voiceIdPreview: document.getElementById('elVoicePreview').value || null,
+        voiceIdAnnouncer: document.getElementById('elVoiceAnnouncer').value || null,
+      };
       MB.Announcer.setTtsSettings(settings);
       alert('Gespeichert.');
       renderSongMomentsPanel();
@@ -3891,20 +4194,6 @@ function renderRanking() {
         stadium: 'Test-Stadion',
         upcoming: [{ homeName: 'Markus', awayName: 'Lukas', time: '20:00', stadium: 'Test-Stadion 2' }],
       });
-    }
-
-    function refreshTtsVoiceList() {
-      const sel = document.getElementById('ttsVoiceSelect');
-      if (!sel) return;
-      const voices = MB.Announcer.getGermanVoiceCandidates();
-      const current = localStorage.getItem('mb_tts_voice_name') || '';
-      sel.innerHTML = '<option value="">(Standard automatisch wählen)</option>' +
-        voices.map(v => `<option value="${v.name}" ${v.name === current ? 'selected' : ''}>${v.name} ${/online\s*\(natural\)|natural/i.test(v.name) ? '⭐' : ''}</option>`).join('');
-      sel.onchange = () => MB.Announcer.setPreferredVoice(sel.value || null);
-    }
-
-    function testTtsVoice() {
-      MB.Announcer.speak('So klingt die aktuell ausgewählte Stimme. Endstand: Tim 24, Alex 17. Was für ein Spiel!');
     }
   </script>
 </body>

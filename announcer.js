@@ -118,71 +118,70 @@
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
   // ======================================================================
-  // RING-ANSAGER (Draft-Vorstellung + Finale) — Textbausteine mit {name}
-  // als einzig freier Variable, Auswahl der Kategorie kommt aus
-  // MB.computeRingIntroBadges() (shared.js). Ein Baustein pro Vorstellung,
+  // RING-ANSAGER (Draft-Vorstellung + Finale) — dreiteiliger Aufbau:
+  // Einleitung (wechselnd) + Ankündigung (Badge-Baustein) + Name allein.
+  // Auswahl der Ankündigung kommt aus MB.computeRingIntroBadges() (shared.js),
   // Priorität: Champion > Serien-Champion > Rekordhalter > Contender >
   // Toilet-Bowl-Sieger > Rookie > Routinier (Fallback).
   // ======================================================================
-  const RING_ANNOUNCER_INTROS = {
-    champion: [
-      (n) => `Und hier kommt er... der amtierende Champion... ${n}!`,
-      (n) => `Er hat den Ring, und er will ihn verteidigen... ${n}!`,
-      (n) => `Der Titelträger persönlich... ${n}!`,
-    ],
-    championRings: [
-      (n, rings) => `Und hier kommt er, mit bereits ${rings} Ringen am Controller, der amtierende Champion... ${n}!`,
-      (n, rings) => `${rings}-facher Champion und aktueller Titelträger in einem... ${n}!`,
-    ],
-    seriesChampion: [
-      (n, rings) => `Der einzige Head Coach mit ${rings} Ringen... ${n}!`,
-      (n, rings) => `${rings} Titel — niemand sonst hat so viele geholt... ${n}!`,
-    ],
-    recordHolder: [
-      (n) => `Der Mann mit dem Allzeit-Highscore dieser Liga... ${n}!`,
-      (n) => `Niemand hat je mehr Punkte in einem einzigen Spiel gemacht als er... ${n}!`,
-    ],
-    contender: [
-      (n) => `Der ewige Herausforderer, immer ganz nah dran am Ring... ${n}!`,
-      (n) => `Der Vize-Champion der letzten Saison — diesmal soll's ganz nach oben gehen... ${n}!`,
-    ],
-    toiletBowlFirstPick: [
-      (n) => `Und der Sieger des letztjährigen Toilet Bowls, mit dem ersten Pick... ${n}!`,
-    ],
-    toiletBowl: [
-      (n) => `Er will die Kloschüssel diesmal weit hinter sich lassen... ${n}!`,
-    ],
-    rookie: [
-      (n) => `Und hier kommt der Rookie... ${n}!`,
-      (n) => `Sein allererstes Madden Bowl... ${n}!`,
-    ],
-    veteran: [
-      (n) => `Am Start... ${n}!`,
-      (n) => `Bereit für eine neue Saison... ${n}!`,
-    ],
+  const RING_INTRO_PREFIXES = [
+    "Und hier kommt er:",
+    "Als nächstes im Draft:",
+    "Jetzt darf er picken:",
+    "Und nun:",
+  ];
+  const RING_INTRO_FIRST_PICK_PREFIX = "Der erste Pick geht an:";
+  const RING_INTRO_LAST_PICK_PREFIX = "Der letzte Pick gebührt ihm:";
+
+  // Dativ-Vervielfältigungswörter für "...fachem Champion" (Index = Titelzahl)
+  const RING_FOLD_WORDS_DE = ["", "einfachem", "zweifachem", "dreifachem", "vierfachem", "fünffachem", "sechsfachem"];
+  function foldWordDE(n) { return RING_FOLD_WORDS_DE[n] || `${n}-fachem`; }
+
+  const RING_ANNOUNCEMENTS = {
+    champion: ["Dem amtierenden Champion:"],
+    championRings: [(rings) => `Dem aktuellen Titelträger und ${foldWordDE(rings)} Champion:`],
+    seriesChampion: [(rings) => `Den einzigen Head Coach mit ${numberWordsDE(rings)} Ringen:`],
+    recordHolder: ["Den Mann mit dem Allzeit-Highscore:"],
+    contender: ["Der Vize-Champion der letzten Saison:", "Der ewige Herausforderer, immer ganz nah dran am Ring:"],
+    toiletBowl: ["Den Sieger des letztjährigen Toilet Bowls:"],
+    rookie: ["Der Rookie:"],
+    veteran: ["Am Start:", "Bereit für eine neue Saison:"],
   };
 
-  // badge = ein Eintrag aus MB.computeRingIntroBadges(...).get(name.toLowerCase())
-  function buildRingIntroLine(badge, { isFirstPick } = {}) {
-    if (!badge) return "";
-    const n = speechName(badge.name);
+  function ringAnnouncementFor(badge) {
     if (badge.isDefendingChampion) {
-      return badge.titles > 1
-        ? pick(RING_ANNOUNCER_INTROS.championRings)(n, numberWordsDE(badge.titles))
-        : pick(RING_ANNOUNCER_INTROS.champion)(n);
+      return badge.titles > 1 ? pick(RING_ANNOUNCEMENTS.championRings)(numberWordsDE(badge.titles)) : pick(RING_ANNOUNCEMENTS.champion);
     }
-    if (badge.isSoleRecordChampion) return pick(RING_ANNOUNCER_INTROS.seriesChampion)(n, numberWordsDE(badge.titles));
-    if (badge.isAllTimeHighScoreHolder) return pick(RING_ANNOUNCER_INTROS.recordHolder)(n);
-    if (badge.isRunnerUpLastSeason || badge.finalsWithoutTitleCount >= 2) return pick(RING_ANNOUNCER_INTROS.contender)(n);
-    if (badge.isToiletBowlLastSeason) return isFirstPick ? pick(RING_ANNOUNCER_INTROS.toiletBowlFirstPick)(n) : pick(RING_ANNOUNCER_INTROS.toiletBowl)(n);
-    if (badge.isRookie) return pick(RING_ANNOUNCER_INTROS.rookie)(n);
-    return pick(RING_ANNOUNCER_INTROS.veteran)(n);
+    if (badge.isSoleRecordChampion) return pick(RING_ANNOUNCEMENTS.seriesChampion)(badge.titles);
+    if (badge.isAllTimeHighScoreHolder) return pick(RING_ANNOUNCEMENTS.recordHolder);
+    if (badge.isRunnerUpLastSeason || badge.finalsWithoutTitleCount >= 2) return pick(RING_ANNOUNCEMENTS.contender);
+    if (badge.isToiletBowlLastSeason) return pick(RING_ANNOUNCEMENTS.toiletBowl);
+    if (badge.isRookie) return pick(RING_ANNOUNCEMENTS.rookie);
+    return pick(RING_ANNOUNCEMENTS.veteran);
   }
 
-  async function announceRingIntro(name, badge, isFirstPick) {
-    const line = buildRingIntroLine(badge, { isFirstPick });
-    if (!line) return;
+  // badge = ein Eintrag aus MB.computeRingIntroBadges(...).get(name.toLowerCase())
+  // isFirstPick/isLastPick steuern nur die Einleitung, nicht die Ankündigung
+  // (ein Rookie mit dem letzten Pick bleibt "Der Rookie:", bekommt aber die
+  // "Der letzte Pick gebührt ihm:"-Einleitung statt einer zufälligen).
+  // modelId (optional): bei Eleven v3 bekommt der Ring-Ansager zusätzlich
+  // Emotions-/Delivery-Tags für mehr Boxring-Spannung (v3-exklusiv, siehe
+  // formatPacingForModel für die modellabhängige Pausen-Behandlung).
+  function buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId } = {}) {
+    if (!badge) return "";
+    const n = speechName(badge.name);
+    const prefix = isFirstPick ? RING_INTRO_FIRST_PICK_PREFIX : (isLastPick ? RING_INTRO_LAST_PICK_PREFIX : pick(RING_INTRO_PREFIXES));
+    const announcement = ringAnnouncementFor(badge);
+    if (isV3Model(modelId)) {
+      return `[dramatic tone][slows down] ${prefix}\n[building excitement] ${announcement}\n[excited][shouts] ${n}!`;
+    }
+    return `${prefix}\n${announcement}\n${n}!`;
+  }
+
+  async function announceRingIntro(name, badge, isFirstPick, isLastPick) {
     const settings = getTtsSettings();
+    const line = buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId: settings.modelId });
+    if (!line) return;
     const voiceId = settings.provider === "elevenlabs" ? (settings.voiceIdAnnouncer || settings.voiceIdResult) : null;
     await speakSequence([{ text: line, voiceId }]);
   }
@@ -645,6 +644,25 @@
     return digitsStr.split("").map((d) => ONES_DE[parseInt(d, 10)]).join(" ");
   }
 
+  // Ist das gewählte Modell Eleven v3? Steuert, wie Pausen/Betonung gebaut
+  // werden (siehe formatPacingForModel/buildRingIntroLine) — v3 kennt laut
+  // ElevenLabs-Doku KEINE SSML-<break>-Tags (anders als v2/Flash), dort
+  // steuert man Pausen/Emotion über Audio-Tags wie [pause]/[excited] und
+  // Interpunktion statt über feste Zeitangaben.
+  function isV3Model(modelId) { return /v3/i.test(modelId || ""); }
+
+  // Genereller Pacing-Konverter, wird auf JEDEN gesprochenen Text angewendet
+  // (Ring-Ansager UND Kommentator/Moderator-Duo gleichermaßen) — Zeilenumbruch
+  // steht in unseren Textbausteinen für "dramatische Pause zwischen zwei
+  // Beats". Bei v2/Flash wird daraus ein echtes <break>-Tag (dort laut
+  // ElevenLabs zuverlässiger als Interpunktion), bei v3 ein [pause]-Audio-Tag.
+  function formatPacingForModel(text, modelId) {
+    if (!text) return text;
+    return isV3Model(modelId)
+      ? text.replace(/\n+/g, " [pause] ")
+      : text.replace(/\n+/g, ' <break time="0.7s" /> ');
+  }
+
   function sanitizeForSpeech(text) {
     return text
       // Dezimalzahlen für deutsche TTS (Anforderungen 23/24/25) - NUR hier im
@@ -715,7 +733,7 @@
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json", "Accept": "audio/mpeg" },
       body: JSON.stringify({
-        text: sanitizeForSpeech(text),
+        text: formatPacingForModel(sanitizeForSpeech(text), modelId),
         model_id: modelId || "eleven_multilingual_v2",
         voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       }),
@@ -739,20 +757,19 @@
     });
   }
 
-  // Zentraler Sprech-Aufruf: nutzt ElevenLabs, wenn konfiguriert & aktiv,
-  // fällt bei Fehlern automatisch auf die kostenlose Browser-Stimme zurück
-  // (nie stumm bleiben, nur weil ElevenLabs gerade mal ein Problem hat).
+  // Zentraler Sprech-Aufruf: nutzt ElevenLabs, wenn konfiguriert. Bewusst
+  // KEIN Rückfall mehr auf die Browser-Stimme (Tim: lieber ganz stumm als
+  // mit der Browser-Stimme) — ohne gültige ElevenLabs-Konfiguration bleibt
+  // die App bei dieser Ansage einfach still.
   async function speakSmart(text, { voiceId } = {}) {
     const settings = getTtsSettings();
     if (settings.provider === "elevenlabs" && settings.apiKey && voiceId) {
       try {
         await speakElevenLabs(text, { apiKey: settings.apiKey, voiceId, modelId: settings.modelId });
-        return;
       } catch (e) {
-        console.warn("ElevenLabs fehlgeschlagen, Fallback auf Browser-Stimme:", e);
+        console.warn("ElevenLabs-Ansage fehlgeschlagen, bleibt stumm:", e);
       }
     }
-    await speak(text);
   }
 
   // Spielt mehrere Zeilen nacheinander OHNE Wartezeit an den Übergängen.
@@ -762,19 +779,22 @@
   // dann strikt der Reihe nach abgespielt ("nacheinander in die Playlist
   // einsortiert") — während Zeile 1 noch läuft, ist Zeile 2 im Hintergrund
   // längst fertig generiert und wartet nur noch aufs Abspielen.
-  // segments: [{ text, voiceId }] — voiceId=null/undefined -> Browser-Stimme.
+  // segments: [{ text, voiceId }] — ohne gültige ElevenLabs-Konfiguration
+  // oder bei Fehlern wird die jeweilige Zeile übersprungen (kein Browser-
+  // Stimme-Rückfall mehr).
   async function speakSequence(segments) {
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
+    if (!useElevenLabs) return;
 
     const prepared = segments.map((seg) => {
-      if (useElevenLabs && seg.voiceId) {
+      if (seg.voiceId) {
         return {
           seg,
           audioPromise: fetchElevenLabsAudioUrl(seg.text, {
             apiKey: settings.apiKey, voiceId: seg.voiceId, modelId: settings.modelId,
           }).catch((e) => {
-            console.warn("ElevenLabs-Vorgenerierung fehlgeschlagen, Fallback auf Browser-Stimme:", e);
+            console.warn("ElevenLabs-Vorgenerierung fehlgeschlagen, Zeile bleibt stumm:", e);
             return null;
           }),
         };
@@ -782,87 +802,12 @@
       return { seg, audioPromise: null };
     });
 
-    for (const { seg, audioPromise } of prepared) {
+    for (const { audioPromise } of prepared) {
       if (audioPromise) {
         const url = await audioPromise; // meist schon fertig, da parallel gestartet
-        if (url) { await playAudioUrl(url); continue; }
+        if (url) await playAudioUrl(url);
       }
-      await speak(seg.text); // Browser-Stimme oder Fallback bei ElevenLabs-Fehler
     }
-  }
-
-  // ---- Web Speech API ----
-  let cachedVoice = null;
-  let forcedVoiceName = null;
-  try { forcedVoiceName = localStorage.getItem("mb_tts_voice_name") || null; } catch (e) {}
-
-  function setPreferredVoice(name) {
-    forcedVoiceName = name || null;
-    cachedVoice = null;
-    try {
-      if (name) localStorage.setItem("mb_tts_voice_name", name);
-      else localStorage.removeItem("mb_tts_voice_name");
-    } catch (e) {}
-  }
-
-  function getGermanVoiceCandidates() {
-    if (!("speechSynthesis" in window)) return [];
-    return speechSynthesis.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith("de"));
-  }
-
-  // Bevorzugt hochwertige Online-Neural-Stimmen ("... Online (Natural)"),
-  // die Edge/Chrome unter Windows 11 kostenlos mitbringen — deutlich
-  // natürlicher als die alten lokalen SAPI-Stimmen (z.B. "Hedda"/"Stefan"),
-  // die sonst oft als Default landen.
-  function pickGermanVoice() {
-    if (cachedVoice) return cachedVoice;
-    if (!("speechSynthesis" in window)) return null;
-    const all = speechSynthesis.getVoices();
-    const de = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith("de"));
-
-    if (forcedVoiceName) {
-      const forced = all.find((v) => v.name === forcedVoiceName);
-      if (forced) { cachedVoice = forced; return cachedVoice; }
-    }
-
-    const natural = de.find((v) => /online\s*\(natural\)|natural/i.test(v.name));
-    cachedVoice = natural || de[0] || all[0] || null;
-    return cachedVoice;
-  }
-
-  function speak(text, opts = {}) {
-    if (!("speechSynthesis" in window)) {
-      console.warn("Web Speech API nicht verfügbar im Browser.");
-      return Promise.resolve();
-    }
-    const clean = sanitizeForSpeech(text);
-    return new Promise((resolve) => {
-      const utter = new SpeechSynthesisUtterance(clean);
-      const voice = pickGermanVoice();
-      if (voice) utter.voice = voice;
-      utter.lang = (voice && voice.lang) || "de-DE";
-      utter.rate = opts.rate ?? 1.02;
-      utter.pitch = opts.pitch ?? 1.05;
-      utter.onend = resolve;
-      utter.onerror = resolve;
-      speechSynthesis.speak(utter);
-    });
-  }
-
-  // Stellt sicher, dass Stimmen geladen sind (manche Browser laden sie async
-  // nach; Edge liefert dabei manchmal kurzzeitig kaputte "undefined"-Namen —
-  // daher zusätzlich ein kurzer Retry).
-  function warmupVoices() {
-    if (!("speechSynthesis" in window)) return;
-    speechSynthesis.getVoices();
-    speechSynthesis.onvoiceschanged = () => { cachedVoice = null; };
-    let tries = 0;
-    const retry = setInterval(() => {
-      tries++;
-      const de = getGermanVoiceCandidates();
-      const hasUsableName = de.some((v) => v.name && !v.name.includes("undefined"));
-      if (hasUsableName || tries > 10) { clearInterval(retry); cachedVoice = null; }
-    }, 400);
   }
 
   // Eigentliche Ansage-Logik (vormals der einzige "announce"). Umbenannt zu
@@ -897,9 +842,9 @@
       return;
     }
 
-    // Einzel-Stimmen-Modus (Browser kostenlos, oder ElevenLabs mit nur einer
-    // konfigurierten Stimme): alle Zeilen ebenfalls vorab parallel generiert,
-    // dann der Reihe nach abgespielt.
+    // Einzel-Stimmen-Modus (nur eine ElevenLabs-Stimme konfiguriert, oder
+    // keine — dann bleibt es bei dieser Ansage einfach stumm): alle Zeilen
+    // ebenfalls vorab parallel generiert, dann der Reihe nach abgespielt.
     const singleVoiceId = settings.provider === "elevenlabs" ? (settings.voiceIdResult || settings.voiceIdPreview) : null;
     const segments = [{ text: resultLine, voiceId: singleVoiceId }];
     if (nextMatch) segments.push({ text: buildPreviewLine(), voiceId: singleVoiceId });
@@ -912,15 +857,19 @@
   // den aktuell konfigurierten Namen vor, Teilnehmernamen kommen 1:1 aus dem
   // Aufrufer (index.html reicht state.players.map(p => p.name) durch).
   // ======================================================================
-  async function _announceTournamentStartNow({ athleteNames } = {}) {
+  async function _announceTournamentStartNow({ athleteNames, context } = {}) {
     const names = getSpeakerNames();
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
     const resultVoice = useElevenLabs ? settings.voiceIdResult : null;
     const previewVoice = useElevenLabs ? settings.voiceIdPreview : null;
 
+    const welcomeText = context === "draft"
+      ? `${names.commentator} hier am Mikrofon. Willkommen zum Madden Bowl Draft!`
+      : `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`;
+
     const segments = [
-      { text: `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`, voiceId: resultVoice },
+      { text: welcomeText, voiceId: resultVoice },
       { text: `${names.moderator} begleitet euch durch den Abend.`, voiceId: previewVoice },
     ];
     const athletes = (athleteNames || []).filter(Boolean).map(speechName);
@@ -1182,8 +1131,8 @@
 
   global.MB = global.MB || {};
   global.MB.Announcer = {
-    announce, announceSong, announceTournamentStart, speak, warmupVoices, buildResultLine, buildUpcomingLine,
-    setPreferredVoice, getGermanVoiceCandidates, sanitizeForSpeech,
+    announce, announceSong, announceTournamentStart, buildResultLine, buildUpcomingLine,
+    sanitizeForSpeech,
     getTtsSettings, setTtsSettings, fetchElevenLabsVoices, speakElevenLabs, speakSmart,
     speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
     getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
