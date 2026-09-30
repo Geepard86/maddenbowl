@@ -1138,26 +1138,77 @@ function isFinished(match) { return MB.isFinished(match); }
       });
     }
 
+    // Kleine Wartehilfe, damit die Show auch ohne (aktuell fehlende)
+    // ElevenLabs-Credits ein spürbares Tempo hat — die Ansage-Aufrufe lösen
+    // ohne gültige Konfiguration sofort auf, ohne das würde die ganze Show
+    // in Sekundenbruchteilen durchrauschen.
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    async function withMinDelay(promise, ms) {
+      const [result] = await Promise.all([promise, sleep(ms)]);
+      return result;
+    }
+
     async function advanceDraftShow() {
       if (draftShowIndex >= showOrderList.length) {
         renderDraftShowStage({ done: true });
         return;
       }
       const name = showOrderList[draftShowIndex].name;
-      renderDraftShowStage({ calling: name });
       renderDraftOrderStrip();
+
+      // 1) "Jetzt auf der Bühne:" erst allein, Name folgt einen Beat später
+      renderDraftShowStage({ callingLabelOnly: true });
+      await sleep(900);
+      renderDraftShowStage({ calling: name });
 
       const isFirstPick = draftShowIndex === 0;
       const isLastPick = draftShowIndex === showOrderList.length - 1;
       const badge = MB.computeRingIntroBadges(history, [name]).get(name.trim().toLowerCase());
       try {
-        await MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick);
+        await withMinDelay(MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick), 1800);
       } catch (e) { console.warn('Ring-Ansage fehlgeschlagen:', e); }
 
+      // 2) Slot-Ziehen sichtbar in der Bühne selbst (nicht nur im
+      // versteckten Fallback-Board) — Datenlogik bleibt dieselbe.
       document.getElementById('nextPlayerName').value = name;
-      await performSlotDraw(name);
+      renderDraftShowStage({ drawing: name });
+      await performSlotDrawForShow(name);
+      renderDraftShowStage({ drawn: { name, slot: lastDrawnPlayer.slot } });
+      await sleep(900);
 
+      // 3) Aufforderung, dann erst die Team-Auswahl
+      renderDraftShowStage({ prompt: name });
+      await sleep(1000);
       renderDraftShowStage({ picking: { name, slot: lastDrawnPlayer.slot } });
+    }
+
+    // Sichtbare Zufalls-Ziehung DIREKT in der Bühnen-Box (statt nur im
+    // versteckten Fallback-Board) — cycelt kurz durch die freien Slots,
+    // landet auf dem tatsächlich gezogenen (finalizeDraw bleibt exakt wie
+    // beim manuellen Fallback, nur die Anzeige läuft zusätzlich sichtbar).
+    function performSlotDrawForShow(name) {
+      return new Promise((resolve) => {
+        getDrawAudioCtx();
+        let counter = 0;
+        const maxSpins = 18;
+        const spinInterval = setInterval(() => {
+          const spinEl = document.getElementById('showSlotSpin');
+          if (spinEl) {
+            const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+            spinEl.textContent = `P${tempSlot + 1}`;
+          }
+          playDrawTick(counter / maxSpins);
+          counter++;
+          if (counter >= maxSpins) {
+            clearInterval(spinInterval);
+            finalizeDraw(name);
+            buildPlayerDatalist();
+            const finalEl = document.getElementById('showSlotSpin');
+            if (finalEl) finalEl.textContent = `P${lastDrawnPlayer.slot + 1}`;
+            setTimeout(resolve, 400);
+          }
+        }, 90);
+      });
     }
 
     let showPickedTeamId = null;
@@ -1178,9 +1229,10 @@ function isFinished(match) { return MB.isFinished(match); }
         const disabled = takenIds.has(String(t.id));
         return `<button type="button" class="team-pick-btn" data-team="${t.id}" ${disabled ? 'disabled' : ''}
                    onclick="selectShowTeam('${t.id}', this)"
-                   style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; background:#161f2c; border:2px solid transparent; border-radius:8px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? 0.25 : 1};">
+                   style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 4px; background:#161f2c; border:2px solid transparent; border-radius:8px; cursor:${disabled ? 'not-allowed' : 'pointer'}; opacity:${disabled ? 0.25 : 1};">
                    <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" style="width:32px;height:32px;object-fit:contain;">
                    <div style="font-size:0.7em; color:#fff;">${t.n}</div>
+                   <div style="font-size:0.65em; color:var(--v2-gold); font-weight:700;">${t.rating ? 'OVR ' + t.rating : ''}</div>
                  </button>`;
       }).join('');
 
@@ -1214,7 +1266,7 @@ function isFinished(match) { return MB.isFinished(match); }
       playPickIsInSting();
       renderDraftShowStage({ commentating: name });
       try {
-        await announceTeamPickForSlot(slot, name, teamId);
+        await withMinDelay(announceTeamPickForSlot(slot, name, teamId), 2200);
       } catch (e) { console.warn('Team-Pick-Kommentar fehlgeschlagen:', e); }
 
       draftShowIndex++;
@@ -1232,11 +1284,23 @@ function isFinished(match) { return MB.isFinished(match); }
       if (!box) return;
       if (mode?.intro) {
         box.innerHTML = `<div style="font-size:1.3em; font-weight:800; color:var(--v2-gold);">🎙️ Willkommen zum Madden Bowl Draft!</div>`;
+      } else if (mode?.callingLabelOnly) {
+        box.innerHTML = `<div style="font-size:0.9em; opacity:0.7; letter-spacing:2px;">🎙️ JETZT AUF DER BÜHNE:</div>`;
       } else if (mode?.calling) {
         box.innerHTML = `
-          <div style="font-size:0.85em; opacity:0.7; letter-spacing:2px;">JETZT AUF DER BÜHNE</div>
-          <div style="font-size:2em; font-weight:900; color:var(--v2-gold); margin:8px 0;">${mode.calling}</div>
-          <div style="opacity:0.6;">Der Slot wird gezogen...</div>`;
+          <div style="font-size:0.85em; opacity:0.7; letter-spacing:2px;">🎙️ JETZT AUF DER BÜHNE:</div>
+          <div style="font-size:2.2em; font-weight:900; color:var(--v2-gold); margin:8px 0;">${mode.calling}</div>`;
+      } else if (mode?.drawing) {
+        box.innerHTML = `
+          <div style="font-size:0.85em; opacity:0.7; letter-spacing:2px; margin-bottom:6px;">DER SLOT WIRD GEZOGEN...</div>
+          <div id="showSlotSpin" style="font-size:2.4em; font-weight:900; color:var(--v2-gold); font-family:monospace;">P?</div>`;
+      } else if (mode?.drawn) {
+        box.innerHTML = `
+          <div style="font-size:0.85em; opacity:0.7; letter-spacing:2px; margin-bottom:6px;">SLOT STEHT FEST</div>
+          <div style="font-size:2.4em; font-weight:900; color:var(--v2-gold); font-family:monospace;">P${mode.drawn.slot + 1}</div>
+          <div style="opacity:0.7; margin-top:6px;">${mode.drawn.name}</div>`;
+      } else if (mode?.prompt) {
+        box.innerHTML = `<div style="font-size:1.5em; font-weight:800;">${mode.prompt}, wähle dein Team!</div>`;
       } else if (mode?.picking) {
         box.innerHTML = renderTeamPickerHtml(mode.picking.name, mode.picking.slot);
       } else if (mode?.commentating) {
