@@ -527,6 +527,13 @@ Madden Bowl 2027 – wir sind dabei.`,
       if (raw) saved = JSON.parse(raw);
     } catch (e) { console.warn('tournament_defaults laden fehlgeschlagen:', e); }
     const v = { ...RULES_DEFAULTS, ...saved };
+    let savedContent = {};
+    try {
+      const rawContent = await MB.getAppConfig(MB.UI.RULES_CONTENT_KEY);
+      if (rawContent) savedContent = JSON.parse(rawContent);
+    } catch (e) { console.warn('rules_content laden fehlgeschlagen:', e); }
+    const rc = { ...MB.UI.RULES_CONTENT_DEFAULTS, ...savedContent };
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const prepOptions = (selected) => STADIUM_PREP_OPTIONS
       .map(p => `<option value="${p}" ${p === selected ? 'selected' : ''}>${p} ...</option>`).join('');
 
@@ -538,6 +545,15 @@ Madden Bowl 2027 – wir sind dabei.`,
       <div class="row-line"><span class="label">Stadion 1</span><input type="text" id="ruleStadium1" value="${v.stadium1}"><select id="ruleStadium1Prep">${prepOptions(v.stadium1Prep)}</select></div>
       <div class="row-line"><span class="label">Stadion 2</span><input type="text" id="ruleStadium2" value="${v.stadium2}"><select id="ruleStadium2Prep">${prepOptions(v.stadium2Prep)}</select></div>
       <div class="row-line"><span class="label">Spieler</span><input type="number" id="rulePlayerCount" value="${v.playerCount}" min="6" max="10" style="width:80px;"></div>
+      <div style="margin-top:14px; font-weight:700;">Regeln &amp; Settings (Burger-Menü)</div>
+      <div class="hint">Eine Zeile pro Punkt. Wird in Supabase gespeichert und in der App unter „Regeln &amp; Settings“ angezeigt.</div>
+      <label class="hint" style="display:block; margin-top:6px;">⚙️ Madden Settings</label>
+      <textarea id="ruleMadden" rows="5" style="width:100%; box-sizing:border-box;">${esc(rc.maddenSettings.join('\n'))}</textarea>
+      <label class="hint" style="display:block; margin-top:6px;">📜 Turnier-Regeln</label>
+      <textarea id="ruleTournament" rows="5" style="width:100%; box-sizing:border-box;">${esc(rc.tournamentRules.join('\n'))}</textarea>
+      <label class="hint" style="display:block; margin-top:6px;">🎮 Controller-Hub-Link (Text und URL, leer = ausblenden)</label>
+      <input type="text" id="ruleHubLabel" value="${esc(rc.hubLabel)}" placeholder="Linktext" style="width:100%; box-sizing:border-box; margin-bottom:6px;">
+      <input type="text" id="ruleHubUrl" value="${esc(rc.hubUrl)}" placeholder="https://…" style="width:100%; box-sizing:border-box;">
       <div style="margin-top:10px;"><button class="small" onclick="saveRules()">Speichern</button></div>
       <div class="hint" id="rulesSavedHint" style="display:none;">Gespeichert.</div>
     `;
@@ -555,8 +571,16 @@ Madden Bowl 2027 – wir sind dabei.`,
       stadium2Prep: document.getElementById('ruleStadium2Prep').value,
       playerCount: parseInt(document.getElementById('rulePlayerCount').value) || RULES_DEFAULTS.playerCount,
     };
+    const lines = (id) => document.getElementById(id).value.split('\n').map(s => s.trim()).filter(Boolean);
+    const content = {
+      maddenSettings: lines('ruleMadden'),
+      tournamentRules: lines('ruleTournament'),
+      hubLabel: document.getElementById('ruleHubLabel').value.trim(),
+      hubUrl: document.getElementById('ruleHubUrl').value.trim(),
+    };
     try {
       await MB.setAppConfig(RULES_CONFIG_KEY, JSON.stringify(values));
+      await MB.setAppConfig(MB.UI.RULES_CONTENT_KEY, JSON.stringify(content));
       const hint = document.getElementById('rulesSavedHint');
       hint.style.display = 'block';
       setTimeout(() => { hint.style.display = 'none'; }, 2500);

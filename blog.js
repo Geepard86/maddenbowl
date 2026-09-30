@@ -46,16 +46,23 @@
   ];
 
   // ======================================================================
-  // ZWISCHENSTÄNDE
+  // POWER RANKING (früher: "Zwischenstand")
   // ----------------------------------------------------------------------
-  // Die Zwischenstands-Artikel wechseln automatisch zwischen verschiedenen
+  // Die Power-Ranking-Artikel wechseln automatisch zwischen verschiedenen
   // redaktionellen Blickwinkeln:
   // Tabellenführer, Verfolger, Top 3, Spiel des Tages, Favoriten/Krise.
+  // Kind bleibt intern "progress" (bestehende Artikel in der Datenbank),
+  // nur die Anzeige heißt jetzt "Power Ranking".
   // ======================================================================
+
+  // Alle wie viele fertigen Spiele erscheint ein Power Ranking? Bewusst
+  // seltener als früher (3): Gesamtziel ist im Schnitt ca. ein Artikel je
+  // drei Spiele über ALLE Artikelarten (Rekorde, Porträts, Memes, ...).
+  const PROGRESS_EVERY = 6;
 
   const PROGRESS_STYLES = [
     {
-      title: (count) => `Zwischenstand nach ${count} Spielen`,
+      title: (count) => `Power Ranking nach ${count} Spielen`,
 
       opener:
         "Ein paar Spiele sind gespielt, und langsam bekommt der Madden Bowl Konturen. Noch ist nichts entschieden – aber einige Herren arbeiten bereits fleißig daran, diese Aussage zu widerlegen.",
@@ -77,7 +84,7 @@
 
     {
       title: (count) =>
-        `Wer gerade Druck macht – Zwischenstand nach ${count} Spielen`,
+        `Power Ranking: Wer gerade Druck macht (nach ${count} Spielen)`,
 
       opener:
         "Nicht jede Saison erzählt sich über den Tabellenführer. Manchmal ist die interessantere Geschichte der Spieler dahinter, der plötzlich anfängt, Siege einzusammeln.",
@@ -94,7 +101,7 @@
     },
 
     {
-      title: (count) => `Die Tabelle nimmt Fahrt auf – nach ${count} Spielen`,
+      title: (count) => `Power Ranking: Die Tabelle nimmt Fahrt auf (${count} Spiele)`,
 
       opener:
         "Die ersten Ergebnisse waren noch einzelne Geschichten. Inzwischen beginnen sie, ein Bild zu ergeben.",
@@ -116,7 +123,7 @@
 
     {
       title: (count) =>
-        `Spieltag mit Folgen – Zwischenstand nach ${count} Spielen`,
+        `Power Ranking: Spieltag mit Folgen (nach ${count} Spielen)`,
 
       opener:
         "Ein Spieltag muss nicht spektakulär aussehen, um etwas zu verändern. Manchmal reicht schon ein Ergebnis zur richtigen Zeit.",
@@ -134,7 +141,7 @@
 
     {
       title: (count) =>
-        `Favoriten unter Beobachtung – ${count} Spiele vorbei`,
+        `Power Ranking: Favoriten unter Beobachtung (${count} Spiele)`,
 
       opener:
         "Jetzt wird es langsam unangenehm für alle, die sich vor dem Turnier schon selbst zum Favoriten erklärt haben: Die Tabelle beginnt, mitzuschreiben.",
@@ -373,10 +380,11 @@
       ? pick(recentMatches)
       : null;
 
-    // Alle 3 Spiele wird der nächste redaktionelle Blickwinkel verwendet.
+    // Bei jedem neuen Power Ranking wird der nächste redaktionelle
+    // Blickwinkel verwendet.
     const style =
       PROGRESS_STYLES[
-        Math.floor((finishedCount - 1) / 3) % PROGRESS_STYLES.length
+        Math.floor((finishedCount - 1) / PROGRESS_EVERY) % PROGRESS_STYLES.length
       ];
 
     const recent = recentMatch
@@ -685,6 +693,310 @@
   }
 
   // ======================================================================
+  // SPIELERPORTRÄTS
+  // ----------------------------------------------------------------------
+  // Drei Artikel, die zu Turnierbeginn nach und nach erscheinen (pro
+  // fertigem Spiel höchstens einer, siehe isPortraitDue):
+  //   1. champion   – der Titelverteidiger alleine
+  //   2. contender  – alle, die letztes Jahr weit kamen (Platz 1-3) oder
+  //                   aktuell in der Gesamttabelle vorne liegen
+  //   3. field      – der Rest des Feldes
+  // Gruppen ohne Spieler (z.B. kein Titelverteidiger im ersten Jahr)
+  // werden übersprungen. Alle Fakten kommen aus der Historie (Supabase-
+  // Saisons) und dem laufenden Turnier — nichts wird erfunden.
+  // ======================================================================
+
+  const PORTRAIT_ORDER = ["champion", "contender", "field"];
+
+  // Nach wie vielen fertigen Spielen erscheint welches Porträt?
+  // (Pro Gruppe fest, unabhängig davon, ob eine andere Gruppe leer ist.)
+  const PORTRAIT_AT = { champion: 2, contender: 4, field: 8 };
+
+  function fmtDecimal(n, digits) {
+    return Number(n).toFixed(digits == null ? 1 : digits).replace(".", ",");
+  }
+
+  function teamNameById(teamId) {
+    const t = (MB.nflTeams || []).find((x) => x.id === teamId);
+    return t ? t.n : teamId || "";
+  }
+
+  function historyStatsFor(history, name) {
+    const games = (history && history.byPlayer && history.byPlayer.get(name)) || [];
+    let wins = 0, losses = 0, played = 0, pointsFor = 0, bestWin = null;
+    games.forEach((m) => {
+      if (m.homeScore == null || m.awayScore == null) return;
+      const isHome = m.homePlayer === name;
+      const own = isHome ? m.homeScore : m.awayScore;
+      const opp = isHome ? m.awayScore : m.homeScore;
+      played++;
+      pointsFor += own;
+      if (own > opp) wins++;
+      else if (own < opp) losses++;
+      const margin = own - opp;
+      if (margin > 0 && (!bestWin || margin > bestWin.margin)) {
+        bestWin = { margin, own, opp, vs: isHome ? m.awayPlayer : m.homePlayer, season: m.season };
+      }
+    });
+    return { played, wins, losses, ppg: played ? pointsFor / played : null, bestWin };
+  }
+
+  function lastSeasonRanks(history) {
+    const seasons = [...((history && history.seasons) || [])].sort((a, b) => (b.season || 0) - (a.season || 0));
+    const standings = seasons[0] && Array.isArray(seasons[0].standings) ? seasons[0].standings : [];
+    const out = new Map();
+    standings.forEach((s) => out.set(MB.normName(s.name).toLowerCase(), Number(s.rank)));
+    return { ranks: out, year: seasons[0] ? seasons[0].season : null };
+  }
+
+  // Teilt die aktuellen Spieler in die drei Porträt-Gruppen ein.
+  function computePortraitGroups(state, history) {
+    const players = state.players || [];
+    const names = players.map((p) => p.name).filter(Boolean);
+    const safeHistory = history || { seasons: [], matches: [], byPlayer: new Map() };
+    const badges = MB.computeRingIntroBadges ? MB.computeRingIntroBadges(safeHistory, names) : new Map();
+    const { ranks } = lastSeasonRanks(safeHistory);
+
+    const tableTop = [...players]
+      .sort((a, b) => (b.wins || 0) - (a.wins || 0) || (b.diff || 0) - (a.diff || 0))
+      .filter((p) => (p.wins || 0) > 0)
+      .slice(0, 3)
+      .map((p) => p.name);
+
+    const groups = { champion: [], contender: [], field: [] };
+    names.forEach((name) => {
+      const key = name.toLowerCase();
+      const badge = badges.get(key) || {};
+      const rank = ranks.get(key);
+      if (badge.isDefendingChampion) groups.champion.push(name);
+      else if ((rank && rank <= 3) || tableTop.includes(name)) groups.contender.push(name);
+      else groups.field.push(name);
+    });
+    return { groups, badges, ranks };
+  }
+
+  function describePortraitPlayer(name, state, history, badge, lastRank) {
+    const player = (state.players || []).find((p) => p.name === name);
+    const team = player && player.team ? teamNameById(player.team) : null;
+    const stats = historyStatsFor(history, name);
+    const teamHistory =
+      player && player.team && history && MB.computeTeamTitleHistory
+        ? MB.computeTeamTitleHistory(history).get(player.team)
+        : null;
+    const sentences = [];
+
+    if (badge.isRookie) {
+      sentences.push("Für ihn ist es der erste Madden Bowl – keine Historie, keine Rekorde, aber auch noch keine Niederlagen, die man ihm vorhalten könnte.");
+    } else {
+      const seasonsPlayed = badge.seasonsPlayed || 0;
+      let line = `Er ist bereits ${seasonsPlayed} ${seasonsPlayed === 1 ? "Saison" : "Saisons"} dabei`;
+      if (stats.played) {
+        line += `, Gesamtbilanz ${stats.wins}:${stats.losses}`;
+        if (stats.ppg != null) line += ` bei durchschnittlich ${fmtDecimal(stats.ppg)} Punkten pro Spiel`;
+      }
+      sentences.push(line + ".");
+    }
+
+    if (badge.titles > 0) {
+      let t = badge.titles === 1 ? "Ein Titel steht bereits auf seinem Konto" : `${badge.titles} Titel stehen bereits auf seinem Konto`;
+      if (badge.isSoleRecordChampion) t += " – damit ist er alleiniger Rekordchampion";
+      sentences.push(t + ".");
+    }
+
+    if (lastRank) {
+      if (lastRank === 1) sentences.push("Letzte Saison holte er den Titel.");
+      else if (lastRank === 2) sentences.push("Letzte Saison verlor er das Finale.");
+      else sentences.push(`Letzte Saison beendete er das Turnier auf Platz ${lastRank}.`);
+    }
+
+    if (badge.isAllTimeHighScoreHolder && badge.allTimeHighScore > 0) {
+      sentences.push(`Außerdem hält er mit ${badge.allTimeHighScore} Punkten den Allzeit-Punkterekord in einem Spiel.`);
+    }
+
+    if (stats.bestWin) {
+      const b = stats.bestWin;
+      sentences.push(`Sein höchster Sieg: ${b.own}:${b.opp} gegen ${b.vs}${b.season ? ` (Saison ${b.season})` : ""}.`);
+    }
+
+    if (teamHistory && teamHistory.count > 0 && team) {
+      sentences.push(
+        `Sein Team hat übrigens Titel-Tradition: Die ${team} wurden schon ${teamHistory.count}× Madden-Bowl-Champion, zuletzt mit ${teamHistory.lastWinnerName} (${teamHistory.lastSeason}).`
+      );
+    }
+
+    return { team, text: sentences.join(" ") };
+  }
+
+  const PORTRAIT_TEXT = {
+    champion: {
+      title: (names) => `👑 Titelverteidiger: ${names[0]}`,
+      openers: [
+        "Wer den Ring trägt, trägt auch das Fadenkreuz. Ab sofort weiß jeder im Feld, wen er schlagen muss, wenn er selbst irgendwann etwas gewinnen will.",
+        "Jeder Titelverteidiger startet mit einem Vorsprung – und mit dem unangenehmen Gefühl, dass alle anderen ein bisschen mehr wollen als er.",
+      ],
+      closers: [
+        "Ob das für eine Titelverteidigung reicht, zeigen die nächsten Wochen. Verteidigen ist bekanntlich schwerer als Angreifen.",
+        "Die Krone sitzt – die Frage ist nur, wie lange.",
+      ],
+    },
+    contender: {
+      title: () => "🎯 Die Contender",
+      openers: [
+        "Neben dem Titelverteidiger gibt es Spieler, die dieses Turnier nicht nur mitspielen, sondern gewinnen wollen. Hier sind die, denen man es zutraut.",
+        "Wer letztes Jahr weit gekommen ist oder jetzt schon oben in der Tabelle steht, gehört zum engeren Favoritenkreis. Ein Blick auf die Kandidaten.",
+      ],
+      closers: [
+        "Einer von ihnen wird am Ende vermutlich ganz oben stehen. Vermutlich. Beim Madden Bowl ist das nie garantiert.",
+        "Papierform ist schön – aber gespielt wird auf dem Rasen.",
+      ],
+    },
+    field: {
+      title: (names, ctx) => (ctx && ctx.rookies && ctx.rookies.length ? "🐣 Die Rookies & der Rest des Feldes" : "🏈 Der Rest des Feldes"),
+      openers: [
+        "Nicht jeder ist Favorit, und genau das macht ein Turnier interessant. Hier kommt der Rest des Feldes – die Außenseiter, die Überraschungskandidaten und alle, die noch etwas beweisen wollen.",
+        "Ohne Außenseiter gäbe es keine Überraschungen. Deshalb bekommt auch der Rest des Feldes sein Porträt.",
+      ],
+      closers: [
+        "Außenseiter haben einen Vorteil: Erwartet wird nichts von ihnen. Das ändert sich mit dem ersten Sieg gegen einen Favoriten.",
+        "Wer hier unterschätzt wird, hat mindestens ein Spiel lang die Chance, alle eines Besseren zu belehren.",
+      ],
+    },
+  };
+
+  // Liefert die nächste noch nicht veröffentlichte, nicht-leere Gruppe
+  // (Reihenfolge: Titelverteidiger, Contender, Rest) oder null.
+  function nextPortraitGroup(state, history, publishedGroups) {
+    const { groups } = computePortraitGroups(state, history);
+    const done = publishedGroups || new Set();
+    return PORTRAIT_ORDER.find((g) => groups[g].length && !done.has(g)) || null;
+  }
+
+  // Fällig ist das nächste unveröffentlichte Porträt, sobald seine
+  // Spielzahl (PORTRAIT_AT) erreicht ist. Pro Speichern höchstens eines.
+  function isPortraitDue(state, publishedGroups, history) {
+    const group = nextPortraitGroup(state, history, publishedGroups);
+    return !!group && countFinishedMatches(state) >= PORTRAIT_AT[group];
+  }
+
+  function buildPortraitArticle(group, state, history) {
+    const { groups, badges, ranks } = computePortraitGroups(state, history);
+    const names = groups[group] || [];
+    if (!names.length) return null;
+
+    const text = PORTRAIT_TEXT[group];
+    const rookies = names.filter((n) => (badges.get(n.toLowerCase()) || {}).isRookie);
+    const parts = [pick(text.openers)];
+    if (group === "field" && rookies.length) {
+      parts.push(`Besonders im Blick: ${rookies.length === 1 ? "der Rookie" : "die Rookies"} ${rookies.join(", ")} – ${rookies.length === 1 ? "er ist" : "sie sind"} zum ersten Mal beim Madden Bowl dabei.`);
+    }
+    names.forEach((name) => {
+      const key = name.toLowerCase();
+      const d = describePortraitPlayer(name, state, history, badges.get(key) || {}, ranks.get(key));
+      parts.push(`<strong>${name}</strong>${d.team ? ` (${d.team})` : ""}\n${d.text}`);
+    });
+    parts.push(pick(text.closers));
+
+    return {
+      kind: "portrait",
+      title: text.title(names, { rookies }),
+      body: paragraphs(parts),
+      data: { group, players: names },
+    };
+  }
+
+  // ======================================================================
+  // ABSCHLUSS-ARTIKEL (Siegerehrung + Turnierzusammenfassung in einem)
+  // ----------------------------------------------------------------------
+  // Erscheint, sobald das Finalergebnis eingetragen ist — zusätzlich zum
+  // kurzen Champion-Rekordartikel.
+  // ======================================================================
+  function buildWrapUpArticle(state, history) {
+    const gf = MB.getPlayoffMatch(state, "gf");
+    const champion = gf ? MB.winnerOf(gf) : null;
+    const runnerUp = gf ? MB.loserOf(gf) : null;
+    if (!champion || !runnerUp) return null;
+
+    const ranking = MB.computeFinalRanking(state);
+    const ordered = ranking.ordered || [];
+    const third = ordered[2] || null;
+    const matches = MB.getCurrentMatchesNormalized(state);
+
+    let totalPoints = 0, highScore = null, bigMargin = null, highTotal = null;
+    matches.forEach((m) => {
+      totalPoints += m.total;
+      [[m.homePlayer, m.homeScore, m.awayPlayer, m.awayScore], [m.awayPlayer, m.awayScore, m.homePlayer, m.homeScore]].forEach(([p, s, o, os]) => {
+        if (!highScore || s > highScore.score) highScore = { player: p, score: s, opponent: o, oppScore: os };
+      });
+      const margin = Math.abs(m.homeScore - m.awayScore);
+      if (margin > 0 && (!bigMargin || margin > bigMargin.margin)) {
+        const homeWon = m.homeScore > m.awayScore;
+        bigMargin = {
+          margin,
+          winner: homeWon ? m.homePlayer : m.awayPlayer,
+          loser: homeWon ? m.awayPlayer : m.homePlayer,
+          score: `${Math.max(m.homeScore, m.awayScore)}:${Math.min(m.homeScore, m.awayScore)}`,
+        };
+      }
+      if (!highTotal || m.total > highTotal.total) highTotal = { total: m.total, a: m.homePlayer, b: m.awayPlayer };
+    });
+
+    const titlesBefore = (history && history.ringsByPlayer && history.ringsByPlayer.get(champion.name)) || 0;
+    const titleNo = titlesBefore + 1;
+    const fw = Math.max(gf.s1, gf.s2), fl = Math.min(gf.s1, gf.s2);
+
+    const parts = [];
+    parts.push(
+      `${champion.name} ist Madden Bowl Champion: ${fw}:${fl} im Finale gegen ${runnerUp.name}. ${
+        titleNo === 1 ? "Für ihn ist es der erste Titel überhaupt." : `Es ist bereits Titel Nummer ${titleNo}.`
+      }`
+    );
+
+    const podium = [`🥇 ${champion.name}`, `🥈 ${runnerUp.name}`];
+    if (third) podium.push(`🥉 ${third.name}`);
+    parts.push(`<strong>Die Siegerehrung.</strong> ${podium.join("   ")}`);
+
+    const seeds = MB.getGroupSeedsFinal ? MB.getGroupSeedsFinal(state) : new Map();
+    const topSeed = [...seeds.entries()].find(([, seed]) => seed === 1);
+    if (topSeed) {
+      parts.push(
+        topSeed[0] === champion.name
+          ? `<strong>Der Weg.</strong> ${champion.name} ging als Nummer 1 der Gruppenphase ins Turnier und wurde der Favoritenrolle gerecht.`
+          : `<strong>Der Weg.</strong> Die Gruppenphase beendete ${topSeed[0]} als Nummer 1 – am Ende jubelt trotzdem ${champion.name}. So schnell kann eine Favoritenrolle wertlos werden.`
+      );
+    }
+
+    const facts = [`In ${matches.length} Spielen fielen ${totalPoints} Punkte (Ø ${fmtDecimal(totalPoints / Math.max(matches.length, 1))} pro Spiel).`];
+    if (highScore) facts.push(`Höchste Einzelleistung: ${highScore.player} mit ${highScore.score} Punkten gegen ${highScore.opponent}.`);
+    if (bigMargin) facts.push(`Deutlichster Sieg: ${bigMargin.winner} gegen ${bigMargin.loser}, ${bigMargin.score}.`);
+    if (highTotal) facts.push(`Punktreichstes Spiel: ${highTotal.a} gegen ${highTotal.b} mit zusammen ${highTotal.total} Punkten.`);
+    parts.push(`<strong>Die Zahlen.</strong> ${facts.join(" ")}`);
+
+    const tb = MB.getPlayoffMatch(state, "tb");
+    const tbWinner = MB.winnerOf(tb), tbLoser = MB.loserOf(tb);
+    if (tb && tbWinner && tbLoser) {
+      parts.push(`<strong>Die Toilet Bowl.</strong> ${tbWinner.name} setzt sich gegen ${tbLoser.name} durch – und darf sich damit über die undankbarste Trophäe des Turniers freuen.`);
+    }
+
+    parts.push("Damit ist die Saison Geschichte. Alle Zahlen wandern in die Hall of Fame – und ab jetzt gilt wieder das Wichtigste beim Madden Bowl: Bis zur Revanche wird fleißig diskutiert.");
+
+    return {
+      kind: "wrapup",
+      title: "🏆 Siegerehrung & Turnierrückblick",
+      body: paragraphs(parts),
+      data: { champion: champion.name, runnerUp: runnerUp.name },
+    };
+  }
+
+  async function getPublishedPortraitGroups(tournamentId) {
+    const articles = await fetchArticles(tournamentId, 200);
+    const out = new Set();
+    (articles || []).forEach((a) => {
+      if (a.kind === "portrait" && a.data && a.data.group) out.add(a.data.group);
+    });
+    return out;
+  }
+
+  // ======================================================================
   // SUPABASE
   // ======================================================================
 
@@ -899,20 +1211,21 @@
     const articles = await fetchArticles(tournamentId, 200);
     const out = new Set();
     (articles || []).forEach((a) => {
-      if (a.kind === "spurious" && a.data && a.data.pairKey) out.add(a.data.pairKey);
+      // auch Paarungen, die schon in einem Power Ranking vorkamen
+      if ((a.kind === "spurious" || a.kind === "progress") && a.data && a.data.pairKey) out.add(a.data.pairKey);
     });
     return out;
   }
 
-  // Soll jetzt ein neuer Zwischenstands-Artikel erscheinen?
-  // Alle 3 fertigen Spiele.
+  // Soll jetzt ein neuer Power-Ranking-Artikel erscheinen?
+  // Alle PROGRESS_EVERY fertigen Spiele.
   function isProgressArticleDue(
     state,
     progressArticlesSoFar
   ) {
     const finished = countFinishedMatches(state);
     const threshold =
-      (progressArticlesSoFar + 1) * 3;
+      (progressArticlesSoFar + 1) * PROGRESS_EVERY;
 
     return (
       finished >= threshold &&
@@ -931,6 +1244,16 @@
     buildFinalsArticle,
     buildChampionArticle,
     buildSpuriousArticle,
+    buildPortraitArticle,
+    buildWrapUpArticle,
+
+    PROGRESS_EVERY,
+    PORTRAIT_ORDER,
+    PORTRAIT_AT,
+    computePortraitGroups,
+    nextPortraitGroup,
+    isPortraitDue,
+    getPublishedPortraitGroups,
 
     pushArticle,
     getLastPushArticleError,

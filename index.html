@@ -66,36 +66,6 @@
           <small style="color:var(--accent); font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">
             Turnier-Informationen & Live-Tracking
           </small>
-          <button onclick="document.getElementById('infoPanel').classList.toggle('hidden')"
-                  class="btn-secondary" style="padding: 2px 8px; font-size: 0.6em; background: var(--nfl-blue);">
-            ⓘ REGELN & SETTINGS
-          </button>
-        </div>
-
-        <div id="infoPanel" class="hidden" style="background: rgba(0,0,0,0.3); border: 1px solid #2d3748; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 0.75em; line-height: 1.5;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-            <div>
-              <strong style="color:var(--accent);">⚙️ MADDEN SETTINGS</strong><br>
-              • Zeit: 4 Min (Reg.) / 5 Min (Playoffs)<br>
-              • Level: Pro | Style: Simulation<br>
-              • Kicking: Classic | Passing: Classic<br>
-              • Wetter: Random | Broadcast: Random | Accelerated Clock: On
-            </div>
-            <div>
-              <strong style="color:var(--accent);">📜 TURNIER-REGELN</strong><br>
-              • Draft: Neueinsteiger > Vorjahresletzte<br>
-              • Team-Limit: OVR ≤ 90<br>
-              • Trade: Freiwilliger Down-Trade nach 2L
-              • Strafen: Abknien = 10P für den Gegner
-            </div>
-            <div>
-              <strong style="color:var(--accent);">🎮 CONTROLLER HUB</strong><br>
-              <a href="https://www.ea.com/games/madden-nfl/madden-nfl-26/controls-hub/playstation-controls-hub"
-                 target="_blank" style="color: white; text-decoration: underline;">
-                Madden 26 Controls Hub (EA)
-              </a>
-            </div>
-          </div>
         </div>
 
         <div id="nextGamesList" style="width: 100%;"></div>
@@ -126,6 +96,21 @@
       </div>
     </div>
 
+    <!-- Auswahl neben jedem Ergebnis (✨): Meme (mit Kontext-Dialog) oder
+         Spurious Correlation erzeugen. Nichts davon passiert automatisch. -->
+    <div id="resultActionModal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:380px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h2 style="margin:0;">✨ Beitrag erstellen</h2>
+          <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeResultActionChooser()">✕</button>
+        </div>
+        <div id="resultActionSummary" class="hint" style="margin-bottom:12px;"></div>
+        <button id="resultActionMemeBtn" onclick="chooseResultAction('meme')">🎭 Meme (mit Kontext-Auswahl)</button>
+        <button class="btn-secondary" style="margin-top:8px;" onclick="chooseResultAction('spurious')">📊 Spurious Correlation</button>
+        <div id="resultActionNote" class="hint" style="font-size:0.75em; opacity:0.7; margin-top:8px;"></div>
+      </div>
+    </div>
+
     <!-- Erscheint nach JEDEM gespeicherten Ergebnis: Admin kann optional
          markieren, was besonders war (Fehlentscheidung, Ausrede, Comeback...).
          Nur wenn hier mindestens ein Häkchen gesetzt wird, entsteht daraus
@@ -141,7 +126,7 @@
         <div style="font-size:0.8em; opacity:0.75; margin-bottom:8px;">Was war die Story dieses Spiels? Mehrere Optionen möglich — ohne Häkchen entsteht kein Story-Meme.</div>
         <div id="memeContextTags" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:7px;"></div>
         <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-          <button class="btn-secondary" style="width:auto;" onclick="skipMemeContext()">Ohne Kontext weiter</button>
+          <button class="btn-secondary" style="width:auto;" onclick="skipMemeContext()">Abbrechen</button>
           <button class="btn" style="width:auto;" onclick="saveMemeContext()">🎭 Meme erzeugen</button>
         </div>
       </div>
@@ -1813,7 +1798,7 @@ const ringsHtml = rings > 0
                 <input type="number" class="score-input" id="score-group-${gIdx}-home" value="${m.s1 !== null ? m.s1 : ''}"
                        oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
                 ${isAdmin ? `<button type="button" id="score-group-${gIdx}-save" class="score-save-btn" onclick="commitScore('group',${gIdx})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
-                ${(isAdmin && isFinished(m)) ? `<button type="button" class="score-save-btn" onclick="openMemeContextEditorManual('group',${gIdx})" title="Meme generieren">🎭</button>` : ''}
+                ${(isAdmin && isFinished(m)) ? `<button type="button" class="score-save-btn" onclick="openResultActionChooser('group',${gIdx})" title="Meme oder Spurious Correlation erstellen">✨</button>` : ''}
               </div>
               <div class="team-box">
                 ${getLogoHtml(p1.team)} <span>${p1.name}</span>
@@ -2042,6 +2027,9 @@ const ringsHtml = rings > 0
           MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
           const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r) : MB.Blog.buildChampionArticle(r);
           MB.Blog.pushArticle(MB.getCurrentTournamentId(), article);
+          // Finalergebnis eingetragen -> zusätzlich der große Abschluss-Artikel
+          // (Siegerehrung + Turnierzusammenfassung).
+          if (r.type === 'champion') publishWrapUpArticle();
         });
 
         // addSessionRecord() unshiftet synchron in sessionRecords (der
@@ -2051,41 +2039,31 @@ const ringsHtml = rings > 0
         const addedCount = sessionRecords.length - recordsBeforePopup;
         const autoDetectedEntries = addedCount > 0 ? sessionRecords.slice(0, addedCount) : [];
 
-        // Reine Rand-Erkennung (Blowout ab 21, knapp bis 3 Punkten) OHNE
-        // Tags — nur um zu wissen, ob sich das Kontext-Popup von selbst
-        // aufdrängt. Passiert nicht bei jedem Spiel, daher ok als Auto-Trigger.
-        let autoStoryPreview = null;
-        try {
-          autoStoryPreview = MB.Records.detectStoryMeme({ homeName, awayName, homeScore: match.s1, awayScore: match.s2, memeContext: {} });
-        } catch (e) {}
-
-        // Normalfall (kein Rekord, kein auffälliger Rand): einfach still
-        // speichern, kein Popup. Auffällige Spiele bekommen den Dialog
-        // automatisch; für alles andere gibt's das 🎭-Icon neben Speichern.
-        if (autoDetectedEntries.length > 0 || autoStoryPreview) {
-          openMemeContextEditor(type, idx, match, autoDetectedEntries);
+        // Popup NUR bei echten Rekorden/Meilensteinen — mit Meme (falls
+        // Imgflip eingerichtet ist) und direktem Veröffentlichen-Button,
+        // ohne Kontext-Auswahl. Alles andere (Story-Memes, Spurious
+        // Correlations) läuft über den ✨-Button neben dem Ergebnis.
+        if (autoDetectedEntries.length > 0) {
+          activePopupEntries = autoDetectedEntries;
+          openMemePopup();
         }
 
-        // Turnierblog: alle 3 Spiele ein Zwischenstand-Artikel.
+        // Turnierblog: Power Ranking alle MB.Blog.PROGRESS_EVERY Spiele —
+        // automatisch mit 1-2 Saisonverlauf-Memes (falls Imgflip eingerichtet)
+        // und einer Spurious Correlation.
         const progressDueNow = MB.Blog.isProgressArticleDue(state, progressArticlesSoFar);
         if (progressDueNow) {
-          const finishedCount = MB.Blog.countFinishedMatches(state);
-          MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildProgressArticle(state, history, finishedCount));
-          progressArticlesSoFar++;
+          progressArticlesSoFar++; // sofort hochzählen, damit ein schneller zweiter Save nicht doppelt auslöst
+          publishPowerRanking();
         }
 
-        // Spurious Correlations (spurious.js): bei JEDEM gespeicherten
-        // Ergebnis prüfen, ob eine Madden-Bowl-Kennzahl aus der Historie
-        // zufällig stark mit einer der 101 hinterlegten deutschen
-        // Jahres-Statistiken korreliert. Läuft bewusst NICHT, wenn in
-        // diesem Speichervorgang bereits automatisch ein anderer Artikel
-        // entsteht (Finale/Champion/Zwischenstand) — sonst wirkt der Blog
-        // überladen — und nicht, solange schon ein unveröffentlichter
-        // Vorschlag in den Rekord-Momenten liegt. Läuft async im
-        // Hintergrund, blockiert also nichts.
-        if (milestoneRecords.length === 0 && !progressDueNow) {
-          maybeOfferSpuriousCorrelation();
-        }
+        // Spielerporträts (Titelverteidiger, Contender, Rest): zu Turnier-
+        // beginn nach und nach, pro fertigem Spiel höchstens eines.
+        publishNextPortrait();
+
+        // Spurious Correlations entstehen nicht mehr automatisch nach jedem
+        // Ergebnis, sondern (a) fest eingebaut in jedes Power Ranking und
+        // (b) auf Knopfdruck über ✨ neben dem Ergebnis.
       }
 
       if (isAdmin && ttsUnlocked) renderSongMomentsPanel(); // neu erreichte Meilensteine sofort sichtbar machen
@@ -2540,7 +2518,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
                       oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
                ${(isAdmin && isGroupPhaseComplete()) ? `<button type="button" id="score-playoff-${index}-save" class="score-save-btn" onclick="commitScore('playoff',${index})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
-               ${(isAdmin && isFinished(match)) ? `<button type="button" class="score-save-btn" onclick="openMemeContextEditorManual('playoff',${index})" title="Meme generieren">🎭</button>` : ''}
+               ${(isAdmin && isFinished(match)) ? `<button type="button" class="score-save-btn" onclick="openResultActionChooser('playoff',${index})" title="Meme oder Spurious Correlation erstellen">✨</button>` : ''}
              </div>`;
 
         html += `
@@ -3475,13 +3453,47 @@ function renderRanking() {
     let activePopupEntries = []; // aktuell im Meme-Popup angezeigte sessionRecords-Einträge
     let pendingMemeContext = null; // { type, idx, match, autoEntries } — während der Meme-Kontext-Dialog offen ist
 
-    function getMemeProvider() { return localStorage.getItem('mb_meme_provider') || 'canvas'; }
-    function setMemeProvider(p) { localStorage.setItem('mb_meme_provider', p); renderMemeSettingsPanel(); }
+    // Memes kommen ausschließlich über Imgflip (echte Vorlagen). Ist Imgflip
+    // nicht eingerichtet, gibt es bewusst gar keine Memes — statt eines
+    // selbstgezeichneten Ersatzes. Rekorde selbst bleiben trotzdem
+    // veröffentlichbar (dann ohne Bild).
+    function getMemeProvider() { return 'imgflip'; }
+    function memesAvailable() { return !!(MB.Records && MB.Records.hasImgflipSettings()); }
 
     function defaultMemeContext() {
       const out = {};
       Object.keys(MB.Records.MEME_CONTEXT_TAGS || {}).forEach((k) => { out[k] = false; });
       return out;
+    }
+
+    let pendingResultAction = null; // { type, idx } — solange die Auswahl (✨) offen ist
+
+    function openResultActionChooser(type, idx) {
+      const arr = (type === 'group') ? state.matches : state.playoffMatches;
+      const match = arr[idx];
+      if (!match || !isFinished(match)) return;
+      pendingResultAction = { type, idx };
+      const homeName = type === 'group' ? state.players[match.p1].name : match.p1.name;
+      const awayName = type === 'group' ? state.players[match.p2].name : match.p2.name;
+      document.getElementById('resultActionSummary').textContent = `${homeName} ${match.s1}:${match.s2} ${awayName}`;
+      const memeBtn = document.getElementById('resultActionMemeBtn');
+      const available = memesAvailable();
+      memeBtn.disabled = !available;
+      document.getElementById('resultActionNote').textContent = available ? '' : 'Memes brauchen einen eingerichteten Imgflip-Account (Einstellungen → Meme-Einstellungen).';
+      document.getElementById('resultActionModal').classList.remove('hidden');
+    }
+
+    function closeResultActionChooser() {
+      document.getElementById('resultActionModal')?.classList.add('hidden');
+      pendingResultAction = null;
+    }
+
+    function chooseResultAction(kind) {
+      const pending = pendingResultAction;
+      closeResultActionChooser();
+      if (!pending) return;
+      if (kind === 'meme') openMemeContextEditorManual(pending.type, pending.idx);
+      else maybeOfferSpuriousCorrelation({ force: true });
     }
 
     function openMemeContextEditorManual(type, idx) {
@@ -3738,14 +3750,22 @@ function renderRanking() {
         } else if (entry.error) {
           bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div>
             <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="rerenderMeme(${globalIndex})">🔁 Erneut versuchen</button>`;
+        } else if (entry.noMeme) {
+          bodyHtml = `
+            <div style="font-size:0.88em; opacity:0.85; text-align:left; margin-bottom:10px;">${recordSummaryText(entry.record)}</div>
+            <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+              ${memePublishButtonHtml(entry, globalIndex)}
+              <button class="btn-secondary" style="width:auto;" onclick="dismissEntry(${globalIndex})">🙈 Verwerfen</button>
+            </div>`;
         } else {
           bodyHtml = `
             <div class="meme-preview-slot" data-popup-slot="${globalIndex}"
                  style="width:100%; max-width:260px; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
             <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
-              <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${globalIndex})">🔁 Anderes Motiv</button>
-              <button style="width:auto;" onclick="shareMeme(${globalIndex})">📱 Teilen</button>
               ${memePublishButtonHtml(entry, globalIndex)}
+              <button style="width:auto;" onclick="shareMeme(${globalIndex})">📱 Teilen</button>
+              <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${globalIndex})">🔁 Anderes Motiv</button>
+              <button class="btn-secondary" style="width:auto;" onclick="dismissEntry(${globalIndex})">🙈 Verwerfen</button>
             </div>`;
         }
         return `<div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #22304333; text-align:center;">
@@ -3804,6 +3824,108 @@ function renderRanking() {
       </div>`;
     }
 
+    // =========================================================
+    // AUTOMATISCHE BLOG-ARTIKEL: Power Ranking, Porträts, Abschluss
+    // =========================================================
+    let portraitsComplete = false; // sobald alle drei Porträts veröffentlicht sind, keine Abfragen mehr
+    let portraitPublishing = false; // verhindert Doppelveröffentlichung bei schnell aufeinanderfolgenden Saves
+
+    // Power Ranking inkl. 1-2 Saisonverlauf-Memes (nur mit Imgflip) und
+    // einer Spurious Correlation (Grafik + kurzer Teaser im Text). Fehler bei
+    // den Extras verhindern den Artikel nie — er erscheint dann ohne Bilder.
+    async function publishPowerRanking() {
+      const tid = MB.getCurrentTournamentId();
+      try {
+        const finishedCount = MB.Blog.countFinishedMatches(state);
+        const article = MB.Blog.buildProgressArticle(state, history, finishedCount);
+        const images = [];
+
+        // "Dem Boyz": nur wenn ein Cowboys-Spieler mitspielt und schon verloren
+        // hat. Zählt als eines der 1-2 Saison-Memes; braucht kein Imgflip.
+        let demBoyzUsed = false;
+        try {
+          const dem = MB.Records.buildDemBoyzData(state);
+          if (dem) {
+            images.push(await MB.Records.uploadMemeToStorage(MB.Records.renderDemBoyzCanvas(dem), tid, 'demboyz'));
+            demBoyzUsed = true;
+          }
+        } catch (e) { console.warn('Dem-Boyz-Grafik fehlgeschlagen:', e); }
+
+        if (memesAvailable()) {
+          const record = MB.Records.buildSeasonMemeRecord(state, finishedCount);
+          if (record) {
+            const pool = [...MB.Records.IMGFLIP_TEMPLATE_POOLS.season].sort(() => Math.random() - 0.5);
+            const wanted = demBoyzUsed ? 1 : (Math.random() < 0.5 ? 1 : 2);
+            for (let n = 0; n < wanted && n < pool.length; n++) {
+              try {
+                const result = await MB.Records.generateImgflipMeme(record, { ...MB.Records.getImgflipSettings(), templateId: pool[n].id });
+                images.push(result.url);
+              } catch (e) { console.warn('Saison-Meme fehlgeschlagen:', e); }
+            }
+          }
+        }
+
+        try {
+          if (MB.Spurious) {
+            const used = await MB.Blog.getUsedSpuriousPairKeys(tid);
+            const candidates = await MB.Spurious.findAllOverallCandidates(state, used, { limit: 1 });
+            const candidate = candidates && candidates[0];
+            if (candidate) {
+              const headline = MB.Spurious.buildSpuriousHeadline ? MB.Spurious.buildSpuriousHeadline(candidate) : null;
+              const teaser = headline
+                ? `📊 Die Zahl zum Zwischenstand: ${headline.title}${headline.subtitle ? ' – ' + headline.subtitle : ''} Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`
+                : `📊 Die Zahl zum Zwischenstand: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“ (r = ${candidate.r.toFixed(2)}). Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`;
+              article.body += '\n\n' + teaser;
+              const canvas = MB.Spurious.renderChartCanvas(candidate);
+              images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
+              article.data = { ...(article.data || {}), pairKey: candidate.pairKey };
+            }
+          }
+        } catch (e) { console.warn('Spurious-Anteil im Power Ranking fehlgeschlagen:', e); }
+
+        if (images.length) {
+          article.media_url = images[0];
+          article.media_type = 'image';
+          if (images.length > 1) article.data = { ...(article.data || {}), extra_media: images.slice(1) };
+        }
+        await MB.Blog.pushArticle(tid, article);
+      } catch (e) {
+        console.warn('Power Ranking konnte nicht veröffentlicht werden:', e);
+      }
+    }
+
+    async function publishNextPortrait() {
+      if (portraitsComplete || portraitPublishing) return;
+      portraitPublishing = true;
+      try {
+        const tid = MB.getCurrentTournamentId();
+        if (!tid) return;
+        const published = await MB.Blog.getPublishedPortraitGroups(tid);
+        if (published.size >= MB.Blog.PORTRAIT_ORDER.length) { portraitsComplete = true; return; }
+        if (!MB.Blog.isPortraitDue(state, published, history)) return;
+        const group = MB.Blog.nextPortraitGroup(state, history, published);
+        if (!group) { portraitsComplete = true; return; }
+        const article = MB.Blog.buildPortraitArticle(group, state, history);
+        if (article) await MB.Blog.pushArticle(tid, article);
+      } catch (e) {
+        console.warn('Spielerporträt konnte nicht veröffentlicht werden:', e);
+      } finally {
+        portraitPublishing = false;
+      }
+    }
+
+    async function publishWrapUpArticle() {
+      try {
+        const tid = MB.getCurrentTournamentId();
+        if (!tid) return;
+        if ((await MB.Blog.countArticlesByKind(tid, 'wrapup')) > 0) return; // schon vorhanden
+        const article = MB.Blog.buildWrapUpArticle(state, history);
+        if (article) await MB.Blog.pushArticle(tid, article);
+      } catch (e) {
+        console.warn('Abschluss-Artikel konnte nicht veröffentlicht werden:', e);
+      }
+    }
+
     async function addSessionRecord(record) {
       const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null, published: false };
       sessionRecords.unshift(entry); // neueste zuerst
@@ -3842,12 +3964,8 @@ function renderRanking() {
       const tournamentId = MB.getCurrentTournamentId();
       const article = MB.Blog.buildRecordArticle(entry.record);
       try {
-        if (entry.provider === 'imgflip' && entry.imageUrl) {
+        if (entry.imageUrl) {
           article.media_url = entry.imageUrl;
-          article.media_type = 'image';
-        } else if (entry.canvasPreview) {
-          const canvas = MB.Records.renderMemeCanvas(entry.record, entry.styleId);
-          article.media_url = await MB.Records.uploadMemeToStorage(canvas, tournamentId, entry.record.type);
           article.media_type = 'image';
         }
       } catch (e) {
@@ -3857,29 +3975,30 @@ function renderRanking() {
     }
 
     async function regenerateEntryVisual(entry) {
-      entry.loading = true; entry.error = null;
-      if (entry.provider === 'imgflip') {
-        const settings = MB.Records.getImgflipSettings();
-        if (!settings.username || !settings.password) {
-          entry.error = 'Imgflip nicht eingerichtet (siehe oben).';
-          entry.loading = false;
-          return;
-        }
-        try {
-          const result = await MB.Records.generateImgflipMeme(entry.record, settings);
-          entry.imageUrl = result.url;
-        } catch (e) {
-          entry.error = 'Imgflip-Fehler: ' + e.message;
-        }
-      } else {
-        const styleId = MB.Records.MEME_STYLES[Math.floor(Math.random() * MB.Records.MEME_STYLES.length)].id;
-        const canvas = MB.Records.renderMemeCanvas(entry.record, styleId);
-        canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.style.objectFit = 'cover';
-        entry.styleId = styleId;
-        entry.canvasPreview = canvas;
+      entry.loading = true; entry.error = null; entry.noMeme = false;
+      if (!memesAvailable()) {
+        // Kein Imgflip eingerichtet -> bewusst kein Meme. Der Rekord selbst
+        // (nur Text) lässt sich trotzdem veröffentlichen.
+        entry.noMeme = true; entry.imageUrl = null;
+        entry.loading = false;
+        return;
+      }
+      try {
+        const result = await MB.Records.generateImgflipMeme(entry.record, MB.Records.getImgflipSettings());
+        entry.imageUrl = result.url;
+      } catch (e) {
+        entry.error = 'Imgflip-Fehler: ' + e.message;
       }
       entry.loading = false;
     }
+
+    // Kurzer Text zum Rekord (erster Absatz des Blog-Artikels) — für Einträge
+    // ohne Meme-Bild, damit im Popup trotzdem klar ist, worum es geht.
+    function recordSummaryText(record) {
+      try { return (MB.Blog.buildRecordArticle(record).body || '').split('\n\n')[0]; } catch (e) { return ''; }
+    }
+
+    function dismissEntry(i) { dismissSpurious(i); }
 
     // Einstellungen (Meme-Stil, Imgflip-Zugangsdaten) — sitzt im eingeklappten
     // "Ansage/Musik-Einstellungen"-Bereich, NICHT mehr in der immer sichtbaren
@@ -3887,19 +4006,15 @@ function renderRanking() {
     function renderMemeSettingsPanel() {
       const el = document.getElementById('memeSettingsPanel');
       if (!el) return;
-      const provider = getMemeProvider();
       const imgflipSettings = MB.Records.getImgflipSettings();
 
       let html = `
-        <div style="margin-bottom:14px;">
-          <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:4px;">Meme-Stil</label>
-          <select onchange="setMemeProvider(this.value)">
-            <option value="canvas" ${provider !== 'imgflip' ? 'selected' : ''}>🎨 Eigene Grafik (kostenlos, kein Account)</option>
-            <option value="imgflip" ${provider === 'imgflip' ? 'selected' : ''}>🖼️ Imgflip — echte Meme-Vorlagen (kostenlos, Account nötig)</option>
-          </select>
+        <div class="hint" style="font-size:0.8em; opacity:0.75; margin-bottom:12px;">
+          Memes werden über Imgflip erzeugt (kostenloser Account). Ohne eingerichteten Account gibt es keine Memes.
+          Status: <b>${memesAvailable() ? '✅ eingerichtet' : '⚠️ nicht eingerichtet — keine Memes'}</b>
         </div>`;
 
-      if (provider === 'imgflip') {
+      {
         if (!ttsUnlocked) {
           html += `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren, um Imgflip-Zugangsdaten einzugeben</button>`;
         } else {
@@ -3976,6 +4091,10 @@ function renderRanking() {
           bodyHtml = `<div class="hint">Wird generiert…</div>`;
         } else if (entry.error) {
           bodyHtml = `<div class="hint" style="color:var(--nfl-red);">${entry.error}</div><button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="rerenderMeme(${i})">🔁 Erneut versuchen</button>`;
+        } else if (entry.noMeme) {
+          bodyHtml = `
+            <div style="font-size:0.85em; opacity:0.85; margin-bottom:8px;">${recordSummaryText(entry.record)}</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">${memePublishButtonHtml(entry, i)}</div>`;
         } else {
           bodyHtml = `
             <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">

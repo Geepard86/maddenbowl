@@ -406,7 +406,106 @@
       { id: 29617627, name: "Look At Me", caption: (r) => ({ top: "LOOK AT ME", bottom: `I AM THE NEW CHAMPION: ${r.player}` }) },
       { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW MADDEN BOWL CHAMPION!" }) },
     ],
+
+    // SAISONVERLAUF — Memes für die Power-Ranking-Artikel. Beziehen sich
+    // nicht auf ein einzelnes Spiel oder einen Rekord, sondern auf die
+    // Tabelle: Spitzenreiter (leader), Verfolger (second), Schlusslicht
+    // (last) und Anzahl fertiger Spiele (count). Bewusst ANDERE Vorlagen als
+    // in den Rekord-Pools oben, damit sich Motive nicht überschneiden.
+    // Nur klassische oben/unten-Vorlagen. IDs bitte einmal über
+    // "Alle Memes testen" prüfen — kaputte IDs fallen dort sofort auf.
+    // (Das "Dem Boyz"-Meme ist KEINE Imgflip-Vorlage, siehe
+    // renderDemBoyzCanvas weiter unten.)
+    season: [
+      { id: 61520, name: "Futurama Fry", caption: (r) => ({ top: `NOT SURE IF ${upper(r.leader)} IS THAT GOOD`, bottom: "OR THE REST JUST HASN'T SHOWN UP YET" }) },
+      { id: 61582, name: "Condescending Wonka", caption: (r) => ({ top: `OH, ${upper(r.last)} STILL HAS A PLAYOFF PLAN`, bottom: "PLEASE, TELL ME MORE" }) },
+      { id: 61516, name: "Philosoraptor", caption: (r) => ({ top: `IF ${upper(r.leader)} LEADS AFTER ${r.count} GAMES`, bottom: "IS IT SKILL OR JUST GOOD MATCHUPS?" }) },
+      { id: 405658, name: "Grumpy Cat", caption: (r) => ({ top: `${upper(r.last)} AFTER ${r.count} GAMES`, bottom: "I HAD FUN ONCE. IT WAS TERRIBLE." }) },
+      { id: 101288, name: "Third World Skeptical Kid", caption: (r) => ({ top: `${upper(r.second)}: "I'M STILL IN THE TITLE RACE"`, bottom: "THE TABLE DISAGREES" }) },
+      { id: 89370399, name: "Roll Safe", caption: (r) => ({ top: "YOU CAN'T LOSE THE TITLE RACE", bottom: `IF NOBODY CHECKS THE TABLE (${upper(r.last)})` }) },
+      { id: 61527, name: "Y U No", caption: (r) => ({ top: `${upper(r.last)} Y U NO`, bottom: "WIN A GAME" }) },
+    ],
   };
+
+  function upper(s) { return String(s || "").toUpperCase(); }
+
+  // Saison-Kontext für ein Saisonverlauf-Meme aus dem aktuellen Tabellenstand.
+  // Liefert null, solange noch keine sinnvolle Tabelle existiert.
+  function buildSeasonMemeRecord(state, finishedCount) {
+    const sorted = [...((state && state.players) || [])]
+      .filter((p) => p && p.name)
+      .sort((a, b) => (b.wins || 0) - (a.wins || 0) || (b.diff || 0) - (a.diff || 0));
+    if (sorted.length < 2) return null;
+    return {
+      type: "season",
+      leader: sorted[0].name,
+      second: sorted[1].name,
+      last: sorted[sorted.length - 1].name,
+      count: finishedCount || 0,
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // "JUST CHECKING IF Y'ALL STILL DEM BOYZ.." (Dallas Cowboys)
+  // Kein Imgflip-Template, sondern eine eigene Grafik im Stil des Originals:
+  // weißer Hintergrund, Überschrift, darunter eine wachsende Liste der
+  // Gegner, gegen die die Cowboys verloren haben. Gibt es (noch) keine
+  // Cowboys-Niederlage oder keinen Cowboys-Spieler im Turnier -> null.
+  // Bewusst ohne Logo: nur Text und Farben.
+  // ---------------------------------------------------------------------
+  function buildDemBoyzData(state, teamId) {
+    const id = teamId || "DAL";
+    const player = ((state && state.players) || []).find((p) => p && p.team === id);
+    if (!player) return null;
+    const lostTo = [];
+    MB.getCurrentMatchesNormalized(state).forEach((m) => {
+      if (m.homePlayer === player.name && m.homeScore < m.awayScore) lostTo.push({ name: m.awayPlayer, score: `${m.homeScore}:${m.awayScore}` });
+      else if (m.awayPlayer === player.name && m.awayScore < m.homeScore) lostTo.push({ name: m.homePlayer, score: `${m.awayScore}:${m.homeScore}` });
+    });
+    if (!lostTo.length) return null;
+    return { player: player.name, lostTo };
+  }
+
+  function renderDemBoyzCanvas(data) {
+    const W = 1080, PAD = 70, LINE = 84;
+    const rows = data.lostTo;
+    const H = 420 + rows.length * LINE + 140;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = "#041E42"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.font = "bold 74px Arial, Helvetica, sans-serif";
+    ctx.fillText("Just checking if", W / 2, 70);
+    ctx.fillText("y'all still dem boyz..", W / 2, 160);
+    ctx.font = "bold 40px Arial, Helvetica, sans-serif";
+    ctx.fillStyle = "#869397";
+    ctx.fillText(`${data.player} (Cowboys) hat verloren gegen`, W / 2, 285);
+
+    ctx.textAlign = "left";
+    rows.forEach((r, i) => {
+      const y = 370 + i * LINE;
+      ctx.fillStyle = "#041E42";
+      ctx.font = "bold 58px Arial, Helvetica, sans-serif";
+      ctx.fillText(`${i + 1}. ${r.name}`, PAD, y);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#869397";
+      ctx.font = "44px Arial, Helvetica, sans-serif";
+      ctx.fillText(r.score, W - PAD, y + 8);
+      ctx.textAlign = "left";
+    });
+
+    ctx.textAlign = "center"; ctx.fillStyle = "#b0b7bb";
+    ctx.font = "30px Arial, Helvetica, sans-serif";
+    ctx.fillText("Madden Bowl", W / 2, H - 70);
+    return canvas;
+  }
+
+  function hasImgflipSettings() {
+    const s = getImgflipSettings();
+    return !!(s.username && s.password);
+  }
 
   function buildImgflipCaptions(record, entry) {
     if (entry) return entry.caption(record);
@@ -676,6 +775,7 @@
     shootout: { player: "Tobi F.", opponent: "Marco", winnerScore: 45, loserScore: 42 },
     finals: { p1: "Tobi F.", p2: "Marco" },
     champion: { player: "Tobi F.", opponent: "Marco", winnerScore: 31, loserScore: 24 },
+    season: { leader: "Tobi F.", second: "Marco", last: "Jonas", count: 9 },
   };
 
   const TEST_STORY_DATA = { player: "Tobi F.", opponent: "Marco", winner: "Tobi F.", loser: "Marco", score: "28-24" };
@@ -744,7 +844,8 @@
     detectRecords, detectMilestoneRecords, buildMemeCaptions, renderMemeCanvas, canvasToBlob,
     detectStoryMeme, buildStoryCaptions, pickStoryTemplate, buildTestMemeJobs, generateAllTestMemes,
     shareOrDownloadMeme, shareOrOpenRemoteImage,
-    getImgflipSettings, setImgflipSettings, buildImgflipCaptions, pickImgflipTemplate, generateImgflipMeme,
+    getImgflipSettings, setImgflipSettings, hasImgflipSettings, buildImgflipCaptions, pickImgflipTemplate, generateImgflipMeme,
+    buildSeasonMemeRecord, buildDemBoyzData, renderDemBoyzCanvas,
     pushRecordMoment, fetchRecordMoments, dismissRecordMoment, uploadMemeToStorage,
   };
 })(window);

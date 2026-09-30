@@ -25,6 +25,74 @@
     { key: "shop", label: "Shop", href: "shop.html", icon: "assets/icons/cart.svg" },
   ];
 
+  // ---------------------------------------------------------------
+  // "ZUM HOME-BILDSCHIRM HINZUFÜGEN" (PWA-Installation)
+  // Chrome/Android liefert ein beforeinstallprompt-Event, das wir für den
+  // Menüpunkt aufheben. iOS Safari kennt das nicht -> dort Anleitung zeigen.
+  // ---------------------------------------------------------------
+  let _installPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    _installPrompt = e;
+  });
+  window.addEventListener("appinstalled", () => {
+    _installPrompt = null;
+    const item = document.getElementById("mbInstallItem");
+    if (item) item.style.display = "none";
+  });
+
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  }
+  function isIOS() {
+    const ua = navigator.userAgent || "";
+    return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
+  }
+
+  // Inhalt von "Regeln & Settings": wird in seasons.html gepflegt und liegt in
+  // Supabase (app_config, Schlüssel "rules_content"). Diese Defaults gelten,
+  // solange dort noch nichts gespeichert ist. Die Turnier-Defaults (Start,
+  // Spieldauer, Stadien) kommen zusätzlich aus "tournament_defaults".
+  const RULES_CONTENT_KEY = "rules_content";
+  const RULES_CONTENT_DEFAULTS = {
+    maddenSettings: [
+      "Zeit: 4 Min (Reg.) / 5 Min (Playoffs)",
+      "Level: Pro | Style: Simulation",
+      "Kicking: Classic | Passing: Classic",
+      "Wetter: Random | Broadcast: Random | Accelerated Clock: On",
+    ],
+    tournamentRules: [
+      "Draft: Neueinsteiger > Vorjahresletzte",
+      "Team-Limit: OVR ≤ 90",
+      "Trade: Freiwilliger Down-Trade nach 2L",
+      "Strafen: Abknien = 10P für den Gegner",
+    ],
+    hubLabel: "Madden 26 Controls Hub (EA)",
+    hubUrl: "https://www.ea.com/games/madden-nfl/madden-nfl-26/controls-hub/playstation-controls-hub",
+  };
+
+  function rulesListHtml(items) {
+    const list = (items || []).filter((x) => String(x).trim());
+    return list.length ? `<ul>${list.map((x) => `<li>${escHtml(x)}</li>`).join("")}</ul>` : `<div class="v2-info-muted">Nichts hinterlegt.</div>`;
+  }
+
+  function rulesStaticHtml(c) {
+    const safeUrl = /^https?:\/\//i.test(c.hubUrl || "") ? c.hubUrl : "";
+    return `
+    <div class="v2-info-block"><strong>⚙️ Madden Settings</strong>${rulesListHtml(c.maddenSettings)}</div>
+    <div class="v2-info-block"><strong>📜 Turnier-Regeln</strong>${rulesListHtml(c.tournamentRules)}</div>
+    ${safeUrl ? `<div class="v2-info-block"><strong>🎮 Controller Hub</strong><br><a href="${escHtml(safeUrl)}" target="_blank" rel="noopener">${escHtml(c.hubLabel || safeUrl)}</a></div>` : ""}`;
+  }
+
+  const RULES_DEFAULTS = {
+    startTime: "10:00", durGroup: 30, durPlayoff: 45, durBreak: 15,
+    stadium1: "Altima Field", stadium2: "KEVAG Stadium", playerCount: 8,
+  };
+
+  function escHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
   let _state = null;
   let _onChange = null; // optionaler Callback, den die Seite bei Spieler-Login/Logout ausführen kann
   let _showAdminLogin = false; // nur auf Seiten mit Admin-Bereich (aktuell index.html)
@@ -101,10 +169,20 @@
       <nav class="v2-nav-drawer" id="mbNavDrawer">
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
+        <div class="v2-nav-divider"></div>
+        <button class="v2-nav-link v2-nav-btn" onclick="MB.UI.openRules()">
+          <span class="v2-nav-emoji">📜</span> Regeln &amp; Settings
+        </button>
+        <button class="v2-nav-link v2-nav-btn" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">
+          <span class="v2-nav-emoji">📲</span> Zum Home-Bildschirm
+        </button>
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
       <div class="v2-modal-overlay" id="mbLoginModal" onclick="if(event.target===this) MB.UI.closeLogin()">
         <div class="v2-modal-box" id="mbLoginModalContent"></div>
+      </div>
+      <div class="v2-modal-overlay" id="mbInfoModal" onclick="if(event.target===this) MB.UI.closeInfo()">
+        <div class="v2-modal-box v2-info-box" id="mbInfoModalContent"></div>
       </div>`;
 
     document.body.insertAdjacentHTML("afterbegin", headerHtml);
@@ -118,6 +196,82 @@
   function closeNav() {
     document.getElementById("mbNavDrawer").classList.remove("open");
     document.getElementById("mbNavBackdrop").classList.remove("open");
+  }
+
+  // ---------------------------------------------------------------
+  // REGELN & SETTINGS (Burger-Menü)
+  // ---------------------------------------------------------------
+  function closeInfo() {
+    document.getElementById("mbInfoModal").classList.remove("open");
+  }
+
+  function openInfoModal(html) {
+    document.getElementById("mbInfoModalContent").innerHTML = html + `
+      <div class="v2-modal-actions">
+        <button class="v2-btn-primary" onclick="MB.UI.closeInfo()">Schließen</button>
+      </div>`;
+    document.getElementById("mbInfoModal").classList.add("open");
+  }
+
+  async function openRules() {
+    closeNav();
+    openInfoModal(`
+      <h3>📜 Regeln &amp; Settings</h3>
+      <div class="v2-info-content">
+        <div class="v2-info-block" id="mbRulesDynamic"><strong>⏱ Turnier-Ablauf</strong><br><span class="v2-info-muted">Lade…</span></div>
+        <div id="mbRulesContent"></div>
+      </div>`);
+
+    let saved = {}, content = {};
+    try {
+      const raw = await MB.getAppConfig("tournament_defaults");
+      if (raw) saved = JSON.parse(raw);
+    } catch (e) { console.warn("tournament_defaults laden fehlgeschlagen:", e); }
+    try {
+      const raw = await MB.getAppConfig(RULES_CONTENT_KEY);
+      if (raw) content = JSON.parse(raw);
+    } catch (e) { console.warn("rules_content laden fehlgeschlagen:", e); }
+    const v = { ...RULES_DEFAULTS, ...saved };
+    const contentEl = document.getElementById("mbRulesContent");
+    if (contentEl) contentEl.innerHTML = rulesStaticHtml({ ...RULES_CONTENT_DEFAULTS, ...content });
+    const el = document.getElementById("mbRulesDynamic");
+    if (!el) return;
+    el.innerHTML = `
+      <strong>⏱ Turnier-Ablauf</strong>
+      <ul>
+        <li>Start: ${escHtml(v.startTime)} Uhr</li>
+        <li>Spieldauer: ${escHtml(v.durGroup)} Min (Gruppe) / ${escHtml(v.durPlayoff)} Min (Playoffs), ${escHtml(v.durBreak)} Min Pause</li>
+        <li>Stadien: ${escHtml(v.stadium1)} &amp; ${escHtml(v.stadium2)}</li>
+        <li>Spieler: ${escHtml(v.playerCount)}</li>
+      </ul>`;
+  }
+
+  // ---------------------------------------------------------------
+  // HOME-BILDSCHIRM
+  // ---------------------------------------------------------------
+  async function installApp() {
+    closeNav();
+    if (_installPrompt) {
+      const promptEvent = _installPrompt;
+      _installPrompt = null;
+      try {
+        promptEvent.prompt();
+        await promptEvent.userChoice;
+      } catch (e) { console.warn("Install-Prompt fehlgeschlagen:", e); }
+      return;
+    }
+    const steps = isIOS()
+      ? `<ol>
+           <li>Unten (bzw. oben rechts) auf das <b>Teilen-Symbol</b> tippen (Quadrat mit Pfeil nach oben).</li>
+           <li><b>„Zum Home-Bildschirm“</b> wählen.</li>
+           <li>Oben rechts auf <b>„Hinzufügen“</b> tippen.</li>
+         </ol>
+         <div class="v2-info-muted">Wichtig: Auf dem iPhone geht das nur in <b>Safari</b> (oder dem Teilen-Menü deines Browsers).</div>`
+      : `<ol>
+           <li>Browser-Menü öffnen (⋮ bzw. Teilen-Menü).</li>
+           <li><b>„App installieren“</b> bzw. <b>„Zum Startbildschirm hinzufügen“</b> wählen.</li>
+         </ol>`;
+    openInfoModal(`<h3>📲 Zum Home-Bildschirm</h3><div class="v2-info-content">${steps}</div>`);
   }
 
   // ---------------------------------------------------------------
@@ -292,6 +446,8 @@
   global.MB.UI = {
     NAV_ITEMS, mountHeader, setState, currentPlayer, isAdminUnlocked,
     toggleNav, closeNav, toggleUserMenu,
+    openRules, closeInfo, installApp, isStandalone,
+    RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,
     openLogin, closeLogin, doLogin, doLogout,
     openAdminLogin, doAdminLogin, doAdminLogout,
   };

@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Madden Bowl VI — Blog</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Madden Bowl">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
 <script src="tipp.js"></script>
@@ -36,6 +42,11 @@
   .v2-lightbox.open { display:flex; }
   .v2-lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; }
   .v2-lightbox-close { position:absolute; top:16px; right:20px; background:none; border:none; color:#fff; font-size:2em; line-height:1; cursor:pointer; }
+  .v2-lightbox-actions { position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:center; gap:10px; padding:14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); background:linear-gradient(transparent, rgba(0,0,0,0.75)); }
+  .v2-lightbox-share { background:var(--v2-gold); color:#0B162A; border:none; border-radius:999px; padding:10px 22px; font-weight:800; font-size:0.95em; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .v2-lightbox-share:disabled { opacity:0.6; cursor:default; }
+  .v2-lightbox-hint { position:absolute; left:0; right:0; bottom:74px; text-align:center; color:#fff; font-size:0.8em; opacity:0.85; pointer-events:none; }
+  .v2-article-media + .v2-article-media { margin-top:-2px; }
 </style>
 </head>
 <body class="v2">
@@ -45,6 +56,10 @@
 <div class="v2-lightbox" id="mbLightbox" onclick="closeLightbox()">
   <button class="v2-lightbox-close" onclick="closeLightbox()">&times;</button>
   <img id="mbLightboxImg" src="" alt="">
+  <div class="v2-lightbox-hint" id="mbLightboxHint"></div>
+  <div class="v2-lightbox-actions" onclick="event.stopPropagation()">
+    <button class="v2-lightbox-share" id="mbLightboxShare" onclick="shareLightboxImage()">📤 Bild teilen</button>
+  </div>
 </div>
 
 <script>
@@ -55,7 +70,9 @@
 
   const CATEGORY_META = {
     kickoff:      { label: 'Turnierstart',    color: '#0EA5E9', image: 'assets/images/Blog_Kickoff.png' },
-    progress:     { label: 'Zwischenstand',   color: '#8B5CF6', image: 'assets/images/Blog_PowerRankings.png' },
+    progress:     { label: 'Power Ranking',   color: '#8B5CF6', image: 'assets/images/Blog_PowerRankings.png' },
+    portrait:     { label: 'Spielerporträt',  color: '#F97316', image: 'assets/images/Blog_WhoIs.png' },
+    wrapup:       { label: 'Turnierrückblick', color: '#EAB308', image: 'assets/images/Blog_Sieger.png' },
     record:       { label: 'Rekord',          color: '#F59E0B', image: 'assets/images/Blog_Rekord.png' },
     finals:       { label: 'Finale',          color: '#EF4444', image: 'assets/images/Blog_Finale.png' },
     champion:     { label: 'Champion',        color: '#22C55E', image: 'assets/images/Blog_Sieger.png' },
@@ -72,7 +89,7 @@
   // TODO: nach dem Deployen des Cloudflare Workers hier die echte
   // *.workers.dev-URL eintragen (siehe Anleitung), z.B.:
   // "https://maddenbowl-share.deinaccount.workers.dev"
-  const SHARE_BASE_URL = "https://maddenbowl-share.DEIN-ACCOUNT.workers.dev";
+  const SHARE_BASE_URL = "https://altima-bowl.geepard86.workers.dev";
 
   function excerpt(text, n) {
     const clean = (text || '').replace(/\s+/g, ' ').trim();
@@ -89,14 +106,65 @@
     renderList();
   }
 
+  let lightboxUrl = '';
+
   function openLightbox(url) {
+    lightboxUrl = url;
     document.getElementById('mbLightboxImg').src = url;
+    document.getElementById('mbLightboxHint').textContent = '';
     document.getElementById('mbLightbox').classList.add('open');
   }
 
   function closeLightbox() {
     document.getElementById('mbLightbox').classList.remove('open');
     document.getElementById('mbLightboxImg').src = '';
+    lightboxUrl = '';
+  }
+
+  function lightboxHint(text) {
+    const el = document.getElementById('mbLightboxHint');
+    el.textContent = text;
+    if (text) setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 4000);
+  }
+
+  // Teilt das Bild selbst (als Datei), NICHT den Link zum Beitrag: Web Share
+  // API mit Datei -> Systemdialog mit WhatsApp, Signal, ... Ohne Datei-Share
+  // (z.B. Desktop-Browser) wird das Bild stattdessen heruntergeladen.
+  async function shareLightboxImage() {
+    const url = lightboxUrl;
+    if (!url) return;
+    const btn = document.getElementById('mbLightboxShare');
+    btn.disabled = true;
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const type = blob.type || 'image/png';
+      const ext = type.includes('jpeg') ? 'jpg' : (type.split('/')[1] || 'png').split('+')[0];
+      const file = new File([blob], 'madden-bowl.' + ext, { type });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // Nutzer hat abgebrochen
+          // sonst: weiter zum Download-Fallback
+        }
+      }
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl; a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+      lightboxHint('Teilen wird hier nicht unterstützt – Bild wurde heruntergeladen.');
+    } catch (e) {
+      // Bild-Host erlaubt keinen Abruf per fetch (CORS) -> kein Datei-Share möglich.
+      console.warn('Bild teilen fehlgeschlagen:', e);
+      lightboxHint('Bild konnte nicht geladen werden. Lange auf das Bild drücken, um es zu speichern.');
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   document.addEventListener('keydown', (e) => {
@@ -115,9 +183,14 @@
   function renderArticle(a) {
     const meta = catMeta(a.kind);
     const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
-    const media = (a.media_type === 'image' && a.media_url)
-      ? `<img class="v2-article-media" src="${a.media_url}" alt="" loading="lazy" onclick="openLightbox('${a.media_url}')">`
-      : '';
+    const imageUrls = [];
+    if (a.media_type === 'image' && a.media_url) imageUrls.push(a.media_url);
+    // Weitere Bilder (z.B. Memes + Spurious-Correlation-Chart im Power Ranking)
+    // liegen in data.extra_media als Liste von URLs.
+    if (a.data && Array.isArray(a.data.extra_media)) a.data.extra_media.forEach(u => { if (u) imageUrls.push(u); });
+    const media = imageUrls.map(u =>
+      `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`
+    ).join('');
     const adminBtns = isAdmin ? `
       <div class="v2-admin-actions">
         <button onclick="editArticle('${a.id}')">✏️ Bearbeiten</button>
@@ -254,6 +327,8 @@
 
   async function reload() {
     articles = await MB.Blog.fetchAllArticles(200);
+    // Neuester gesehener Beitrag -> Dashboard-Hinweis (siehe renderNoticeBanner)
+    try { if (articles[0]) localStorage.setItem('mb_blog_seen', articles[0].created_at); } catch (e) {}
     applyDeepLinkTab();
     renderShell();
     scrollToDeepLinkedPost();
