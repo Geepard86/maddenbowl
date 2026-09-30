@@ -170,12 +170,8 @@
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
         <div class="v2-nav-divider"></div>
-        <button class="v2-nav-link v2-nav-btn" onclick="MB.UI.openRules()">
-          <span class="v2-nav-emoji">📜</span> Regeln &amp; Settings
-        </button>
-        <button class="v2-nav-link v2-nav-btn" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">
-          <span class="v2-nav-emoji">📲</span> Zum Home-Bildschirm
-        </button>
+        <button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
+        <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
       <div class="v2-modal-overlay" id="mbLoginModal" onclick="if(event.target===this) MB.UI.closeLogin()">

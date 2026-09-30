@@ -133,14 +133,20 @@
     </div>
 
     <div id="admin-panel" class="hidden">
-      <!-- Zeigt JEDE hinterlegte Meme-Vorlage einmal mit Test-Daten, live
-           während des Durchlaufs befüllt (siehe runAllMemeTest()). -->
+      <!-- Memes testen: ein Reiter pro Auslöser (automatisch / manuell) mit
+           kurzer Erklärung (wann, welche Memes, wie veröffentlicht) und den
+           Vorlagen dieses Auslösers mit Testdaten. Katalog: records.js →
+           getMemeTriggers(). Logik: openMemeTest() ff. -->
       <div id="memeTestModal" class="modal-overlay hidden">
         <div class="modal-box" style="max-width:900px; max-height:88vh; overflow-y:auto;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h2 style="margin:0;">🧪 Alle Memes testen</h2>
-            <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeMemeTestModal()">✕</button>
+            <h2 style="margin:0;">🧪 Memes testen</h2>
+            <button class="btn-secondary" style="width:auto; padding:4px 10px; margin:0;" onclick="closeMemeTestModal()">✕</button>
           </div>
+          <div id="memeTestGroups" style="display:flex; gap:6px; margin-bottom:8px;"></div>
+          <div id="memeTestTabs" style="display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:10px;"></div>
+          <div id="memeTestInfo" style="font-size:.82em; line-height:1.45; background:rgba(255,255,255,.04); border-radius:10px; padding:10px 12px; margin-bottom:10px;"></div>
+          <div id="memeTestActions" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;"></div>
           <div id="memeTestStatus" class="hint" style="margin-bottom:10px;"></div>
           <div id="memeTestGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px;"></div>
         </div>
@@ -2023,13 +2029,13 @@ const ringsHtml = rings > 0
         const milestoneRecords = MB.Records.detectMilestoneRecords(state, milestoneRecordFlags);
         milestoneRecords.forEach(r => {
           milestoneRecordFlags[r.type] = true;
-          addSessionRecord(r);
+          const entryPromise = addSessionRecord(r);
+          const milestoneEntry = sessionRecords[0]; // addSessionRecord unshiftet synchron
           MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
           const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r) : MB.Blog.buildChampionArticle(r);
-          MB.Blog.pushArticle(MB.getCurrentTournamentId(), article);
-          // Finalergebnis eingetragen -> zusätzlich der große Abschluss-Artikel
-          // (Siegerehrung + Turnierzusammenfassung).
-          if (r.type === 'champion') publishWrapUpArticle();
+          // Der Beitrag wartet kurz auf das Meme und nimmt es als Bild auf
+          // (kein extra Beitrag). Bei champion folgt danach der Abschluss-Artikel.
+          publishMilestoneArticle(milestoneEntry, entryPromise, article, r.type);
         });
 
         // addSessionRecord() unshiftet synchron in sessionRecords (der
@@ -3838,7 +3844,12 @@ function renderRanking() {
       try {
         const finishedCount = MB.Blog.countFinishedMatches(state);
         const article = MB.Blog.buildProgressArticle(state, history, finishedCount);
-        const images = [];
+        // Vorgemerkte Rekord-/Story-Memes ("Ins nächste Power Ranking") kommen zuerst.
+        const queued = getQueuedMemes(tid);
+        const images = queued.map((q) => q.url);
+        if (queued.length) {
+          article.body += '\n\n🎭 Aus den letzten Spielen: ' + queued.map((q) => q.label).join(', ') + '.';
+        }
 
         // "Dem Boyz": nur wenn ein Cowboys-Spieler mitspielt und schon verloren
         // hat. Zählt als eines der 1-2 Saison-Memes; braucht kein Imgflip.
@@ -3888,7 +3899,8 @@ function renderRanking() {
           article.media_type = 'image';
           if (images.length > 1) article.data = { ...(article.data || {}), extra_media: images.slice(1) };
         }
-        await MB.Blog.pushArticle(tid, article);
+        const savedRanking = await MB.Blog.pushArticle(tid, article);
+        if (savedRanking && queued.length) removeQueuedMemes(queued.map((q) => q.id));
       } catch (e) {
         console.warn('Power Ranking konnte nicht veröffentlicht werden:', e);
       }
@@ -3926,6 +3938,58 @@ function renderRanking() {
       }
     }
 
+    // Finale/Champion: Meme kommt in den jeweiligen Beitrag, nicht als
+    // eigener Post. Wartet höchstens MILESTONE_MEME_WAIT_MS auf das Bild;
+    // ohne Meme (kein Imgflip, Fehler, Timeout) erscheint der Beitrag ohne Bild.
+    const MILESTONE_MEME_WAIT_MS = 25000;
+    async function publishMilestoneArticle(entry, entryPromise, article, type) {
+      const tid = MB.getCurrentTournamentId();
+      try {
+        await Promise.race([entryPromise, new Promise((resolve) => setTimeout(resolve, MILESTONE_MEME_WAIT_MS))]);
+      } catch (e) { /* Meme-Fehler blockiert den Beitrag nie */ }
+      if (entry && entry.imageUrl) {
+        article.media_url = entry.imageUrl;
+        article.media_type = 'image';
+      }
+      let saved = null;
+      try { saved = await MB.Blog.pushArticle(tid, article); } catch (e) { console.warn('Meilenstein-Beitrag fehlgeschlagen:', e); }
+      if (entry) entry.published = !!saved;
+      refreshMemeViews();
+      // Finalergebnis eingetragen -> zusätzlich der große Abschluss-Artikel
+      // (Siegerehrung + Turnierzusammenfassung), nach dem Champion-Beitrag.
+      if (type === 'champion') publishWrapUpArticle();
+    }
+
+    // ---------------------------------------------------------------
+    // WARTESCHLANGE "Ins nächste Power Ranking": vorgemerkte Memes liegen
+    // im localStorage des Admin-Browsers (Bild-URL + Kurzbeschreibung) und
+    // werden von publishPowerRanking() eingesammelt.
+    // ---------------------------------------------------------------
+    const QUEUED_MEMES_KEY = 'mb_queued_memes';
+    function readQueuedMemes() {
+      try { return JSON.parse(localStorage.getItem(QUEUED_MEMES_KEY) || '[]'); } catch (e) { return []; }
+    }
+    function getQueuedMemes(tid) { return readQueuedMemes().filter((q) => q.tid === tid); }
+    function addQueuedMeme(item) {
+      try { localStorage.setItem(QUEUED_MEMES_KEY, JSON.stringify([...readQueuedMemes(), item])); }
+      catch (e) { console.warn('Meme konnte nicht vorgemerkt werden:', e); }
+    }
+    function removeQueuedMemes(ids) {
+      try { localStorage.setItem(QUEUED_MEMES_KEY, JSON.stringify(readQueuedMemes().filter((q) => !ids.includes(q.id)))); }
+      catch (e) { /* egal */ }
+    }
+    function describeRecordForQueue(record) {
+      const info = (MB.Records.RECORD_TYPES || {})[record.type] || { label: record.type, emoji: '🏈' };
+      return `${info.emoji} ${info.label}${record.player ? ' (' + record.player + ')' : ''}`;
+    }
+    function queueRecordMeme(i) {
+      const entry = sessionRecords[i];
+      if (!entry || entry.published || entry.queued || entry.loading || entry.error || !entry.imageUrl) return;
+      addQueuedMeme({ id: 'q' + Date.now() + '_' + i, tid: MB.getCurrentTournamentId(), url: entry.imageUrl, label: describeRecordForQueue(entry.record) });
+      entry.queued = true;
+      refreshMemeViews();
+    }
+
     async function addSessionRecord(record) {
       const entry = { record, provider: getMemeProvider(), styleId: null, imageUrl: null, canvasPreview: null, loading: true, error: null, published: false };
       sessionRecords.unshift(entry); // neueste zuerst
@@ -3940,12 +4004,22 @@ function renderRanking() {
     // Button anzeigen, sonst gäbe es doppelte Artikel für denselben Moment.
     function memePublishButtonHtml(entry, i) {
       if (entry.record.type === 'finals' || entry.record.type === 'champion') {
-        return `<button style="width:auto;" disabled title="Erscheint automatisch im Blog">📰 Automatisch im Blog</button>`;
+        const name = entry.record.type === 'finals' ? 'Finale' : 'Champion';
+        return entry.published
+          ? `<button style="width:auto;" disabled>✅ Im Beitrag „${name}“</button>`
+          : `<button style="width:auto;" disabled title="Der Beitrag erscheint, sobald das Meme fertig ist">⏳ Kommt in den Beitrag „${name}“</button>`;
       }
       if (entry.published) {
-        return `<button style="width:auto;" disabled>✅ Im Blog</button>`;
+        return `<button style="width:auto;" disabled>✅ Als eigener Beitrag im Blog</button>`;
       }
-      return `<button style="width:auto;" onclick="publishRecordToBlog(${i})">📰 Im Blog veröffentlichen</button>`;
+      if (entry.queued) {
+        return `<button style="width:auto;" disabled>✅ Fürs nächste Power Ranking vorgemerkt</button>`;
+      }
+      // Wahl: eigener Beitrag ODER im nächsten Power Ranking (nur mit Meme-Bild).
+      const queueBtn = entry.imageUrl
+        ? `<button class="btn-secondary" style="width:auto;" onclick="queueRecordMeme(${i})">📊 Ins nächste Power Ranking</button>`
+        : '';
+      return `<button style="width:auto;" onclick="publishRecordToBlog(${i})">📰 Eigener Beitrag</button>${queueBtn}`;
     }
 
     // Wird über den 📰-Button im Popup (oder in der Rekord-Momente-Karte)
@@ -4029,7 +4103,7 @@ function renderRanking() {
               </div>
               <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
               <button style="margin-top:8px;" onclick="testImgflip()">Testen</button>
-              <button class="btn-secondary" style="margin-top:8px;" onclick="runAllMemeTest()">🧪 Alle Memes testen (${MB.Records.buildTestMemeJobs().length})</button>
+              <button class="btn-secondary" style="margin-top:8px;" onclick="openMemeTest()">🧪 Memes testen (${MB.Records.getMemeTriggers().length} Auslöser, ${MB.Records.buildTestMemeJobs().length} Vorlagen)</button>
               <div id="imgflipTestResult" style="margin-top:8px;"></div>
             </div>`;
         }
@@ -4151,49 +4225,152 @@ function renderRanking() {
       }
     }
 
+    // ---------------------------------------------------------------
+    // MEMES TESTEN — Reiter pro Auslöser. Erzeugt die Vorlagen EINES
+    // Auslösers auf Knopfdruck (statt immer alle ~110 Imgflip-Aufrufe) und
+    // merkt sich die Ergebnisse je Reiter, bis die Seite neu geladen wird.
+    // ---------------------------------------------------------------
+    const memeTest = { group: 'auto', trigger: null, cache: {}, running: false };
+
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+
+    // Zugangsdaten aus den Feldern übernehmen, falls dort gerade etwas
+    // eingetippt wurde (ohne die "Gespeichert."-Meldung von saveImgflipSettings).
+    function persistImgflipInputsSilently() {
+      const u = document.getElementById('imgflipUser'), p = document.getElementById('imgflipPass');
+      if (u && p && (u.value.trim() || p.value.trim())) {
+        MB.Records.setImgflipSettings({ username: u.value.trim(), password: p.value.trim() });
+      }
+    }
+
+    function openMemeTest() {
+      persistImgflipInputsSilently();
+      const triggers = MB.Records.getMemeTriggers();
+      if (!memeTest.trigger) memeTest.trigger = triggers.find((t) => t.group === memeTest.group).id;
+      document.getElementById('memeTestModal').classList.remove('hidden');
+      renderMemeTest();
+    }
+
     function closeMemeTestModal() {
       document.getElementById('memeTestModal')?.classList.add('hidden');
     }
 
-    // Erzeugt JEDE Vorlage aus JEDEM Pool (klassisch + Story) einmal mit
-    // Platzhalter-Daten — nacheinander, damit man live mitverfolgen kann UND
-    // Imgflip nicht mit 80 parallelen Requests bombardiert wird. Jede Kachel
-    // zeigt, WARUM das Meme erzeugt wurde (Anlass + Vorlagenname) und bietet
-    // einen Download mit genau diesem Namen an, damit man einzelne Treffer
-    // zum Nachschauen behalten kann.
-    async function runAllMemeTest() {
-      saveImgflipSettings();
-      const settings = MB.Records.getImgflipSettings();
-      if (!settings.username || !settings.password) { alert('Bitte zuerst Imgflip-Zugangsdaten eingeben und speichern.'); return; }
+    function selectMemeTestGroup(group) {
+      memeTest.group = group;
+      const triggers = MB.Records.getMemeTriggers();
+      if (!triggers.find((t) => t.id === memeTest.trigger && t.group === group)) {
+        memeTest.trigger = triggers.find((t) => t.group === group).id;
+      }
+      renderMemeTest();
+    }
 
-      const modal = document.getElementById('memeTestModal');
-      const grid = document.getElementById('memeTestGrid');
-      const status = document.getElementById('memeTestStatus');
-      grid.innerHTML = '';
-      modal.classList.remove('hidden');
+    function selectMemeTestTrigger(id) {
+      memeTest.trigger = id;
+      renderMemeTest();
+    }
 
-      const jobs = MB.Records.buildTestMemeJobs();
-      status.textContent = `Erzeuge 0 / ${jobs.length} …`;
+    function memeTestCellHtml(result) {
+      if (result.ok) {
+        return `
+          <img src="${result.url}" style="width:100%; border-radius:6px; display:block; margin-bottom:6px; background:#000;">
+          <div style="opacity:.85; margin-bottom:4px;">${escHtml(result.label)}</div>
+          <button class="btn-secondary" style="width:100%; font-size:.9em; padding:4px; margin:0;" onclick="MB.Records.shareOrOpenRemoteImage('${result.url}', '${result.filename}.png')">💾 Speichern</button>`;
+      }
+      return `
+        <div style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; background:#2a0e0e; border-radius:6px; margin-bottom:6px;">⚠️</div>
+        <div style="opacity:.85; margin-bottom:4px;">${escHtml(result.label)}</div>
+        <div style="color:var(--nfl-red);">${escHtml(result.error)}</div>`;
+    }
 
-      await MB.Records.generateAllTestMemes(settings, (result, done, total) => {
-        status.textContent = `Erzeuge ${done} / ${total} …`;
-        const cell = document.createElement('div');
-        cell.style.cssText = 'background:rgba(255,255,255,.03); border-radius:8px; padding:8px; font-size:.75em;';
-        if (result.ok) {
-          cell.innerHTML = `
-            <img src="${result.url}" style="width:100%; border-radius:6px; display:block; margin-bottom:6px; background:#000;">
-            <div style="opacity:.85; margin-bottom:4px;">${result.label}</div>
-            <button class="btn-secondary" style="width:100%; font-size:.9em; padding:4px;" onclick="MB.Records.shareOrOpenRemoteImage('${result.url}', '${result.filename}.png')">💾 Speichern</button>`;
-        } else {
-          cell.innerHTML = `
-            <div style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; background:#2a0e0e; border-radius:6px; margin-bottom:6px;">⚠️</div>
-            <div style="opacity:.85; margin-bottom:4px;">${result.label}</div>
-            <div style="color:var(--nfl-red);">${result.error}</div>`;
-        }
-        grid.appendChild(cell);
+    function appendMemeTestCell(grid, result) {
+      const cell = document.createElement('div');
+      cell.style.cssText = 'background:rgba(255,255,255,.03); border-radius:8px; padding:8px; font-size:.75em;';
+      cell.innerHTML = memeTestCellHtml(result);
+      grid.appendChild(cell);
+    }
+
+    function renderMemeTest() {
+      const triggers = MB.Records.getMemeTriggers();
+      const current = triggers.find((t) => t.id === memeTest.trigger) || triggers[0];
+      const btnBase = 'width:auto; margin:0; padding:7px 12px; border-radius:999px; font-size:.82em; white-space:nowrap; flex-shrink:0;';
+      const activeStyle = 'background:var(--accent); color:#0B162A;';
+
+      document.getElementById('memeTestGroups').innerHTML = [['auto', '⚡ Automatisch'], ['manual', '🖐️ Manuell']].map(([g, label]) =>
+        `<button class="btn-secondary" style="${btnBase} ${memeTest.group === g ? activeStyle : ''}" onclick="selectMemeTestGroup('${g}')">${label}</button>`).join('');
+
+      document.getElementById('memeTestTabs').innerHTML = triggers.filter((t) => t.group === memeTest.group).map((t) => {
+        const n = MB.Records.buildTestMemeJobs(t.id).length;
+        return `<button class="btn-secondary" style="${btnBase} ${t.id === current.id ? activeStyle : ''}" onclick="selectMemeTestTrigger('${t.id}')">${t.emoji} ${escHtml(t.label)} (${n})</button>`;
+      }).join('');
+
+      const tagLabels = (current.tags || []).map((k) => {
+        const info = MB.Records.MEME_CONTEXT_TAGS[k];
+        return info ? `${info.emoji} ${info.label}` : k;
       });
+      document.getElementById('memeTestInfo').innerHTML = `
+        <div><b>${current.group === 'auto' ? 'Wann?' : 'So auslösen:'}</b> ${escHtml(current.when)}</div>
+        ${tagLabels.length ? `<div style="margin-top:4px;"><b>Häkchen:</b> ${escHtml(tagLabels.join(' · '))}</div>` : ''}
+        <div style="margin-top:4px;"><b>Veröffentlichung:</b> ${escHtml(current.publish)}</div>`;
 
-      status.textContent = `Fertig: ${jobs.length} / ${jobs.length}.`;
+      const jobs = MB.Records.buildTestMemeJobs(current.id);
+      const cached = memeTest.cache[current.id];
+      const needsImgflip = jobs.some((j) => j.kind !== 'canvas');
+      const noCreds = needsImgflip && !MB.Records.hasImgflipSettings();
+      document.getElementById('memeTestActions').innerHTML = `
+        <button style="width:auto; margin:0;" ${memeTest.running || noCreds ? 'disabled' : ''} onclick="runMemeTestFor('${current.id}')">${cached ? '🔁 Neu erzeugen' : '▶ Erzeugen'} (${jobs.length})</button>
+        <button class="btn-secondary" style="width:auto; margin:0;" ${memeTest.running || !MB.Records.hasImgflipSettings() ? 'disabled' : ''} onclick="runMemeTestAll()">Alle Auslöser erzeugen (${MB.Records.buildTestMemeJobs().length})</button>`;
+
+      const statusEl = document.getElementById('memeTestStatus');
+      if (noCreds) statusEl.textContent = 'Bitte zuerst Imgflip-Zugangsdaten in den Meme-Einstellungen speichern.';
+      else if (!memeTest.running) statusEl.textContent = cached ? `Fertig: ${cached.length} / ${jobs.length}.` : '';
+
+      const grid = document.getElementById('memeTestGrid');
+      grid.innerHTML = '';
+      (cached || []).forEach((r) => appendMemeTestCell(grid, r));
+    }
+
+    // Erzeugt die Memes EINES Auslösers und rendert live mit, solange dessen
+    // Reiter offen ist.
+    async function runMemeTestFor(id, opts) {
+      const silent = !!(opts && opts.silent);
+      persistImgflipInputsSilently();
+      const jobs = MB.Records.buildTestMemeJobs(id);
+      if (!jobs.length) return;
+      if (jobs.some((j) => j.kind !== 'canvas') && !MB.Records.hasImgflipSettings()) { if (!silent) alert('Bitte zuerst Imgflip-Zugangsdaten eingeben und speichern.'); return; }
+      const wasRunning = memeTest.running;
+      memeTest.running = true;
+      memeTest.cache[id] = [];
+      if (memeTest.trigger === id) renderMemeTest();
+      try {
+        await MB.Records.generateAllTestMemes(MB.Records.getImgflipSettings(), (result, done, total) => {
+          memeTest.cache[id].push(result);
+          if (memeTest.trigger === id) {
+            document.getElementById('memeTestStatus').textContent = `Erzeuge ${done} / ${total} …`;
+            appendMemeTestCell(document.getElementById('memeTestGrid'), result);
+          }
+        }, jobs);
+      } catch (e) {
+        alert('Fehler beim Testen: ' + e.message);
+      }
+      if (!silent) memeTest.running = wasRunning;
+      if (!silent && memeTest.trigger === id) renderMemeTest();
+    }
+
+    // Alle Auslöser nacheinander (nicht parallel — schont das Imgflip-Kontingent).
+    async function runMemeTestAll() {
+      persistImgflipInputsSilently();
+      if (!MB.Records.hasImgflipSettings()) { alert('Bitte zuerst Imgflip-Zugangsdaten eingeben und speichern.'); return; }
+      const triggers = MB.Records.getMemeTriggers();
+      memeTest.running = true;
+      renderMemeTest();
+      for (let i = 0; i < triggers.length; i++) {
+        document.getElementById('memeTestStatus').textContent = `Auslöser ${i + 1} / ${triggers.length}: ${triggers[i].label} …`;
+        await runMemeTestFor(triggers[i].id, { silent: true });
+      }
+      memeTest.running = false;
+      renderMemeTest();
     }
 
     async function rerenderMeme(i) {

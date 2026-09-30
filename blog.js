@@ -190,6 +190,11 @@
       "Nicht jede Partie hält sich an die Ausgangslage. {player} setzt sich gegen {opponent} mit {winnerScore}:{loserScore} durch – und bringt damit ordentlich Bewegung ins Turnier.",
     ],
 
+    blowout: [
+      "{player} lässt {opponent} keine Chance: {winnerScore}:{loserScore}. Bei so einem Abstand geht es nicht mehr um die Frage, wer gewonnen hat, sondern nur noch darum, wie lange man darüber redet.",
+      "Manche Spiele sind früh entschieden, dieses war es wohl noch früher. {player} schlägt {opponent} mit {winnerScore}:{loserScore} und lässt kaum Fragen offen.",
+    ],
+
     shutout: [
       "Ein Spiel, das vor allem eine Zahl hinterlässt: {loserScore}. {player} gewinnt gegen {opponent} {winnerScore}:{loserScore} und lässt dem Gegner kaum Raum für eine Antwort.",
       "Für {opponent} war es einer dieser Abende, an denen selbst ein guter Start wahrscheinlich nicht geholfen hätte. {player} gewinnt {winnerScore}:{loserScore}.",
@@ -772,7 +777,52 @@
       else if ((rank && rank <= 3) || tableTop.includes(name)) groups.contender.push(name);
       else groups.field.push(name);
     });
-    return { groups, badges, ranks };
+
+    // Titelverteidiger spielt nicht mit -> der heißeste Anwärter bekommt
+    // dessen Porträt-Slot (Gruppe "champion", gleiche Fälligkeit). Nur wenn
+    // es überhaupt einen Vorjahressieger gibt, der jetzt fehlt.
+    const previousChampion = lastSeasonChampionName(safeHistory);
+    let championAbsent = false;
+    if (!groups.champion.length && previousChampion) {
+      const challenger = pickHottestChallenger(names, badges, ranks, safeHistory);
+      if (challenger) {
+        groups.contender = groups.contender.filter((n) => n !== challenger);
+        groups.field = groups.field.filter((n) => n !== challenger);
+        groups.champion = [challenger];
+        championAbsent = true;
+      }
+    }
+    return { groups, badges, ranks, championAbsent, previousChampion };
+  }
+
+  // Name des Vorjahres-Champions (Platz 1 der letzten Saison) oder null.
+  function lastSeasonChampionName(history) {
+    const seasons = [...((history && history.seasons) || [])].sort((a, b) => (b.season || 0) - (a.season || 0));
+    const standings = seasons[0] && Array.isArray(seasons[0].standings) ? seasons[0].standings : [];
+    const champ = standings.find((s) => Number(s.rank) === 1);
+    return champ ? MB.normName(champ.name) : null;
+  }
+
+  // Heißester Anwärter, wenn der Titelverteidiger fehlt. Reihenfolge der
+  // Kriterien (nur Spieler mit Historie; rein aus Historie, damit die Wahl
+  // über das Turnier stabil bleibt):
+  //   1. beste Platzierung in der letzten Saison (Finalist vor Platz 3 ...)
+  //   2. meiste Titel insgesamt
+  //   3. beste Gesamt-Siegquote
+  // Gibt null zurück, wenn niemand Historie hat (z.B. nur Rookies).
+  function pickHottestChallenger(names, badges, ranks, history) {
+    const cands = names
+      .map((name) => {
+        const key = name.toLowerCase();
+        const badge = badges.get(key) || {};
+        if (badge.isRookie) return null;
+        const stats = historyStatsFor(history, name);
+        return { name, rank: ranks.get(key) || 99, titles: badge.titles || 0, winPct: stats.played ? stats.wins / stats.played : 0 };
+      })
+      .filter(Boolean);
+    if (!cands.length) return null;
+    cands.sort((a, b) => a.rank - b.rank || b.titles - a.titles || b.winPct - a.winPct || a.name.localeCompare(b.name));
+    return cands[0].name;
   }
 
   function describePortraitPlayer(name, state, history, badge, lastRank) {
@@ -839,10 +889,27 @@
         "Die Krone sitzt – die Frage ist nur, wie lange.",
       ],
     },
+    // Titelverteidiger fehlt: {prev} = Name des Vorjahres-Champions.
+    challenger: {
+      title: (names) => `🔥 Der heißeste Anwärter: ${names[0]}`,
+      openers: [
+        "Der Titelverteidiger {prev} ist diesmal nicht dabei, der Thron steht leer. Umso spannender die Frage, wer als Erster danach greift. Hier kommt der mit den besten Karten.",
+        "Ohne {prev} gibt es keinen Titelverteidiger, den alle jagen. Dafür gibt es einen, dem man die Krone am ehesten zutraut.",
+      ],
+      closers: [
+        "Anwärter heißt nicht Sieger. Aber irgendjemand muss die Favoritenrolle ja spielen.",
+        "Ob die Favoritenrolle Rückenwind oder Bürde ist, zeigt sich in den nächsten Spielen.",
+      ],
+    },
     contender: {
       title: () => "🎯 Die Contender",
       openers: [
         "Neben dem Titelverteidiger gibt es Spieler, die dieses Turnier nicht nur mitspielen, sondern gewinnen wollen. Hier sind die, denen man es zutraut.",
+        "Wer letztes Jahr weit gekommen ist oder jetzt schon oben in der Tabelle steht, gehört zum engeren Favoritenkreis. Ein Blick auf die Kandidaten.",
+      ],
+      // Ohne Titelverteidiger im Turnier passt "Neben dem Titelverteidiger" nicht.
+      openersNoDefender: [
+        "Ohne Titelverteidiger ist das Rennen offen. Hier sind die, denen man es zutraut.",
         "Wer letztes Jahr weit gekommen ist oder jetzt schon oben in der Tabelle steht, gehört zum engeren Favoritenkreis. Ein Blick auf die Kandidaten.",
       ],
       closers: [
@@ -879,13 +946,16 @@
   }
 
   function buildPortraitArticle(group, state, history) {
-    const { groups, badges, ranks } = computePortraitGroups(state, history);
+    const { groups, badges, ranks, championAbsent, previousChampion } = computePortraitGroups(state, history);
     const names = groups[group] || [];
     if (!names.length) return null;
 
-    const text = PORTRAIT_TEXT[group];
+    const isChallenger = group === "champion" && championAbsent;
+    const text = isChallenger ? PORTRAIT_TEXT.challenger : PORTRAIT_TEXT[group];
     const rookies = names.filter((n) => (badges.get(n.toLowerCase()) || {}).isRookie);
-    const parts = [pick(text.openers)];
+    const hasDefender = !!groups.champion.length && !championAbsent;
+    const openerPool = group === "contender" && !hasDefender && text.openersNoDefender ? text.openersNoDefender : text.openers;
+    const parts = [pick(openerPool).replace(/\{prev\}/g, previousChampion || "Der Titelverteidiger")];
     if (group === "field" && rookies.length) {
       parts.push(`Besonders im Blick: ${rookies.length === 1 ? "der Rookie" : "die Rookies"} ${rookies.join(", ")} – ${rookies.length === 1 ? "er ist" : "sie sind"} zum ersten Mal beim Madden Bowl dabei.`);
     }
@@ -900,7 +970,7 @@
       kind: "portrait",
       title: text.title(names, { rookies }),
       body: paragraphs(parts),
-      data: { group, players: names },
+      data: isChallenger ? { group, players: names, challenger: true } : { group, players: names },
     };
   }
 

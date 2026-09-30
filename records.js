@@ -27,6 +27,7 @@
     upset: { label: "Überraschung", emoji: "😱" },
     shutout: { label: "Abgeschossen", emoji: "🛑" },
     shootout: { label: "Shootout", emoji: "🎯" },
+    blowout: { label: "Blowout", emoji: "🔥" },
     finals: { label: "Finaleinzug", emoji: "🎬" },
     champion: { label: "Neuer Champion", emoji: "👑" },
     storyMeme: { label: "Story-Meme", emoji: "🎭" },
@@ -144,6 +145,18 @@
     const maxTotalThisTournament = currentOnly.length ? Math.max(0, ...currentOnly.map((m) => m.homeScore + m.awayScore)) : 0;
     if (total >= 70 && total >= maxTotalThisTournament) {
       records.push({ type: "shootout", player: winnerName, opponent: loserName, winnerScore, loserScore });
+    }
+
+    // Blowout: deutlicher Sieg (>= 21 Punkte Abstand), der noch KEIN
+    // Klatschen-/Abschuss-Rekord ist — sonst gäbe es zwei Memes für dieselbe
+    // Sache. Nutzt die Story-Vorlagen "blowout" (siehe generateImgflipMeme).
+    // Knappe Spiele lösen bewusst NICHT automatisch aus.
+    const marginRecordFired = records.some((r) => r.type === "allTimeMargin" || r.type === "tournamentMargin" || r.type === "shutout");
+    if (margin >= 21 && !marginRecordFired) {
+      records.push({
+        type: "blowout", storyKey: "blowout", player: winnerName, opponent: loserName,
+        winner: winnerName, loser: loserName, winnerScore, loserScore, score: `${winnerScore}-${loserScore}`,
+      });
     }
 
     return records;
@@ -422,7 +435,6 @@
       { id: 61516, name: "Philosoraptor", caption: (r) => ({ top: `IF ${upper(r.leader)} LEADS AFTER ${r.count} GAMES`, bottom: "IS IT SKILL OR JUST GOOD MATCHUPS?" }) },
       { id: 405658, name: "Grumpy Cat", caption: (r) => ({ top: `${upper(r.last)} AFTER ${r.count} GAMES`, bottom: "I HAD FUN ONCE. IT WAS TERRIBLE." }) },
       { id: 101288, name: "Third World Skeptical Kid", caption: (r) => ({ top: `${upper(r.second)}: "I'M STILL IN THE TITLE RACE"`, bottom: "THE TABLE DISAGREES" }) },
-      { id: 89370399, name: "Roll Safe", caption: (r) => ({ top: "YOU CAN'T LOSE THE TITLE RACE", bottom: `IF NOBODY CHECKS THE TABLE (${upper(r.last)})` }) },
       { id: 61527, name: "Y U No", caption: (r) => ({ top: `${upper(r.last)} Y U NO`, bottom: "WIN A GAME" }) },
     ],
   };
@@ -525,19 +537,33 @@
     return pick(pool);
   }
 
-  async function generateImgflipMeme(record, { username, password, templateId } = {}) {
+  // Ein Caption-Aufruf an Imgflip. `caps` ist entweder { top, bottom }
+  // (Standard: text0/text1) ODER { boxes: [..] } für Vorlagen mit mehr als
+  // zwei Textfeldern (z.B. "Who Wants To Be A Millionaire": Frage + A-D).
+  // Bei boxes[] ignoriert Imgflip text0/text1 — daher entweder oder.
+  async function callImgflip(templateId, caps, { username, password }) {
     if (!username || !password) throw new Error("Imgflip-Zugangsdaten fehlen.");
-    const entry = record.type === "storyMeme" ? pickStoryTemplate(record, templateId) : pickImgflipTemplate(record.type, templateId);
-    const caps = record.type === "storyMeme" ? buildStoryCaptions(record) : buildImgflipCaptions(record, entry.caption ? entry : null);
-    const tid = entry.id;
-    const body = new URLSearchParams({
-      template_id: String(tid), username, password,
-      text0: caps.top, text1: caps.bottom,
-    });
+    const body = new URLSearchParams({ template_id: String(templateId), username, password });
+    if (caps && Array.isArray(caps.boxes) && caps.boxes.length) {
+      caps.boxes.forEach((t, i) => body.append(`boxes[${i}][text]`, String(t == null ? "" : t)));
+    } else {
+      body.append("text0", (caps && caps.top) || "");
+      body.append("text1", (caps && caps.bottom) || "");
+    }
     const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
     const json = await res.json();
     if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");
-    return { url: json.data.url, pageUrl: json.data.page_url, templateId: tid };
+    return { url: json.data.url, pageUrl: json.data.page_url };
+  }
+
+  async function generateImgflipMeme(record, { username, password, templateId } = {}) {
+    if (!username || !password) throw new Error("Imgflip-Zugangsdaten fehlen.");
+    const isStory = record.type === "storyMeme" || record.type === "blowout";
+    const entry = isStory ? pickStoryTemplate(record, templateId) : pickImgflipTemplate(record.type, templateId);
+    const caps = isStory ? buildStoryCaptions(record) : buildImgflipCaptions(record, entry.caption ? entry : null);
+    const tid = entry.id;
+    const out = await callImgflip(tid, caps, { username, password });
+    return { ...out, templateId: tid };
   }
 
   // ======================================================================
@@ -563,6 +589,16 @@
     collapse: { label: "Kompletter Kollaps", emoji: "🫠" },
     comeback: { label: "Comeback", emoji: "🔥" },
     decision_game: { label: "Entscheidungsspiel", emoji: "🚨" },
+  };
+
+  // Kontext-Häkchen -> [Story-Kategorie, Priorität]. Bei mehreren Häkchen
+  // gewinnt die höchste Priorität. Wird von detectStoryMeme() UND von der
+  // Auslöser-Übersicht ("Memes testen") gelesen — nur hier pflegen.
+  const STORY_TAG_RULES = {
+    ref_error: ["ref", 110], unfair_call: ["ref", 105], controversial_call: ["ref", 100], complaint: ["ref", 95],
+    excuse: ["excuse", 115], collapse: ["collapse", 105], comeback: ["comeback", 100],
+    ragequit: ["ragequit", 98], rage: ["ragequit", 90], hype: ["hype", 95],
+    lucky_win: ["upset", 88], unexpected: ["upset", 90], decision_game: ["decision_game", 82],
   };
 
   const STORY_MEME_TEMPLATES = {
@@ -641,7 +677,7 @@
     decision_game: [
       { id: 272113903, name: "Tom Brady 4th Down", caption: () => ({ top: "THE MADDEN BOWL FINAL,", bottom: "EVERYTHING ON ONE DRIVE" }) },
       { id: 456538639, name: "Roger Goodell", caption: () => ({ top: "THE COMMISSIONER HANDING OVER", bottom: "THE MADDEN BOWL TROPHY" }) },
-      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ top: "WHO WINS THE MADDEN BOWL FINAL?", bottom: `A) ${r.opponent || "HIM"}   B) ${r.opponent || "HIM"}   C) ${r.opponent || "HIM"}   D) ${r.player || "OBVIOUSLY HIM"}` }) },
+      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ boxes: ["WHO WINS THE MADDEN BOWL FINAL?", r.opponent || "HIM", r.opponent || "HIM", r.opponent || "HIM", r.player || "OBVIOUSLY HIM"] }) },
       { id: 627432492, name: "NFL Football", caption: (r) => ({ top: "MADDEN BOWL FINAL", bottom: `${r.player || r.winner || "ONE PLAYER"} WALKS AWAY CHAMPION` }) },
       { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "EVEN THE CHAMPION", bottom: "DIDN'T SEE THAT FINAL COMING" }) },
       { id: 127129121, name: "Tom Brady Angry", caption: (r) => ({ top: r.opponent || r.loser || "THE RUNNER-UP", bottom: "AFTER LOSING THE MADDEN BOWL FINAL" }) },
@@ -679,19 +715,7 @@
     let key = null, score = 0;
     const add = (k, pts) => { if (pts > score) { key = k; score = pts; } };
 
-    if (c.ref_error) add("ref", 110);
-    if (c.unfair_call) add("ref", 105);
-    if (c.controversial_call) add("ref", 100);
-    if (c.complaint) add("ref", 95);
-    if (c.excuse) add("excuse", 115);
-    if (c.collapse) add("collapse", 105);
-    if (c.comeback) add("comeback", 100);
-    if (c.ragequit) add("ragequit", 98);
-    if (c.rage) add("ragequit", 90);
-    if (c.hype) add("hype", 95);
-    if (c.lucky_win) add("upset", 88);
-    if (c.unexpected) add("upset", 90);
-    if (c.decision_game) add("decision_game", 82);
+    Object.entries(STORY_TAG_RULES).forEach(([tag, [k, pts]]) => { if (c[tag]) add(k, pts); });
 
     const margin = Math.abs(record.homeScore - record.awayScore);
     if (margin >= 21) add("blowout", 60);
@@ -780,31 +804,120 @@
 
   const TEST_STORY_DATA = { player: "Tobi F.", opponent: "Marco", winner: "Tobi F.", loser: "Marco", score: "28-24" };
 
-  // Baut die vollständige Job-Liste (Label + Template-ID + fertiger Text),
-  // OHNE schon etwas zu generieren — praktisch auch, um vorher zu sehen,
-  // wie viele Imgflip-Aufrufe ein Testlauf macht.
-  function buildTestMemeJobs() {
+  const TEST_DEM_BOYZ = {
+    player: "Tobi F.",
+    lostTo: [
+      { name: "Marco", score: "17:24" },
+      { name: "Jonas", score: "10:31" },
+      { name: "Basti", score: "21:28" },
+    ],
+  };
+
+  // ======================================================================
+  // AUSLÖSER-KATALOG — wofür/wann welche Memes entstehen. Speist die Reiter
+  // in "Memes testen". Die Bedingungen spiegeln detectRecords(),
+  // detectMilestoneRecords(), detectStoryMeme() und publishPowerRanking()
+  // (index.html) — bei Änderungen dort bitte hier nachziehen.
+  // source: { pool } = IMGFLIP_TEMPLATE_POOLS-Schlüssel, { story } =
+  // STORY_MEME_TEMPLATES-Schlüssel, { canvas } = eigene Grafik ohne Imgflip.
+  // ======================================================================
+  const PUBLISH_RECORD = "Popup direkt nach „Ergebnis speichern“ (auch live.html). Danach die Wahl: „📰 Eigener Beitrag“ (Kategorie „Rekord“, sofort) oder „📊 Ins nächste Power Ranking“ (Meme wird dort angehängt, vorgemerkt im Browser des Admins).";
+  const PUBLISH_MILESTONE = "Kommt automatisch in den passenden Beitrag (Finale bzw. Champion), kein extra Beitrag. Der Beitrag erscheint, sobald das Meme fertig ist (ohne Meme spätestens nach ca. 25 Sekunden). Zum Teilen gibt es das Meme zusätzlich im Popup.";
+  const PUBLISH_STORY = "Popup nach „Meme erzeugen“ (🔁 anderes Motiv, 📱 teilen). Dann die Wahl: „📰 Eigener Beitrag“ (Kategorie „Rekord“, Titel „🎭 Story-Meme“) oder „📊 Ins nächste Power Ranking“.";
+  const MANUAL_HOW = "✨ neben dem Ergebnis → „🎭 Meme (mit Kontext-Auswahl)“ → passendes Häkchen setzen → „Meme erzeugen“.";
+
+  function getMemeTriggers() {
+    const every = (global.MB && MB.Blog && MB.Blog.PROGRESS_EVERY) || 6;
+    const tagsFor = (key) => Object.entries(STORY_TAG_RULES).filter(([, [k]]) => k === key).map(([tag]) => tag);
+    return [
+      // ---------------- automatisch ----------------
+      { id: "allTimeHigh", group: "auto", emoji: "🔥", label: "Allzeit-Highscore", source: { pool: "allTimeHigh" },
+        when: "Nach dem Speichern eines Ergebnisses: Der Sieger hat mindestens so viele Punkte wie jedes bisherige Spiel (Historie + laufendes Turnier). Gleichstand zählt.", publish: PUBLISH_RECORD },
+      { id: "allTimeMargin", group: "auto", emoji: "💥", label: "Allzeit-Klatsche", source: { pool: "allTimeMargin" },
+        when: "Der Punkteabstand ist mindestens so groß wie der größte Abstand aller bisherigen Spiele. Gleichstand zählt.", publish: PUBLISH_RECORD },
+      { id: "tournamentMargin", group: "auto", emoji: "🥊", label: "Klatsche des Turniers", source: { pool: "tournamentMargin" },
+        when: "Kein Allzeit-Rekord, aber Abstand ≥ 20 Punkte und mindestens so groß wie der größte Abstand im laufenden Turnier.", publish: PUBLISH_RECORD },
+      { id: "winStreak", group: "auto", emoji: "🏆", label: "Siegesserie", source: { pool: "winStreak" },
+        when: "Der Sieger hat jetzt ≥ 3 Siege in Folge im Turnier und damit mehr als jeder andere Spieler aktuell.", publish: PUBLISH_RECORD },
+      { id: "upset", group: "auto", emoji: "😱", label: "Überraschung", source: { pool: "upset" },
+        when: "Der Sieger steht in der Gruppen-Setzliste mindestens 3 Plätze schlechter als der Verlierer.", publish: PUBLISH_RECORD },
+      { id: "shutout", group: "auto", emoji: "🛑", label: "Abgeschossen", source: { pool: "shutout" },
+        when: "Der Verlierer macht höchstens 3 Punkte und der Sieger mindestens 14.", publish: PUBLISH_RECORD },
+      { id: "shootout", group: "auto", emoji: "🎯", label: "Shootout", source: { pool: "shootout" },
+        when: "Beide Teams zusammen ≥ 70 Punkte und damit mindestens so viel wie das bisher punktreichste Spiel des Turniers.", publish: PUBLISH_RECORD },
+      { id: "blowout", group: "auto", emoji: "🔥", label: "Blowout", source: { story: "blowout" },
+        when: "Der Sieger gewinnt mit mindestens 21 Punkten Abstand, ohne dass schon Allzeit-Klatsche, Turnier-Klatsche oder Abgeschossen ausgelöst hat. Knappe Spiele lösen bewusst nicht automatisch aus.", publish: PUBLISH_RECORD },
+      { id: "finals", group: "auto", emoji: "🎬", label: "Finaleinzug", source: { pool: "finals" },
+        when: "Einmalig pro Turnier, sobald beide Finalisten feststehen.", publish: PUBLISH_MILESTONE },
+      { id: "champion", group: "auto", emoji: "👑", label: "Neuer Champion", source: { pool: "champion" },
+        when: "Einmalig pro Turnier, sobald das Finalergebnis eingetragen ist.", publish: PUBLISH_MILESTONE },
+      { id: "season", group: "auto", emoji: "📊", label: "Saisonverlauf", source: { pool: "season" },
+        when: `Alle ${every} fertigen Spiele beim automatischen Power Ranking. Bezieht sich auf die Tabelle (Spitzenreiter, Verfolger, Schlusslicht), nicht auf ein einzelnes Spiel. Es werden 1–2 Memes gezogen (nur 1, wenn „We Dem Boyz“ dabei ist). Ohne Imgflip entfallen sie.`,
+        publish: "Automatisch im nächsten Power-Ranking-Beitrag, zusammen mit einer Spurious Correlation. Kein Popup, kein Klick nötig." },
+      { id: "demboyz", group: "auto", emoji: "🤠", label: "We Dem Boyz", source: { canvas: "demBoyz" },
+        when: `Beim Power Ranking (alle ${every} Spiele), aber nur wenn ein Cowboys-Spieler im Turnier ist und schon verloren hat. Die Liste wächst mit jeder weiteren Niederlage. Eigene Grafik, braucht kein Imgflip.`,
+        publish: "Automatisch im nächsten Power-Ranking-Beitrag (kommt vor den Saison-Memes)." },
+      // ---------------- manuell (Story) ----------------
+      { id: "story:ref", group: "manual", emoji: "🚩", label: "Schiri / Beschwerde", source: { story: "ref" }, tags: tagsFor("ref"),
+        when: MANUAL_HOW, publish: PUBLISH_STORY },
+      { id: "story:excuse", group: "manual", emoji: "🧠", label: "Ausrede", source: { story: "excuse" }, tags: tagsFor("excuse"),
+        when: MANUAL_HOW, publish: PUBLISH_STORY },
+      { id: "story:collapse", group: "manual", emoji: "🫠", label: "Kollaps", source: { story: "collapse" }, tags: tagsFor("collapse"),
+        when: MANUAL_HOW, publish: PUBLISH_STORY },
+      { id: "story:comeback", group: "manual", emoji: "🔥", label: "Comeback", source: { story: "comeback" }, tags: tagsFor("comeback"),
+        when: MANUAL_HOW, publish: PUBLISH_STORY },
+      { id: "story:ragequit", group: "manual", emoji: "💀", label: "Ragequit / sauer", source: { story: "ragequit" }, tags: tagsFor("ragequit"),
+        when: MANUAL_HOW, publish: PUBLISH_STORY },
+      { id: "story:hype", group: "manual", emoji: "📈", label: "Hype", source: { story: "hype" }, tags: tagsFor("hype"),
+        when: MANUAL_HOW, publish: PUBLISH_STORY },
+      { id: "story:upset", group: "manual", emoji: "🤯", label: "Unerwartet / Glück", source: { story: "upset" }, tags: tagsFor("upset"),
+        when: MANUAL_HOW + " Nicht zu verwechseln mit dem automatischen Rekord „Überraschung“ (Setzliste).", publish: PUBLISH_STORY },
+      { id: "story:decision_game", group: "manual", emoji: "🚨", label: "Entscheidungsspiel", source: { story: "decision_game" }, tags: tagsFor("decision_game"),
+        when: MANUAL_HOW + " Deckt auch Finale/Champion-Momente ab.", publish: PUBLISH_STORY },
+      { id: "story:close", group: "manual", emoji: "🤏", label: "Knappes Spiel (Fallback)", source: { story: "close" }, tags: [],
+        when: "Nur manuell: Wie oben, aber ohne passendes Häkchen greift bei „Meme erzeugen“ ein Abstand ≤ 3 Punkte als knappes Spiel. Ein gesetztes Häkchen hat immer Vorrang. (Ein Blowout ≥ 21 Punkte erkennt dort ebenfalls noch der Fallback, falls er automatisch unterdrückt wurde.)", publish: PUBLISH_STORY },
+      { id: "story:general", group: "manual", emoji: "🧰", label: "Allgemein (Reserve)", source: { story: "general" }, tags: [],
+        when: "Wird aktuell von keinem Auslöser gewählt, nur als Rückfall, falls eine Story-Kategorie keine Vorlagen hätte.", publish: "—" },
+    ];
+  }
+
+  // Baut die Job-Liste (Label + Template-ID + fertiger Text) für einen
+  // Auslöser (triggerId) oder — ohne Argument — für alle, OHNE schon etwas
+  // zu generieren. Praktisch auch, um vorher zu sehen, wie viele
+  // Imgflip-Aufrufe ein Testlauf macht.
+  function buildTestMemeJobs(triggerId) {
     const jobs = [];
-    Object.entries(IMGFLIP_TEMPLATE_POOLS).forEach(([type, pool]) => {
-      const data = TEST_RECORD_DATA[type] || {};
-      pool.forEach((entry) => {
+    getMemeTriggers().forEach((t) => {
+      if (triggerId && t.id !== triggerId) return;
+      if (t.source.canvas === "demBoyz") {
         jobs.push({
-          label: `${RECORD_TYPES[type] ? RECORD_TYPES[type].label : type} – ${entry.name}`,
-          filename: `${type}_${entry.name}`.replace(/[^a-z0-9]+/gi, "-"),
-          templateId: entry.id,
-          caption: entry.caption({ ...data, type }),
+          trigger: t.id, kind: "canvas", label: "We Dem Boyz – eigene Grafik (kein Imgflip)",
+          filename: "season_we-dem-boyz", canvasData: TEST_DEM_BOYZ,
         });
-      });
-    });
-    Object.entries(STORY_MEME_TEMPLATES).forEach(([storyKey, pool]) => {
-      pool.forEach((entry) => {
-        jobs.push({
-          label: `Story: ${storyKey} – ${entry.name}`,
-          filename: `story-${storyKey}_${entry.name}`.replace(/[^a-z0-9]+/gi, "-"),
-          templateId: entry.id,
-          caption: entry.caption({ ...TEST_STORY_DATA, storyKey }),
+      } else if (t.source.pool) {
+        const type = t.source.pool;
+        const data = TEST_RECORD_DATA[type] || {};
+        (IMGFLIP_TEMPLATE_POOLS[type] || []).forEach((entry) => {
+          jobs.push({
+            trigger: t.id,
+            label: `${RECORD_TYPES[type] ? RECORD_TYPES[type].label : type} – ${entry.name}`,
+            filename: `${type}_${entry.name}`.replace(/[^a-z0-9]+/gi, "-"),
+            templateId: entry.id,
+            caption: entry.caption({ ...data, type }),
+          });
         });
-      });
+      } else if (t.source.story) {
+        const storyKey = t.source.story;
+        (STORY_MEME_TEMPLATES[storyKey] || []).forEach((entry) => {
+          jobs.push({
+            trigger: t.id,
+            label: `Story: ${storyKey} – ${entry.name}`,
+            filename: `story-${storyKey}_${entry.name}`.replace(/[^a-z0-9]+/gi, "-"),
+            templateId: entry.id,
+            caption: entry.caption({ ...TEST_STORY_DATA, storyKey }),
+          });
+        });
+      }
     });
     return jobs;
   }
@@ -813,22 +926,23 @@
   // das kostenlose Imgflip-Kontingent und vermeidet Rate-Limit-Fehler) und
   // meldet nach jedem einzelnen Bild den Fortschritt per onProgress, damit
   // die Oberfläche live mitrendern kann statt am Ende alles auf einmal.
-  async function generateAllTestMemes({ username, password }, onProgress) {
-    if (!username || !password) throw new Error("Imgflip-Zugangsdaten fehlen.");
-    const jobs = buildTestMemeJobs();
+  // `jobs` optional (Standard: alle). Canvas-Jobs (We Dem Boyz) brauchen
+  // weder Zugangsdaten noch einen Imgflip-Aufruf.
+  async function generateAllTestMemes({ username, password } = {}, onProgress, jobsOverride) {
+    const jobs = jobsOverride || buildTestMemeJobs();
+    if (jobs.some((j) => j.kind !== "canvas") && (!username || !password)) throw new Error("Imgflip-Zugangsdaten fehlen.");
     const results = [];
     for (let i = 0; i < jobs.length; i++) {
       const job = jobs[i];
       let result;
       try {
-        const body = new URLSearchParams({
-          template_id: String(job.templateId), username, password,
-          text0: job.caption.top, text1: job.caption.bottom,
-        });
-        const res = await fetch("https://api.imgflip.com/caption_image", { method: "POST", body });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error_message || "Imgflip-Fehler (unbekannt)");
-        result = { ...job, url: json.data.url, pageUrl: json.data.page_url, ok: true };
+        if (job.kind === "canvas") {
+          const blob = await canvasToBlob(renderDemBoyzCanvas(job.canvasData));
+          result = { ...job, url: URL.createObjectURL(blob), ok: true };
+        } else {
+          const out = await callImgflip(job.templateId, job.caption, { username, password });
+          result = { ...job, url: out.url, pageUrl: out.pageUrl, ok: true };
+        }
       } catch (e) {
         result = { ...job, error: e.message || String(e), ok: false };
       }
@@ -840,7 +954,7 @@
 
   global.MB = global.MB || {};
   global.MB.Records = {
-    RECORD_TYPES, MEME_STYLES, IMGFLIP_TEMPLATE_POOLS, MEME_CONTEXT_TAGS, STORY_MEME_TEMPLATES,
+    RECORD_TYPES, MEME_STYLES, IMGFLIP_TEMPLATE_POOLS, MEME_CONTEXT_TAGS, STORY_MEME_TEMPLATES, STORY_TAG_RULES, getMemeTriggers,
     detectRecords, detectMilestoneRecords, buildMemeCaptions, renderMemeCanvas, canvasToBlob,
     detectStoryMeme, buildStoryCaptions, pickStoryTemplate, buildTestMemeJobs, generateAllTestMemes,
     shareOrDownloadMeme, shareOrOpenRemoteImage,
