@@ -78,8 +78,9 @@
 
   function sceneHTML(type, names) {
     const tag = (t, sub) => `<div class="ds-tag">${t}${sub ? `<small>${sub}</small>` : ""}</div>`;
-    if (type === "booth") {
-      return `<div class="ds-scene ds-scene-booth" data-scene="booth"><div class="ds-zoom"><div class="ds-bg-booth" style="position:absolute;inset:0"></div>${charHTML("commentator", names)}${charHTML("moderator", names)}<div class="ds-desk"></div></div>${tag("Kommentatoren-Booth", "Totale")}<div class="ds-rec">REC</div></div>`;
+    if (type === "booth" || type === "booth-close") {
+      const big = type === "booth-close";
+      return `<div class="ds-scene ds-scene-booth${big ? " ds-scene-boothclose" : ""}" data-scene="${type}"><div class="ds-zoom"><div class="ds-bg-booth" style="position:absolute;inset:0"></div>${charHTML("commentator", names)}${charHTML("moderator", names)}<div class="ds-desk"></div></div>${tag("Kommentatoren-Booth", big ? "Nahaufnahme" : "Totale")}<div class="ds-rec">${big ? "CAM 1" : "REC"}</div></div>`;
     }
     if (type === "close-commentator" || type === "close-moderator") {
       const role = type.split("-")[1];
@@ -104,7 +105,7 @@
         <div class="ds-main cam-close" id="dsMain">
           <div class="ds-left">
             <div class="ds-cam" id="dsCam">
-              ${sceneHTML("booth", names)}${sceneHTML("close-commentator", names)}${sceneHTML("close-moderator", names)}${sceneHTML("ring", names)}
+              ${sceneHTML("booth", names)}${sceneHTML("booth-close", names)}${sceneHTML("close-commentator", names)}${sceneHTML("close-moderator", names)}${sceneHTML("ring", names)}
               <div class="ds-flash" id="dsFlash"></div>
             </div>
             <div class="ds-pip" id="dsPip">${sceneHTML("ring", names).replace('data-scene="ring"', 'data-scene="pip-ring"')}</div>
@@ -181,7 +182,7 @@
     const names = speakerNames();
     if (evt.type === "start") {
       lastRole = role;
-      if (phaseName !== "picking" && phaseName !== "done") setCam(camForRole(role));
+      if (phaseName !== "picking" && phaseName !== "done" && phaseName !== "intro") setCam(camForRole(role));
       setTalking(role, true);
       clearTimeout(captionTimer);
       el.capName.innerHTML = `${esc(names[role] || role)}<small>${role === "announcer" ? "RING-ANSAGER" : role === "moderator" ? "MODERATION" : "KOMMENTAR"}</small>`;
@@ -276,8 +277,8 @@
     setHype("announcer", false); setHype("commentator", false);
     if (mode.intro) {
       phaseName = "intro"; selectedTeam = null;
-      setCam("booth");
-      put(`<div class="ds-kicker">Live aus dem Stadion</div><div class="ds-big-title">Madden Bowl<br>Draft Night</div><div class="ds-sub">Heute Abend werden die Slots gezogen und die Teams vergeben.</div>`);
+      setCam("booth-close"); // beide Sprecher in der Nahaufnahme, Kamera bleibt während der ganzen Begrüßung stehen
+      put(`<div class="ds-kicker">Live aus dem Stadion</div><div class="ds-big-title" style="font-size:68px">Altima Bowl<br>Draft Night</div><div class="ds-sub">Heute Abend werden die Slots gezogen und die Teams vergeben.</div>`);
       setHype("commentator", true); setHype("moderator", true);
     } else if (mode.callingLabelOnly || mode.calling) {
       phaseName = "calling";
@@ -298,7 +299,7 @@
       setHype("announcer", true);
     } else if (mode.prompt) {
       phaseName = "prompt";
-      setCam("close-moderator");
+      setCam("booth");
       put(`<div class="ds-kicker">Du bist dran</div><div class="ds-name" style="font-size:${nameSize(mode.prompt)}px">${esc(mode.prompt)}</div><div class="ds-big-title" style="font-size:64px;margin-top:10px">Wähle dein Team!</div>`);
     } else if (mode.picking) {
       phaseName = "picking"; selectedTeam = null;
@@ -306,7 +307,9 @@
       renderPicker(d);
     } else if (mode.commentating) {
       phaseName = "commentating";
-      setCam(camForRole(lastRole === "commentator" ? "moderator" : "commentator"));
+      // Rolle kommt aus index.html (Rudi/Mona im Wechsel) -> auch ohne Audio korrekt
+      if (mode.role) lastRole = mode.role;
+      setCam(camForRole(mode.role || (lastRole === "commentator" ? "moderator" : "commentator")));
       const lp = d.lastPick || {};
       put(`<div class="ds-teamcard">${lp.teamId ? `<img src="${LOGO(lp.teamId)}" alt="">` : ""}<div class="tname">${esc(lp.teamName || "")}</div><div class="pline"><b>${esc(mode.commentating)}</b> übernimmt · Slot P${(lp.slot ?? 0) + 1}${lp.rating ? ` · OVR ${lp.rating}` : ""}</div></div>`);
       setHype("commentator", true);
@@ -326,11 +329,97 @@
     }
   }
 
+  // ------------------------------------------------- BOOT-INTRO (PS2-Stil)
+  let audioCtx = null;
+  function ac() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {} return audioCtx; }
+  function tone(freq, t0, dur, type, vol, attack) {
+    const c = ac(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain(); o.type = type || "sine"; o.frequency.value = freq;
+    const t = c.currentTime + (t0 || 0);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol || 0.05, t + (attack || 0.02)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function bootChime() { // weicher, ambienter Akkord mit Schimmer — angelehnt an klassische Konsolen-Starts
+    [130.8, 196, 261.6, 329.6, 493.9].forEach((f, i) => tone(f, i * 0.12, 3.4, "sine", 0.045, 0.9));
+    [1568, 2093, 2637].forEach((f, i) => tone(f, 0.9 + i * 0.22, 1.6, "triangle", 0.012, 0.05));
+  }
+  function slam() { tone(98, 0, 1.1, "sawtooth", 0.07, 0.01); tone(196, 0, 0.9, "square", 0.04, 0.01); tone(392, 0.02, 0.6, "triangle", 0.04, 0.01); }
+  const blip = () => tone(880, 0, 0.07, "square", 0.04, 0.005);
+  const select = () => { tone(660, 0, 0.09, "square", 0.05, 0.005); tone(990, 0.09, 0.16, "square", 0.05, 0.005); };
+
+  let bootEl = null, bootTimers = [], bootKeyHandler = null;
+  function bootCleanup() {
+    bootTimers.forEach(clearTimeout); bootTimers = [];
+    if (bootKeyHandler) { document.removeEventListener("keydown", bootKeyHandler, true); bootKeyHandler = null; }
+    if (bootEl) { bootEl.remove(); bootEl = null; }
+  }
+  function boot(onStart) {
+    if (!built) build();
+    bootCleanup();
+    el.cap.classList.add("off");
+    bootEl = document.createElement("div");
+    bootEl.className = "ds-boot";
+    bootEl.innerHTML = `
+      <div class="bt-stage bt-sports" id="btA"><div class="bt-cubes"><i></i><i></i><i></i><i></i></div><div class="logo">ALTIMA<sup>™</sup></div><div class="sub">SPORTS</div></div>
+      <div class="bt-stage bt-bowl" id="btB"><div class="ball"></div><div class="logo">Altima<br>Bowl</div><div class="est">EST. <b>2022</b> &nbsp;ALEX&nbsp;•&nbsp;TIM&nbsp;•&nbsp;MARKUS</div></div>
+      <div class="bt-stage bt-menu" id="btC">
+        <div class="mt">Altima Bowl</div><div class="ms">DRAFT NIGHT</div>
+        <div class="bt-panel" id="btItems"></div>
+        <div class="mf">▲▼ AUSWÄHLEN &nbsp;·&nbsp; ENTER / KLICK BESTÄTIGEN</div>
+        <div class="mc">© 2022 ALTIMA SPORTS · ALLE RECHTE VORBEHALTEN</div>
+      </div>
+      <div class="bt-skip" id="btSkip">KLICK / ENTER = ÜBERSPRINGEN ▶▶</div>`;
+    el.canvas.appendChild(bootEl);
+    const A = bootEl.querySelector("#btA"), B = bootEl.querySelector("#btB"), C = bootEl.querySelector("#btC"), skip = bootEl.querySelector("#btSkip");
+    const at = (ms, fn) => bootTimers.push(setTimeout(fn, ms));
+    const items = [
+      { label: "Draft-Show starten", act: () => { select(); bootEl.classList.add("out"); at(550, () => { bootCleanup(); onStart && onStart(); }); } },
+      { label: "Zurück zum Setup", act: () => { bootCleanup(); close(); } },
+    ];
+    let sel = 0, inMenu = false;
+    const drawItems = () => {
+      bootEl.querySelector("#btItems").innerHTML = items.map((it, i) => `<div class="bt-item ${i === sel ? "sel" : ""} ${i === 1 ? "dim" : ""}" data-i="${i}"><span class="cur">▶</span>${esc(it.label)}</div>`).join("");
+      bootEl.querySelectorAll(".bt-item").forEach((n) => {
+        n.onmouseenter = () => { if (sel !== +n.dataset.i) { sel = +n.dataset.i; blip(); drawItems(); } };
+        n.onclick = (e) => { e.stopPropagation(); sel = +n.dataset.i; items[sel].act(); };
+      });
+    };
+    const showMenu = () => {
+      if (inMenu) return; inMenu = true; bootTimers.forEach(clearTimeout); bootTimers = [];
+      A.classList.remove("show"); B.classList.remove("show"); C.classList.add("show"); skip.style.display = "none";
+      drawItems();
+    };
+    // Ablauf: Sports-Logo -> Bowl-Logo -> Menü
+    ac(); bootChime();
+    A.classList.add("show");
+    at(3300, () => A.classList.remove("show"));
+    at(4300, () => { B.classList.add("show"); slam(); });
+    at(8300, () => B.classList.remove("show"));
+    at(9300, showMenu);
+    bootEl.addEventListener("click", () => { if (!inMenu) showMenu(); });
+    bootKeyHandler = (e) => {
+      if (!inMenu) { if (["Enter", " ", "Escape"].includes(e.key)) { e.preventDefault(); e.stopPropagation(); showMenu(); } return; }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); sel = (sel + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; blip(); drawItems(); }
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); items[sel].act(); }
+    };
+    document.addEventListener("keydown", bootKeyHandler, true);
+  }
+
   // ---------------------------------------------------------------- Öffentlich
   function init(o) { opts = Object.assign(opts, o || {}); }
-  function open() {
+  function goFullscreen() {
+    if (document.fullscreenElement || !root || !root.requestFullscreen) return Promise.resolve();
+    return root.requestFullscreen().catch(() => {});
+  }
+  function open(o) {
     if (!built) build();
     root.classList.remove("ds-hidden");
+    if (o && o.fullscreen) {
+      goFullscreen();
+      // Falls der Browser den Start nicht als Nutzer-Geste wertet: beim ersten Klick/Tastendruck nachholen
+      const retry = () => { goFullscreen(); document.removeEventListener("pointerdown", retry, true); document.removeEventListener("keydown", retry, true); };
+      setTimeout(() => { if (!document.fullscreenElement) { document.addEventListener("pointerdown", retry, true); document.addEventListener("keydown", retry, true); } }, 400);
+    }
     fit();
     curCam = ""; setCam("booth", { flash: false });
     if (speakUnsub) speakUnsub();
@@ -339,11 +428,12 @@
   }
   function close() {
     if (!root) return;
+    bootCleanup();
     root.classList.add("ds-hidden");
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     document.dispatchEvent(new CustomEvent("ds-closed"));
   }
   function isOpen() { return !!root && !root.classList.contains("ds-hidden"); }
 
-  global.MB.DraftStage = { init, open, close, isOpen, phase, setStrip, refreshSide };
+  global.MB.DraftStage = { init, open, close, isOpen, phase, setStrip, refreshSide, boot };
 })(window);

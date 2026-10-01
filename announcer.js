@@ -251,12 +251,12 @@
   }
 
   // speakerIndex: 0 = Kommentator, 1 = Moderator (im Wechsel von index.html gesteuert)
-  async function announceTeamPick(text, speakerIndex) {
+  async function announceTeamPick(text, speakerIndex, gate) {
     if (!text) return;
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs";
     const voiceId = useElevenLabs ? (speakerIndex === 1 ? settings.voiceIdPreview : settings.voiceIdResult) : null;
-    await speakSequence([{ text, voiceId, role: speakerIndex === 1 ? "moderator" : "commentator" }]);
+    await speakSequence([{ text, voiceId, role: speakerIndex === 1 ? "moderator" : "commentator" }], { gate });
   }
 
   function fmt(tpl, vars) { return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? ""); }
@@ -804,7 +804,9 @@
   // segments: [{ text, voiceId }] — ohne gültige ElevenLabs-Konfiguration
   // oder bei Fehlern wird die jeweilige Zeile übersprungen (kein Browser-
   // Stimme-Rückfall mehr).
-  async function speakSequence(segments) {
+  // opts.gate (optional): Promise, auf die vor dem ERSTEN Abspielen gewartet wird
+  // (Audio wird trotzdem schon vorab generiert, es gibt also keine Extra-Latenz).
+  async function speakSequence(segments, opts) {
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
     if (!useElevenLabs) return;
@@ -824,10 +826,12 @@
       return { seg, audioPromise: null };
     });
 
+    let gateWaited = false;
     for (const { seg, audioPromise } of prepared) {
       if (audioPromise) {
         const url = await audioPromise; // meist schon fertig, da parallel gestartet
         if (url) {
+          if (!gateWaited && opts && opts.gate) { gateWaited = true; try { await opts.gate; } catch (e) {} }
           const role = seg.role || _roleForVoice(seg.voiceId, settings);
           _emitSpeak({ type: "start", role, text: seg.text });
           await playAudioUrl(url);
@@ -891,10 +895,18 @@
     const resultVoice = useElevenLabs ? settings.voiceIdResult : null;
     const previewVoice = useElevenLabs ? settings.voiceIdPreview : null;
 
-    const welcomeText = context === "draft"
-      ? `${names.commentator} hier am Mikrofon. Willkommen zum Madden Bowl Draft!`
-      : `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`;
+    // Draft-Night-Intro: Kommentator und Moderation übergeben sich den Satz
+    // ("... neben mir sitzt…" / "…Mona!"), daher bewusst keine Namensliste.
+    if (context === "draft") {
+      await speakSequence([
+        { text: `Guten Abend und herzlich willkommen zur Altima Bowl Draft Night! Ich bin ${names.commentator}, und neben mir sitzt…`, voiceId: resultVoice, role: "commentator" },
+        { text: `…${names.moderator}! Heute Abend werden die Slots gezogen und die Teams vergeben. Wer erwischt den Top-Pick, wer muss mit dem Rest leben?`, voiceId: previewVoice, role: "moderator" },
+        { text: "Allen Athletinnen und Athleten, viel Erfolg am Controller. Und nun: Lasset den Draft beginnen!", voiceId: resultVoice, role: "commentator" },
+      ]);
+      return;
+    }
 
+    const welcomeText = `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`;
     const segments = [
       { text: welcomeText, voiceId: resultVoice, role: "commentator" },
       { text: `${names.moderator} begleitet euch durch den Abend.`, voiceId: previewVoice, role: "moderator" },

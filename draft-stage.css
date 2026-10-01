@@ -105,7 +105,7 @@
 /* Tisch (Booth) */
 .ds-desk { position: absolute; left: 0; right: 0; bottom: 0; height: 22%; z-index: 4;
   background: linear-gradient(180deg, #6b3a1a 0 14%, #3f210d 14%); border-top: 5px solid #e2b466; }
-.ds-desk::after { content: 'MADDEN BOWL'; position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
+.ds-desk::after { content: 'ALTIMA BOWL'; position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
   font: 900 26px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 4px; color: #e2b466; opacity: .85; white-space: nowrap; }
 
 /* Kamera-HUD + Schnitt-Blitz */
@@ -281,3 +281,79 @@
 .ds-pip .ds-tag { font-size: 15px; padding: 3px 10px; }
 .ds-tile { height: 122px; }
 .ds-tile img { width: 56px; height: 56px; }
+
+/* --- ruhigere Figuren: Nahaufnahmen (v.a. Ring-Ansager) kaum noch wippen --- */
+.ds-scene-close .ds-char.talking svg { animation: dsNodSoft 1.15s ease-in-out infinite; }
+.ds-scene-close .ds-char.hype svg { animation: dsNodSoft 1.6s ease-in-out infinite; }
+.ds-char[data-role="announcer"].talking svg, .ds-char[data-role="announcer"].hype svg { animation: dsNodSoft 1.4s ease-in-out infinite; }
+@keyframes dsNodSoft { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-2px) rotate(.25deg); } }
+.ds-scene.on .ds-zoom { animation-duration: 14s; }
+
+/* =========================================================================
+   BOOT-INTRO (PS2-Stil) + Retro-Menü
+   ========================================================================= */
+.ds-boot { position: absolute; inset: 0; z-index: 50; background: #000; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }
+.ds-boot .bt-stage { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: opacity .9s ease; text-align: center; }
+.ds-boot .bt-stage.show { opacity: 1; }
+.ds-boot .bt-skip { position: absolute; right: 30px; bottom: 22px; color: #5d6a80; font: 600 18px/1 'Courier New', monospace; letter-spacing: 2px; z-index: 5; }
+
+/* Logo 1: ALTIMA SPORTS */
+.bt-sports { background: radial-gradient(ellipse 50% 45% at 50% 50%, #0b2147 0%, #02060f 70%); }
+.bt-sports::before { content: ''; position: absolute; width: 900px; height: 900px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 20%, rgba(80,150,255,.28) 30%, transparent 45%, rgba(160,200,255,.2) 60%, transparent 80%);
+  filter: blur(26px); animation: btSpin 9s linear infinite; }
+@keyframes btSpin { to { transform: rotate(360deg); } }
+.bt-cubes { position: relative; width: 120px; height: 120px; margin-bottom: 36px; perspective: 600px; }
+.bt-cubes i { position: absolute; width: 38px; height: 38px; border: 2px solid rgba(160,200,255,.85); background: rgba(70,130,255,.18); box-shadow: 0 0 20px rgba(100,160,255,.7);
+  animation: btCube 3.4s ease-in-out infinite; }
+.bt-cubes i:nth-child(1) { left: 0; top: 41px; } .bt-cubes i:nth-child(2) { left: 41px; top: 0; animation-delay: .2s; }
+.bt-cubes i:nth-child(3) { left: 82px; top: 41px; animation-delay: .4s; } .bt-cubes i:nth-child(4) { left: 41px; top: 82px; animation-delay: .6s; }
+@keyframes btCube { 0%,100% { transform: rotateX(20deg) rotateY(0) translateZ(0); } 50% { transform: rotateX(200deg) rotateY(180deg) translateZ(30px); } }
+.bt-sports .logo { position: relative; font: 300 112px/1 'Segoe UI', Arial, sans-serif; letter-spacing: 26px; padding-left: 26px; color: #e8f0ff;
+  text-shadow: 0 0 30px rgba(120,170,255,.85), 0 0 80px rgba(70,120,255,.6); }
+.bt-sports .logo sup { font-size: 24px; letter-spacing: 0; vertical-align: top; position: relative; top: 14px; margin-left: 6px; }
+.bt-sports .sub { position: relative; margin-top: 18px; font: 600 22px/1 'Segoe UI'; letter-spacing: 16px; padding-left: 16px; color: #7fa0d6; }
+
+/* Logo 2: ALTIMA BOWL */
+.bt-bowl { background: radial-gradient(ellipse 70% 60% at 50% 40%, #1a0d0d 0%, #050203 75%); }
+.bt-bowl::before { content: ''; position: absolute; left: -10%; right: -10%; top: 50%; height: 380px; margin-top: -190px; transform: skewY(-6deg);
+  background: linear-gradient(90deg, transparent, rgba(213,10,10,.5) 18%, rgba(201,151,0,.55) 50%, rgba(30,80,200,.5) 82%, transparent); filter: blur(2px); opacity: .55; }
+.bt-bowl .ball { position: relative; width: 150px; height: 90px; margin-bottom: 14px; }
+.bt-bowl .ball::before { content: ''; position: absolute; inset: 0; background: #7b3f12; border-radius: 50%; border: 5px solid #2a1405; box-shadow: 0 0 40px rgba(201,151,0,.5); transform: rotate(-18deg); }
+.bt-bowl .ball::after { content: ''; position: absolute; left: 30%; right: 30%; top: 46%; height: 5px; background: #fff; border-radius: 3px; transform: rotate(-18deg); box-shadow: 0 -12px 0 #fff, 0 12px 0 #fff; }
+.bt-bowl .logo { position: relative; font: 900 190px/.95 Impact, 'Arial Black', sans-serif; text-transform: uppercase; letter-spacing: 6px; color: #fff;
+  background: linear-gradient(180deg, #fff 0%, #ffd23f 45%, #c99700 60%, #7a5600 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(8px 8px 0 #d50a0a) drop-shadow(0 0 40px rgba(201,151,0,.5)); animation: btPunch 1s cubic-bezier(.2,1.5,.4,1); }
+@keyframes btPunch { from { transform: scale(2.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.bt-bowl .est { position: relative; margin-top: 34px; font: 700 28px/1 'Courier New', monospace; letter-spacing: 10px; color: #d6dce8; }
+.bt-bowl .est b { color: #c99700; letter-spacing: 12px; }
+
+/* Retro-Menü (Madden-98-Optik) */
+.bt-menu { background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.25) 0 2px, transparent 2px 4px),
+    linear-gradient(180deg, #0a1f5c 0%, #123a8f 55%, #0a1f5c 100%); font-family: 'Courier New', monospace; }
+.bt-menu::before { content: ''; position: absolute; inset: 0; background:
+    linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(0deg, rgba(255,255,255,.06) 1px, transparent 1px) 0 0 / 80px 80px; transform: perspective(700px) rotateX(58deg) translateY(240px) scale(2.2); transform-origin: 50% 100%; opacity: .5; }
+.bt-menu .mt { position: relative; font: 900 84px/1 Impact, 'Arial Black', sans-serif; color: #ffd23f; text-shadow: 6px 6px 0 #000; letter-spacing: 4px; text-transform: uppercase; }
+.bt-menu .ms { position: relative; margin: 8px 0 54px; font: 700 28px/1 'Courier New', monospace; color: #fff; letter-spacing: 10px; text-shadow: 3px 3px 0 #000; }
+.bt-panel { position: relative; min-width: 760px; padding: 26px 40px; background: rgba(0,0,40,.78); border: 6px solid #fff; outline: 6px solid #000; box-shadow: 10px 10px 0 #000; }
+.bt-item { display: flex; align-items: center; gap: 22px; padding: 14px 18px; font: 900 44px/1 'Courier New', monospace; letter-spacing: 3px; color: #8ea2cf; cursor: pointer; text-transform: uppercase; text-align: left; }
+.bt-item .cur { width: 40px; color: transparent; font-size: 40px; }
+.bt-item.sel { color: #fff; background: linear-gradient(90deg, #d50a0a, #8a0606); text-shadow: 3px 3px 0 #000; }
+.bt-item.sel .cur { color: #ffd23f; animation: dsBlink .7s steps(1) infinite; }
+.bt-item.dim { opacity: .5; }
+.bt-menu .mf { position: absolute; bottom: 42px; left: 0; right: 0; font: 700 22px/1 'Courier New', monospace; color: #cfe0ff; letter-spacing: 3px; text-shadow: 2px 2px 0 #000; }
+.bt-menu .mc { position: absolute; bottom: 14px; left: 0; right: 0; font: 600 16px/1 'Courier New', monospace; color: #7e92c4; letter-spacing: 2px; }
+.ds-boot.out { animation: btOut .6s ease-in forwards; }
+@keyframes btOut { 0% { filter: brightness(1); opacity: 1; } 40% { filter: brightness(4); opacity: 1; } 100% { filter: brightness(1); opacity: 0; } }
+
+/* Booth in Nahaufnahme (Begrüßung): beide Moderatoren groß im breiten Kamerabild */
+.ds-scene-boothclose .ds-char { width: 330px; bottom: 11%; }
+.ds-scene-boothclose .ds-char[data-role="commentator"] { left: 6%; }
+.ds-scene-boothclose .ds-char[data-role="moderator"] { right: 6%; left: auto; }
+.ds-scene-boothclose .ds-desk { height: 20%; }
+.ds-scene-boothclose .ds-char::after { font-size: 22px; bottom: -44px; }
+.ds-scene-boothclose .ds-char.talking svg, .ds-scene-boothclose .ds-char.hype svg { animation: dsNodSoft 1.3s ease-in-out infinite; }
+.ds-scene-boothclose .ds-char::after { display: none; }
+.ds-scene-boothclose .ds-desk::after { left: auto; right: 4%; transform: none; bottom: 22%; font-size: 30px; }

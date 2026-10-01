@@ -1109,18 +1109,46 @@ function isFinished(match) { return MB.isFinished(match); }
       document.getElementById('draftShowStep').classList.remove('hidden');
       initSetupInputs(count); // frisches, leeres Engine-Board für die Show
       draftShowIndex = 0;
+      initDraftStage();
+      initMusicDucking();
+      // Direkt aus dem Klick heraus: Vollbild + PS2-Boot-Intro. Der eigentliche
+      // Start (Musik, Willkommen, erster Spieler) folgt erst nach "Draft-Show
+      // starten" im Menü (auch das ist eine Nutzer-Geste -> Musik darf starten).
+      MB.DraftStage.open({ fullscreen: true });
+      MB.DraftStage.boot(() => beginDraftShow());
+    }
+
+    function beginDraftShow() {
       renderDraftOrderStrip();
       startDraftShowMusic();
-      initDraftStage();
-      MB.DraftStage.open();
       renderDraftShowStage({ intro: true });
-
       (async () => {
         try {
           await MB.Announcer.announceTournamentStart({ athleteNames: showOrderList.map(e => e.name), context: 'draft' });
         } catch (e) { console.warn('Willkommensansage fehlgeschlagen:', e); }
         advanceDraftShow();
       })();
+    }
+
+    // ---- Hintergrundmusik leiser, solange jemand spricht (Ducking) ----
+    const MUSIC_VOL = 0.35, MUSIC_DUCK_VOL = 0.10;
+    let duckInited = false, duckTimer = null, duckRelease = null, musicFade = null;
+    function fadeMusicTo(target, ms) {
+      const a = document.getElementById('draftShowMusic');
+      if (!a) return;
+      clearInterval(musicFade);
+      const from = a.volume, steps = Math.max(1, Math.round(ms / 40)); let i = 0;
+      musicFade = setInterval(() => {
+        i++; a.volume = Math.min(1, Math.max(0, from + (target - from) * (i / steps)));
+        if (i >= steps) clearInterval(musicFade);
+      }, 40);
+    }
+    function initMusicDucking() {
+      if (duckInited) return; duckInited = true;
+      MB.Announcer.onSpeak((evt) => {
+        if (evt.type === 'start') { clearTimeout(duckRelease); fadeMusicTo(MUSIC_DUCK_VOL, 350); }
+        else { clearTimeout(duckRelease); duckRelease = setTimeout(() => fadeMusicTo(MUSIC_VOL, 900), 700); } // kein Pumpen zwischen zwei Zeilen
+      });
     }
 
     // Hintergrundmusik für die Show — Dateien liegen nicht im Repo, Tim lädt
@@ -1144,12 +1172,19 @@ function isFinished(match) { return MB.isFinished(match); }
     }
     // Kurzer Stinger, wenn eine Team-Wahl bestätigt wurde ("Pick is in").
     // Läuft parallel zur gesprochenen Kommentar-Ansage, nicht davor.
+    // Gibt eine Promise zurück, die NACH dem Ende des Stingers (bzw. sofort bei
+    // Fehler / fehlender Datei, spätestens nach 8 s) erfüllt wird.
     function playPickIsInSting() {
-      try {
-        const sting = new Audio('assets/audio/PickIsIn.m4a');
-        sting.volume = 0.8;
-        sting.play().catch(() => {});
-      } catch (e) { /* kein Show-Stopper, falls die Datei fehlt */ }
+      return new Promise((resolve) => {
+        try {
+          const sting = new Audio('assets/audio/PickIsIn.m4a');
+          sting.volume = 0.8;
+          const done = () => resolve();
+          sting.onended = done; sting.onerror = done;
+          setTimeout(done, 8000);
+          sting.play().catch(done);
+        } catch (e) { resolve(); }
+      });
     }
     // Fanfare beim Übergang von der Draft-Show ins eigentliche Turnier.
     function playAltimaBowlFanfare() {
@@ -1191,8 +1226,10 @@ function isFinished(match) { return MB.isFinished(match); }
       const isLastPick = draftShowIndex === showOrderList.length - 1;
       const badge = MB.computeRingIntroBadges(history, [name]).get(name.trim().toLowerCase());
       try {
+        // Slot wird erst gezogen, wenn die Ansage KOMPLETT zu Ende gesprochen ist.
         await withMinDelay(MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick), 1800);
       } catch (e) { console.warn('Ring-Ansage fehlgeschlagen:', e); }
+      await sleep(700); // kurze Atempause, dann erst die Ziehung
 
       // 2) Slot-Ziehen sichtbar in der Bühne selbst (nicht nur im
       // versteckten Fallback-Board) — Datenlogik bleibt dieselbe.
@@ -1285,10 +1322,15 @@ function isFinished(match) { return MB.isFinished(match); }
       updateTeamAvailability();
       showDrivenPick = false;
 
-      playPickIsInSting();
-      renderDraftShowStage({ commentating: name });
+      // Sprecher VORHER festlegen, damit die Bühne sofort auf den richtigen
+      // Kommentator (Rudi/Mona) schneidet — auch ganz ohne Audio.
+      const speakerIdx = draftAnnounceState.teamPickSpeakerToggle % 2;
+      draftAnnounceState.teamPickSpeakerToggle++;
+      const stingDone = playPickIsInSting();
+      renderDraftShowStage({ commentating: name, role: speakerIdx === 1 ? 'moderator' : 'commentator' });
       try {
-        await withMinDelay(announceTeamPickForSlot(slot, name, teamId), 2200);
+        // Überblendung läuft sofort, die Stimme erst NACH dem Stinger.
+        await withMinDelay(announceTeamPickForSlot(slot, name, teamId, speakerIdx, stingDone), 2200);
       } catch (e) { console.warn('Team-Pick-Kommentar fehlgeschlagen:', e); }
 
       draftShowIndex++;
@@ -1664,7 +1706,7 @@ document.querySelectorAll('.draft-row').forEach(row => {
 
     // Kommentator/Moderator im Wechsel: Kommentar zur gerade getroffenen
     // Team-Wahl (Team-Titelhistorie + ggf. Einschätzung der Gruppengegner).
-    async function announceTeamPickForSlot(slotId, name, teamId) {
+    async function announceTeamPickForSlot(slotId, name, teamId, speakerIdx, gate) {
       try {
         const count = parseInt(document.getElementById('playerCount').value);
         const teamMeta = nflTeams.find(t => String(t.id) === String(teamId));
@@ -1675,9 +1717,7 @@ document.querySelectorAll('.draft-row').forEach(row => {
         const badgeMap = MB.computeRingIntroBadges(history, oppNames);
         const opponentBadges = oppNames.map(n => ({ name: n, badge: badgeMap.get(n.trim().toLowerCase()) }));
         const line = MB.Announcer.buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges });
-        const speakerIdx = draftAnnounceState.teamPickSpeakerToggle % 2;
-        draftAnnounceState.teamPickSpeakerToggle++;
-        await MB.Announcer.announceTeamPick(line, speakerIdx);
+        await MB.Announcer.announceTeamPick(line, speakerIdx, gate);
       } catch (e) {
         console.warn('Team-Pick-Kommentar fehlgeschlagen:', e);
       }
