@@ -85,6 +85,7 @@
       border-radius: 4px;
       cursor: pointer;
     }
+    .btn-secondary:disabled { opacity: 0.45; cursor: not-allowed; }
 
     /* --- SCHEDULE & MATCH ROWS --- */
     .time-slot {

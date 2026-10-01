@@ -14,6 +14,7 @@
   <script src="records.js"></script>
   <script src="blog.js"></script>
   <script src="spurious.js"></script>
+  <script src="ai.js"></script>
 
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="draft-stage.css">
@@ -52,6 +53,7 @@
   <script>
     MB.UI.mountHeader({
       active: '',
+      adminActive: 'schedule', // Admin-Menü + Standort-Zeile (siehe setAdminSection)
       showAdminLogin: true,
       // Admin-Status wird als const beim Laden ausgewertet (siehe isAdmin
       // weiter unten) -> nach Login/Logout einfach neu laden, statt jede
@@ -107,7 +109,7 @@
           <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeResultActionChooser()">✕</button>
         </div>
         <div id="resultActionSummary" class="hint" style="margin-bottom:12px;"></div>
-        <button id="resultActionMemeBtn" onclick="chooseResultAction('meme')">🎭 Meme (mit Kontext-Auswahl)</button>
+        <button id="resultActionMemeBtn" class="btn-secondary" onclick="chooseResultAction('meme')">🎭 Meme (mit Kontext-Auswahl)</button>
         <button class="btn-secondary" style="margin-top:8px;" onclick="chooseResultAction('spurious')">📊 Spurious Correlation</button>
         <div id="resultActionNote" class="hint" style="font-size:0.75em; opacity:0.7; margin-top:8px;"></div>
       </div>
@@ -158,7 +160,7 @@
            und alle Settings/Export/Tools voneinander, statt dass alles
            untereinander auf einer Seite steht (bisher musste man an allen
            Settings vorbeiscrollen, um zur Ergebniseintragung zu kommen). -->
-      <div class="v2-tabbar admin-tabbar" id="adminTabbar">
+      <div class="v2-tabbar admin-tabbar" id="adminTabbar" style="display:none;"><!-- ersetzt durch das Admin-Burger-Menü -->
         <button class="v2-tab" id="adminTabBtn-setup" onclick="setAdminTab('setup')">🏈 Turnier-Setup</button>
         <button class="v2-tab" id="adminTabBtn-schedule" onclick="setAdminTab('schedule')">📅 Spielplan &amp; Ergebnisse</button>
         <button class="v2-tab" id="adminTabBtn-settings" onclick="setAdminTab('settings')">⚙️ Einstellungen</button>
@@ -169,8 +171,12 @@
           <button class="btn-secondary" onclick="window.print()">PDF Export</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportAllSeasonsJson(this)">🗄️ Gesamtexport (alle Saisons)</button>
-          <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
           <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+        </div>
+
+        <div class="card" id="accessCard" style="margin-bottom:15px;">
+          <h2>🔑 Zugänge &amp; Kennwörter</h2>
+          <div id="accessPanel"></div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -197,6 +203,11 @@
         <div class="card" style="margin-bottom:15px;">
           <h2>🖼️ Meme-Einstellungen</h2>
           <div id="memeSettingsPanel"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🤖 KI-Texte (optional)</h2>
+          <div id="aiSettingsPanel"></div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -340,9 +351,7 @@
     //  statt Duplikate in jeder Seite. Backend ist jetzt Supabase,
     //  siehe MB.fetchCloudState/pushCloudState in shared.js.)
     // =========================================================
-    // Admin-Zugang läuft jetzt über den Login im Header (Passwort einmalig
-    // pro Browser vergeben, siehe MB.UI.doAdminLogin in ui.js) statt über
-    // den alten "?Altima"-Query-Parameter.
+    // Admin-Zugang läuft über den Login im Header (siehe MB.UI.doAdminLogin in ui.js).
     const isAdmin = MB.UI.isAdminUnlocked();
 
     // =========================================================
@@ -493,9 +502,16 @@
     if (v) taken.add(v);
   }
 
+  // Auch Namen, die schon in der Show-Reihenfolge bzw. der vorbereiteten
+  // Ziehreihenfolge stehen, gelten als "ausgewählt" und werden nicht mehr
+  // vorgeschlagen — tauchen aber wieder auf, sobald sie dort entfernt werden.
+  const lowTaken = new Set(Array.from(taken).map(n => n.toLowerCase()));
+  try { (showOrderList || []).forEach(e => e && e.name && lowTaken.add(String(e.name).trim().toLowerCase())); } catch (e) { /* noch nicht initialisiert */ }
+  try { (presetDraftQueue || []).forEach(e => e && e.name && lowTaken.add(String(e.name).trim().toLowerCase())); } catch (e) { /* noch nicht initialisiert */ }
+
   // Namen aus History, aber ohne die bereits vergebenen
   const names = Array.from(history.players)
-    .filter(n => !taken.has(n))
+    .filter(n => !lowTaken.has(String(n).trim().toLowerCase()))
     .sort((a,b) => a.localeCompare(b, "de"));
 
   dl.innerHTML = names.map(n => `<option value="${n}"></option>`).join("");
@@ -1059,12 +1075,14 @@ function isFinished(match) { return MB.isFinished(match); }
       if (showOrderList.some(e => e.name.toLowerCase() === name.toLowerCase())) { input.value = ''; return; }
       showOrderList.push({ name, reason: 'manuell hinzugefügt' });
       input.value = '';
+      buildPlayerDatalist();
       renderShowOrderCard();
       document.getElementById('showOrderNewName').focus();
     }
 
     function removeShowOrderEntry(i) {
       showOrderList.splice(i, 1);
+      buildPlayerDatalist();
       renderShowOrderCard();
     }
 
@@ -2164,7 +2182,7 @@ const ringsHtml = rings > 0
         // (MB.Tipp.computeTippStandings), kein Abrechnungsschritt nötig.
 
         // Rekord-Momente & Memes: komplett kostenlos, immer aktiv. Werden
-        // nach Supabase gepusht, damit sie auch auf live.html?Altima (z.B.
+        // nach Supabase gepusht, damit sie auch auf der Live-Seite (z.B.
         // am Handy) sichtbar sind. Der Turnierblog-Artikel für einen
         // "normalen" Rekord entsteht jetzt automatisch, sobald das Meme-Bild
         // fertig ist (siehe addSessionRecord/postRecordBlogArticle) — nicht
@@ -3024,11 +3042,27 @@ function renderRanking() {
     // wurde (setAdminTab), richtet sich das nach state.currentView, damit
     // beim Turnierstart automatisch auf den Spielplan gesprungen wird.
     let activeAdminTab = null;
+    let activeAdminSection = null; // z.B. 'access' (liegt im Tab "settings")
 
     function setAdminTab(tab) {
       activeAdminTab = tab;
+      activeAdminSection = null;
       renderAdminTabs();
     }
+
+    // Admin-Navigation läuft über den URL-Hash (index.html#setup, #schedule,
+    // #settings, #access) — das Burger-Menü verlinkt direkt darauf.
+    function applyAdminHash() {
+      if (!isAdmin) return;
+      const h = (location.hash || '').replace('#', '');
+      if (!['setup', 'schedule', 'settings', 'access'].includes(h)) return;
+      activeAdminTab = h === 'access' ? 'settings' : h;
+      activeAdminSection = h === 'access' ? 'access' : null;
+      renderAdminTabs();
+      if (h === 'access') setTimeout(() => document.getElementById('accessCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+      else window.scrollTo({ top: 0 });
+    }
+    window.addEventListener('hashchange', applyAdminHash);
 
     function renderAdminTabs() {
       // Turnier-Setup nur verfügbar, solange kein Turnier läuft (bzw. nach
@@ -3044,6 +3078,9 @@ function renderRanking() {
       ['setup', 'schedule', 'settings'].forEach(t => {
         document.getElementById('adminTabBtn-' + t).classList.toggle('active', t === tab);
       });
+      // Burger-Menü + Standort-Zeile nachziehen ("Turnier-Setup" nur, solange kein Turnier läuft)
+      MB.UI.setAdminNavItemHidden('setup', !setupAvailable);
+      MB.UI.setAdminSection(tab === 'settings' && activeAdminSection === 'access' ? 'access' : tab);
     }
 
     function renderAll() {
@@ -3164,6 +3201,9 @@ function renderRanking() {
       // markieren - sonst würde ein Reload mitten im Turnier sofort wieder
       // ein Song-Popup für längst vergangene Momente aufreißen.
       try { MB.Music.detectMilestones(state).forEach((k) => { songMomentFlags[k] = true; }); } catch (e) {}
+      if (isAdmin) applyAdminHash();
+      if (isAdmin) setTimeout(renderAccessPanel, 800);
+      if (isAdmin) setTimeout(renderAiSettingsPanel, 800);
       if (isAdmin) setTimeout(renderTtsSettingsPanel, 800); // Panel erst nach kurzem Warmup füllen
       if (isAdmin) setTimeout(renderSongMomentsPanel, 800);
       if (isAdmin) setTimeout(renderMemeSettingsPanel, 800);
@@ -3176,47 +3216,11 @@ function renderRanking() {
     // ANSAGE-ENGINE: Browser (kostenlos) vs. ElevenLabs (kostenpflichtig)
     // -------------------------------------------------------------------------
     // ElevenLabs-Einstellungen (inkl. API-Key) liegen NUR in localStorage
-    // (dieses Gerät/dieser Browser), NICHT in Supabase — die DB-Policies
-    // sind aktuell offen für jeden mit dem anon-Key, ein bezahlter Key
-    // sollte da nicht landen. Zusätzlich per einfachem Passwort gesperrt,
-    // damit nicht jeder, der kurz am Admin-Gerät sitzt, versehentlich den
-    // API-Key sieht/ändert — das ist KEIN Schutz gegen jemanden mit
-    // Zugriff auf die Browser-Devtools/localStorage auf diesem Gerät.
+    // (dieses Gerät/dieser Browser), NICHT in Supabase. Die Bereiche sind nur
+    // sichtbar, wenn man als Admin angemeldet ist — ein zusätzliches
+    // Entsperr-Passwort gibt es nicht mehr.
     // =========================================================
-    let ttsUnlocked = false;
-
-    async function sha256Hex(str) {
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    async function unlockTtsSettings() {
-      const storedHash = localStorage.getItem('mb_tts_pw_hash');
-      if (!storedHash) {
-        const pw = prompt('Noch kein Passwort für die Ansage-Einstellungen gesetzt.\nNeues Passwort festlegen:');
-        if (!pw) return;
-        localStorage.setItem('mb_tts_pw_hash', await sha256Hex(pw));
-        ttsUnlocked = true;
-      } else {
-        const pw = prompt('Passwort für Ansage-Einstellungen:');
-        if (!pw) return;
-        if (await sha256Hex(pw) !== storedHash) { alert('Falsches Passwort.'); return; }
-        ttsUnlocked = true;
-      }
-      renderTtsSettingsPanel();
-      renderSongMomentsPanel();
-      renderMemeSettingsPanel();
-    }
-
-    function resetTtsPassword() {
-      if (!confirm('Passwort UND gespeicherte ElevenLabs-Einstellungen auf diesem Gerät löschen? (API-Key muss danach neu eingegeben werden)')) return;
-      localStorage.removeItem('mb_tts_pw_hash');
-      localStorage.removeItem('mb_tts_settings');
-      ttsUnlocked = false;
-      renderTtsSettingsPanel();
-      renderSongMomentsPanel();
-      renderMemeSettingsPanel();
-    }
+    const ttsUnlocked = true; // Admin-Login reicht
 
     // =========================================================
     // SONG-MOMENTE (ElevenLabs Music API) — manuell ausgelöst pro
@@ -3237,11 +3241,6 @@ function renderRanking() {
       renderSongTestPanel();
       const el = document.getElementById('songMomentsPanel');
       if (!el) return;
-
-      if (!ttsUnlocked) {
-        el.innerHTML = `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren (gleiches Passwort wie Ansage-Engine)</button>`;
-        return;
-      }
 
       const settings = MB.Announcer.getTtsSettings();
       if (settings.provider !== 'elevenlabs' || !settings.apiKey) {
@@ -3493,10 +3492,6 @@ function renderRanking() {
       const el = document.getElementById('songTestPanel');
       if (!el) return;
 
-      if (!ttsUnlocked) {
-        el.innerHTML = `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren (gleiches Passwort wie Ansage-Engine)</button>`;
-        return;
-      }
       const settings = MB.Announcer.getTtsSettings();
       if (settings.provider !== 'elevenlabs' || !settings.apiKey) {
         el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.75;">Erst unter "🎙️ Ansage-Engine" ElevenLabs mit API-Key einrichten — dann geht's hier weiter.</div>`;
@@ -4005,8 +4000,11 @@ function renderRanking() {
         // Vorgemerkte Rekord-/Story-Memes ("Ins nächste Power Ranking") kommen zuerst.
         const queued = getQueuedMemes(tid);
         const images = queued.map((q) => q.url);
+        // Bild-Marker [[img:N]] (N = Position in images) sagen blog.html, wo im
+        // Text das jeweilige Bild stehen soll — direkt unter dem passenden Absatz.
+        const imgMarkers = (from, to) => { let m = ''; for (let k = from; k < to; k++) m += `[[img:${k}]]`; return m; };
         if (queued.length) {
-          article.body += '\n\n🎭 Aus den letzten Spielen: ' + queued.map((q) => q.label).join(', ') + '.';
+          article.body += '\n\n🎭 Aus den letzten Spielen: ' + queued.map((q) => q.label).join(', ') + '.\n' + imgMarkers(0, queued.length);
         }
 
         // "Dem Boyz": nur wenn ein Cowboys-Spieler mitspielt und schon verloren
@@ -4016,6 +4014,7 @@ function renderRanking() {
           const dem = MB.Records.buildDemBoyzData(state);
           if (dem) {
             images.push(await MB.Records.uploadMemeToStorage(MB.Records.renderDemBoyzCanvas(dem), tid, 'demboyz'));
+            article.body += '\n\n' + imgMarkers(images.length - 1, images.length);
             demBoyzUsed = true;
           }
         } catch (e) { console.warn('Dem-Boyz-Grafik fehlgeschlagen:', e); }
@@ -4029,6 +4028,7 @@ function renderRanking() {
               try {
                 const result = await MB.Records.generateImgflipMeme(record, { ...MB.Records.getImgflipSettings(), templateId: pool[n].id });
                 images.push(result.url);
+                article.body += '\n\n' + imgMarkers(images.length - 1, images.length);
               } catch (e) { console.warn('Saison-Meme fehlgeschlagen:', e); }
             }
           }
@@ -4047,6 +4047,7 @@ function renderRanking() {
               article.body += '\n\n' + teaser;
               const canvas = MB.Spurious.renderChartCanvas(candidate);
               images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
+              article.body += '\n' + imgMarkers(images.length - 1, images.length);
               article.data = { ...(article.data || {}), pairKey: candidate.pairKey };
             }
           }
@@ -4247,9 +4248,7 @@ function renderRanking() {
         </div>`;
 
       {
-        if (!ttsUnlocked) {
-          html += `<button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren, um Imgflip-Zugangsdaten einzugeben</button>`;
-        } else {
+        {
           html += `
             <div style="margin-bottom:14px;">
               <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">Imgflip-Benutzername</label>
@@ -4271,9 +4270,7 @@ function renderRanking() {
       // vom Meme-Stil — sucht sofort nach dem besten (noch unveröffentlichten)
       // Treffer über Saison-Kennzahlen UND Spieler-Turnierverlauf und zeigt
       // ihn im selben Popup wie ein automatisch erkanntes Meme.
-      if (!ttsUnlocked) {
-        html += `<button class="btn-secondary" style="margin-top:10px;" onclick="unlockTtsSettings()">🔒 Entsperren, um Spurious Correlations zu testen</button>`;
-      } else {
+      {
         html += `
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid #22304366;">
             <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:6px;">📊 Spurious Correlations</label>
@@ -4298,7 +4295,7 @@ function renderRanking() {
         el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.7;">
           Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore, Allzeit-/Turnier-Klatsche,
           Siegesserie, Überraschung, Abgeschossen, Shootout, Finaleinzug, neuer Champion) — auch am Handy über
-          live.html?Altima sichtbar.
+          auf der Live-Seite sichtbar.
         </div>`;
         return;
       }
@@ -4555,19 +4552,131 @@ function renderRanking() {
       }
     }
 
+    // =========================================================
+    // ZUGÄNGE: Spieler-PINs zurücksetzen + Admin-Kennwort ändern
+    // -------------------------------------------------------------------
+    // Spieler-PIN: wird auf null gesetzt, beim nächsten Login legt der Spieler
+    // selbst eine neue PIN fest (siehe MB.UI.doLogin). Gilt pro Turnier.
+    // Admin-Kennwort: SHA-256-Hash in Supabase (app_config "admin_pw_hash").
+    // =========================================================
+    async function sha256HexAdmin(str) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    // =========================================================
+    // KI-TEXTE (OpenRouter) — vorbereitet, noch nirgends angebunden.
+    // Key/Modell liegen wie bei ElevenLabs/Imgflip nur in diesem Browser.
+    // =========================================================
+    function renderAiSettingsPanel() {
+      const el = document.getElementById('aiSettingsPanel');
+      if (!el || !MB.AI) return;
+      const s = MB.AI.getSettings();
+      const esc = (v) => String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      el.innerHTML = `
+        <div class="hint" style="font-size:0.8em; opacity:0.75; margin-bottom:10px;">
+          Vorbereitet für spätere Blog-/Ansage-Texte über openrouter.ai. Aktuell nutzt noch kein Beitrag diese Einstellung — alle Texte kommen weiter aus den Vorlagen. Später soll die KI nur optional und mit Rückfall auf die Vorlagen schreiben.
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; margin-bottom:8px;">
+          <input type="checkbox" id="aiEnabled" ${s.enabled ? 'checked' : ''} style="width:auto;"> KI-Texte aktivieren
+        </label>
+        <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">OpenRouter API-Key</label>
+        <input type="password" id="aiApiKey" value="${esc(s.apiKey)}" placeholder="sk-or-..." autocomplete="off">
+        <label style="font-size:0.8em; opacity:0.75; display:block; margin:6px 0 4px;">Modell (ID von openrouter.ai/models)</label>
+        <input type="text" id="aiModel" value="${esc(s.model)}" placeholder="Anbieter/Modellname">
+        <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:6px;">
+          Gilt nur für dieses Gerät/diesen Browser, nicht in Supabase gespeichert. Setze bei OpenRouter am besten ein Ausgabenlimit für den Key.
+        </div>
+        <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn-secondary" onclick="saveAiSettings()">Speichern</button>
+          <button class="btn-secondary" onclick="testAi()">Verbindung testen</button>
+        </div>
+        <div id="aiTestResult" class="hint" style="margin-top:8px;"></div>`;
+    }
+
+    function saveAiSettings() {
+      MB.AI.setSettings({
+        enabled: document.getElementById('aiEnabled').checked,
+        apiKey: document.getElementById('aiApiKey').value.trim(),
+        model: document.getElementById('aiModel').value.trim(),
+      });
+      document.getElementById('aiTestResult').textContent = 'Gespeichert.';
+    }
+
+    async function testAi() {
+      saveAiSettings();
+      const out = document.getElementById('aiTestResult');
+      out.textContent = 'Teste …';
+      try {
+        out.textContent = '✅ Antwort: ' + await MB.AI.test();
+      } catch (e) {
+        out.textContent = '❌ ' + e.message;
+      }
+    }
+
+    function renderAccessPanel() {
+      const el = document.getElementById('accessPanel');
+      if (!el) return;
+      if (state.players && state.players.length) MB.ensureWettbuero(state);
+      const players = state.players || [];
+      const rows = players.length
+        ? players.map((p, i) => {
+            const hasPin = !!(state.wettbuero?.accounts?.[p.name]?.pin);
+            return `<div class="row-line" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0;">
+              <span><b>${p.name}</b> <span style="opacity:0.6; font-size:0.8em;">${hasPin ? '· PIN gesetzt' : '· noch keine PIN'}</span></span>
+              <button class="btn-secondary" style="width:auto; margin:0;" ${hasPin ? '' : 'disabled'} onclick="resetPlayerPin(${i})">PIN zurücksetzen</button>
+            </div>`;
+          }).join('')
+        : `<div class="hint" style="opacity:0.6;">Kein laufendes Turnier — Spieler-PINs gibt es erst, wenn Spieler eingetragen sind.</div>`;
+      el.innerHTML = `
+        <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:6px;">Spieler-PINs (aktuelles Turnier)</label>
+        ${rows}
+        <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:6px;">Nach dem Zurücksetzen legt der Spieler beim nächsten Anmelden selbst eine neue PIN fest.</div>
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304366;">
+          <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:6px;">Admin-Kennwort ändern</label>
+          <input type="password" id="adminPwNew" placeholder="Neues Kennwort (mind. 6 Zeichen)" autocomplete="new-password" style="margin-bottom:6px;">
+          <input type="password" id="adminPwRepeat" placeholder="Neues Kennwort wiederholen" autocomplete="new-password">
+          <button class="btn-secondary" style="margin-top:8px;" onclick="changeAdminPassword()">Kennwort speichern</button>
+          <div id="adminPwResult" class="hint" style="margin-top:6px;"></div>
+        </div>`;
+    }
+
+    async function resetPlayerPin(i) {
+      const p = (state.players || [])[i];
+      const acc = p && state.wettbuero?.accounts?.[p.name];
+      if (!acc) return;
+      if (!confirm(`PIN von ${p.name} zurücksetzen? ${p.name} legt beim nächsten Login eine neue PIN fest.`)) return;
+      acc.pin = null;
+      try {
+        await syncData(true);
+      } catch (e) {
+        alert('PIN konnte nicht zurückgesetzt werden: ' + e.message);
+        return;
+      }
+      renderAccessPanel();
+    }
+
+    async function changeAdminPassword() {
+      const a = document.getElementById('adminPwNew').value;
+      const b = document.getElementById('adminPwRepeat').value;
+      const out = document.getElementById('adminPwResult');
+      if (a.length < 6) { out.textContent = 'Bitte mindestens 6 Zeichen.'; return; }
+      if (a !== b) { out.textContent = 'Die beiden Eingaben stimmen nicht überein.'; return; }
+      try {
+        await MB.setAppConfig('admin_pw_hash', await sha256HexAdmin(a));
+      } catch (e) {
+        out.textContent = 'Konnte nicht gespeichert werden: ' + e.message;
+        return;
+      }
+      document.getElementById('adminPwNew').value = '';
+      document.getElementById('adminPwRepeat').value = '';
+      out.textContent = '✅ Admin-Kennwort geändert (gilt ab dem nächsten Login).';
+    }
+
     function renderTtsSettingsPanel() {
       const el = document.getElementById('ttsSettingsPanel');
       if (!el) return;
       const settings = MB.Announcer.getTtsSettings();
-
-      if (!ttsUnlocked) {
-        el.innerHTML = `
-          <div style="font-size:0.85em; opacity:0.75; margin-bottom:10px;">
-            Aktuell: <b>${settings.apiKey ? 'ElevenLabs konfiguriert' : 'Keine Sprachausgabe eingerichtet'}</b>
-          </div>
-          <button class="btn-secondary" onclick="unlockTtsSettings()">🔒 Entsperren zum Bearbeiten</button>`;
-        return;
-      }
 
       const speakerNames = MB.Announcer.getSpeakerNames();
       el.innerHTML = `
@@ -4636,7 +4745,6 @@ function renderRanking() {
 
         <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
           <button onclick="saveTtsSettings()">Speichern</button>
-          <button class="btn-secondary" onclick="resetTtsPassword()">Passwort zurücksetzen</button>
         </div>
         <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:8px;">
           Gilt nur für dieses Gerät/diesen Browser — wird nicht mit Supabase synchronisiert.

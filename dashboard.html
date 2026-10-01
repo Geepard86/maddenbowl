@@ -70,6 +70,7 @@
 
 <script>
   MB.UI.mountHeader({ active: 'dashboard' });
+  MB.UI.maybeStartTour(); // Einweisung beim ersten Öffnen (nur Spieler/Gäste)
 
   let state = null, history = null, articles = [];
 
@@ -282,12 +283,20 @@
            d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
 
+  // Kategorie-Label + Farbe (dezent in der Datumszeile, spiegelt blog.html)
+  const BLOG_CATS = {
+    kickoff: ['Turnierstart', '#0EA5E9'], progress: ['Power Ranking', '#8B5CF6'], portrait: ['Spielerporträt', '#F97316'],
+    wrapup: ['Turnierrückblick', '#EAB308'], record: ['Rekord', '#F59E0B'], finals: ['Finale', '#EF4444'],
+    champion: ['Champion', '#22C55E'], song: ['Song', '#3B82F6'], retrospective: ['Rückblick', '#14B8A6'],
+    spurious: ['Analyse', '#A855F7'], meme: ['Meme', '#EC4899'], manual: ['Community', '#94A3B8'],
+  };
+
   function renderBlogCard() {
     if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
     const items = articles.slice(0, 2).map(a => `
       <a href="blog.html?post=${encodeURIComponent(a.id)}" style="display:block; margin-bottom:6px; color:inherit; text-decoration:none;">
         <div style="font-weight:800; font-size:0.84em;">${excerpt(a.title, 42)}</div>
-        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:2px;">${formatArticleDate(a.created_at)}</div>
+        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:2px;">${(BLOG_CATS[a.kind] ? `<span style="color:${BLOG_CATS[a.kind][1]}; font-weight:700;">${BLOG_CATS[a.kind][0]}</span> · ` : '')}${formatArticleDate(a.created_at)}</div>
       </a>`).join('');
     return `
       <div class="v2-card">

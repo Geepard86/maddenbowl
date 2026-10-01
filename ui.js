@@ -25,6 +25,81 @@
     { key: "shop", label: "Shop", href: "shop.html", icon: "assets/icons/cart.svg" },
   ];
 
+  // Admin-Navigation: ersetzt im Admin-Modus die Spieler-Links im Burger-Menü.
+  // Nur Bereiche, die sich bearbeiten lassen. "index" ist die Admin-Startseite
+  // (index.html), die Abschnitte dort werden über den URL-Hash umgeschaltet.
+  const ADMIN_NAV_ITEMS = [
+    { key: "setup", label: "Turnier-Setup", href: "index.html#setup", emoji: "🏈" },
+    { key: "schedule", label: "Spielplan & Ergebnisse", href: "index.html#schedule", emoji: "📅" },
+    { key: "settings", label: "Einstellungen", href: "index.html#settings", emoji: "⚙️" },
+    { key: "access", label: "Zugänge & Kennwörter", href: "index.html#access", emoji: "🔑" },
+    { key: "seasons", label: "Saison verwalten", href: "seasons.html", emoji: "🗂️" },
+    { key: "blog", label: "Blog", href: "blog.html", emoji: "📰" },
+  ];
+
+  // Einweisung beim ersten Öffnen des Dashboards (nur Spieler/Gäste).
+  const TOUR_KEY = "mb_tour_dashboard_v1";
+  const TOUR_STEPS = [
+    { icon: "🏈", title: "Willkommen beim Madden Bowl", text: "Hier siehst du auf einen Blick, was gerade läuft: den Spielplan mit Live-Spielen, das Tippspiel und die neuesten Blog-Beiträge. Alles Weitere erreichst du über das Menü oben rechts (☰)." },
+    { icon: "👤", title: "Anmelden", text: "Oben rechts tippst du auf „Anmelden“, wählst deinen Namen und gibst eine PIN mit 4–6 Ziffern ein. Beim allerersten Mal legst du damit deine eigene PIN fest – merk sie dir gut. Hast du sie vergessen, setzt der Admin sie zurück." },
+    { icon: "🎯", title: "Tippspiel", text: "Tippe vor jedem Spieltag auf die Sieger der Spiele und auf Over/Under der Gesamtpunkte. Dazu kommen Tipps auf Champion, Zweiten und Toilet-Bowl-Sieger. Ein Sieger-Tipp bringt 1 Punkt, Over/Under 2, der Champion 5. Tipps sind nur bis zum Kickoff möglich – du darfst auch auf deine eigenen Spiele tippen." },
+    { icon: "📰", title: "Blog", text: "Im Blog findest du Power Rankings, Spielerporträts, Rekorde, Memes und Songs rund um das Turnier. Jeden Beitrag kannst du aufklappen und mit der Teilen-Funktion direkt in die Gruppe schicken." },
+    { icon: "👑", title: "Hall of Fame", text: "Die Hall of Fame sammelt alle bisherigen Saisons: Champions, die ewige Tabelle und alle gespielten Partien. Hier siehst du, wer die Geschichte des Madden Bowl geschrieben hat." },
+  ];
+  let _tourIndex = 0;
+
+  function tourSeen() { try { return localStorage.getItem(TOUR_KEY) === "1"; } catch (e) { return true; } }
+  function markTourSeen() { try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) { /* egal */ } }
+
+  function renderTourStep() {
+    const step = TOUR_STEPS[_tourIndex];
+    const last = _tourIndex === TOUR_STEPS.length - 1;
+    const dots = TOUR_STEPS.map((_, i) => `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 3px;background:${i === _tourIndex ? "var(--v2-gold)" : "rgba(255,255,255,0.25)"};"></span>`).join("");
+    document.getElementById("mbTourContent").innerHTML = `
+      <div style="text-align:center; font-size:2.2em; margin-bottom:6px;">${step.icon}</div>
+      <h3 style="text-align:center;">${escHtml(step.title)}</h3>
+      <div class="v2-info-content" style="font-size:0.9em; line-height:1.5; margin-bottom:14px;">${escHtml(step.text)}</div>
+      <div style="text-align:center; margin-bottom:14px;">${dots}</div>
+      <div class="v2-modal-actions">
+        <button class="v2-btn-ghost" onclick="MB.UI.closeTour()">${last ? "Schließen" : "Überspringen"}</button>
+        <button class="v2-btn-primary" onclick="MB.UI.${last ? "closeTour" : "nextTourStep"}()">${last ? "Los geht's" : "Weiter"}</button>
+      </div>`;
+  }
+
+  function openTour() {
+    closeNav();
+    _tourIndex = 0;
+    renderTourStep();
+    document.getElementById("mbTourModal").classList.add("open");
+  }
+  function nextTourStep() {
+    if (_tourIndex < TOUR_STEPS.length - 1) { _tourIndex++; renderTourStep(); }
+  }
+  function closeTour() {
+    markTourSeen();
+    document.getElementById("mbTourModal").classList.remove("open");
+  }
+  // Wird vom Dashboard aufgerufen: zeigt die Einweisung nur beim ersten Besuch
+  // (pro Browser) und nie im Admin-Modus.
+  function maybeStartTour() {
+    if (isAdminUnlocked() || tourSeen()) return;
+    setTimeout(openTour, 600);
+  }
+
+  // Admin: Abschnitt in der Standort-Zeile + Menü hervorheben (von index.html aufgerufen)
+  function setAdminSection(key) {
+    const item = ADMIN_NAV_ITEMS.find((i) => i.key === key);
+    document.querySelectorAll(".v2-nav-link[data-admin-key]").forEach((a) => a.classList.toggle("active", a.dataset.adminKey === key));
+    const titleEl = document.getElementById("mbPageBarTitle");
+    const iconEl = document.getElementById("mbPageBarEmoji");
+    if (item && titleEl) titleEl.textContent = item.label;
+    if (item && iconEl) iconEl.textContent = item.emoji;
+  }
+  function setAdminNavItemHidden(key, hidden) {
+    const a = document.querySelector(`.v2-nav-link[data-admin-key="${key}"]`);
+    if (a) a.style.display = hidden ? "none" : "";
+  }
+
   // ---------------------------------------------------------------
   // "ZUM HOME-BILDSCHIRM HINZUFÜGEN" (PWA-Installation)
   // Chrome/Android liefert ein beforeinstallprompt-Event, das wir für den
@@ -135,7 +210,16 @@
     const active = (opts && opts.active) || "";
     _showAdminLogin = !!(opts && opts.showAdminLogin);
     _onAdminChange = (opts && opts.onAdminChange) || null;
-    const navHtml = NAV_ITEMS.map(item => `
+    // Admin-Modus (nur auf Seiten, die adminActive übergeben): eigene Links im
+    // Burger-Menü und Standort-Zeile mit Zurück-Pfeil zur Admin-Startseite.
+    const adminMode = isAdminUnlocked() && !!(opts && opts.adminActive);
+    const adminActive = adminMode ? opts.adminActive : "";
+    const navHtml = adminMode
+      ? ADMIN_NAV_ITEMS.map(item => `
+      <a class="v2-nav-link ${item.key === adminActive ? "active" : ""}" data-admin-key="${item.key}" href="${item.href}" onclick="MB.UI.closeNav()">
+        <span style="width:18px; text-align:center;">${item.emoji}</span> ${item.label}
+      </a>`).join("")
+      : NAV_ITEMS.map(item => `
       <a class="v2-nav-link ${item.key === active ? "active" : ""}" href="${item.href}">
         <img src="${item.icon}" alt=""> ${item.label}
       </a>`).join("");
@@ -144,7 +228,14 @@
     // zum Dashboard. Nur auf Unterseiten — auf dem Dashboard selbst (active
     // === "dashboard") weglassen, da man dort schon "zuhause" ist.
     const activeItem = NAV_ITEMS.find(item => item.key === active);
-    const pageBarHtml = (activeItem && active !== "dashboard") ? `
+    const adminItem = adminMode ? ADMIN_NAV_ITEMS.find(i => i.key === adminActive) : null;
+    const adminBackHref = (opts && opts.adminBack) ? "index.html" : "";
+    const pageBarHtml = adminItem ? `
+      <div class="v2-page-bar">
+        ${adminBackHref ? `<a class="v2-page-back" href="${adminBackHref}" aria-label="Zurück zur Admin-Startseite">←</a>` : ""}
+        <span id="mbPageBarEmoji" style="font-size:0.95em;">${adminItem.emoji}</span>
+        <span class="v2-page-bar-title" id="mbPageBarTitle">${adminItem.label}</span>
+      </div>` : (activeItem && active !== "dashboard") ? `
       <div class="v2-page-bar">
         <a class="v2-page-back" href="dashboard.html" aria-label="Zurück zum Dashboard">←</a>
         <img src="${activeItem.icon}" alt="">
@@ -170,12 +261,17 @@
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
         <div class="v2-nav-divider"></div>
+        ${adminMode ? `<a class="v2-nav-secondary" href="dashboard.html" style="text-decoration:none; display:block;">Zum Dashboard (Spieleransicht)</a>` : ""}
         <button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
+        ${(!adminMode && active === "dashboard") ? `<button class="v2-nav-secondary" onclick="MB.UI.openTour()">Einweisung ansehen</button>` : ""}
         <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
       <div class="v2-modal-overlay" id="mbLoginModal" onclick="if(event.target===this) MB.UI.closeLogin()">
         <div class="v2-modal-box" id="mbLoginModalContent"></div>
+      </div>
+      <div class="v2-modal-overlay" id="mbTourModal">
+        <div class="v2-modal-box" id="mbTourContent"></div>
       </div>
       <div class="v2-modal-overlay" id="mbInfoModal" onclick="if(event.target===this) MB.UI.closeInfo()">
         <div class="v2-modal-box v2-info-box" id="mbInfoModalContent"></div>
@@ -446,5 +542,7 @@
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,
     openLogin, closeLogin, doLogin, doLogout,
     openAdminLogin, doAdminLogin, doAdminLogout,
+    openTour, nextTourStep, closeTour, maybeStartTour,
+    setAdminSection, setAdminNavItemHidden, ADMIN_NAV_ITEMS,
   };
 })(window);

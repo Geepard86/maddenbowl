@@ -485,13 +485,19 @@
         ? `Der Blick auf die Ausgangslage macht den Sieg besonders bemerkenswert: ${record.player} lag in der Setzliste deutlich hinter ${record.opponent}. Auf dem Feld spielte das offenbar keine Rolle.`
         : null;
 
+    // Nur echte Rekorde bekommen die Kategorie "Rekord". Story-Memes und
+    // Blowout-Memes (kein Rekord im historischen Sinn) laufen unter "Meme".
+    const isMemeOnly = record.type === "storyMeme" || record.type === "blowout";
+
     return {
-      kind: "record",
+      kind: isMemeOnly ? "meme" : "record",
       title: `${info.emoji} ${info.label}`,
       body: paragraphs([
         intro,
         detail ? fill(detail, vars) : null,
-        "Ein neuer Eintrag für die Madden-Bowl-Geschichtsbücher – und vermutlich Material für die nächste WhatsApp-Diskussion.",
+        isMemeOnly
+          ? "Das Meme zum Spiel – ohne Anspruch auf Vollständigkeit, aber mit vollem Anspruch auf Diskussion."
+          : "Ein neuer Eintrag für die Madden-Bowl-Geschichtsbücher – und vermutlich Material für die nächste WhatsApp-Diskussion.",
       ]),
     };
   }

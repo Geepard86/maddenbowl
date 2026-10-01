@@ -18,9 +18,11 @@
 <script src="ui.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  .v2-article { display:flex; gap:12px; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; align-items:flex-start; }
+  .v2-article { display:block; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; }
+  .v2-article-head { display:flex; gap:12px; align-items:flex-start; margin-bottom:8px; }
+  .v2-article-headtext { min-width:0; flex:1; }
   .v2-article img.thumb { width:88px; height:66px; object-fit:cover; border-radius:8px; flex-shrink:0; background:#0007; }
-  .v2-article-body { min-width:0; flex:1; }
+  .v2-article-body { min-width:0; }
   .v2-article-title { font-weight:900; font-size:0.98em; margin:2px 0 4px; }
   .v2-article-subtitle { font-size:0.82em; opacity:0.72; font-style:italic; margin:0 0 6px; }
   .v2-article-excerpt { font-size:0.84em; opacity:0.82; margin-bottom:6px; }
@@ -47,6 +49,7 @@
   .v2-lightbox-share:disabled { opacity:0.6; cursor:default; }
   .v2-lightbox-hint { position:absolute; left:0; right:0; bottom:74px; text-align:center; color:#fff; font-size:0.8em; opacity:0.85; pointer-events:none; }
   .v2-article-media + .v2-article-media { margin-top:-2px; }
+  .v2-article-full .v2-article-media { margin:10px 0; }
 </style>
 </head>
 <body class="v2">
@@ -63,7 +66,7 @@
 </div>
 
 <script>
-  MB.UI.mountHeader({ active: 'blog', showAdminLogin: true, onAdminChange: () => location.reload() });
+  MB.UI.mountHeader({ active: 'blog', adminActive: 'blog', adminBack: true, showAdminLogin: true, onAdminChange: () => location.reload() });
   // Admin-Zugang läuft jetzt über den Login im Header statt über den alten
   // "?Altima"-Query-Parameter (siehe MB.UI.doAdminLogin in ui.js).
   const isAdmin = MB.UI.isAdminUnlocked();
@@ -77,8 +80,9 @@
     finals:       { label: 'Finale',          color: '#EF4444', image: 'assets/images/Blog_Finale.png' },
     champion:     { label: 'Champion',        color: '#22C55E', image: 'assets/images/Blog_Sieger.png' },
     song:         { label: 'Song',            color: '#3B82F6', image: 'assets/images/Blog_Song.png' },
-    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_WhoIs.png' },
+    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_Rueckblick.png' },
     spurious:     { label: 'Analyse',         color: '#A855F7', image: 'assets/images/Blog_SpuriousCorrelations.png' },
+    meme:         { label: 'Meme',            color: '#EC4899', image: 'assets/images/Blog_Meme.png' },
     manual:       { label: 'Community',       color: '#94A3B8', image: 'assets/images/Blog_WhoIs.png' },
   };
   function catMeta(kind) { return CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: 'assets/images/Blog_WhoIs.png' }; }
@@ -92,7 +96,7 @@
   const SHARE_BASE_URL = "https://altima-bowl.geepard86.workers.dev";
 
   function excerpt(text, n) {
-    const clean = (text || '').replace(/\s+/g, ' ').trim();
+    const clean = (text || '').replace(/\[\[img:\d+\]\]/g, '').replace(/\s+/g, ' ').trim();
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
   }
   function formatDate(dateStr) {
@@ -188,20 +192,34 @@
     // Weitere Bilder (z.B. Memes + Spurious-Correlation-Chart im Power Ranking)
     // liegen in data.extra_media als Liste von URLs.
     if (a.data && Array.isArray(a.data.extra_media)) a.data.extra_media.forEach(u => { if (u) imageUrls.push(u); });
-    const media = imageUrls.map(u =>
-      `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`
-    ).join('');
+    const imgTag = u => `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`;
+    // Power Ranking: Text steht oben, die Bilder erscheinen dort im Text, wo
+    // ein Marker [[img:N]] steht (N = Position in imageUrls). Bilder ohne
+    // Marker folgen am Ende des Textes. Alle anderen Beitragsarten zeigen
+    // ihre Bilder wie bisher vor dem Text.
+    const textFirst = a.kind === 'progress';
+    const usedByMarker = new Set();
     const adminBtns = isAdmin ? `
       <div class="v2-admin-actions">
         <button onclick="editArticle('${a.id}')">✏️ Bearbeiten</button>
         <button onclick="removeArticle('${a.id}')">🗑️ Löschen</button>
       </div>` : '';
-    const fullBody = (a.body || '');
-    const isLong = fullBody.replace(/\s+/g, ' ').trim().length > 140;
+    const rawBody = (a.body || '');
+    const fullBody = textFirst
+      ? rawBody.replace(/\[\[img:(\d+)\]\]/g, (m, n) => {
+          const u = imageUrls[Number(n)];
+          if (!u) return '';
+          usedByMarker.add(Number(n));
+          return imgTag(u);
+        })
+      : rawBody.replace(/\[\[img:\d+\]\]/g, '');
+    const isLong = rawBody.replace(/\[\[img:\d+\]\]/g, '').replace(/\s+/g, ' ').trim().length > 160 || (textFirst && imageUrls.length > 0);
     const isExpanded = expandedIds.has(String(a.id));
+    const leftoverImgs = imageUrls.filter((u, i) => !usedByMarker.has(i)).map(imgTag).join('');
+    const mediaBefore = textFirst ? '' : imageUrls.map(imgTag).join('');
     const bodyHtml = isExpanded
-      ? `<div class="v2-article-full">${fullBody}</div>`
-      : `<div class="v2-article-excerpt">${excerpt(fullBody, 140)}</div>`;
+      ? `<div class="v2-article-full">${fullBody}${textFirst ? leftoverImgs : ''}</div>`
+      : `<div class="v2-article-excerpt">${excerpt(rawBody, 160)}</div>`;
     const toggleBtn = isLong
       ? `<button class="v2-article-toggle" onclick="toggleArticle('${a.id}')">${isExpanded ? 'Weniger anzeigen ▴' : 'Mehr anzeigen ▾'}</button>`
       : '';
@@ -213,12 +231,16 @@
     const subtitle = (a.data && a.data.subtitle) ? `<div class="v2-article-subtitle">${a.data.subtitle}</div>` : '';
     return `
       <div class="v2-article" id="post-${a.id}">
-        <img class="thumb" src="${meta.image}" alt="">
+        <div class="v2-article-head">
+          <img class="thumb" src="${meta.image}" alt="" onerror="this.onerror=null;this.src='assets/images/Blog_WhoIs.png'">
+          <div class="v2-article-headtext">
+            <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
+            <div class="v2-article-title">${a.title || ''}</div>
+          </div>
+        </div>
         <div class="v2-article-body">
-          <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
-          <div class="v2-article-title">${a.title || ''}</div>
           ${subtitle}
-          ${media}
+          ${mediaBefore}
           ${bodyHtml}
           ${toggleBtn}
           <div class="v2-article-footer">
