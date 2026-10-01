@@ -9,12 +9,14 @@
   <script src="shared.js"></script>
   <script src="ui.js"></script>
   <script src="announcer.js"></script>
+  <script src="draft-stage.js"></script>
   <script src="music.js"></script>
   <script src="records.js"></script>
   <script src="blog.js"></script>
   <script src="spurious.js"></script>
 
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="draft-stage.css">
   <style>
     /* Speichern-Box für Score-Eingabe: Ergebnis wird erst bei Klick auf den
        Button (oder Enter) committed, nicht mehr live bei jedem onchange.
@@ -261,11 +263,18 @@
           <div id="showOrderCard"></div>
         </div>
 
+        <div class="card" style="background: rgba(0,0,0,0.2); margin-bottom:15px;">
+          <h3 style="margin-bottom:8px;">🚫 Teams für die Auswahl streichen</h3>
+          <div class="hint" style="font-size:0.8em; opacity:0.7; margin-bottom:8px;">Angetippte Teams stehen im Draft nicht zur Wahl (werden durchgestrichen angezeigt). Vorbelegung aus seasons.html, hier kurzfristig änderbar.</div>
+          <div id="teamExclCard"></div>
+        </div>
+
         <button class="btn" onclick="goToDraftShow()" style="margin-top:15px;">🎬 Weiter zur Draft-Show</button>
         <button class="btn-secondary" onclick="createRandomTournament()" style="margin-top:8px;">🎲 Zufalls-Turnier erstellen (Testzwecke)</button>
         </div>
 
         <div id="draftShowStep" class="hidden">
+          <button type="button" id="dsReopenBtn" class="btn hidden ds-reopen" onclick="MB.DraftStage.open(); this.classList.add('hidden'); renderDraftOrderStrip();">📺 Draft-Bühne wieder einblenden</button>
           <div id="draftOrderStrip" style="display:flex; gap:6px; overflow-x:auto; padding:8px 0; margin-bottom:14px;"></div>
           <div id="draftShowStageBox" class="card" style="border:2px solid var(--v2-gold); text-align:center; padding:24px; margin-bottom:15px;"></div>
           <div id="playerInputs"></div>
@@ -404,6 +413,8 @@
     let showOrderList = [];
     let _showOrderDragFromIndex = null;
     let draftShowIndex = 0;
+    // Vom Draft ausgeschlossene Team-IDs (aus seasons.html / hier änderbar)
+    let excludedTeams = new Set();
     // true, während die Draft-Show selbst gerade eine Team-Wahl committet —
     // unterdrückt die normale automatische Team-Pick-Ansage an der Stelle,
     // weil die Show den Kommentar selbst anstößt und auf ihn wartet, bevor
@@ -893,7 +904,7 @@ function isFinished(match) { return MB.isFinished(match); }
 
       const year = document.getElementById('maddenYear').value;
       const ratings = maddenRatings[year] || {};
-      const sortedTeams = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 }))
+      const sortedTeams = nflTeams.filter(t => !excludedTeams.has(t.id)).map(t => ({ ...t, rating: ratings[t.id] || 0 }))
                                   .sort((a, b) => b.rating - a.rating);
 
       const teamOptions = sortedTeams.map(t =>
@@ -991,6 +1002,28 @@ function isFinished(match) { return MB.isFinished(match); }
     }
 
     // =========================================================
+    // TEAMS STREICHEN (Vorbereitung)
+    // =========================================================
+    function renderTeamExclCard() {
+      const el = document.getElementById('teamExclCard');
+      if (!el) return;
+      const ratings = maddenRatings[document.getElementById('maddenYear')?.value || '2026'] || {};
+      const sorted = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 })).sort((a, b) => b.rating - a.rating);
+      el.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:6px;">${sorted.map(t => {
+        const ex = excludedTeams.has(t.id);
+        return `<button type="button" onclick="toggleExcludedTeam('${t.id}')" style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 2px; background:#161f2c; border:2px solid ${ex ? '#ff3b3b' : 'transparent'}; border-radius:8px; cursor:pointer; opacity:${ex ? 0.45 : 1};">
+          <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" style="width:28px;height:28px;object-fit:contain;${ex ? 'filter:grayscale(1);' : ''}">
+          <span style="font-size:0.68em; color:#fff; ${ex ? 'text-decoration:line-through;' : ''}">${t.n}</span>
+          <span style="font-size:0.62em; color:var(--v2-gold);">${t.rating || ''}</span></button>`;
+      }).join('')}</div>
+      <div style="font-size:0.8em; margin-top:8px; opacity:0.75;">${excludedTeams.size} Team(s) gestrichen · ${nflTeams.length - excludedTeams.size} wählbar${(nflTeams.length - excludedTeams.size) < parseInt(document.getElementById('playerCount')?.value || 0) ? ' <span style="color:var(--nfl-red);">⚠️ weniger wählbare Teams als Spieler!</span>' : ''}</div>`;
+    }
+    function toggleExcludedTeam(id) {
+      if (excludedTeams.has(id)) excludedTeams.delete(id); else excludedTeams.add(id);
+      renderTeamExclCard();
+    }
+
+    // =========================================================
     // SCHRITT 1: DRAFT-REIHENFOLGE (editierbar, Drag & Drop)
     // =========================================================
     function renderShowOrderCard() {
@@ -1078,6 +1111,8 @@ function isFinished(match) { return MB.isFinished(match); }
       draftShowIndex = 0;
       renderDraftOrderStrip();
       startDraftShowMusic();
+      initDraftStage();
+      MB.DraftStage.open();
       renderDraftShowStage({ intro: true });
 
       (async () => {
@@ -1165,7 +1200,7 @@ function isFinished(match) { return MB.isFinished(match); }
       renderDraftShowStage({ drawing: name });
       await performSlotDrawForShow(name);
       renderDraftShowStage({ drawn: { name, slot: lastDrawnPlayer.slot } });
-      await sleep(900);
+      await sleep(3800); // "Slot steht fest" bewusst lang stehen lassen
 
       // 3) Aufforderung, dann erst die Team-Auswahl
       renderDraftShowStage({ prompt: name });
@@ -1183,19 +1218,15 @@ function isFinished(match) { return MB.isFinished(match); }
         let counter = 0;
         const maxSpins = 18;
         const spinInterval = setInterval(() => {
-          const spinEl = document.getElementById('showSlotSpin');
-          if (spinEl) {
-            const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
-            spinEl.textContent = `P${tempSlot + 1}`;
-          }
+          const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+          document.querySelectorAll('#showSlotSpin, #dsSlotSpin').forEach(spinEl => { spinEl.textContent = `P${tempSlot + 1}`; });
           playDrawTick(counter / maxSpins);
           counter++;
           if (counter >= maxSpins) {
             clearInterval(spinInterval);
             finalizeDraw(name);
             buildPlayerDatalist();
-            const finalEl = document.getElementById('showSlotSpin');
-            if (finalEl) finalEl.textContent = `P${lastDrawnPlayer.slot + 1}`;
+            document.querySelectorAll('#showSlotSpin, #dsSlotSpin').forEach(finalEl => { finalEl.textContent = `P${lastDrawnPlayer.slot + 1}`; });
             setTimeout(resolve, 400);
           }
         }, 90);
@@ -1213,7 +1244,7 @@ function isFinished(match) { return MB.isFinished(match); }
         const v = document.getElementById(`pTeam${i}`)?.value;
         if (v) takenIds.add(String(v));
       }
-      const sortedTeams = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 })).sort((a, b) => b.rating - a.rating);
+      const sortedTeams = nflTeams.filter(t => !excludedTeams.has(t.id)).map(t => ({ ...t, rating: ratings[t.id] || 0 })).sort((a, b) => b.rating - a.rating);
       showPickedTeamId = null;
 
       const btns = sortedTeams.map(t => {
@@ -1267,10 +1298,81 @@ function isFinished(match) { return MB.isFinished(match); }
 
     function finishDraftShow() {
       stopDraftShowMusic();
-      playAltimaBowlFanfare().then(() => startTournament());
+      if (MB.DraftStage.isOpen()) MB.DraftStage.phase({ kickoff: true });
+      playAltimaBowlFanfare().then(() => { MB.DraftStage.close(); startTournament(); });
+    }
+
+    // ---- Draft-Bühne (draft-stage.js): Datenquelle + Anbindung ----
+    function badgeChips(name) {
+      const b = MB.computeRingIntroBadges(history, [name]).get(String(name).trim().toLowerCase());
+      if (!b) return [];
+      const c = [];
+      if (b.isRookie) c.push('Rookie');
+      if (b.isDefendingChampion) c.push('Titelverteidiger');
+      else if (b.titles > 0) c.push(b.titles + (b.titles === 1 ? ' Titel' : ' Titel'));
+      if (b.isSoleRecordChampion) c.push('Rekordchampion');
+      if (b.isToiletBowlLastSeason) c.push('Toilet-Bowl-Sieger');
+      if (b.isAllTimeHighScoreHolder) c.push('Highscore ' + b.allTimeHighScore);
+      if (b.isRunnerUpLastSeason) c.push('Vizemeister');
+      if (b.finalsWithoutTitleCount > 0) c.push('Finale ohne Titel');
+      return c;
+    }
+    let stageCallingName = null; // während der Ring-Ansage: Kandidat, dessen Badges gezeigt werden
+    function getDraftStageData() {
+      const count = parseInt(document.getElementById('playerCount').value);
+      const year = document.getElementById('maddenYear').value;
+      const ratings = maddenRatings[year] || {};
+      const slots = [];
+      const takenBy = {};
+      for (let i = 0; i < count; i++) {
+        const nm = document.getElementById(`pName${i}`)?.value || '';
+        const tm = document.getElementById(`pTeam${i}`)?.value || '';
+        slots.push({ slot: i, name: nm, teamId: tm });
+        if (tm) takenBy[tm] = nm;
+      }
+      const teams = nflTeams.map(t => ({
+        id: t.id, n: t.n, rating: ratings[t.id] || 0,
+        status: excludedTeams.has(t.id) ? 'ex' : (takenBy[t.id] ? 'taken' : 'free'),
+        takenBy: takenBy[t.id] || ''
+      })).sort((a, b) => b.rating - a.rating || a.n.localeCompare(b.n));
+      const focus = (lastDrawnPlayer.name && !stageCallingName) ? lastDrawnPlayer.slot : null;
+      const opponents = [];
+      if (focus !== null && schedules[count]) {
+        schedules[count].forEach((round, ri) => round.forEach(m => {
+          if (m[0] === focus || m[1] === focus) {
+            const opp = m[0] === focus ? m[1] : m[0];
+            opponents.push({ round: ri + 1, name: document.getElementById(`pName${opp}`)?.value || '', teamId: document.getElementById(`pTeam${opp}`)?.value || '', home: m[0] === focus });
+          }
+        }));
+      }
+      const lpTeam = focus !== null ? (document.getElementById(`pTeam${focus}`)?.value || '') : '';
+      const meta = nflTeams.find(t => String(t.id) === String(lpTeam));
+      return {
+        count, slots, teams, opponents, focusSlot: focus, drawnName: stageCallingName ? '' : (lastDrawnPlayer.name || ''),
+        badges: stageCallingName ? badgeChips(stageCallingName) : (lastDrawnPlayer.name ? badgeChips(lastDrawnPlayer.name) : []),
+        lastPick: { name: lastDrawnPlayer.name, slot: focus, teamId: lpTeam, teamName: meta ? meta.n : '', rating: ratings[lpTeam] || 0 }
+      };
+    }
+    let draftStageInited = false;
+    function initDraftStage() {
+      if (draftStageInited) return;
+      draftStageInited = true;
+      MB.DraftStage.init({
+        getData: getDraftStageData,
+        onSelect: (id) => { showPickedTeamId = id; },
+        onConfirm: () => confirmShowTeamPick(),
+        onFinish: () => finishDraftShow(),
+      });
+      document.addEventListener('ds-closed', () => {
+        const b = document.getElementById('dsReopenBtn');
+        if (b && !document.getElementById('draftShowStep').classList.contains('hidden')) b.classList.remove('hidden');
+      });
     }
 
     function renderDraftShowStage(mode) {
+      stageCallingName = (mode && (mode.callingLabelOnly || mode.calling)) ? (mode.calling || '') : null;
+      if (mode && mode.callingLabelOnly) stageCallingName = '\u0000';
+      try { if (MB.DraftStage && MB.DraftStage.isOpen()) MB.DraftStage.phase(mode || {}); } catch (e) { console.warn('Draft-Bühne:', e); }
       const box = document.getElementById('draftShowStageBox');
       if (!box) return;
       if (mode?.intro) {
@@ -1308,6 +1410,19 @@ function isFinished(match) { return MB.isFinished(match); }
       const el = document.getElementById('draftOrderStrip');
       if (!el || !showOrderList.length) return;
       const count = parseInt(document.getElementById('playerCount')?.value || showOrderList.length);
+      try {
+        if (MB.DraftStage && MB.DraftStage.isOpen()) {
+          MB.DraftStage.setStrip(showOrderList.map((entry, i) => {
+            let teamId = '';
+            if (i < draftShowIndex) {
+              for (let s = 0; s < count; s++) {
+                if ((document.getElementById(`pName${s}`)?.value || '').trim().toLowerCase() === entry.name.trim().toLowerCase()) teamId = document.getElementById(`pTeam${s}`)?.value || '';
+              }
+            }
+            return { i, name: entry.name, teamId, status: i < draftShowIndex ? 'done' : (i === draftShowIndex ? 'active' : 'upcoming') };
+          }));
+        }
+      } catch (e) { /* Bühne optional */ }
       el.innerHTML = showOrderList.map((entry, i) => {
         const status = i < draftShowIndex ? 'done' : (i === draftShowIndex ? 'active' : 'upcoming');
         let teamLogo = '';
@@ -1673,7 +1788,8 @@ document.querySelectorAll('.draft-row').forEach(row => {
         s2: document.getElementById('stadium2').value,
         s1Prep: document.getElementById('stadium1Prep').value || 'im',
         s2Prep: document.getElementById('stadium2Prep').value || 'im',
-        year: document.getElementById('maddenYear').value
+        year: document.getElementById('maddenYear').value,
+        excludedTeams: [...excludedTeams]
       };
 
       state.players = [];
@@ -2974,8 +3090,10 @@ function renderRanking() {
           const match = [...countSelect.options].find(o => parseInt(o.value) === presetDraftQueue.length);
           if (match) countSelect.value = String(presetDraftQueue.length);
         }
+        excludedTeams = new Set(Array.isArray(state.config?.excludedTeams) ? state.config.excludedTeams : []);
         updateModeInfo();
         renderShowOrderCard();
+        renderTeamExclCard();
       }
 
       if (state.slots && state.slots.length > 0) {

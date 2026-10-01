@@ -183,7 +183,7 @@
     const line = buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId: settings.modelId });
     if (!line) return;
     const voiceId = settings.provider === "elevenlabs" ? (settings.voiceIdAnnouncer || settings.voiceIdResult) : null;
-    await speakSequence([{ text: line, voiceId }]);
+    await speakSequence([{ text: line, voiceId, role: "announcer" }]);
   }
 
   // ======================================================================
@@ -256,7 +256,7 @@
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs";
     const voiceId = useElevenLabs ? (speakerIndex === 1 ? settings.voiceIdPreview : settings.voiceIdResult) : null;
-    await speakSequence([{ text, voiceId }]);
+    await speakSequence([{ text, voiceId, role: speakerIndex === 1 ? "moderator" : "commentator" }]);
   }
 
   function fmt(tpl, vars) { return tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? ""); }
@@ -772,6 +772,28 @@
     }
   }
 
+  // ----------------------------------------------------------------------
+  // SPRECH-EVENTS für die Draft-Bühne (draft-stage.js): meldet, WER gerade
+  // spricht (role = commentator | moderator | announcer) und was. So können
+  // die animierten Moderatoren im Bild synchron zum Audio den Mund bewegen
+  // und Untertitel einblenden. Ohne Listener passiert nichts.
+  // ----------------------------------------------------------------------
+  const _speakListeners = new Set();
+  function onSpeak(fn) {
+    _speakListeners.add(fn);
+    return () => _speakListeners.delete(fn);
+  }
+  function _emitSpeak(evt) {
+    _speakListeners.forEach((fn) => { try { fn(evt); } catch (e) { /* Bühne darf nie die Ansage stören */ } });
+  }
+  function _roleForVoice(voiceId, settings) {
+    if (!voiceId) return null;
+    if (settings.voiceIdAnnouncer && voiceId === settings.voiceIdAnnouncer) return "announcer";
+    if (voiceId === settings.voiceIdPreview) return "moderator";
+    if (voiceId === settings.voiceIdResult) return "commentator";
+    return null;
+  }
+
   // Spielt mehrere Zeilen nacheinander OHNE Wartezeit an den Übergängen.
   // Statt jede Zeile erst nach Ende der vorherigen bei ElevenLabs anzufragen
   // (das kostet pro Zeile ~1-3s Generierungszeit), werden ALLE ElevenLabs-
@@ -802,10 +824,15 @@
       return { seg, audioPromise: null };
     });
 
-    for (const { audioPromise } of prepared) {
+    for (const { seg, audioPromise } of prepared) {
       if (audioPromise) {
         const url = await audioPromise; // meist schon fertig, da parallel gestartet
-        if (url) await playAudioUrl(url);
+        if (url) {
+          const role = seg.role || _roleForVoice(seg.voiceId, settings);
+          _emitSpeak({ type: "start", role, text: seg.text });
+          await playAudioUrl(url);
+          _emitSpeak({ type: "end", role });
+        }
       }
     }
   }
@@ -869,14 +896,15 @@
       : `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`;
 
     const segments = [
-      { text: welcomeText, voiceId: resultVoice },
-      { text: `${names.moderator} begleitet euch durch den Abend.`, voiceId: previewVoice },
+      { text: welcomeText, voiceId: resultVoice, role: "commentator" },
+      { text: `${names.moderator} begleitet euch durch den Abend.`, voiceId: previewVoice, role: "moderator" },
     ];
     const athletes = (athleteNames || []).filter(Boolean).map(speechName);
     if (athletes.length) {
       segments.push({
         text: `Allen Athletinnen und Athleten, ${athletes.join(", ")}, viel Erfolg am Controller!`,
         voiceId: resultVoice,
+        role: "commentator",
       });
     }
     await speakSequence(segments);
@@ -1138,5 +1166,6 @@
     getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
     buildDryRunTranscript,
     buildRingIntroLine, announceRingIntro, buildTeamPickLine, announceTeamPick,
+    onSpeak,
   };
 })(window);

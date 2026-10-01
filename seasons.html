@@ -74,6 +74,11 @@
         <div id="draftOrderCard">Lade…</div>
       </div>
       <div class="card">
+        <h2>🚫 Teams für den Draft streichen</h2>
+        <div class="hint">Angetippte Teams stehen im Draft nicht zur Wahl — sie erscheinen in der Draft-Show durchgestrichen. Wird mit dem Turnier-Setup in index.html übernommen.</div>
+        <div id="teamExclCard">Lade…</div>
+      </div>
+      <div class="card">
         <h2>✍️ Artikel verfassen</h2>
         <div class="hint">Freier Editor für redaktionelle Blog-Beiträge (Saisonrückblicke, Ankündigungen, alles) — Saison und Beitragsart frei wählbar, landet direkt im Turnierblog (blog.html). Zwei Entwürfe sind schon vorausgefüllt.</div>
         <div id="composerCard"></div>
@@ -87,6 +92,7 @@
     await renderRatingsCard();
     await renderRulesCard();
     await renderDraftOrderCard();
+    drawTeamExclCard();
     await loadSeasons();
     renderComposerCard();
   }
@@ -169,6 +175,37 @@
     catch (e) { alert('Historie konnte nicht geladen werden: ' + e.message); return; }
     draftOrderList = MB.computeDraftOrder(history, names);
     drawDraftOrderCard();
+  }
+
+  // ---- Teams streichen (config.excludedTeams) ----
+  function drawTeamExclCard() {
+    const el = document.getElementById('teamExclCard');
+    if (!el) return;
+    if (!draftOrderCloudState) { el.innerHTML = '<div class="hint">Turnierstatus nicht verfügbar.</div>'; return; }
+    if (!window._exclSet) window._exclSet = new Set(Array.isArray(draftOrderCloudState.config?.excludedTeams) ? draftOrderCloudState.config.excludedTeams : []);
+    const ratings = (MB.maddenRatings && (MB.maddenRatings['2026'])) || {};
+    const teams = MB.nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 })).sort((a, b) => b.rating - a.rating);
+    el.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(88px,1fr)); gap:6px; margin:10px 0;">${teams.map(t => {
+      const ex = window._exclSet.has(t.id);
+      return `<button class="secondary" onclick="toggleExclTeam('${t.id}')" style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 2px; border:2px solid ${ex ? '#ff3b3b' : 'transparent'}; opacity:${ex ? 0.45 : 1};">
+        <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" style="width:28px;height:28px;object-fit:contain;${ex ? 'filter:grayscale(1);' : ''}">
+        <span style="font-size:0.7em; ${ex ? 'text-decoration:line-through;' : ''}">${t.n}</span><span style="font-size:0.65em; opacity:.7;">${t.rating || ''}</span></button>`;
+    }).join('')}</div>
+    <div class="hint">${window._exclSet.size} gestrichen · ${MB.nflTeams.length - window._exclSet.size} wählbar</div>
+    <button onclick="saveExclTeams()">💾 Speichern</button>`;
+  }
+  function toggleExclTeam(id) {
+    if (window._exclSet.has(id)) window._exclSet.delete(id); else window._exclSet.add(id);
+    drawTeamExclCard();
+  }
+  async function saveExclTeams() {
+    if (!draftOrderCloudState) return;
+    const mergedConfig = { ...(draftOrderCloudState.config || {}), excludedTeams: [...window._exclSet] };
+    try {
+      await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
+      draftOrderCloudState.config = mergedConfig;
+      alert('Gestrichene Teams gespeichert.');
+    } catch (e) { alert('Speichern fehlgeschlagen: ' + e.message); }
   }
 
   async function saveDraftOrder() {
