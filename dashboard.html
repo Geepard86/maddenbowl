@@ -70,7 +70,6 @@
 
 <script>
   MB.UI.mountHeader({ active: 'dashboard' });
-  MB.UI.maybeStartTour(); // Einweisung beim ersten Öffnen (nur Spieler/Gäste)
 
   let state = null, history = null, articles = [];
 
@@ -533,6 +532,7 @@
     } catch (e) { console.warn('Artikel laden fehlgeschlagen:', e); }
 
     await render();
+    MB.UI.maybeStartTour(); // Einweisung beim ersten Öffnen (nur Spieler/Gäste), erst wenn die Karten da sind
 
     setInterval(async () => {
       try {

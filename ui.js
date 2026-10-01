@@ -38,52 +38,159 @@
   ];
 
   // Einweisung beim ersten Öffnen des Dashboards (nur Spieler/Gäste).
+  // Jeder Schritt markiert den passenden Punkt auf der Seite (Spotlight) und
+  // zeigt die Erklärung direkt daneben. Fehlt der Punkt (z.B. kein laufendes
+  // Turnier, deshalb keine Tippspiel-Karte), erscheint nur die Erklärung.
   const TOUR_KEY = "mb_tour_dashboard_v1";
+  function tourCard(href) {
+    const a = document.querySelector(`#app a[href="${href}"]`);
+    return a ? (a.closest(".v2-card") || a) : null;
+  }
   const TOUR_STEPS = [
-    { icon: "🏈", title: "Willkommen beim Madden Bowl", text: "Hier siehst du auf einen Blick, was gerade läuft: den Spielplan mit Live-Spielen, das Tippspiel und die neuesten Blog-Beiträge. Alles Weitere erreichst du über das Menü oben rechts (☰)." },
-    { icon: "👤", title: "Anmelden", text: "Oben rechts tippst du auf „Anmelden“, wählst deinen Namen und gibst eine PIN mit 4–6 Ziffern ein. Beim allerersten Mal legst du damit deine eigene PIN fest – merk sie dir gut. Hast du sie vergessen, setzt der Admin sie zurück." },
-    { icon: "🎯", title: "Tippspiel", text: "Tippe vor jedem Spieltag auf die Sieger der Spiele und auf Over/Under der Gesamtpunkte. Dazu kommen Tipps auf Champion, Zweiten und Toilet-Bowl-Sieger. Ein Sieger-Tipp bringt 1 Punkt, Over/Under 2, der Champion 5. Tipps sind nur bis zum Kickoff möglich – du darfst auch auf deine eigenen Spiele tippen." },
-    { icon: "📰", title: "Blog", text: "Im Blog findest du Power Rankings, Spielerporträts, Rekorde, Memes und Songs rund um das Turnier. Jeden Beitrag kannst du aufklappen und mit der Teilen-Funktion direkt in die Gruppe schicken." },
-    { icon: "👑", title: "Hall of Fame", text: "Die Hall of Fame sammelt alle bisherigen Saisons: Champions, die ewige Tabelle und alle gespielten Partien. Hier siehst du, wer die Geschichte des Madden Bowl geschrieben hat." },
+    { icon: "🏈", title: "Willkommen beim Madden Bowl",
+      text: "Hier siehst du auf einen Blick, was gerade läuft: den Spielplan mit Live-Spielen, das Tippspiel und die neuesten Blog-Beiträge. Alles Weitere erreichst du über das Menü – dieses Symbol hier.",
+      target: () => document.querySelector(".v2-burger") },
+    { icon: "👤", title: "Anmelden",
+      text: "Hier meldest du dich an: Du wählst deinen Namen und gibst eine PIN mit 4–6 Ziffern ein. Beim allerersten Mal legst du damit deine eigene PIN fest – merk sie dir gut, bei Verlust setzt der Admin sie zurück. Wichtig: Anmelden und das Tippspiel sind nur für Teilnehmer des laufenden Turniers möglich. Gäste können alles lesen, aber nicht mittippen.",
+      target: () => document.getElementById("mbAuthArea") },
+    { icon: "🎯", title: "Tippspiel",
+      text: "Nur für Turnier-Teilnehmer: Tippe vor jedem Spieltag auf die Sieger der Spiele und auf Over/Under der Gesamtpunkte. Dazu kommen Tipps auf Champion, Zweiten und Toilet-Bowl-Sieger. Ein Sieger-Tipp bringt 1 Punkt, Over/Under 2, der Champion 5. Tipps sind nur bis zum Kickoff möglich – du darfst auch auf deine eigenen Spiele tippen. Hier siehst du den aktuellen Tippstand.",
+      target: () => tourCard("wettbuero.html") },
+    { icon: "📰", title: "Blog",
+      text: "Hier stehen die neuesten Beiträge: Power Rankings, Spielerporträts, Rekorde, Memes und Songs rund um das Turnier. Ein Tipp auf die Karte öffnet den Blog, dort kannst du jeden Beitrag aufklappen und mit der Teilen-Funktion direkt in die Gruppe schicken.",
+      target: () => tourCard("blog.html") },
+    { icon: "👑", title: "Hall of Fame",
+      text: "Die Hall of Fame sammelt alle bisherigen Saisons: Champions, die ewige Tabelle und alle gespielten Partien. Hier siehst du, wer die Geschichte des Madden Bowl geschrieben hat.",
+      target: () => tourCard("hall_of_fame.html") },
   ];
   let _tourIndex = 0;
+  let _tourOpen = false;
+  let _tourTimer = null;
 
   function tourSeen() { try { return localStorage.getItem(TOUR_KEY) === "1"; } catch (e) { return true; } }
   function markTourSeen() { try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) { /* egal */ } }
 
-  function renderTourStep() {
+  function tourHeaderHeight() {
+    const h = document.querySelector(".v2-header");
+    return h ? h.offsetHeight : 0;
+  }
+
+  // Zielelement ermitteln. Ist die Karte höher als der freie Platz neben der
+  // Erklärung, wird nur ihre Überschrift markiert.
+  function resolveTourTarget(step, tipH) {
+    let el = step.target ? step.target() : null;
+    if (!el) return null;
+    if (!el.closest(".v2-header")) {
+      const avail = window.innerHeight - tourHeaderHeight() - tipH - 48;
+      if (el.offsetHeight > avail) el = el.querySelector(".v2-card-title") || el;
+    }
+    return el;
+  }
+
+  // Spotlight + Erklärung positionieren. scroll=true nur beim Schrittwechsel.
+  function layoutTour(scroll) {
+    if (!_tourOpen) return;
+    const tip = document.getElementById("mbTourTip");
+    const spot = document.getElementById("mbTourSpot");
+    const blocker = document.getElementById("mbTourBlocker");
+    if (!tip || !spot) return;
+    const step = TOUR_STEPS[_tourIndex];
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const headerH = tourHeaderHeight();
+    const tipH = tip.offsetHeight;
+    const el = resolveTourTarget(step, tipH);
+
+    if (!el) {
+      spot.style.display = "none";
+      blocker.style.background = "rgba(8,12,20,0.78)";
+      tip.style.top = Math.max(headerH + 8, Math.round((vh - tipH) / 2)) + "px";
+      return;
+    }
+    blocker.style.background = "transparent";
+
+    const inHeader = !!el.closest(".v2-header");
+    if (scroll && !inHeader) {
+      const r0 = el.getBoundingClientRect();
+      window.scrollTo({ top: window.scrollY + r0.top - headerH - 12, behavior: "auto" });
+    }
+    const r = el.getBoundingClientRect();
+    const pad = 6;
+    spot.style.display = "block";
+    spot.style.left = (r.left - pad) + "px";
+    spot.style.top = (r.top - pad) + "px";
+    spot.style.width = (r.width + pad * 2) + "px";
+    spot.style.height = (r.height + pad * 2) + "px";
+
+    // Erklärung unter dem Ziel, sonst darüber, sonst am unteren Rand
+    const gap = 14;
+    const spaceBelow = vh - r.bottom - pad;
+    const spaceAbove = r.top - pad - headerH;
+    let top;
+    if (spaceBelow >= tipH + gap + 8) top = r.bottom + pad + gap;
+    else if (spaceAbove >= tipH + gap + 8) top = r.top - pad - gap - tipH;
+    else top = vh - tipH - 12;
+    tip.style.top = Math.min(Math.max(top, headerH + 8), vh - tipH - 8) + "px";
+  }
+
+  function renderTourStep(scroll) {
     const step = TOUR_STEPS[_tourIndex];
     const last = _tourIndex === TOUR_STEPS.length - 1;
+    const first = _tourIndex === 0;
     const dots = TOUR_STEPS.map((_, i) => `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 3px;background:${i === _tourIndex ? "var(--v2-gold)" : "rgba(255,255,255,0.25)"};"></span>`).join("");
-    document.getElementById("mbTourContent").innerHTML = `
-      <div style="text-align:center; font-size:2.2em; margin-bottom:6px;">${step.icon}</div>
-      <h3 style="text-align:center;">${escHtml(step.title)}</h3>
-      <div class="v2-info-content" style="font-size:0.9em; line-height:1.5; margin-bottom:14px;">${escHtml(step.text)}</div>
-      <div style="text-align:center; margin-bottom:14px;">${dots}</div>
+    document.getElementById("mbTourTip").innerHTML = `
+      <button class="v2-modal-close" style="position:absolute; top:8px; right:10px; background:none; border:none; color:inherit; font-size:1.1em; cursor:pointer; opacity:0.6;" onclick="MB.UI.closeTour()" aria-label="Einweisung schließen">✕</button>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding-right:22px;">
+        <span style="font-size:1.6em;">${step.icon}</span>
+        <h3 style="margin:0;">${escHtml(step.title)}</h3>
+      </div>
+      <div class="v2-info-content" style="font-size:0.88em; line-height:1.5; margin-bottom:12px;">${escHtml(step.text)}</div>
+      <div style="text-align:center; margin-bottom:12px;">${dots}</div>
       <div class="v2-modal-actions">
-        <button class="v2-btn-ghost" onclick="MB.UI.closeTour()">${last ? "Schließen" : "Überspringen"}</button>
+        <button class="v2-btn-ghost" onclick="MB.UI.${first ? "closeTour" : "prevTourStep"}()">${first ? "Überspringen" : "Zurück"}</button>
         <button class="v2-btn-primary" onclick="MB.UI.${last ? "closeTour" : "nextTourStep"}()">${last ? "Los geht's" : "Weiter"}</button>
       </div>`;
+    layoutTour(scroll);
   }
 
   function openTour() {
     closeNav();
+    if (_tourOpen) return;
+    _tourOpen = true;
     _tourIndex = 0;
-    renderTourStep();
-    document.getElementById("mbTourModal").classList.add("open");
+    document.body.insertAdjacentHTML("beforeend", `
+      <div id="mbTourBlocker" style="position:fixed; inset:0; z-index:9990; touch-action:none; background:transparent;"></div>
+      <div id="mbTourSpot" style="position:fixed; z-index:9991; display:none; pointer-events:none; border-radius:12px; border:2px solid var(--v2-gold); box-shadow:0 0 0 9999px rgba(8,12,20,0.78); transition:left .2s, top .2s, width .2s, height .2s;"></div>
+      <div id="mbTourTip" class="v2-modal-box" style="position:fixed; z-index:9992; left:50%; transform:translateX(-50%); width:min(400px, calc(100vw - 24px)); max-width:none; box-sizing:border-box; box-shadow:0 8px 30px rgba(0,0,0,0.5);"></div>`);
+    const blocker = document.getElementById("mbTourBlocker");
+    blocker.addEventListener("wheel", (e) => e.preventDefault(), { passive: false });
+    window.addEventListener("resize", onTourResize);
+    document.addEventListener("keydown", onTourKey);
+    // Seite kann sich während der Tour neu aufbauen (Auto-Refresh): Position nachziehen
+    _tourTimer = setInterval(() => layoutTour(false), 500);
+    renderTourStep(true);
   }
+  function onTourResize() { layoutTour(false); }
+  function onTourKey(e) { if (e.key === "Escape") closeTour(); }
+
   function nextTourStep() {
-    if (_tourIndex < TOUR_STEPS.length - 1) { _tourIndex++; renderTourStep(); }
+    if (_tourIndex < TOUR_STEPS.length - 1) { _tourIndex++; renderTourStep(true); }
+  }
+  function prevTourStep() {
+    if (_tourIndex > 0) { _tourIndex--; renderTourStep(true); }
   }
   function closeTour() {
     markTourSeen();
-    document.getElementById("mbTourModal").classList.remove("open");
+    _tourOpen = false;
+    clearInterval(_tourTimer);
+    window.removeEventListener("resize", onTourResize);
+    document.removeEventListener("keydown", onTourKey);
+    ["mbTourBlocker", "mbTourSpot", "mbTourTip"].forEach((id) => { const n = document.getElementById(id); if (n) n.remove(); });
   }
-  // Wird vom Dashboard aufgerufen: zeigt die Einweisung nur beim ersten Besuch
-  // (pro Browser) und nie im Admin-Modus.
+  // Wird vom Dashboard nach dem ersten Rendern aufgerufen: zeigt die
+  // Einweisung nur beim ersten Besuch (pro Browser) und nie im Admin-Modus.
   function maybeStartTour() {
     if (isAdminUnlocked() || tourSeen()) return;
-    setTimeout(openTour, 600);
+    setTimeout(openTour, 400);
   }
 
   // Admin: Abschnitt in der Standort-Zeile + Menü hervorheben (von index.html aufgerufen)
@@ -270,9 +377,6 @@
       <div class="v2-modal-overlay" id="mbLoginModal" onclick="if(event.target===this) MB.UI.closeLogin()">
         <div class="v2-modal-box" id="mbLoginModalContent"></div>
       </div>
-      <div class="v2-modal-overlay" id="mbTourModal">
-        <div class="v2-modal-box" id="mbTourContent"></div>
-      </div>
       <div class="v2-modal-overlay" id="mbInfoModal" onclick="if(event.target===this) MB.UI.closeInfo()">
         <div class="v2-modal-box v2-info-box" id="mbInfoModalContent"></div>
       </div>`;
@@ -419,6 +523,7 @@
     const names = _state.players.map(p => p.name);
     document.getElementById("mbLoginModalContent").innerHTML = `
       <h3>Anmelden</h3>
+      <div style="font-size:0.78em; opacity:0.7; line-height:1.4;">Anmeldung und Tippspiel sind nur für Teilnehmer des aktuellen Turniers möglich.</div>
       <label for="mbLoginName">Spieler</label>
       <select id="mbLoginName">${names.map(n => `<option value="${n}">${n}</option>`).join("")}</select>
       <label for="mbLoginPin">PIN</label>
@@ -542,7 +647,7 @@
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,
     openLogin, closeLogin, doLogin, doLogout,
     openAdminLogin, doAdminLogin, doAdminLogout,
-    openTour, nextTourStep, closeTour, maybeStartTour,
+    openTour, nextTourStep, prevTourStep, closeTour, maybeStartTour,
     setAdminSection, setAdminNavItemHidden, ADMIN_NAV_ITEMS,
   };
 })(window);
