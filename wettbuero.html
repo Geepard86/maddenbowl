@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl VI — Tippspiel</title>
+<title>Altima Bowl VI — Tippspiel</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
 <script src="tipp.js"></script>
@@ -332,6 +335,7 @@
       await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'match', matchId, val);
       cache.myPicksByKey.set(`match:${matchId}`, val);
       delete pendingMatchPicks[matchId];
+      try { const mi = MB.Tipp.getMatchInfo(state, matchId); MB.UI.withAchievements((A) => A.track('tipp_saved', { pick: val, homeName: mi && mi.homeName, awayName: mi && mi.awayName })); } catch (e) { /* Achievements optional */ }
       renderDashboardHtml(document.getElementById('app'));
     } catch (e) { alert('Fehler: ' + e.message); }
   }

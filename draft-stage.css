@@ -357,3 +357,5 @@
 .ds-scene-boothclose .ds-char.talking svg, .ds-scene-boothclose .ds-char.hype svg { animation: dsNodSoft 1.3s ease-in-out infinite; }
 .ds-scene-boothclose .ds-char::after { display: none; }
 .ds-scene-boothclose .ds-desk::after { left: auto; right: 4%; transform: none; bottom: 22%; font-size: 30px; }
+
+.ds-nick { font: 900 54px/1.1 Impact, 'Arial Black', sans-serif; color: #fff; text-transform: uppercase; letter-spacing: 6px; text-shadow: 4px 4px 0 #d50a0a; margin-top: 18px; max-width: 100%; overflow-wrap: anywhere; }

@@ -98,7 +98,7 @@
       <div class="ds-canvas" id="dsCanvas">
         <div class="ds-bg"></div>
         <div class="ds-header">
-          <div class="ds-brand"><span class="ds-live">LIVE</span><div class="ds-logo">Madden Bowl<small>DRAFT NIGHT</small></div></div>
+          <div class="ds-brand"><span class="ds-live">LIVE</span><div class="ds-logo">Altima Bowl<small>DRAFT NIGHT</small></div></div>
           <div class="ds-strip" id="dsStrip"></div>
           <div class="ds-tools"><button id="dsFs" title="Vollbild">⛶</button><button id="dsClose" title="Bühne ausblenden (Steuerung unten bleibt)">✕</button></div>
         </div>
@@ -284,7 +284,7 @@
       phaseName = "calling";
       setCam("ring");
       const nm = mode.calling;
-      put(`<div class="ds-kicker">Jetzt auf der Bühne</div>${nm ? `<div class="ds-name" style="font-size:${nameSize(nm)}px">${esc(nm)}</div>` : `<div style="height:140px"></div>`}${nm && d.badges && d.badges.length ? `<div class="ds-tags">${d.badges.map((b, i) => `<span class="ds-tag-chip ${i % 2 ? "gold" : ""}">${esc(b)}</span>`).join("")}</div>` : ""}`);
+      put(`<div class="ds-kicker">Jetzt auf der Bühne</div>${nm && mode.nickname ? `<div class="ds-nick">„${esc(mode.nickname)}“</div>` : ""}${nm ? `<div class="ds-name" style="font-size:${nameSize(nm)}px">${esc(nm)}</div>` : `<div style="height:140px"></div>`}${nm && d.badges && d.badges.length ? `<div class="ds-tags">${d.badges.map((b, i) => `<span class="ds-tag-chip ${i % 2 ? "gold" : ""}">${esc(b)}</span>`).join("")}</div>` : ""}`);
       if (nm) setHype("announcer", true);
     } else if (mode.drawing) {
       phaseName = "drawing";
@@ -307,7 +307,7 @@
       renderPicker(d);
     } else if (mode.commentating) {
       phaseName = "commentating";
-      // Rolle kommt aus index.html (Rudi/Mona im Wechsel) -> auch ohne Audio korrekt
+      // Rolle kommt aus admin.html (Rudi/Mona im Wechsel) -> auch ohne Audio korrekt
       if (mode.role) lastRole = mode.role;
       setCam(camForRole(mode.role || (lastRole === "commentator" ? "moderator" : "commentator")));
       const lp = d.lastPick || {};
@@ -316,14 +316,14 @@
     } else if (mode.done) {
       phaseName = "done";
       setCam("booth");
-      put(`<div class="ds-kicker">Alle Plätze vergeben</div><div class="ds-big-title">Draft komplett!</div><div class="ds-sub">Bereit für den Anpfiff?</div><button type="button" class="ds-big-btn" id="dsFinish">🏈 Madden Bowl starten</button>`);
+      put(`<div class="ds-kicker">Alle Plätze vergeben</div><div class="ds-big-title">Draft komplett!</div><div class="ds-sub">Bereit für den Anpfiff?</div><button type="button" class="ds-big-btn" id="dsFinish">🏈 Altima Bowl starten</button>`);
       el.center.querySelector("#dsFinish").onclick = () => opts.onFinish();
       setHype("commentator", true); setHype("moderator", true);
       confetti(120);
     } else if (mode.kickoff) {
       phaseName = "kickoff";
       setCam("booth");
-      put(`<div class="ds-kick"><div class="ds-kicker">Anpfiff</div><div class="ds-big-title">Madden Bowl</div><div class="ds-sub">Viel Erfolg am Controller!</div></div>`);
+      put(`<div class="ds-kick"><div class="ds-kicker">Anpfiff</div><div class="ds-big-title">Altima Bowl</div><div class="ds-sub">Viel Erfolg am Controller!</div></div>`);
       setHype("commentator", true); setHype("moderator", true);
       confetti(160);
     }
@@ -435,5 +435,5 @@
   }
   function isOpen() { return !!root && !root.classList.contains("ds-hidden"); }
 
-  global.MB.DraftStage = { init, open, close, isOpen, phase, setStrip, refreshSide, boot };
+  global.MB.DraftStage = { init, open, close, isOpen, phase, setStrip, refreshSide, boot, charSVG, sceneHTML, speakerNames };
 })(window);

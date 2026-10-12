@@ -1,5 +1,5 @@
 /* =========================================================================
-   MADDEN BOWL — SHOP-PRODUKTE (shop-products.js)
+   ALTIMA BOWL — SHOP-PRODUKTE (shop-products.js)
    -------------------------------------------------------------------------
    Statische Produktliste fürs "Featured Merch"-Widget im Dashboard.
 

@@ -1,8 +1,8 @@
 /* =========================================================================
-   MADDEN BOWL — SPURIOUS CORRELATIONS (spurious.js)
+   ALTIMA BOWL — SPURIOUS CORRELATIONS (spurious.js)
    -------------------------------------------------------------------------
    Tyler-Vigen-Style ("tylervigen.com/spurious") Schein-Korrelationen:
-   testet bei jedem gespeicherten Ergebnis, ob eine Madden-Bowl-Kennzahl aus
+   testet bei jedem gespeicherten Ergebnis, ob eine Altima-Bowl-Kennzahl aus
    der Turnier-Historie (archivierte Saisons, je ein Wert pro Jahr) zufällig
    stark mit einer der 101 unten hinterlegten deutschen Jahres-Statistiken
    korreliert (Pearson r). Bewusst reine Spielerei: bei nur 4 Datenpunkten
@@ -130,416 +130,416 @@
   // ----------------------------------------------------------------------
   // Pro deutscher Statistik (germanStatId) zwei fertige, handgeschriebene
   // Absätze: "up" wird verwendet, wenn r >= 0 (gleichläufig — je mehr
-  // Madden-Bowl-Kennzahl, desto mehr von der deutschen Statistik), "down"
+  // Altima-Bowl-Kennzahl, desto mehr von der deutschen Statistik), "down"
   // bei r < 0 (gegenläufig). Bleibt bewusst generisch bei "beim/im Madden
   // Bowl", damit dieselben zwei Bausteine zu JEDER der 12 möglichen
-  // Madden-Bowl-Kennzahlen (Saison- wie Spieler-Stats) passen — sonst
+  // Altima-Bowl-Kennzahlen (Saison- wie Spieler-Stats) passen — sonst
   // bräuchte es 101 × 12 × 2 Texte statt nur 101 × 2.
   // ======================================================================
   const GERMAN_STAT_STORIES = {
     "bierabsatz-deutschland": {
-      up: "Wird beim Madden Bowl richtig aufgedreht, wächst offenbar auch der Bierdurst der Nation: Jeder Touchdown scheint eine Kiste mehr zu rechtfertigen — und die Statistik gibt den Zuschauern recht, denn der bundesweite Bierabsatz zieht im gleichen Rhythmus an.",
-      down: "Wer beim Madden Bowl mitfiebert, hat offenbar keine Hand mehr frei fürs Glas: Bei besonders punktereichen Spielständen bleibt der Kronkorken zu, und der bundesweite Bierabsatz gibt nach."
+      up: "Wird beim Altima Bowl richtig aufgedreht, wächst offenbar auch der Bierdurst der Nation: Jeder Touchdown scheint eine Kiste mehr zu rechtfertigen — und die Statistik gibt den Zuschauern recht, denn der bundesweite Bierabsatz zieht im gleichen Rhythmus an.",
+      down: "Wer beim Altima Bowl mitfiebert, hat offenbar keine Hand mehr frei fürs Glas: Bei besonders punktereichen Spielständen bleibt der Kronkorken zu, und der bundesweite Bierabsatz gibt nach."
     },
     "bierverbrauch-je-einwohner": {
-      up: "Pro Kopf wird offenbar genauso mitgezählt wie auf dem Scoreboard: Steigt die Punkteausbeute beim Madden Bowl, steigt scheinbar auch der individuelle Bierdurst — jeder Bundesbürger trinkt im selben Takt ein bisschen mehr mit.",
-      down: "Ganz Deutschland scheint gebannt aufs Spielfeld zu starren statt ins Glas: Je mehr beim Madden Bowl passiert, desto stärker sinkt der Bierverbrauch je Einwohner — offenbar zu spannend, um nebenbei nachzuschenken."
+      up: "Pro Kopf wird offenbar genauso mitgezählt wie auf dem Scoreboard: Steigt die Punkteausbeute beim Altima Bowl, steigt scheinbar auch der individuelle Bierdurst — jeder Bundesbürger trinkt im selben Takt ein bisschen mehr mit.",
+      down: "Ganz Deutschland scheint gebannt aufs Spielfeld zu starren statt ins Glas: Je mehr beim Altima Bowl passiert, desto stärker sinkt der Bierverbrauch je Einwohner — offenbar zu spannend, um nebenbei nachzuschenken."
     },
     "eierproduktion": {
-      up: "Ein spannungsgeladener Madden Bowl macht offenbar Lust auf deftiges Frühstück danach: Mit den Punktzahlen zieht auch die deutsche Eierproduktion an, als müssten die Hühner dem Turniergeschehen hinterherlegen.",
-      down: "Zu viel Nervenkitzel schlägt offenbar aufs Frühstück: Je mehr beim Madden Bowl los ist, desto weniger Eier legt die deutsche Landwirtschaft — vielleicht sind selbst die Hühner zu abgelenkt vom Spielstand."
+      up: "Ein spannungsgeladener Altima Bowl macht offenbar Lust auf deftiges Frühstück danach: Mit den Punktzahlen zieht auch die deutsche Eierproduktion an, als müssten die Hühner dem Turniergeschehen hinterherlegen.",
+      down: "Zu viel Nervenkitzel schlägt offenbar aufs Frühstück: Je mehr beim Altima Bowl los ist, desto weniger Eier legt die deutsche Landwirtschaft — vielleicht sind selbst die Hühner zu abgelenkt vom Spielstand."
     },
     "apfelernte-deutschland": {
-      up: "Nach einem torreichen Madden-Bowl-Abend greifen offenbar alle zum gesunden Ausgleich: Die deutsche Apfelernte wächst im gleichen Maß wie die Punktzahlen — schlechtes Gewissen nach den Chips, vermutlich.",
-      down: "Bei intensiven Madden-Bowl-Duellen bleibt der Apfel offenbar im Obstkorb liegen: Je mehr Punkte fallen, desto magerer fällt die deutsche Apfelernte aus — zu viel Nervenkitzel, zu wenig Vitamine."
+      up: "Nach einem torreichen Altima-Bowl-Abend greifen offenbar alle zum gesunden Ausgleich: Die deutsche Apfelernte wächst im gleichen Maß wie die Punktzahlen — schlechtes Gewissen nach den Chips, vermutlich.",
+      down: "Bei intensiven Altima-Bowl-Duellen bleibt der Apfel offenbar im Obstkorb liegen: Je mehr Punkte fallen, desto magerer fällt die deutsche Apfelernte aus — zu viel Nervenkitzel, zu wenig Vitamine."
     },
     "fleischersatzproduktion": {
-      up: "Selbst Fleischersatz zieht beim Madden Bowl mit: Steigen die Punktzahlen, wächst auch die deutsche Produktion veganer Alternativen — offenbar wird auf der Fan-Couch zunehmend pflanzlich gegrillt.",
-      down: "Bei hitzigen Madden-Bowl-Spielständen greifen die Fans doch lieber zum Klassiker: Je mehr Punkte fallen, desto stärker schrumpft die deutsche Fleischersatzproduktion — Deftiges siegt über gute Vorsätze."
+      up: "Selbst Fleischersatz zieht beim Altima Bowl mit: Steigen die Punktzahlen, wächst auch die deutsche Produktion veganer Alternativen — offenbar wird auf der Fan-Couch zunehmend pflanzlich gegrillt.",
+      down: "Bei hitzigen Altima-Bowl-Spielständen greifen die Fans doch lieber zum Klassiker: Je mehr Punkte fallen, desto stärker schrumpft die deutsche Fleischersatzproduktion — Deftiges siegt über gute Vorsätze."
     },
     "unternehmensinsolvenzen": {
-      up: "Offenbar überträgt sich der sportliche Konkurrenzdruck direkt auf die Wirtschaft: Je mehr beim Madden Bowl entschieden wird, desto mehr deutsche Unternehmen geraten anschließend in finanzielle Schieflage.",
-      down: "Ein packender Madden Bowl scheint die Nerven der Wirtschaft zu beruhigen statt zu strapazieren: Mit steigenden Punktzahlen sinkt überraschend die Zahl der Unternehmensinsolvenzen in Deutschland."
+      up: "Offenbar überträgt sich der sportliche Konkurrenzdruck direkt auf die Wirtschaft: Je mehr beim Altima Bowl entschieden wird, desto mehr deutsche Unternehmen geraten anschließend in finanzielle Schieflage.",
+      down: "Ein packender Altima Bowl scheint die Nerven der Wirtschaft zu beruhigen statt zu strapazieren: Mit steigenden Punktzahlen sinkt überraschend die Zahl der Unternehmensinsolvenzen in Deutschland."
     },
     "eheschlieungen": {
-      up: "Der Team-Geist beim Madden Bowl scheint anzustecken: Je mehr Punkte fallen, desto mehr Paare trauen sich offenbar auch selbst den großen Schritt und heiraten.",
-      down: "Zu viel Bildschirmzeit beim Madden Bowl lässt die Romantik offenbar leiden: Steigen die Punktzahlen, sinkt im gleichen Maß die Zahl der Eheschließungen in Deutschland."
+      up: "Der Team-Geist beim Altima Bowl scheint anzustecken: Je mehr Punkte fallen, desto mehr Paare trauen sich offenbar auch selbst den großen Schritt und heiraten.",
+      down: "Zu viel Bildschirmzeit beim Altima Bowl lässt die Romantik offenbar leiden: Steigen die Punktzahlen, sinkt im gleichen Maß die Zahl der Eheschließungen in Deutschland."
     },
     "ehescheidungen": {
-      up: "Wenn beim Madden Bowl die Fetzen fliegen, hallt der Ehrgeiz offenbar bis ins Wohnzimmer nach: Wo Paare sich abends über strittige Zweikampf-Entscheidungen streiten, wächst am Ende auch bundesweit die Zahl der Scheidungen.",
-      down: "Ein spannender Madden-Bowl-Abend hält offenbar Paare zusammen: Wer gemeinsam mitfiebert statt zu streiten, braucht seltener den Anwalt — die Scheidungsrate sinkt im gleichen Maß, wie die Punkte steigen."
+      up: "Wenn beim Altima Bowl die Fetzen fliegen, hallt der Ehrgeiz offenbar bis ins Wohnzimmer nach: Wo Paare sich abends über strittige Zweikampf-Entscheidungen streiten, wächst am Ende auch bundesweit die Zahl der Scheidungen.",
+      down: "Ein spannender Altima-Bowl-Abend hält offenbar Paare zusammen: Wer gemeinsam mitfiebert statt zu streiten, braucht seltener den Anwalt — die Scheidungsrate sinkt im gleichen Maß, wie die Punkte steigen."
     },
     "ubernachtungen-deutschland": {
-      up: "Der Erfolg des Madden Bowl scheint Reiselust zu wecken: Je mehr Punkte im Turnier fallen, desto mehr Übernachtungen zählt Deutschland — offenbar wird nach jedem Highlight gleich ein Fan-Trip gebucht.",
-      down: "Wer beim Madden Bowl mitfiebert, bleibt offenbar lieber zu Hause vorm Bildschirm: Steigen die Punktzahlen, sinkt die Zahl der Übernachtungen in Deutschland spürbar."
+      up: "Der Erfolg des Altima Bowl scheint Reiselust zu wecken: Je mehr Punkte im Turnier fallen, desto mehr Übernachtungen zählt Deutschland — offenbar wird nach jedem Highlight gleich ein Fan-Trip gebucht.",
+      down: "Wer beim Altima Bowl mitfiebert, bleibt offenbar lieber zu Hause vorm Bildschirm: Steigen die Punktzahlen, sinkt die Zahl der Übernachtungen in Deutschland spürbar."
     },
     "aus-deutschland-abfliegende-passagiere": {
-      up: "Madden-Bowl-Erfolge scheinen Deutschland reiselustig zu machen: Mit steigenden Punktzahlen wächst auch die Zahl der abfliegenden Passagiere — vielleicht auf dem Weg zu einem echten NFL-Spiel.",
-      down: "Je spannender das Madden Bowl, desto mehr Deutsche bleiben offenbar am Boden: Steigende Punktzahlen gehen mit sinkenden Passagierzahlen an deutschen Flughäfen einher — zu gebannt fürs Gate."
+      up: "Altima-Bowl-Erfolge scheinen Deutschland reiselustig zu machen: Mit steigenden Punktzahlen wächst auch die Zahl der abfliegenden Passagiere — vielleicht auf dem Weg zu einem echten NFL-Spiel.",
+      down: "Je spannender das Altima Bowl, desto mehr Deutsche bleiben offenbar am Boden: Steigende Punktzahlen gehen mit sinkenden Passagierzahlen an deutschen Flughäfen einher — zu gebannt fürs Gate."
     },
     "patentanmeldungen-beim-dpma": {
-      up: "Der taktische Erfindungsreichtum beim Madden Bowl scheint überzuschwappen: Je mehr Punkte erzielt werden, desto mehr Patente melden deutsche Tüftler beim DPMA an.",
-      down: "Zu viel Madden-Bowl-Ablenkung lässt offenbar die Werkbank kalt: Steigen die Punktzahlen im Turnier, sinkt die Zahl der Patentanmeldungen beim DPMA."
+      up: "Der taktische Erfindungsreichtum beim Altima Bowl scheint überzuschwappen: Je mehr Punkte erzielt werden, desto mehr Patente melden deutsche Tüftler beim DPMA an.",
+      down: "Zu viel Altima-Bowl-Ablenkung lässt offenbar die Werkbank kalt: Steigen die Punktzahlen im Turnier, sinkt die Zahl der Patentanmeldungen beim DPMA."
     },
     "studierende-deutschland": {
-      up: "Madden-Bowl-Erfolge scheinen Bildungshunger zu wecken: Je mehr Punkte fallen, desto mehr junge Menschen schreiben sich an deutschen Hochschulen ein.",
-      down: "Zu viele Punkte beim Madden Bowl, zu wenig Zeit fürs Studium: Mit steigenden Punktzahlen sinkt die Zahl der Studierenden in Deutschland."
+      up: "Altima-Bowl-Erfolge scheinen Bildungshunger zu wecken: Je mehr Punkte fallen, desto mehr junge Menschen schreiben sich an deutschen Hochschulen ein.",
+      down: "Zu viele Punkte beim Altima Bowl, zu wenig Zeit fürs Studium: Mit steigenden Punktzahlen sinkt die Zahl der Studierenden in Deutschland."
     },
     "treibhausgasemissionen-deutschland": {
-      up: "Jeder zusätzliche Punkt beim Madden Bowl scheint einen kleinen CO₂-Fußabdruck zu hinterlassen: Steigende Punktzahlen gehen Hand in Hand mit höheren deutschen Treibhausgasemissionen — wohl der ganze Konsolen- und Grillbetrieb drumherum.",
-      down: "Ein spannender Madden Bowl hält die Fans offenbar zuhause und ruhig statt unterwegs: Je mehr Punkte fallen, desto stärker sinken die deutschen Treibhausgasemissionen."
+      up: "Jeder zusätzliche Punkt beim Altima Bowl scheint einen kleinen CO₂-Fußabdruck zu hinterlassen: Steigende Punktzahlen gehen Hand in Hand mit höheren deutschen Treibhausgasemissionen — wohl der ganze Konsolen- und Grillbetrieb drumherum.",
+      down: "Ein spannender Altima Bowl hält die Fans offenbar zuhause und ruhig statt unterwegs: Je mehr Punkte fallen, desto stärker sinken die deutschen Treibhausgasemissionen."
     },
     "smartphones-absatz-deutschland": {
-      up: "Wer den Madden Bowl live mitverfolgen will, braucht offenbar ein neues Gerät: Steigen die Punktzahlen im Turnier, steigt auch der Smartphone-Absatz in Deutschland.",
-      down: "Zu gebannt vom Spielgeschehen, um noch zu shoppen: Je mehr Punkte beim Madden Bowl fallen, desto weniger Smartphones werden in Deutschland verkauft."
+      up: "Wer den Altima Bowl live mitverfolgen will, braucht offenbar ein neues Gerät: Steigen die Punktzahlen im Turnier, steigt auch der Smartphone-Absatz in Deutschland.",
+      down: "Zu gebannt vom Spielgeschehen, um noch zu shoppen: Je mehr Punkte beim Altima Bowl fallen, desto weniger Smartphones werden in Deutschland verkauft."
     },
     "deutsche-games-unternehmen": {
-      up: "Der Erfolg des Madden Bowl scheint die ganze Branche zu beflügeln: Mit steigenden Punktzahlen wächst auch die Zahl der Games-Unternehmen in Deutschland.",
-      down: "Zu viel Konkurrenz durch das Madden Bowl selbst: Je mehr Punkte im Turnier fallen, desto mehr deutsche Games-Unternehmen ziehen sich offenbar zurück."
+      up: "Der Erfolg des Altima Bowl scheint die ganze Branche zu beflügeln: Mit steigenden Punktzahlen wächst auch die Zahl der Games-Unternehmen in Deutschland.",
+      down: "Zu viel Konkurrenz durch das Altima Bowl selbst: Je mehr Punkte im Turnier fallen, desto mehr deutsche Games-Unternehmen ziehen sich offenbar zurück."
     },
     "globale-musikindustrie-recorded-music-umsatz": {
-      up: "Jeder Punkt beim Madden Bowl braucht offenbar den passenden Soundtrack: Steigende Punktzahlen gehen mit einem wachsenden weltweiten Umsatz mit Recorded Music einher.",
-      down: "Zu gespannt fürs Radio: Je mehr beim Madden Bowl passiert, desto stärker schrumpft ausgerechnet der weltweite Umsatz mit Recorded Music."
+      up: "Jeder Punkt beim Altima Bowl braucht offenbar den passenden Soundtrack: Steigende Punktzahlen gehen mit einem wachsenden weltweiten Umsatz mit Recorded Music einher.",
+      down: "Zu gespannt fürs Radio: Je mehr beim Altima Bowl passiert, desto stärker schrumpft ausgerechnet der weltweite Umsatz mit Recorded Music."
     },
     "globale-musikindustrie-subscription-streaming-umsatz": {
-      up: "Die Hymnen zum Madden Bowl laufen offenbar im Abo: Mit steigenden Punktzahlen wächst auch der weltweite Umsatz mit Subscription-Streaming.",
-      down: "Wer beim Madden Bowl mitfiebert, pausiert offenbar die Playlist: Steigende Punktzahlen im Turnier gehen mit sinkenden Streaming-Abo-Umsätzen weltweit einher."
+      up: "Die Hymnen zum Altima Bowl laufen offenbar im Abo: Mit steigenden Punktzahlen wächst auch der weltweite Umsatz mit Subscription-Streaming.",
+      down: "Wer beim Altima Bowl mitfiebert, pausiert offenbar die Playlist: Steigende Punktzahlen im Turnier gehen mit sinkenden Streaming-Abo-Umsätzen weltweit einher."
     },
     "oscar-werbung-30-sek-spot": {
-      up: "Der Werbemarkt scheint vom Madden-Bowl-Fieber anzustecken: Je mehr Punkte im Turnier fallen, desto teurer wird ein 30-Sekunden-Werbespot bei den Oscars.",
-      down: "Die Werbebranche investiert ihr Budget offenbar lieber woanders: Steigende Punktzahlen beim Madden Bowl gehen mit sinkenden Oscar-Werbepreisen einher."
+      up: "Der Werbemarkt scheint vom Altima-Bowl-Fieber anzustecken: Je mehr Punkte im Turnier fallen, desto teurer wird ein 30-Sekunden-Werbespot bei den Oscars.",
+      down: "Die Werbebranche investiert ihr Budget offenbar lieber woanders: Steigende Punktzahlen beim Altima Bowl gehen mit sinkenden Oscar-Werbepreisen einher."
     },
     "super-bowl-werbung-30-sek-spot": {
-      up: "Football-Fieber steckt an: Je mehr Punkte beim Madden Bowl fallen, desto teurer wird der 30-Sekunden-Werbespot beim echten Super Bowl.",
-      down: "Zu viel Konkurrenz durchs Madden Bowl selbst: Steigende Punktzahlen im Turnier gehen überraschend mit fallenden Super-Bowl-Werbepreisen einher."
+      up: "Football-Fieber steckt an: Je mehr Punkte beim Altima Bowl fallen, desto teurer wird der 30-Sekunden-Werbespot beim echten Super Bowl.",
+      down: "Zu viel Konkurrenz durchs Altima Bowl selbst: Steigende Punktzahlen im Turnier gehen überraschend mit fallenden Super-Bowl-Werbepreisen einher."
     },
     "fahrrad-e-bike-durchschnittlicher-verkaufspreis": {
-      up: "Nach jedem Highlight beim Madden Bowl gönnen sich die Fans offenbar etwas Gutes: Steigende Punktzahlen gehen mit einem höheren Durchschnittspreis für Fahrräder und E-Bikes in Deutschland einher.",
-      down: "Wer beim Madden Bowl mitfiebert, spart offenbar woanders: Je mehr Punkte fallen, desto günstiger werden Fahrräder und E-Bikes im Schnitt in Deutschland."
+      up: "Nach jedem Highlight beim Altima Bowl gönnen sich die Fans offenbar etwas Gutes: Steigende Punktzahlen gehen mit einem höheren Durchschnittspreis für Fahrräder und E-Bikes in Deutschland einher.",
+      down: "Wer beim Altima Bowl mitfiebert, spart offenbar woanders: Je mehr Punkte fallen, desto günstiger werden Fahrräder und E-Bikes im Schnitt in Deutschland."
     },
     "durchschnittlicher-e-bike-preis": {
-      up: "Der sportliche Ehrgeiz beim Madden Bowl überträgt sich offenbar aufs echte Radfahren: Mit steigenden Punktzahlen klettert auch der durchschnittliche E-Bike-Preis in Deutschland.",
-      down: "Zu viel Zeit auf der Couch, zu wenig auf dem Sattel: Je mehr Punkte beim Madden Bowl fallen, desto günstiger werden E-Bikes im deutschen Durchschnitt."
+      up: "Der sportliche Ehrgeiz beim Altima Bowl überträgt sich offenbar aufs echte Radfahren: Mit steigenden Punktzahlen klettert auch der durchschnittliche E-Bike-Preis in Deutschland.",
+      down: "Zu viel Zeit auf der Couch, zu wenig auf dem Sattel: Je mehr Punkte beim Altima Bowl fallen, desto günstiger werden E-Bikes im deutschen Durchschnitt."
     },
     "pkw-bestand-deutschland": {
-      up: "Der Erfolg des Madden Bowl scheint auch die Straßen zu füllen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Pkw-Bestand in Deutschland einher.",
-      down: "Wer gebannt vorm Bildschirm sitzt, braucht offenbar kein neues Auto: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wächst der deutsche Pkw-Bestand."
+      up: "Der Erfolg des Altima Bowl scheint auch die Straßen zu füllen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Pkw-Bestand in Deutschland einher.",
+      down: "Wer gebannt vorm Bildschirm sitzt, braucht offenbar kein neues Auto: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wächst der deutsche Pkw-Bestand."
     },
     "gesamtbevolkerung-deutschland": {
-      up: "Der Madden Bowl scheint Deutschland regelrecht attraktiv zu machen: Mit steigenden Punktzahlen wächst auch die Gesamtbevölkerung.",
-      down: "Zu viel Nervenkitzel beim Madden Bowl könnte manchen die Lust am Bleiben nehmen: Steigende Punktzahlen im Turnier gehen mit einem schwächeren Bevölkerungswachstum in Deutschland einher."
+      up: "Der Altima Bowl scheint Deutschland regelrecht attraktiv zu machen: Mit steigenden Punktzahlen wächst auch die Gesamtbevölkerung.",
+      down: "Zu viel Nervenkitzel beim Altima Bowl könnte manchen die Lust am Bleiben nehmen: Steigende Punktzahlen im Turnier gehen mit einem schwächeren Bevölkerungswachstum in Deutschland einher."
     },
     "lebendgeborene": {
-      up: "Der Team-Geist beim Madden Bowl scheint sich fortzupflanzen: Je mehr Punkte fallen, desto mehr Babys werden in Deutschland geboren — neun Monate später, versteht sich.",
-      down: "Zu viel Bildschirmzeit beim Madden Bowl lässt offenbar die Geburtenzahlen sinken: Steigende Punktzahlen im Turnier gehen mit weniger Lebendgeborenen in Deutschland einher."
+      up: "Der Team-Geist beim Altima Bowl scheint sich fortzupflanzen: Je mehr Punkte fallen, desto mehr Babys werden in Deutschland geboren — neun Monate später, versteht sich.",
+      down: "Zu viel Bildschirmzeit beim Altima Bowl lässt offenbar die Geburtenzahlen sinken: Steigende Punktzahlen im Turnier gehen mit weniger Lebendgeborenen in Deutschland einher."
     },
     "gestorbene": {
-      up: "Der Nervenkitzel beim Madden Bowl scheint aufs Herz zu schlagen: Steigende Punktzahlen im Turnier gehen mit einer höheren Sterberate in Deutschland einher.",
-      down: "Ein spannender Madden Bowl hält die Menschen offenbar am Leben und am Bildschirm: Je mehr Punkte fallen, desto weniger Menschen sterben in Deutschland."
+      up: "Der Nervenkitzel beim Altima Bowl scheint aufs Herz zu schlagen: Steigende Punktzahlen im Turnier gehen mit einer höheren Sterberate in Deutschland einher.",
+      down: "Ein spannender Altima Bowl hält die Menschen offenbar am Leben und am Bildschirm: Je mehr Punkte fallen, desto weniger Menschen sterben in Deutschland."
     },
     "erwerbstatige": {
-      up: "Der Erfolg des Madden Bowl scheint den ganzen Arbeitsmarkt mitzuziehen: Steigende Punktzahlen gehen mit einer wachsenden Zahl an Erwerbstätigen in Deutschland einher.",
-      down: "Zu viel Ablenkung durchs Turniergeschehen: Je mehr Punkte beim Madden Bowl fallen, desto weniger Menschen gehen in Deutschland einer Arbeit nach."
+      up: "Der Erfolg des Altima Bowl scheint den ganzen Arbeitsmarkt mitzuziehen: Steigende Punktzahlen gehen mit einer wachsenden Zahl an Erwerbstätigen in Deutschland einher.",
+      down: "Zu viel Ablenkung durchs Turniergeschehen: Je mehr Punkte beim Altima Bowl fallen, desto weniger Menschen gehen in Deutschland einer Arbeit nach."
     },
     "erwerbslose": {
-      up: "Der Konkurrenzkampf beim Madden Bowl scheint auf den Arbeitsmarkt abzufärben: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Zahl an Erwerbslosen in Deutschland einher.",
-      down: "Ein spannendes Madden Bowl motiviert offenbar zum Durchstarten: Je mehr Punkte fallen, desto weniger Menschen sind in Deutschland ohne Arbeit."
+      up: "Der Konkurrenzkampf beim Altima Bowl scheint auf den Arbeitsmarkt abzufärben: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Zahl an Erwerbslosen in Deutschland einher.",
+      down: "Ein spannendes Altima Bowl motiviert offenbar zum Durchstarten: Je mehr Punkte fallen, desto weniger Menschen sind in Deutschland ohne Arbeit."
     },
     "genehmigte-wohnungen": {
-      up: "Der Erfolg des Madden Bowl scheint auch Bauherren zu beflügeln: Steigende Punktzahlen im Turnier gehen mit mehr genehmigten Wohnungen in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen, um Bauanträge zu stellen: Je mehr Punkte beim Madden Bowl fallen, desto weniger Wohnungen werden in Deutschland genehmigt."
+      up: "Der Erfolg des Altima Bowl scheint auch Bauherren zu beflügeln: Steigende Punktzahlen im Turnier gehen mit mehr genehmigten Wohnungen in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen, um Bauanträge zu stellen: Je mehr Punkte beim Altima Bowl fallen, desto weniger Wohnungen werden in Deutschland genehmigt."
     },
     "holzeinschlag": {
-      up: "Nach jedem Sieg beim Madden Bowl wird offenbar kräftig gegrillt: Steigende Punktzahlen im Turnier gehen mit einem höheren Holzeinschlag in Deutschland einher — Grillkohle-Nachschub, vermutlich.",
-      down: "Zu gebannt vorm Bildschirm, um in den Wald zu fahren: Je mehr Punkte beim Madden Bowl fallen, desto weniger Holz wird in Deutschland eingeschlagen."
+      up: "Nach jedem Sieg beim Altima Bowl wird offenbar kräftig gegrillt: Steigende Punktzahlen im Turnier gehen mit einem höheren Holzeinschlag in Deutschland einher — Grillkohle-Nachschub, vermutlich.",
+      down: "Zu gebannt vorm Bildschirm, um in den Wald zu fahren: Je mehr Punkte beim Altima Bowl fallen, desto weniger Holz wird in Deutschland eingeschlagen."
     },
     "kinobesucher-deutschland": {
-      up: "Der Hype ums Madden Bowl scheint auch aufs Kino abzufärben: Steigende Punktzahlen im Turnier gehen mit mehr Kinobesuchen in Deutschland einher.",
-      down: "Wer den Madden Bowl verfolgt, bleibt offenbar lieber zu Hause: Je mehr Punkte fallen, desto weniger Menschen gehen in Deutschland ins Kino."
+      up: "Der Hype ums Altima Bowl scheint auch aufs Kino abzufärben: Steigende Punktzahlen im Turnier gehen mit mehr Kinobesuchen in Deutschland einher.",
+      down: "Wer den Altima Bowl verfolgt, bleibt offenbar lieber zu Hause: Je mehr Punkte fallen, desto weniger Menschen gehen in Deutschland ins Kino."
     },
     "stromerzeugung-gesamt": {
-      up: "Jeder zusätzliche Bildschirm für den Madden Bowl zieht offenbar Strom: Steigende Punktzahlen im Turnier gehen mit einer höheren Bruttostromerzeugung in Deutschland einher.",
-      down: "Alle sitzen still und gebannt vorm selben Bildschirm: Je mehr Punkte beim Madden Bowl fallen, desto weniger Strom wird in Deutschland insgesamt erzeugt."
+      up: "Jeder zusätzliche Bildschirm für den Altima Bowl zieht offenbar Strom: Steigende Punktzahlen im Turnier gehen mit einer höheren Bruttostromerzeugung in Deutschland einher.",
+      down: "Alle sitzen still und gebannt vorm selben Bildschirm: Je mehr Punkte beim Altima Bowl fallen, desto weniger Strom wird in Deutschland insgesamt erzeugt."
     },
     "windstrom": {
-      up: "Der Rückenwind für den Madden Bowl scheint wortwörtlich zu wehen: Steigende Punktzahlen im Turnier gehen mit mehr Windstromerzeugung in Deutschland einher.",
-      down: "Zu viel Spannung, zu wenig Wind: Je mehr Punkte beim Madden Bowl fallen, desto schwächer fällt die deutsche Windstromerzeugung aus."
+      up: "Der Rückenwind für den Altima Bowl scheint wortwörtlich zu wehen: Steigende Punktzahlen im Turnier gehen mit mehr Windstromerzeugung in Deutschland einher.",
+      down: "Zu viel Spannung, zu wenig Wind: Je mehr Punkte beim Altima Bowl fallen, desto schwächer fällt die deutsche Windstromerzeugung aus."
     },
     "erneuerbare-stromerzeugung": {
-      up: "Der Madden Bowl scheint auch die Energiewende anzufeuern: Steigende Punktzahlen im Turnier gehen mit einer wachsenden erneuerbaren Stromerzeugung in Deutschland einher.",
-      down: "Zu gebannt fürs Wetterglück: Je mehr Punkte beim Madden Bowl fallen, desto geringer fällt die erneuerbare Stromerzeugung in Deutschland aus."
+      up: "Der Altima Bowl scheint auch die Energiewende anzufeuern: Steigende Punktzahlen im Turnier gehen mit einer wachsenden erneuerbaren Stromerzeugung in Deutschland einher.",
+      down: "Zu gebannt fürs Wetterglück: Je mehr Punkte beim Altima Bowl fallen, desto geringer fällt die erneuerbare Stromerzeugung in Deutschland aus."
     },
     "butterproduktion": {
-      up: "Nach jedem Highlight beim Madden Bowl wird offenbar großzügiger aufs Popcorn gestrichen: Steigende Punktzahlen im Turnier gehen mit einer höheren deutschen Butterproduktion einher.",
-      down: "Zu gebannt, um noch zu backen: Je mehr Punkte beim Madden Bowl fallen, desto weniger Butter wird in Deutschland produziert."
+      up: "Nach jedem Highlight beim Altima Bowl wird offenbar großzügiger aufs Popcorn gestrichen: Steigende Punktzahlen im Turnier gehen mit einer höheren deutschen Butterproduktion einher.",
+      down: "Zu gebannt, um noch zu backen: Je mehr Punkte beim Altima Bowl fallen, desto weniger Butter wird in Deutschland produziert."
     },
     "kaseproduktion": {
-      up: "Ein spannender Madden Bowl macht offenbar Appetit auf deftigen Snack-Nachschub: Steigende Punktzahlen gehen mit einer wachsenden deutschen Käseproduktion einher.",
-      down: "Zu viel Nervenkitzel schlägt offenbar auf den Appetit: Je mehr Punkte beim Madden Bowl fallen, desto geringer fällt die deutsche Käseproduktion aus."
+      up: "Ein spannender Altima Bowl macht offenbar Appetit auf deftigen Snack-Nachschub: Steigende Punktzahlen gehen mit einer wachsenden deutschen Käseproduktion einher.",
+      down: "Zu viel Nervenkitzel schlägt offenbar auf den Appetit: Je mehr Punkte beim Altima Bowl fallen, desto geringer fällt die deutsche Käseproduktion aus."
     },
     "zigarettenverbrauch": {
-      up: "Die Nerven liegen beim Madden Bowl offenbar blank: Steigende Punktzahlen im Turnier gehen mit einem höheren Zigarettenverbrauch in Deutschland einher.",
-      down: "Ein spannender Madden Bowl lenkt offenbar erfolgreich vom Griff zur Packung ab: Je mehr Punkte fallen, desto geringer der deutsche Zigarettenverbrauch."
+      up: "Die Nerven liegen beim Altima Bowl offenbar blank: Steigende Punktzahlen im Turnier gehen mit einem höheren Zigarettenverbrauch in Deutschland einher.",
+      down: "Ein spannender Altima Bowl lenkt offenbar erfolgreich vom Griff zur Packung ab: Je mehr Punkte fallen, desto geringer der deutsche Zigarettenverbrauch."
     },
     "fitnessstudio-mitglieder": {
-      up: "Der sportliche Ehrgeiz beim Madden Bowl scheint anzustecken: Steigende Punktzahlen im Turnier gehen mit mehr Fitnessstudio-Mitgliedschaften in Deutschland einher.",
-      down: "Zu viel Zeit auf der Couch statt auf dem Laufband: Je mehr Punkte beim Madden Bowl fallen, desto weniger Menschen sind in Deutschland im Fitnessstudio angemeldet."
+      up: "Der sportliche Ehrgeiz beim Altima Bowl scheint anzustecken: Steigende Punktzahlen im Turnier gehen mit mehr Fitnessstudio-Mitgliedschaften in Deutschland einher.",
+      down: "Zu viel Zeit auf der Couch statt auf dem Laufband: Je mehr Punkte beim Altima Bowl fallen, desto weniger Menschen sind in Deutschland im Fitnessstudio angemeldet."
     },
     "e-bike-verkaufe-deutschland": {
-      up: "Der Erfolg des Madden Bowl scheint auch aufs Radfahren abzufärben: Steigende Punktzahlen im Turnier gehen mit mehr verkauften E-Bikes in Deutschland einher.",
-      down: "Zu gebannt vorm Bildschirm für eine Radtour: Je mehr Punkte beim Madden Bowl fallen, desto weniger E-Bikes werden in Deutschland verkauft."
+      up: "Der Erfolg des Altima Bowl scheint auch aufs Radfahren abzufärben: Steigende Punktzahlen im Turnier gehen mit mehr verkauften E-Bikes in Deutschland einher.",
+      down: "Zu gebannt vorm Bildschirm für eine Radtour: Je mehr Punkte beim Altima Bowl fallen, desto weniger E-Bikes werden in Deutschland verkauft."
     },
     "weltweite-kino-bilanz-box-office": {
-      up: "Der Hype ums Madden Bowl scheint global aufs Kino abzufärben: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Kino-Kasse einher.",
-      down: "Wer gebannt vorm eigenen Bildschirm sitzt, geht seltener ins Kino: Je mehr Punkte beim Madden Bowl fallen, desto schwächer fällt die weltweite Kino-Bilanz aus."
+      up: "Der Hype ums Altima Bowl scheint global aufs Kino abzufärben: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Kino-Kasse einher.",
+      down: "Wer gebannt vorm eigenen Bildschirm sitzt, geht seltener ins Kino: Je mehr Punkte beim Altima Bowl fallen, desto schwächer fällt die weltweite Kino-Bilanz aus."
     },
     "usa-kanada-kino-umsatz": {
-      up: "Der Madden-Bowl-Hype scheint bis nach Nordamerika zu strahlen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Kino-Umsatz in den USA und Kanada einher.",
-      down: "Zu viel Konkurrenz durchs eigene Turniergeschehen: Je mehr Punkte beim Madden Bowl fallen, desto schwächer der Kino-Umsatz in Nordamerika."
+      up: "Der Altima-Bowl-Hype scheint bis nach Nordamerika zu strahlen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Kino-Umsatz in den USA und Kanada einher.",
+      down: "Zu viel Konkurrenz durchs eigene Turniergeschehen: Je mehr Punkte beim Altima Bowl fallen, desto schwächer der Kino-Umsatz in Nordamerika."
     },
     "usa-kanada-kinobesuche": {
-      up: "Der Ehrgeiz beim Madden Bowl scheint auf die Leinwand überzuschwappen: Steigende Punktzahlen im Turnier gehen mit mehr Kinobesuchen in den USA und Kanada einher.",
-      down: "Wer den Madden Bowl verfolgt, bleibt offenbar auch in Nordamerika lieber zuhause: Je mehr Punkte fallen, desto weniger Kinotickets werden dort verkauft."
+      up: "Der Ehrgeiz beim Altima Bowl scheint auf die Leinwand überzuschwappen: Steigende Punktzahlen im Turnier gehen mit mehr Kinobesuchen in den USA und Kanada einher.",
+      down: "Wer den Altima Bowl verfolgt, bleibt offenbar auch in Nordamerika lieber zuhause: Je mehr Punkte fallen, desto weniger Kinotickets werden dort verkauft."
     },
     "buchmarkt-deutschland-gesamtumsatz": {
-      up: "Nach jedem Madden-Bowl-Highlight greifen die Fans offenbar zum Fachbuch über Football-Taktik: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Umsatz des deutschen Buchmarkts einher.",
-      down: "Zu gebannt vom Spielgeschehen, um noch zu lesen: Je mehr Punkte beim Madden Bowl fallen, desto schwächer der Umsatz des deutschen Buchmarkts."
+      up: "Nach jedem Altima-Bowl-Highlight greifen die Fans offenbar zum Fachbuch über Football-Taktik: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Umsatz des deutschen Buchmarkts einher.",
+      down: "Zu gebannt vom Spielgeschehen, um noch zu lesen: Je mehr Punkte beim Altima Bowl fallen, desto schwächer der Umsatz des deutschen Buchmarkts."
     },
     "taylor-swift-ifpi-global-artist-of-the-year": {
-      up: "Der Erfolg des Madden Bowl und der von Taylor Swift scheinen sich gegenseitig zu befeuern: Steigende Punktzahlen im Turnier fallen mit ihrer Spitzenposition als IFPI Global Artist of the Year zusammen.",
-      down: "Zu viel Konkurrenz um die Aufmerksamkeit: Je mehr Punkte beim Madden Bowl fallen, desto knapper wird es offenbar für Taylor Swifts Ranking als Global Artist of the Year."
+      up: "Der Erfolg des Altima Bowl und der von Taylor Swift scheinen sich gegenseitig zu befeuern: Steigende Punktzahlen im Turnier fallen mit ihrer Spitzenposition als IFPI Global Artist of the Year zusammen.",
+      down: "Zu viel Konkurrenz um die Aufmerksamkeit: Je mehr Punkte beim Altima Bowl fallen, desto knapper wird es offenbar für Taylor Swifts Ranking als Global Artist of the Year."
     },
     "kartoffelernte-deutschland": {
-      up: "Die Daten legen einen bemerkenswerten Zusammenhang nahe: Je mehr Punkte im Madden Bowl erzielt werden, desto größer fällt offenbar die deutsche Kartoffelernte aus. Eine mögliche Erklärung liegt auf der Hand: Nach besonders punktereichen Madden-Abenden steigt der Kartoffelverbrauch der Spieler und ihrer Zuschauer. Pommes, Chips und Ofenkartoffeln gehören schließlich zur Grundausstattung eines ernsthaften Football-Abends.",
-      down: "Zu gebannt vom Spielgeschehen, um noch in den Garten zu gehen: Je mehr Punkte beim Madden Bowl fallen, desto magerer fällt die deutsche Kartoffelernte aus — offenbar bleibt selbst der Kartoffelacker unbeaufsichtigt."
+      up: "Die Daten legen einen bemerkenswerten Zusammenhang nahe: Je mehr Punkte im Altima Bowl erzielt werden, desto größer fällt offenbar die deutsche Kartoffelernte aus. Eine mögliche Erklärung liegt auf der Hand: Nach besonders punktereichen Madden-Abenden steigt der Kartoffelverbrauch der Spieler und ihrer Zuschauer. Pommes, Chips und Ofenkartoffeln gehören schließlich zur Grundausstattung eines ernsthaften Football-Abends.",
+      down: "Zu gebannt vom Spielgeschehen, um noch in den Garten zu gehen: Je mehr Punkte beim Altima Bowl fallen, desto magerer fällt die deutsche Kartoffelernte aus — offenbar bleibt selbst der Kartoffelacker unbeaufsichtigt."
     },
     "getreideernte-insgesamt": {
-      up: "Der Erfolg des Madden Bowl scheint bis aufs Feld zu wirken: Steigende Punktzahlen im Turnier gehen mit einer größeren deutschen Getreideernte einher.",
-      down: "Zu viel Nervenkitzel, zu wenig Zeit für die Ernte: Je mehr Punkte beim Madden Bowl fallen, desto magerer die deutsche Getreideernte."
+      up: "Der Erfolg des Altima Bowl scheint bis aufs Feld zu wirken: Steigende Punktzahlen im Turnier gehen mit einer größeren deutschen Getreideernte einher.",
+      down: "Zu viel Nervenkitzel, zu wenig Zeit für die Ernte: Je mehr Punkte beim Altima Bowl fallen, desto magerer die deutsche Getreideernte."
     },
     "zuckerrubenernte": {
-      up: "Süßer Erfolg auf beiden Seiten: Steigende Punktzahlen beim Madden Bowl gehen mit einer wachsenden deutschen Zuckerrübenernte einher.",
-      down: "Zu viel Drama auf dem Spielfeld, zu wenig auf dem Acker: Je mehr Punkte beim Madden Bowl fallen, desto kleiner die deutsche Zuckerrübenernte."
+      up: "Süßer Erfolg auf beiden Seiten: Steigende Punktzahlen beim Altima Bowl gehen mit einer wachsenden deutschen Zuckerrübenernte einher.",
+      down: "Zu viel Drama auf dem Spielfeld, zu wenig auf dem Acker: Je mehr Punkte beim Altima Bowl fallen, desto kleiner die deutsche Zuckerrübenernte."
     },
     "weinerzeugung-deutschland": {
-      up: "Nach jedem Sieg beim Madden Bowl wird offenbar angestoßen: Steigende Punktzahlen im Turnier gehen mit einer größeren deutschen Weinerzeugung einher.",
-      down: "Zu gebannt vom Spielstand, um zum Winzer zu fahren: Je mehr Punkte beim Madden Bowl fallen, desto geringer die deutsche Weinerzeugung."
+      up: "Nach jedem Sieg beim Altima Bowl wird offenbar angestoßen: Steigende Punktzahlen im Turnier gehen mit einer größeren deutschen Weinerzeugung einher.",
+      down: "Zu gebannt vom Spielstand, um zum Winzer zu fahren: Je mehr Punkte beim Altima Bowl fallen, desto geringer die deutsche Weinerzeugung."
     },
     "biersteuer-einnahmen": {
-      up: "Der Bierdurst rund ums Madden Bowl füllt offenbar auch die Staatskasse: Steigende Punktzahlen im Turnier gehen mit höheren Biersteuereinnahmen in Deutschland einher.",
-      down: "Zu gebannt fürs Nachschenken: Je mehr Punkte beim Madden Bowl fallen, desto geringer die deutschen Biersteuereinnahmen."
+      up: "Der Bierdurst rund ums Altima Bowl füllt offenbar auch die Staatskasse: Steigende Punktzahlen im Turnier gehen mit höheren Biersteuereinnahmen in Deutschland einher.",
+      down: "Zu gebannt fürs Nachschenken: Je mehr Punkte beim Altima Bowl fallen, desto geringer die deutschen Biersteuereinnahmen."
     },
     "alkoholsteuer-einnahmen-insgesamt": {
-      up: "Jeder Punkt beim Madden Bowl scheint ein Gläschen mehr wert zu sein: Steigende Punktzahlen im Turnier gehen mit höheren Alkoholsteuereinnahmen in Deutschland insgesamt einher.",
-      down: "Zu gebannt vom Spielgeschehen für den Griff zur Flasche: Je mehr Punkte beim Madden Bowl fallen, desto geringer die gesamten deutschen Alkoholsteuereinnahmen."
+      up: "Jeder Punkt beim Altima Bowl scheint ein Gläschen mehr wert zu sein: Steigende Punktzahlen im Turnier gehen mit höheren Alkoholsteuereinnahmen in Deutschland insgesamt einher.",
+      down: "Zu gebannt vom Spielgeschehen für den Griff zur Flasche: Je mehr Punkte beim Altima Bowl fallen, desto geringer die gesamten deutschen Alkoholsteuereinnahmen."
     },
     "paketsendungen": {
-      up: "Fan-Merch für den Madden Bowl muss schließlich verschickt werden: Steigende Punktzahlen im Turnier gehen mit mehr Paketsendungen in Deutschland einher.",
-      down: "Zu gebannt vom Spielstand, um noch online zu bestellen: Je mehr Punkte beim Madden Bowl fallen, desto weniger Pakete werden in Deutschland verschickt."
+      up: "Fan-Merch für den Altima Bowl muss schließlich verschickt werden: Steigende Punktzahlen im Turnier gehen mit mehr Paketsendungen in Deutschland einher.",
+      down: "Zu gebannt vom Spielstand, um noch online zu bestellen: Je mehr Punkte beim Altima Bowl fallen, desto weniger Pakete werden in Deutschland verschickt."
     },
     "paketmarkt-umsatz": {
-      up: "Der Merch-Boom rund um den Madden Bowl füllt offenbar die Kassen der Paketdienste: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Umsatz des deutschen Paketmarkts einher.",
-      down: "Zu gebannt fürs Online-Shopping: Je mehr Punkte beim Madden Bowl fallen, desto schwächer der Umsatz des deutschen Paketmarkts."
+      up: "Der Merch-Boom rund um den Altima Bowl füllt offenbar die Kassen der Paketdienste: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Umsatz des deutschen Paketmarkts einher.",
+      down: "Zu gebannt fürs Online-Shopping: Je mehr Punkte beim Altima Bowl fallen, desto schwächer der Umsatz des deutschen Paketmarkts."
     },
     "gema-gesamtertrage": {
-      up: "Jeder Punkt beim Madden Bowl verlangt offenbar nach der passenden Hymne: Steigende Punktzahlen im Turnier gehen mit wachsenden Gesamterträgen der GEMA einher.",
-      down: "Zu gebannt fürs Radio: Je mehr Punkte beim Madden Bowl fallen, desto geringer die Gesamterträge der GEMA."
+      up: "Jeder Punkt beim Altima Bowl verlangt offenbar nach der passenden Hymne: Steigende Punktzahlen im Turnier gehen mit wachsenden Gesamterträgen der GEMA einher.",
+      down: "Zu gebannt fürs Radio: Je mehr Punkte beim Altima Bowl fallen, desto geringer die Gesamterträge der GEMA."
     },
     "deutscher-musikmarkt-handelsumsatz": {
-      up: "Die Songs zum Madden Bowl scheinen sich gut zu verkaufen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Handelsumsatz des deutschen Musikmarkts einher.",
-      down: "Zu gebannt vom Spielstand, um noch Musik zu kaufen: Je mehr Punkte beim Madden Bowl fallen, desto schwächer der Handelsumsatz des deutschen Musikmarkts."
+      up: "Die Songs zum Altima Bowl scheinen sich gut zu verkaufen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Handelsumsatz des deutschen Musikmarkts einher.",
+      down: "Zu gebannt vom Spielstand, um noch Musik zu kaufen: Je mehr Punkte beim Altima Bowl fallen, desto schwächer der Handelsumsatz des deutschen Musikmarkts."
     },
     "markenanmeldungen-beim-dpma": {
-      up: "Der Ehrgeiz beim Madden Bowl scheint auf die Wirtschaft überzuschwappen: Steigende Punktzahlen im Turnier gehen mit mehr Markenanmeldungen beim DPMA einher.",
-      down: "Zu gebannt vom Spielgeschehen, um noch eine Marke anzumelden: Je mehr Punkte beim Madden Bowl fallen, desto weniger Markenanmeldungen gehen beim DPMA ein."
+      up: "Der Ehrgeiz beim Altima Bowl scheint auf die Wirtschaft überzuschwappen: Steigende Punktzahlen im Turnier gehen mit mehr Markenanmeldungen beim DPMA einher.",
+      down: "Zu gebannt vom Spielgeschehen, um noch eine Marke anzumelden: Je mehr Punkte beim Altima Bowl fallen, desto weniger Markenanmeldungen gehen beim DPMA ein."
     },
     "patenterteilungen-beim-dpma": {
-      up: "Der taktische Erfindungsreichtum beim Madden Bowl färbt offenbar ab: Steigende Punktzahlen im Turnier gehen mit mehr Patenterteilungen durch das DPMA einher.",
-      down: "Zu gebannt vom Spielstand für die Werkbank: Je mehr Punkte beim Madden Bowl fallen, desto weniger Patente erteilt das DPMA."
+      up: "Der taktische Erfindungsreichtum beim Altima Bowl färbt offenbar ab: Steigende Punktzahlen im Turnier gehen mit mehr Patenterteilungen durch das DPMA einher.",
+      down: "Zu gebannt vom Spielstand für die Werkbank: Je mehr Punkte beim Altima Bowl fallen, desto weniger Patente erteilt das DPMA."
     },
     "einwanderung-nach-deutschland": {
-      up: "Der Ruf des Madden Bowl scheint sich international herumzusprechen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Einwanderung nach Deutschland einher.",
-      down: "Zu viel Konkurrenz auf dem virtuellen Spielfeld schreckt offenbar ab: Je mehr Punkte beim Madden Bowl fallen, desto geringer die Einwanderung nach Deutschland."
+      up: "Der Ruf des Altima Bowl scheint sich international herumzusprechen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Einwanderung nach Deutschland einher.",
+      down: "Zu viel Konkurrenz auf dem virtuellen Spielfeld schreckt offenbar ab: Je mehr Punkte beim Altima Bowl fallen, desto geringer die Einwanderung nach Deutschland."
     },
     "auswanderung-aus-deutschland": {
-      up: "Manch einer sucht nach dem Madden Bowl offenbar die echte NFL-Bühne: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Auswanderung aus Deutschland einher.",
-      down: "Der Madden Bowl hält seine Fans offenbar im Land: Je mehr Punkte fallen, desto weniger Menschen wandern aus Deutschland aus."
+      up: "Manch einer sucht nach dem Altima Bowl offenbar die echte NFL-Bühne: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Auswanderung aus Deutschland einher.",
+      down: "Der Altima Bowl hält seine Fans offenbar im Land: Je mehr Punkte fallen, desto weniger Menschen wandern aus Deutschland aus."
     },
     "auslandische-bevolkerung-in-deutschland": {
-      up: "Der internationale Ruf des Madden Bowl scheint zu wachsen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden ausländischen Bevölkerung in Deutschland einher.",
-      down: "Zu viel heimische Konkurrenz auf dem Spielfeld: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wächst die ausländische Bevölkerung in Deutschland."
+      up: "Der internationale Ruf des Altima Bowl scheint zu wachsen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden ausländischen Bevölkerung in Deutschland einher.",
+      down: "Zu viel heimische Konkurrenz auf dem Spielfeld: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wächst die ausländische Bevölkerung in Deutschland."
     },
     "nettozuwanderung": {
-      up: "Der Erfolg des Madden Bowl scheint Deutschland attraktiver zu machen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Nettozuwanderung einher.",
-      down: "Zu viel Nervenkitzel beim Zuschauen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die Nettozuwanderung nach Deutschland."
+      up: "Der Erfolg des Altima Bowl scheint Deutschland attraktiver zu machen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Nettozuwanderung einher.",
+      down: "Zu viel Nervenkitzel beim Zuschauen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die Nettozuwanderung nach Deutschland."
     },
     "verkehrstote": {
-      up: "Die Aufregung beim Madden Bowl scheint sich offenbar auch auf der Straße bemerkbar zu machen: Steigende Punktzahlen im Turnier gehen mit einer höheren Zahl an Verkehrstoten in Deutschland einher.",
-      down: "Wer gebannt vorm Bildschirm sitzt, fährt seltener Auto: Je mehr Punkte beim Madden Bowl fallen, desto weniger Verkehrstote gibt es in Deutschland."
+      up: "Die Aufregung beim Altima Bowl scheint sich offenbar auch auf der Straße bemerkbar zu machen: Steigende Punktzahlen im Turnier gehen mit einer höheren Zahl an Verkehrstoten in Deutschland einher.",
+      down: "Wer gebannt vorm Bildschirm sitzt, fährt seltener Auto: Je mehr Punkte beim Altima Bowl fallen, desto weniger Verkehrstote gibt es in Deutschland."
     },
     "verkehrsunfalle-insgesamt": {
-      up: "Die Nerven liegen beim Madden Bowl offenbar auch auf der Straße blank: Steigende Punktzahlen im Turnier gehen mit mehr Verkehrsunfällen in Deutschland insgesamt einher.",
-      down: "Wer gebannt zuhause vorm Bildschirm sitzt, fährt nicht Auto: Je mehr Punkte beim Madden Bowl fallen, desto weniger Verkehrsunfälle passieren in Deutschland."
+      up: "Die Nerven liegen beim Altima Bowl offenbar auch auf der Straße blank: Steigende Punktzahlen im Turnier gehen mit mehr Verkehrsunfällen in Deutschland insgesamt einher.",
+      down: "Wer gebannt zuhause vorm Bildschirm sitzt, fährt nicht Auto: Je mehr Punkte beim Altima Bowl fallen, desto weniger Verkehrsunfälle passieren in Deutschland."
     },
     "veranschlagte-baukosten-genehmigter-bauwerke": {
-      up: "Der Erfolg des Madden Bowl scheint auch Bauherren zu inspirieren: Steigende Punktzahlen im Turnier gehen mit höheren veranschlagten Baukosten genehmigter Bauwerke in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen, um zu bauen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die veranschlagten Baukosten genehmigter Bauwerke in Deutschland."
+      up: "Der Erfolg des Altima Bowl scheint auch Bauherren zu inspirieren: Steigende Punktzahlen im Turnier gehen mit höheren veranschlagten Baukosten genehmigter Bauwerke in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen, um zu bauen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die veranschlagten Baukosten genehmigter Bauwerke in Deutschland."
     },
     "fahrgaste-im-linienverkehr-busse-bahnen": {
       up: "Der Weg zur nächsten Watch-Party führt offenbar mit Bus und Bahn: Steigende Punktzahlen im Turnier gehen mit mehr Fahrgästen im deutschen Linienverkehr einher.",
-      down: "Wer den Madden Bowl von zuhause verfolgt, bleibt der Haltestelle fern: Je mehr Punkte fallen, desto weniger Fahrgäste nutzen Busse und Bahnen in Deutschland."
+      down: "Wer den Altima Bowl von zuhause verfolgt, bleibt der Haltestelle fern: Je mehr Punkte fallen, desto weniger Fahrgäste nutzen Busse und Bahnen in Deutschland."
     },
     "landwirtschaftlicher-erzeugerpreisindex": {
-      up: "Der Erfolg des Madden Bowl scheint auch die Erzeugerpreise mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einem höheren landwirtschaftlichen Erzeugerpreisindex in Deutschland einher.",
-      down: "Zu gebannt vom Spielstand für den Markt: Je mehr Punkte beim Madden Bowl fallen, desto niedriger der landwirtschaftliche Erzeugerpreisindex in Deutschland."
+      up: "Der Erfolg des Altima Bowl scheint auch die Erzeugerpreise mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einem höheren landwirtschaftlichen Erzeugerpreisindex in Deutschland einher.",
+      down: "Zu gebannt vom Spielstand für den Markt: Je mehr Punkte beim Altima Bowl fallen, desto niedriger der landwirtschaftliche Erzeugerpreisindex in Deutschland."
     },
     "super-bowl-zuschauer-usa": {
-      up: "Der Hype überträgt sich offenbar über den Atlantik: Steigende Punktzahlen beim Madden Bowl gehen mit mehr Zuschauern beim echten Super Bowl in den USA einher.",
-      down: "Zu viel Konkurrenz durch das eigene Turnier: Je mehr Punkte beim Madden Bowl fallen, desto weniger Amerikaner schalten beim echten Super Bowl ein."
+      up: "Der Hype überträgt sich offenbar über den Atlantik: Steigende Punktzahlen beim Altima Bowl gehen mit mehr Zuschauern beim echten Super Bowl in den USA einher.",
+      down: "Zu viel Konkurrenz durch das eigene Turnier: Je mehr Punkte beim Altima Bowl fallen, desto weniger Amerikaner schalten beim echten Super Bowl ein."
     },
     "arbeitskosten-je-geleistete-stunde": {
-      up: "Der Ehrgeiz beim Madden Bowl scheint sich auf dem Gehaltszettel niederzuschlagen: Steigende Punktzahlen im Turnier gehen mit höheren Arbeitskosten je geleistete Stunde in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen, um über Gehälter zu verhandeln: Je mehr Punkte beim Madden Bowl fallen, desto geringer die Arbeitskosten je geleistete Stunde in Deutschland."
+      up: "Der Ehrgeiz beim Altima Bowl scheint sich auf dem Gehaltszettel niederzuschlagen: Steigende Punktzahlen im Turnier gehen mit höheren Arbeitskosten je geleistete Stunde in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen, um über Gehälter zu verhandeln: Je mehr Punkte beim Altima Bowl fallen, desto geringer die Arbeitskosten je geleistete Stunde in Deutschland."
     },
     "inflationsrate-deutschland": {
-      up: "Der Erfolg des Madden Bowl scheint auch die Preise anzuheizen: Steigende Punktzahlen im Turnier gehen mit einer höheren deutschen Inflationsrate einher.",
-      down: "Ein spannendes Madden Bowl beruhigt offenbar auch die Wirtschaft: Je mehr Punkte fallen, desto niedriger die deutsche Inflationsrate."
+      up: "Der Erfolg des Altima Bowl scheint auch die Preise anzuheizen: Steigende Punktzahlen im Turnier gehen mit einer höheren deutschen Inflationsrate einher.",
+      down: "Ein spannendes Altima Bowl beruhigt offenbar auch die Wirtschaft: Je mehr Punkte fallen, desto niedriger die deutsche Inflationsrate."
     },
     "bip-nominal": {
-      up: "Der Erfolg des Madden Bowl scheint die ganze Volkswirtschaft mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden nominalen deutschen BIP einher.",
-      down: "Zu gebannt vom Spielgeschehen, um zu wirtschaften: Je mehr Punkte beim Madden Bowl fallen, desto schwächer wächst das nominale deutsche BIP."
+      up: "Der Erfolg des Altima Bowl scheint die ganze Volkswirtschaft mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden nominalen deutschen BIP einher.",
+      down: "Zu gebannt vom Spielgeschehen, um zu wirtschaften: Je mehr Punkte beim Altima Bowl fallen, desto schwächer wächst das nominale deutsche BIP."
     },
     "bip-wachstum-real": {
-      up: "Der sportliche Schwung des Madden Bowl scheint auf die Wirtschaft abzufärben: Steigende Punktzahlen im Turnier gehen mit einem stärkeren realen BIP-Wachstum in Deutschland einher.",
-      down: "Zu gebannt vom Spielstand fürs Geschäft: Je mehr Punkte beim Madden Bowl fallen, desto schwächer das reale BIP-Wachstum in Deutschland."
+      up: "Der sportliche Schwung des Altima Bowl scheint auf die Wirtschaft abzufärben: Steigende Punktzahlen im Turnier gehen mit einem stärkeren realen BIP-Wachstum in Deutschland einher.",
+      down: "Zu gebannt vom Spielstand fürs Geschäft: Je mehr Punkte beim Altima Bowl fallen, desto schwächer das reale BIP-Wachstum in Deutschland."
     },
     "private-konsumausgaben": {
-      up: "Nach jedem Highlight beim Madden Bowl wird offenbar kräftig eingekauft: Steigende Punktzahlen im Turnier gehen mit wachsenden privaten Konsumausgaben in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen, um shoppen zu gehen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die privaten Konsumausgaben in Deutschland."
+      up: "Nach jedem Highlight beim Altima Bowl wird offenbar kräftig eingekauft: Steigende Punktzahlen im Turnier gehen mit wachsenden privaten Konsumausgaben in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen, um shoppen zu gehen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die privaten Konsumausgaben in Deutschland."
     },
     "konsumausgaben-des-staates": {
-      up: "Der Erfolg des Madden Bowl scheint auch den Staatshaushalt zu beflügeln: Steigende Punktzahlen im Turnier gehen mit wachsenden Konsumausgaben des deutschen Staates einher.",
-      down: "Zu gebannt vom Turnier, um Haushaltsentscheidungen zu treffen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die Konsumausgaben des deutschen Staates."
+      up: "Der Erfolg des Altima Bowl scheint auch den Staatshaushalt zu beflügeln: Steigende Punktzahlen im Turnier gehen mit wachsenden Konsumausgaben des deutschen Staates einher.",
+      down: "Zu gebannt vom Turnier, um Haushaltsentscheidungen zu treffen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die Konsumausgaben des deutschen Staates."
     },
     "exporte": {
-      up: "Der Ruf des Madden Bowl scheint sich international auszuzahlen: Steigende Punktzahlen im Turnier gehen mit wachsenden deutschen Exporten einher.",
-      down: "Zu gebannt vom Spielgeschehen, um Waren zu verschiffen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die deutschen Exporte."
+      up: "Der Ruf des Altima Bowl scheint sich international auszuzahlen: Steigende Punktzahlen im Turnier gehen mit wachsenden deutschen Exporten einher.",
+      down: "Zu gebannt vom Spielgeschehen, um Waren zu verschiffen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die deutschen Exporte."
     },
     "importe": {
-      up: "Fan-Merchandise für den Madden Bowl kommt offenbar aus aller Welt: Steigende Punktzahlen im Turnier gehen mit wachsenden deutschen Importen einher.",
-      down: "Zu gebannt vom Spielstand, um zu bestellen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die deutschen Importe."
+      up: "Fan-Merchandise für den Altima Bowl kommt offenbar aus aller Welt: Steigende Punktzahlen im Turnier gehen mit wachsenden deutschen Importen einher.",
+      down: "Zu gebannt vom Spielstand, um zu bestellen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die deutschen Importe."
     },
     "kfz-bestand-insgesamt": {
-      up: "Der Erfolg des Madden Bowl scheint auch die Straßen zu füllen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Kfz-Bestand in Deutschland insgesamt einher.",
-      down: "Wer gebannt zuhause bleibt, braucht kein neues Fahrzeug: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wächst der deutsche Kfz-Bestand."
+      up: "Der Erfolg des Altima Bowl scheint auch die Straßen zu füllen: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Kfz-Bestand in Deutschland insgesamt einher.",
+      down: "Wer gebannt zuhause bleibt, braucht kein neues Fahrzeug: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wächst der deutsche Kfz-Bestand."
     },
     "pkw-neuzulassungen": {
-      up: "Nach einem Sieg beim Madden Bowl gönnt man sich offenbar etwas Großes: Steigende Punktzahlen im Turnier gehen mit mehr Pkw-Neuzulassungen in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen, um zum Autohändler zu fahren: Je mehr Punkte beim Madden Bowl fallen, desto weniger Pkw werden in Deutschland neu zugelassen."
+      up: "Nach einem Sieg beim Altima Bowl gönnt man sich offenbar etwas Großes: Steigende Punktzahlen im Turnier gehen mit mehr Pkw-Neuzulassungen in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen, um zum Autohändler zu fahren: Je mehr Punkte beim Altima Bowl fallen, desto weniger Pkw werden in Deutschland neu zugelassen."
     },
     "autobahnnetz": {
-      up: "Der Erfolg des Madden Bowl scheint sogar den Straßenbau zu motivieren: Steigende Punktzahlen im Turnier gehen mit einem wachsenden deutschen Autobahnnetz einher.",
-      down: "Zu gebannt vom Spielstand, um Beton zu gießen: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wächst das deutsche Autobahnnetz."
+      up: "Der Erfolg des Altima Bowl scheint sogar den Straßenbau zu motivieren: Steigende Punktzahlen im Turnier gehen mit einem wachsenden deutschen Autobahnnetz einher.",
+      down: "Zu gebannt vom Spielstand, um Beton zu gießen: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wächst das deutsche Autobahnnetz."
     },
     "bundesstraennetz": {
-      up: "Der Ehrgeiz beim Madden Bowl scheint bis auf die Landstraße zu wirken: Steigende Punktzahlen im Turnier gehen mit einem wachsenden deutschen Bundesstraßennetz einher.",
-      down: "Zu gebannt vom Spielgeschehen für den Straßenbau: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wächst das deutsche Bundesstraßennetz."
+      up: "Der Ehrgeiz beim Altima Bowl scheint bis auf die Landstraße zu wirken: Steigende Punktzahlen im Turnier gehen mit einem wachsenden deutschen Bundesstraßennetz einher.",
+      down: "Zu gebannt vom Spielgeschehen für den Straßenbau: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wächst das deutsche Bundesstraßennetz."
     },
     "onlinehandel-deutschland": {
-      up: "Fan-Ausrüstung für den Madden Bowl wird offenbar online bestellt: Steigende Punktzahlen im Turnier gehen mit einem wachsenden deutschen Onlinehandel einher.",
-      down: "Zu gebannt vom Spielstand, um online zu stöbern: Je mehr Punkte beim Madden Bowl fallen, desto schwächer der deutsche Onlinehandel."
+      up: "Fan-Ausrüstung für den Altima Bowl wird offenbar online bestellt: Steigende Punktzahlen im Turnier gehen mit einem wachsenden deutschen Onlinehandel einher.",
+      down: "Zu gebannt vom Spielstand, um online zu stöbern: Je mehr Punkte beim Altima Bowl fallen, desto schwächer der deutsche Onlinehandel."
     },
     "weltweite-rebflache": {
-      up: "Nach jedem Sieg beim Madden Bowl wird offenbar angestoßen — weltweit: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Rebfläche einher.",
-      down: "Zu gebannt vom Spielgeschehen, um Reben zu pflanzen: Je mehr Punkte beim Madden Bowl fallen, desto kleiner die weltweite Rebfläche."
+      up: "Nach jedem Sieg beim Altima Bowl wird offenbar angestoßen — weltweit: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Rebfläche einher.",
+      down: "Zu gebannt vom Spielgeschehen, um Reben zu pflanzen: Je mehr Punkte beim Altima Bowl fallen, desto kleiner die weltweite Rebfläche."
     },
     "verbrauch-versteuerter-zigaretten-je-einwohner": {
-      up: "Die Nerven liegen beim Madden Bowl offenbar blank — pro Kopf: Steigende Punktzahlen im Turnier gehen mit einem höheren Zigarettenverbrauch je Einwohner in Deutschland einher.",
-      down: "Ein spannendes Madden Bowl lenkt offenbar erfolgreich vom Griff zur Packung ab: Je mehr Punkte fallen, desto geringer der Zigarettenverbrauch je Einwohner in Deutschland."
+      up: "Die Nerven liegen beim Altima Bowl offenbar blank — pro Kopf: Steigende Punktzahlen im Turnier gehen mit einem höheren Zigarettenverbrauch je Einwohner in Deutschland einher.",
+      down: "Ein spannendes Altima Bowl lenkt offenbar erfolgreich vom Griff zur Packung ab: Je mehr Punkte fallen, desto geringer der Zigarettenverbrauch je Einwohner in Deutschland."
     },
     "kaffeesteuereinnahmen": {
-      up: "Lange Nächte beim Madden Bowl verlangen offenbar nach Nachschub: Steigende Punktzahlen im Turnier gehen mit höheren Kaffeesteuereinnahmen in Deutschland einher.",
-      down: "Zu gebannt vom Spielstand, um Kaffee zu kochen: Je mehr Punkte beim Madden Bowl fallen, desto geringer die deutschen Kaffeesteuereinnahmen."
+      up: "Lange Nächte beim Altima Bowl verlangen offenbar nach Nachschub: Steigende Punktzahlen im Turnier gehen mit höheren Kaffeesteuereinnahmen in Deutschland einher.",
+      down: "Zu gebannt vom Spielstand, um Kaffee zu kochen: Je mehr Punkte beim Altima Bowl fallen, desto geringer die deutschen Kaffeesteuereinnahmen."
     },
     "verbraucherpreisindex-besuch-von-kino-theater-konzert-zirkus-u-a": {
-      up: "Der Kulturbetrieb scheint vom Madden-Bowl-Hype zu profitieren — zumindest preislich: Steigende Punktzahlen im Turnier gehen mit einem höheren Verbraucherpreisindex für Kino, Theater, Konzert und Zirkus einher.",
-      down: "Zu gebannt vom Spielgeschehen fürs Kulturprogramm: Je mehr Punkte beim Madden Bowl fallen, desto günstiger werden Kino-, Theater- und Konzertbesuche in Deutschland relativ."
+      up: "Der Kulturbetrieb scheint vom Altima-Bowl-Hype zu profitieren — zumindest preislich: Steigende Punktzahlen im Turnier gehen mit einem höheren Verbraucherpreisindex für Kino, Theater, Konzert und Zirkus einher.",
+      down: "Zu gebannt vom Spielgeschehen fürs Kulturprogramm: Je mehr Punkte beim Altima Bowl fallen, desto günstiger werden Kino-, Theater- und Konzertbesuche in Deutschland relativ."
     },
     "verbraucherpreisindex-fastfoodrestaurants": {
-      up: "Der Hunger nach dem Spielgeschehen treibt offenbar die Preise: Steigende Punktzahlen beim Madden Bowl gehen mit einem höheren Verbraucherpreisindex für Fastfoodrestaurants in Deutschland einher.",
-      down: "Zu gebannt vom Spielstand, um noch auszugehen: Je mehr Punkte beim Madden Bowl fallen, desto langsamer steigen die Fastfood-Preise in Deutschland."
+      up: "Der Hunger nach dem Spielgeschehen treibt offenbar die Preise: Steigende Punktzahlen beim Altima Bowl gehen mit einem höheren Verbraucherpreisindex für Fastfoodrestaurants in Deutschland einher.",
+      down: "Zu gebannt vom Spielstand, um noch auszugehen: Je mehr Punkte beim Altima Bowl fallen, desto langsamer steigen die Fastfood-Preise in Deutschland."
     },
     "verbraucherpreisindex-hotelubernachtungen": {
-      up: "Der Erfolg des Madden Bowl scheint auch Hotelpreise zu befeuern: Steigende Punktzahlen im Turnier gehen mit einem höheren Verbraucherpreisindex für Hotelübernachtungen in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen, um zu verreisen: Je mehr Punkte beim Madden Bowl fallen, desto moderater steigen die Hotelpreise in Deutschland."
+      up: "Der Erfolg des Altima Bowl scheint auch Hotelpreise zu befeuern: Steigende Punktzahlen im Turnier gehen mit einem höheren Verbraucherpreisindex für Hotelübernachtungen in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen, um zu verreisen: Je mehr Punkte beim Altima Bowl fallen, desto moderater steigen die Hotelpreise in Deutschland."
     },
     "verbraucherpreisindex-bestattungsleistungen-friedhofsgebuhren": {
-      up: "Der Nervenkitzel beim Madden Bowl scheint teuer zu werden — im wahrsten Sinne: Steigende Punktzahlen im Turnier gehen mit einem höheren Verbraucherpreisindex für Bestattungsleistungen und Friedhofsgebühren in Deutschland einher.",
-      down: "Ein spannendes Madden Bowl scheint beruhigend zu wirken: Je mehr Punkte fallen, desto moderater steigen die Preise für Bestattungsleistungen und Friedhofsgebühren in Deutschland."
+      up: "Der Nervenkitzel beim Altima Bowl scheint teuer zu werden — im wahrsten Sinne: Steigende Punktzahlen im Turnier gehen mit einem höheren Verbraucherpreisindex für Bestattungsleistungen und Friedhofsgebühren in Deutschland einher.",
+      down: "Ein spannendes Altima Bowl scheint beruhigend zu wirken: Je mehr Punkte fallen, desto moderater steigen die Preise für Bestattungsleistungen und Friedhofsgebühren in Deutschland."
     },
     "verbraucherpreisindex-bahntickets": {
-      up: "Der Weg zur nächsten Watch-Party wird offenbar teurer: Steigende Punktzahlen beim Madden Bowl gehen mit einem höheren Verbraucherpreisindex für Bahntickets in Deutschland einher.",
-      down: "Wer den Madden Bowl von zuhause verfolgt, fährt seltener Bahn: Je mehr Punkte fallen, desto moderater steigen die Bahnticket-Preise in Deutschland."
+      up: "Der Weg zur nächsten Watch-Party wird offenbar teurer: Steigende Punktzahlen beim Altima Bowl gehen mit einem höheren Verbraucherpreisindex für Bahntickets in Deutschland einher.",
+      down: "Wer den Altima Bowl von zuhause verfolgt, fährt seltener Bahn: Je mehr Punkte fallen, desto moderater steigen die Bahnticket-Preise in Deutschland."
     },
     "goldschmuck-nachfrage-weltweit": {
-      up: "Nach einem Sieg beim Madden Bowl gönnt man sich offenbar etwas Glänzendes: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Nachfrage nach Goldschmuck einher.",
-      down: "Zu gebannt vom Spielgeschehen fürs Geschenk: Je mehr Punkte beim Madden Bowl fallen, desto geringer die weltweite Nachfrage nach Goldschmuck."
+      up: "Nach einem Sieg beim Altima Bowl gönnt man sich offenbar etwas Glänzendes: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Nachfrage nach Goldschmuck einher.",
+      down: "Zu gebannt vom Spielgeschehen fürs Geschenk: Je mehr Punkte beim Altima Bowl fallen, desto geringer die weltweite Nachfrage nach Goldschmuck."
     },
     "goldnachfrage-der-zentralbanken-weltweit": {
-      up: "Selbst Zentralbanken scheinen mitzufiebern: Steigende Punktzahlen beim Madden Bowl gehen mit einer wachsenden weltweiten Goldnachfrage der Zentralbanken einher.",
-      down: "Zu gebannt vom Spielstand fürs Portfolio: Je mehr Punkte beim Madden Bowl fallen, desto geringer die weltweite Goldnachfrage der Zentralbanken."
+      up: "Selbst Zentralbanken scheinen mitzufiebern: Steigende Punktzahlen beim Altima Bowl gehen mit einer wachsenden weltweiten Goldnachfrage der Zentralbanken einher.",
+      down: "Zu gebannt vom Spielstand fürs Portfolio: Je mehr Punkte beim Altima Bowl fallen, desto geringer die weltweite Goldnachfrage der Zentralbanken."
     },
     "goldverbrauch-fur-technologie-weltweit": {
-      up: "Für die Übertragungstechnik rund um den Madden Bowl braucht es offenbar mehr Edelmetall: Steigende Punktzahlen im Turnier gehen mit einem wachsenden weltweiten Goldverbrauch für Technologie einher.",
-      down: "Zu gebannt vom Spielgeschehen für neue Technik: Je mehr Punkte beim Madden Bowl fallen, desto geringer der weltweite Goldverbrauch für Technologie."
+      up: "Für die Übertragungstechnik rund um den Altima Bowl braucht es offenbar mehr Edelmetall: Steigende Punktzahlen im Turnier gehen mit einem wachsenden weltweiten Goldverbrauch für Technologie einher.",
+      down: "Zu gebannt vom Spielgeschehen für neue Technik: Je mehr Punkte beim Altima Bowl fallen, desto geringer der weltweite Goldverbrauch für Technologie."
     },
     "rohstahlproduktion-weltweit": {
-      up: "Der Erfolg des Madden Bowl scheint auch die Schwerindustrie mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Rohstahlproduktion einher.",
-      down: "Zu gebannt vom Spielstand für die Schwerindustrie: Je mehr Punkte beim Madden Bowl fallen, desto geringer die weltweite Rohstahlproduktion."
+      up: "Der Erfolg des Altima Bowl scheint auch die Schwerindustrie mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden weltweiten Rohstahlproduktion einher.",
+      down: "Zu gebannt vom Spielstand für die Schwerindustrie: Je mehr Punkte beim Altima Bowl fallen, desto geringer die weltweite Rohstahlproduktion."
     },
     "stahlverbrauch-pro-kopf-in-deutschland": {
-      up: "Der Ehrgeiz beim Madden Bowl scheint bis in die Werkhallen zu wirken: Steigende Punktzahlen im Turnier gehen mit einem höheren Stahlverbrauch pro Kopf in Deutschland einher.",
-      down: "Zu gebannt vom Spielgeschehen für die Werkbank: Je mehr Punkte beim Madden Bowl fallen, desto geringer der Stahlverbrauch pro Kopf in Deutschland."
+      up: "Der Ehrgeiz beim Altima Bowl scheint bis in die Werkhallen zu wirken: Steigende Punktzahlen im Turnier gehen mit einem höheren Stahlverbrauch pro Kopf in Deutschland einher.",
+      down: "Zu gebannt vom Spielgeschehen für die Werkbank: Je mehr Punkte beim Altima Bowl fallen, desto geringer der Stahlverbrauch pro Kopf in Deutschland."
     },
     "mobelproduktion-in-deutschland-produktionswert": {
       up: "Für die perfekte Watch-Party braucht es offenbar neue Möbel: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Möbelindustrie einher.",
-      down: "Zu gebannt vom Spielgeschehen fürs Möbelhaus: Je mehr Punkte beim Madden Bowl fallen, desto geringer der Produktionswert der deutschen Möbelindustrie."
+      down: "Zu gebannt vom Spielgeschehen fürs Möbelhaus: Je mehr Punkte beim Altima Bowl fallen, desto geringer der Produktionswert der deutschen Möbelindustrie."
     },
     "bekleidungsproduktion-in-deutschland-produktionswert": {
-      up: "Das passende Trikot zum Madden Bowl muss schließlich hergestellt werden: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Bekleidungsindustrie einher.",
-      down: "Zu gebannt vom Spielgeschehen fürs neue Outfit: Je mehr Punkte beim Madden Bowl fallen, desto geringer der Produktionswert der deutschen Bekleidungsindustrie."
+      up: "Das passende Trikot zum Altima Bowl muss schließlich hergestellt werden: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Bekleidungsindustrie einher.",
+      down: "Zu gebannt vom Spielgeschehen fürs neue Outfit: Je mehr Punkte beim Altima Bowl fallen, desto geringer der Produktionswert der deutschen Bekleidungsindustrie."
     },
     "pharmaindustrie-deutschland-produktionswert": {
-      up: "Die Nerven beim Madden Bowl brauchen offenbar Unterstützung: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Pharmaindustrie einher.",
-      down: "Ein entspanntes Madden Bowl scheint der Gesundheit gutzutun: Je mehr Punkte fallen, desto geringer der Produktionswert der deutschen Pharmaindustrie."
+      up: "Die Nerven beim Altima Bowl brauchen offenbar Unterstützung: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Pharmaindustrie einher.",
+      down: "Ein entspanntes Altima Bowl scheint der Gesundheit gutzutun: Je mehr Punkte fallen, desto geringer der Produktionswert der deutschen Pharmaindustrie."
     },
     "lederwaren-und-schuhindustrie-deutschland-produktionswert": {
-      up: "Nach einem Sieg beim Madden Bowl gönnt man sich offenbar neue Schuhe: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Lederwaren- und Schuhindustrie einher.",
-      down: "Zu gebannt vom Spielgeschehen fürs Schuhgeschäft: Je mehr Punkte beim Madden Bowl fallen, desto geringer der Produktionswert der deutschen Lederwaren- und Schuhindustrie."
+      up: "Nach einem Sieg beim Altima Bowl gönnt man sich offenbar neue Schuhe: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Lederwaren- und Schuhindustrie einher.",
+      down: "Zu gebannt vom Spielgeschehen fürs Schuhgeschäft: Je mehr Punkte beim Altima Bowl fallen, desto geringer der Produktionswert der deutschen Lederwaren- und Schuhindustrie."
     },
     "tabakverarbeitung-deutschland-produktionswert": {
-      up: "Die Nerven liegen beim Madden Bowl offenbar blank: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Tabakverarbeitung einher.",
-      down: "Ein entspanntes Madden Bowl lenkt offenbar erfolgreich vom Griff zur Packung ab: Je mehr Punkte fallen, desto geringer der Produktionswert der deutschen Tabakverarbeitung."
+      up: "Die Nerven liegen beim Altima Bowl offenbar blank: Steigende Punktzahlen im Turnier gehen mit einem wachsenden Produktionswert der deutschen Tabakverarbeitung einher.",
+      down: "Ein entspanntes Altima Bowl lenkt offenbar erfolgreich vom Griff zur Packung ab: Je mehr Punkte fallen, desto geringer der Produktionswert der deutschen Tabakverarbeitung."
     },
     "staatliche-lotterien-spieleinsatze": {
-      up: "Der Nervenkitzel beim Madden Bowl macht offenbar Lust aufs eigene Glück: Steigende Punktzahlen im Turnier gehen mit höheren Spieleinsätzen bei staatlichen Lotterien in Deutschland einher.",
-      down: "Zu gebannt vom Spielstand fürs Lottoheft: Je mehr Punkte beim Madden Bowl fallen, desto geringer die Spieleinsätze bei staatlichen Lotterien in Deutschland."
+      up: "Der Nervenkitzel beim Altima Bowl macht offenbar Lust aufs eigene Glück: Steigende Punktzahlen im Turnier gehen mit höheren Spieleinsätzen bei staatlichen Lotterien in Deutschland einher.",
+      down: "Zu gebannt vom Spielstand fürs Lottoheft: Je mehr Punkte beim Altima Bowl fallen, desto geringer die Spieleinsätze bei staatlichen Lotterien in Deutschland."
     },
     "weltbevolkerung": {
-      up: "Der Erfolg des Madden Bowl scheint die ganze Welt mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Weltbevölkerung einher.",
-      down: "Zu gebannt vom Spielgeschehen fürs Weltgeschehen: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wächst die Weltbevölkerung."
+      up: "Der Erfolg des Altima Bowl scheint die ganze Welt mitzuziehen: Steigende Punktzahlen im Turnier gehen mit einer wachsenden Weltbevölkerung einher.",
+      down: "Zu gebannt vom Spielgeschehen fürs Weltgeschehen: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wächst die Weltbevölkerung."
     },
     "zusammengefasste-geburtenziffer-deutschland": {
-      up: "Der Team-Geist beim Madden Bowl scheint sich fortzupflanzen — statistisch gesehen: Steigende Punktzahlen im Turnier gehen mit einer höheren zusammengefassten Geburtenziffer in Deutschland einher.",
-      down: "Zu viel Bildschirmzeit beim Madden Bowl lässt offenbar die Geburtenziffer sinken: Je mehr Punkte fallen, desto niedriger die zusammengefasste Geburtenziffer in Deutschland."
+      up: "Der Team-Geist beim Altima Bowl scheint sich fortzupflanzen — statistisch gesehen: Steigende Punktzahlen im Turnier gehen mit einer höheren zusammengefassten Geburtenziffer in Deutschland einher.",
+      down: "Zu viel Bildschirmzeit beim Altima Bowl lässt offenbar die Geburtenziffer sinken: Je mehr Punkte fallen, desto niedriger die zusammengefasste Geburtenziffer in Deutschland."
     },
     "weltweite-verkaufe-von-elektroautos-bev-plug-in-hybride": {
-      up: "Der sportliche Ehrgeiz beim Madden Bowl scheint sich auf die Straße zu übertragen: Steigende Punktzahlen im Turnier gehen mit wachsenden weltweiten Verkäufen von Elektroautos einher.",
-      down: "Zu gebannt vom Spielgeschehen für den Autohändler: Je mehr Punkte beim Madden Bowl fallen, desto langsamer wachsen die weltweiten Verkäufe von Elektroautos."
+      up: "Der sportliche Ehrgeiz beim Altima Bowl scheint sich auf die Straße zu übertragen: Steigende Punktzahlen im Turnier gehen mit wachsenden weltweiten Verkäufen von Elektroautos einher.",
+      down: "Zu gebannt vom Spielgeschehen für den Autohändler: Je mehr Punkte beim Altima Bowl fallen, desto langsamer wachsen die weltweiten Verkäufe von Elektroautos."
     },
     "internationale-fuballtransfers-transferentschadigungen-weltweit": {
-      up: "Der Konkurrenzkampf beim Madden Bowl scheint auch auf den echten Rasen abzufärben: Steigende Punktzahlen im Turnier gehen mit höheren weltweiten Transferentschädigungen bei internationalen Fußballtransfers einher.",
-      down: "Zu viel Konkurrenz durch die eigene Liga: Je mehr Punkte beim Madden Bowl fallen, desto geringer die weltweiten Transferentschädigungen bei internationalen Fußballtransfers."
+      up: "Der Konkurrenzkampf beim Altima Bowl scheint auch auf den echten Rasen abzufärben: Steigende Punktzahlen im Turnier gehen mit höheren weltweiten Transferentschädigungen bei internationalen Fußballtransfers einher.",
+      down: "Zu viel Konkurrenz durch die eigene Liga: Je mehr Punkte beim Altima Bowl fallen, desto geringer die weltweiten Transferentschädigungen bei internationalen Fußballtransfers."
     }
   };
 
@@ -552,12 +552,12 @@
   // jeweiligen germanName statt aus stat-spezifischem Fachwissen.
   const NON_POINT_STORY_TEMPLATES = {
     gamesPlayed: {
-      up: (name) => `Je mehr Partien beim Madden Bowl gespielt werden, desto mehr scheint auch bei „${name}“ zu passieren — offenbar sorgt jede zusätzliche Partie im Turnier ganz nebenbei für einen kleinen Schub extra.`,
-      down: (name) => `Je mehr Partien beim Madden Bowl gespielt werden, desto weniger bleibt offenbar von „${name}“ übrig — als würde jede zusätzliche Partie im Turnier ein Stückchen davon abzwacken.`,
+      up: (name) => `Je mehr Partien beim Altima Bowl gespielt werden, desto mehr scheint auch bei „${name}“ zu passieren — offenbar sorgt jede zusätzliche Partie im Turnier ganz nebenbei für einen kleinen Schub extra.`,
+      down: (name) => `Je mehr Partien beim Altima Bowl gespielt werden, desto weniger bleibt offenbar von „${name}“ übrig — als würde jede zusätzliche Partie im Turnier ein Stückchen davon abzwacken.`,
     },
     playerCount: {
-      up: (name) => `Je mehr Teilnehmer beim Madden Bowl antreten, desto mehr legt offenbar auch „${name}“ zu — mehr Spieler, mehr Trubel, mehr Nebenwirkungen, könnte man meinen.`,
-      down: (name) => `Je mehr Teilnehmer beim Madden Bowl antreten, desto stärker gibt offenbar „${name}“ nach — als würde jeder zusätzliche Spieler am Tisch ein bisschen davon abziehen.`,
+      up: (name) => `Je mehr Teilnehmer beim Altima Bowl antreten, desto mehr legt offenbar auch „${name}“ zu — mehr Spieler, mehr Trubel, mehr Nebenwirkungen, könnte man meinen.`,
+      down: (name) => `Je mehr Teilnehmer beim Altima Bowl antreten, desto stärker gibt offenbar „${name}“ nach — als würde jeder zusätzliche Spieler am Tisch ein bisschen davon abziehen.`,
     },
   };
 
@@ -615,7 +615,7 @@
     const germanShort = shortGermanTitle(candidate.germanName);
     return {
       title: `${mbShort} vs. ${germanShort}`,
-      subtitle: `Was der Madden Bowl mit ${candidate.germanName} zu tun hat`,
+      subtitle: `Was der Altima Bowl mit ${candidate.germanName} zu tun hat`,
     };
   }
 
@@ -644,7 +644,7 @@
   }
 
   // ======================================================================
-  // MADDEN-BOWL-SEITE — Saison-Kennzahlen aus den archivierten Turnieren
+  // ALTIMA-BOWL-SEITE — Saison-Kennzahlen aus den archivierten Turnieren
   // ----------------------------------------------------------------------
   // Ein Wert pro abgeschlossener Saison (Jahr), berechnet direkt aus den
   // Rohdaten von MB.loadHistorySeasons() (dieselbe Quelle wie hall_of_fame.html).
@@ -726,7 +726,7 @@
   // excludePairKeys: Set von "mbStatKey::germanStatId" — bereits in diesem
   // Turnier veröffentlichte Paarungen, damit sich nichts wiederholt.
   //
-  // WICHTIG: hier wird bewusst NICHT verlangt, dass eine Madden-Bowl-Saison
+  // WICHTIG: hier wird bewusst NICHT verlangt, dass eine Altima-Bowl-Saison
   // (state.season, z.B. "2026") denselben Zahlenwert trägt wie ein Jahr im
   // deutschen Datensatz (aktuell 2022–2025). Turnier-Saisonbezeichnungen
   // folgen ihrer eigenen Logik (Turnier Nr. X, benannt nach dem Jahr, in dem
@@ -1050,7 +1050,7 @@
 
   // ======================================================================
   // CHART (Canvas) — im Look von tylervigen.com/spurious: zwei Linien,
-  // zwei y-Achsen (links: Madden-Bowl-Kennzahl, rechts: deutsche Statistik),
+  // zwei y-Achsen (links: Altima-Bowl-Kennzahl, rechts: deutsche Statistik),
   // gemeinsame Jahres-x-Achse. Selbst gezeichnet, keine externe Chart-Lib.
   // ======================================================================
 
@@ -1223,7 +1223,7 @@
       }
     }
 
-    // Linie 1: Madden Bowl
+    // Linie 1: Altima Bowl
     drawLine(
       ctx,
       years.map((_, i) => [
@@ -1303,7 +1303,7 @@
     ctx.fillStyle = "rgba(255,255,255,0.4)";
 
     ctx.fillText(
-      "🏈 Madden Bowl — Spurious Correlations",
+      "🏈 Altima Bowl — Spurious Correlations",
       W - 20,
       H - 8
     );

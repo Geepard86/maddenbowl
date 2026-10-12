@@ -4,8 +4,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MADDEN BOWL – Hall of Fame</title>
+  <title>ALTIMA BOWL – Hall of Fame</title>
   <link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="shared.js"></script>
@@ -86,12 +89,29 @@
     (async () => {
       try {
         const state = await MB.fetchCloudState();
-        MB.UI.setState(state);
+        MB.UI.setState(state, renderMyCards);
+        renderMyCards();
       } catch (e) { /* Hall of Fame liest ohnehin aus den Archiv-JSONs */ }
     })();
+
+    // "Meine Karten": Sammelkarten des eingeloggten Spielers (Achievements)
+    function renderMyCards() {
+      const box = document.getElementById('myCardsCard');
+      if (!box) return;
+      const me = MB.UI.currentPlayer();
+      box.style.display = me ? '' : 'none';
+      if (!me) return;
+      MB.UI.withAchievements(function (A) { A.renderGallery(document.getElementById('myCardsGallery')); });
+    }
   </script>
 
   <div class="container">
+    <div class="card" id="myCardsCard" style="margin-bottom:12px; display:none;">
+      <h2>🃏 Meine Karten</h2>
+      <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Deine Sammelkarten — freigeschaltet durch Tippen, Stöbern und Mitmachen, unabhängig von deinen Turnierergebnissen. Neue Karten tauchen automatisch als Popup auf.</div>
+      <div id="myCardsGallery"></div>
+    </div>
+
     <div class="card" style="margin-bottom:12px;">
       <h2>Navigation</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -180,7 +200,7 @@
     // =========================================================
     // LOAD + NORMALIZE
     // =========================================================
-    function normName(s){ return (s || "").trim(); }
+    const normName = (s) => MB.normName(s);
 
     function normalizeSeason(raw) {
       const t = raw?.tournament || raw;
@@ -907,15 +927,6 @@
     // =========================================================
     // UTIL
     // =========================================================
-    function reloadAll(){
-      $("matchesWrap").innerHTML = `<div class="hint">Lade…</div>`;
-      $("tab-standings").innerHTML = "";
-      $("tab-stats").innerHTML = "";
-      $("tab-records").innerHTML = "";
-      $("tab2-alltime").innerHTML = "";
-      $("tab2-allrecords").innerHTML = "";
-      loadAll();
-    }
 
     // =========================================================
     // INIT

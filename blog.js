@@ -1,5 +1,5 @@
 /* =========================================================================
-   MADDEN BOWL — BLOG (blog.js)
+   ALTIMA BOWL — BLOG (blog.js)
    -------------------------------------------------------------------------
    Generiert automatisch deutschsprachige Turnierblog-Artikel an passenden
    Momenten (Turnierstart, alle paar Spiele ein Zwischenstand,
@@ -34,7 +34,7 @@
   // ======================================================================
 
   const KICKOFF_OPENERS = [
-    "Der Madden Bowl ist zurück. Und damit beginnt wieder die Phase des Jahres, in der ein vermeintlich harmloses Spiel plötzlich erstaunlich wichtig wird.",
+    "Der Altima Bowl ist zurück. Und damit beginnt wieder die Phase des Jahres, in der ein vermeintlich harmloses Spiel plötzlich erstaunlich wichtig wird.",
     "Es geht wieder los. Controller in die Hand, Tabelle auf und die üblichen guten Vorsätze für faire Spiele vorsichtshalber gleich wieder vergessen.",
     "Neue Saison, neues Glück – und dieselbe alte Frage: Wer schafft es am Ende tatsächlich bis zum Ring?",
   ];
@@ -42,7 +42,7 @@
   const KICKOFF_CLOSERS = [
     "Noch ist alles offen. Das ist wahrscheinlich der letzte Moment, in dem das alle Beteiligten genauso sehen.",
     "Der Rest ist jetzt Sache der Controller. Und der Nerven. Vor allem der Nerven.",
-    "Der Madden Bowl ist eröffnet. Was jetzt noch fehlt, sind Spiele, Geschichten und mindestens ein Ergebnis, das später niemand kommen gesehen haben will.",
+    "Der Altima Bowl ist eröffnet. Was jetzt noch fehlt, sind Spiele, Geschichten und mindestens ein Ergebnis, das später niemand kommen gesehen haben will.",
   ];
 
   // ======================================================================
@@ -65,7 +65,7 @@
       title: (count) => `Power Ranking nach ${count} Spielen`,
 
       opener:
-        "Ein paar Spiele sind gespielt, und langsam bekommt der Madden Bowl Konturen. Noch ist nichts entschieden – aber einige Herren arbeiten bereits fleißig daran, diese Aussage zu widerlegen.",
+        "Ein paar Spiele sind gespielt, und langsam bekommt der Altima Bowl Konturen. Noch ist nichts entschieden – aber einige Herren arbeiten bereits fleißig daran, diese Aussage zu widerlegen.",
 
       focus: (leader) =>
         `${leader.name} steht aktuell ganz oben. ${leader.wins || 0} Siege hat er bereits gesammelt${
@@ -95,7 +95,7 @@
           : `${leader.name} hat sich an die Spitze gesetzt. Wer dahinter Druck machen will, braucht allerdings langsam Ergebnisse und nicht nur gute Vorsätze.`,
 
       closer:
-        "Noch ist das Feld eng genug für eine Kehrtwende. Beim Madden Bowl reicht dafür bekanntlich manchmal schon ein einziges Spiel.",
+        "Noch ist das Feld eng genug für eine Kehrtwende. Beim Altima Bowl reicht dafür bekanntlich manchmal schon ein einziges Spiel.",
 
       consumesRecent: false,
     },
@@ -172,7 +172,7 @@
 
     allTimeMargin: [
       "Manchmal entscheidet ein Spiel die Tabelle. Manchmal entscheidet es nur, wie lange der Verlierer danach über diese Partie sprechen möchte. {player} schlägt {opponent} {winnerScore}:{loserScore} – die größte Klatsche der Turniergeschichte.",
-      "{winnerScore}:{loserScore}. Mehr muss man über die Kräfteverhältnisse zwischen {player} und {opponent} eigentlich nicht sagen. Es ist die deutlichste Niederlage, die der Madden Bowl bisher gesehen hat.",
+      "{winnerScore}:{loserScore}. Mehr muss man über die Kräfteverhältnisse zwischen {player} und {opponent} eigentlich nicht sagen. Es ist die deutlichste Niederlage, die der Altima Bowl bisher gesehen hat.",
     ],
 
     tournamentMargin: [
@@ -216,8 +216,8 @@
   ];
 
   const CHAMPION_INTROS = [
-    "Es ist entschieden. {player} gewinnt das Finale gegen {opponent} mit {winnerScore}:{loserScore} und darf sich Madden Bowl Champion nennen.",
-    "Am Ende bleibt einer stehen: {player}. Mit {winnerScore}:{loserScore} gegen {opponent} geht der Titel an den neuen Madden Bowl Champion.",
+    "Es ist entschieden. {player} gewinnt das Finale gegen {opponent} mit {winnerScore}:{loserScore} und darf sich Altima Bowl Champion nennen.",
+    "Am Ende bleibt einer stehen: {player}. Mit {winnerScore}:{loserScore} gegen {opponent} geht der Titel an den neuen Altima Bowl Champion.",
   ];
 
   const SONG_INTROS = {
@@ -228,7 +228,7 @@
 
     firstElimination: [
       "Der erste Spieler ist raus. Hart, aber immerhin gibt es dafür jetzt den passenden Soundtrack.",
-      "Die erste Saisonhoffnung ist geplatzt. Der Madden Bowl hat seinen ersten Ausgeschiedenen – und natürlich bekommt auch dieser Moment seinen Song.",
+      "Die erste Saisonhoffnung ist geplatzt. Der Altima Bowl hat seinen ersten Ausgeschiedenen – und natürlich bekommt auch dieser Moment seinen Song.",
     ],
 
     toiletBowl: [
@@ -262,13 +262,13 @@
       names.length
         ? `Mit dabei sind diesmal ${names.join(", ")}. Jeder startet bei null, jeder hat seine eigene Vorstellung davon, wie diese Saison laufen soll – und spätestens nach den ersten Spielen dürfte sich zeigen, wie belastbar diese Vorstellungen wirklich sind.`
         : "Das Teilnehmerfeld steht bereit. Jetzt fehlt eigentlich nur noch das erste Spiel.",
-      "Wie immer entscheidet nicht die Papierform, sondern das, was auf dem virtuellen Rasen passiert. Favoriten gibt es natürlich trotzdem – schließlich wäre ein Madden Bowl ohne voreilige Prognosen nur halb so unterhaltsam.",
+      "Wie immer entscheidet nicht die Papierform, sondern das, was auf dem virtuellen Rasen passiert. Favoriten gibt es natürlich trotzdem – schließlich wäre ein Altima Bowl ohne voreilige Prognosen nur halb so unterhaltsam.",
       pick(KICKOFF_CLOSERS),
     ];
 
     return {
       kind: "kickoff",
-      title: "🏈 Der Madden Bowl ist eröffnet!",
+      title: "🏈 Der Altima Bowl ist eröffnet!",
       body: paragraphs(parts),
     };
   }
@@ -329,9 +329,9 @@
     const parts = [
       `${seasons.length} ${
         seasons.length === 1 ? "Season" : "Seasons"
-      } Madden Bowl liegen inzwischen hinter uns. Was als kleines Turnier begonnen hat, ist längst mehr geworden: eine eigene Geschichte, eine Tabelle, Rekorde und vor allem jede Menge Spiele, über die man noch lange sprechen kann.`,
+      } Altima Bowl liegen inzwischen hinter uns. Was als kleines Turnier begonnen hat, ist längst mehr geworden: eine eigene Geschichte, eine Tabelle, Rekorde und vor allem jede Menge Spiele, über die man noch lange sprechen kann.`,
       allPlayers.size
-        ? `${allPlayers.size} Spieler haben sich bislang in die Geschichte des Madden Bowl gespielt. Manche davon mit Titeln, manche mit Rekorden – und manche vor allem mit Ergebnissen, die man lieber nicht mehr auf dem Screenshot hätte.`
+        ? `${allPlayers.size} Spieler haben sich bislang in die Geschichte des Altima Bowl gespielt. Manche davon mit Titeln, manche mit Rekorden – und manche vor allem mit Ergebnissen, die man lieber nicht mehr auf dem Screenshot hätte.`
         : null,
     ];
 
@@ -356,12 +356,12 @@
     }
 
     parts.push(
-      "Was bleibt? Vor allem die Erkenntnis, dass beim Madden Bowl eigentlich nichts sicher ist. Außer vielleicht, dass irgendwann wieder jemand ein völlig absurdes Ergebnis produziert. Und genau deshalb kann die nächste Season kommen."
+      "Was bleibt? Vor allem die Erkenntnis, dass beim Altima Bowl eigentlich nichts sicher ist. Außer vielleicht, dass irgendwann wieder jemand ein völlig absurdes Ergebnis produziert. Und genau deshalb kann die nächste Season kommen."
     );
 
     return {
       kind: "retrospective",
-      title: "📜 Madden Bowl – ein Rückblick",
+      title: "📜 Altima Bowl – ein Rückblick",
       body: paragraphs(parts),
     };
   }
@@ -370,7 +370,25 @@
   // ZWISCHENSTAND
   // ======================================================================
 
-  function buildProgressArticle(state, history, finishedCount) {
+  // Kurzer Absatz "Aus der Kommentarspalte" für die zusammenfassenden Beiträge (Power Ranking, Siegerehrung).
+  // c = { total, picks:[{player_name, body}] } aus MB.Comments.pickHighlights; ohne Kommentare kein Absatz.
+  function buildCommentParagraph(c) {
+    if (!c || !c.total) return null;
+    const esc = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    const n = c.total, picks = (c.picks || []).slice(0, 2);
+    const count = n === 1 ? "Ein Kommentar ist" : `${n} Kommentare sind`;
+    const heads = [
+      `<strong>Aus der Kommentarspalte.</strong> Seit dem letzten Rückblick ${n === 1 ? "ist" : "sind"} ${count.replace(/ (ist|sind)$/, "")} eingegangen.`,
+      `<strong>Stimmen aus der Kommentarspalte.</strong> ${count} seit dem letzten Mal eingetrudelt.`,
+      `<strong>Post von den Rängen.</strong> ${count} seit dem letzten Rückblick bei uns gelandet.`,
+    ];
+    const head = heads[Math.floor(Math.random() * heads.length)];
+    if (!picks.length) return `${head} Die Stimmung ist rege – schreibt gern weiter.`;
+    const quotes = picks.map((p, i) => `${i === 0 ? "" : "Und "}${esc(p.player_name)} ${i === 0 ? "meinte unter einem der Beiträge" : "legte nach"}: „${esc(p.body)}“`);
+    return `${head} ${quotes.join(" ")} – weiter so, die Spalte darf gern noch voller werden.`;
+  }
+
+  function buildProgressArticle(state, history, finishedCount, opts) {
     const sorted = [...(state.players || [])].sort(
       (a, b) =>
         (b.wins || 0) - (a.wins || 0) ||
@@ -443,6 +461,8 @@
       );
     }
 
+    const commentPara = buildCommentParagraph(opts && opts.comments);
+    if (commentPara) parts.push(commentPara);
     parts.push(style.closer);
 
     return {
@@ -474,7 +494,7 @@
 
     const intro = pool
       ? fill(pick(pool), vars)
-      : `Ein besonderer Moment im Madden Bowl: ${
+      : `Ein besonderer Moment im Altima Bowl: ${
           record.player || "jemand"
         } sorgt für Gesprächsstoff.`;
 
@@ -485,19 +505,13 @@
         ? `Der Blick auf die Ausgangslage macht den Sieg besonders bemerkenswert: ${record.player} lag in der Setzliste deutlich hinter ${record.opponent}. Auf dem Feld spielte das offenbar keine Rolle.`
         : null;
 
-    // Nur echte Rekorde bekommen die Kategorie "Rekord". Story-Memes und
-    // Blowout-Memes (kein Rekord im historischen Sinn) laufen unter "Meme".
-    const isMemeOnly = record.type === "storyMeme" || record.type === "blowout";
-
     return {
-      kind: isMemeOnly ? "meme" : "record",
+      kind: "record",
       title: `${info.emoji} ${info.label}`,
       body: paragraphs([
         intro,
         detail ? fill(detail, vars) : null,
-        isMemeOnly
-          ? "Das Meme zum Spiel – ohne Anspruch auf Vollständigkeit, aber mit vollem Anspruch auf Diskussion."
-          : "Ein neuer Eintrag für die Madden-Bowl-Geschichtsbücher – und vermutlich Material für die nächste WhatsApp-Diskussion.",
+        "Ein neuer Eintrag für die Altima-Bowl-Geschichtsbücher – und vermutlich Material für die nächste WhatsApp-Diskussion.",
       ]),
     };
   }
@@ -560,12 +574,12 @@
   function buildChampionArticle(record) {
     return {
       kind: "champion",
-      title: "👑 Wir haben einen neuen Madden Bowl Champion!",
+      title: "👑 Wir haben einen neuen Altima Bowl Champion!",
 
       body: paragraphs([
         fill(pick(CHAMPION_INTROS), record),
 
-        "Damit endet die Saison dort, wo sie angefangen hat: mit der Frage, wer am Ende ganz oben steht. Jetzt ist die Antwort bekannt – und der Name des Champions ist für die Geschichte des Madden Bowl notiert.",
+        "Damit endet die Saison dort, wo sie angefangen hat: mit der Frage, wer am Ende ganz oben steht. Jetzt ist die Antwort bekannt – und der Name des Champions ist für die Geschichte des Altima Bowl notiert.",
       ]),
     };
   }
@@ -621,7 +635,7 @@
     // Kausalgeschichte je deutscher Statistik + Richtung für die 10
     // punktbasierten Kennzahlen, generische parametrisierte Bausteine für
     // "Anzahl gespielter Partien"/"Anzahl Teilnehmer". Deckt damit alle 12
-    // Madden-Bowl-Kennzahlen ab. Der alte, neutrale Befund-Text weiter unten
+    // Altima-Bowl-Kennzahlen ab. Der alte, neutrale Befund-Text weiter unten
     // bleibt als Sicherheitsnetz, falls mal ein germanStatId ohne Baustein
     // in GERMAN_STAT_STORIES landet (z.B. künftig neu ergänzte Statistik).
     const story = MB.Spurious.buildSpuriousStory
@@ -842,7 +856,7 @@
     const sentences = [];
 
     if (badge.isRookie) {
-      sentences.push("Für ihn ist es der erste Madden Bowl – keine Historie, keine Rekorde, aber auch noch keine Niederlagen, die man ihm vorhalten könnte.");
+      sentences.push("Für ihn ist es der erste Altima Bowl – keine Historie, keine Rekorde, aber auch noch keine Niederlagen, die man ihm vorhalten könnte.");
     } else {
       const seasonsPlayed = badge.seasonsPlayed || 0;
       let line = `Er ist bereits ${seasonsPlayed} ${seasonsPlayed === 1 ? "Saison" : "Saisons"} dabei`;
@@ -876,7 +890,7 @@
 
     if (teamHistory && teamHistory.count > 0 && team) {
       sentences.push(
-        `Sein Team hat übrigens Titel-Tradition: Die ${team} wurden schon ${teamHistory.count}× Madden-Bowl-Champion, zuletzt mit ${teamHistory.lastWinnerName} (${teamHistory.lastSeason}).`
+        `Sein Team hat übrigens Titel-Tradition: Die ${team} wurden schon ${teamHistory.count}× Altima-Bowl-Champion, zuletzt mit ${teamHistory.lastWinnerName} (${teamHistory.lastSeason}).`
       );
     }
 
@@ -919,7 +933,7 @@
         "Wer letztes Jahr weit gekommen ist oder jetzt schon oben in der Tabelle steht, gehört zum engeren Favoritenkreis. Ein Blick auf die Kandidaten.",
       ],
       closers: [
-        "Einer von ihnen wird am Ende vermutlich ganz oben stehen. Vermutlich. Beim Madden Bowl ist das nie garantiert.",
+        "Einer von ihnen wird am Ende vermutlich ganz oben stehen. Vermutlich. Beim Altima Bowl ist das nie garantiert.",
         "Papierform ist schön – aber gespielt wird auf dem Rasen.",
       ],
     },
@@ -963,7 +977,7 @@
     const openerPool = group === "contender" && !hasDefender && text.openersNoDefender ? text.openersNoDefender : text.openers;
     const parts = [pick(openerPool).replace(/\{prev\}/g, previousChampion || "Der Titelverteidiger")];
     if (group === "field" && rookies.length) {
-      parts.push(`Besonders im Blick: ${rookies.length === 1 ? "der Rookie" : "die Rookies"} ${rookies.join(", ")} – ${rookies.length === 1 ? "er ist" : "sie sind"} zum ersten Mal beim Madden Bowl dabei.`);
+      parts.push(`Besonders im Blick: ${rookies.length === 1 ? "der Rookie" : "die Rookies"} ${rookies.join(", ")} – ${rookies.length === 1 ? "er ist" : "sie sind"} zum ersten Mal beim Altima Bowl dabei.`);
     }
     names.forEach((name) => {
       const key = name.toLowerCase();
@@ -986,7 +1000,7 @@
   // Erscheint, sobald das Finalergebnis eingetragen ist — zusätzlich zum
   // kurzen Champion-Rekordartikel.
   // ======================================================================
-  function buildWrapUpArticle(state, history) {
+  function buildWrapUpArticle(state, history, opts) {
     const gf = MB.getPlayoffMatch(state, "gf");
     const champion = gf ? MB.winnerOf(gf) : null;
     const runnerUp = gf ? MB.loserOf(gf) : null;
@@ -1022,7 +1036,7 @@
 
     const parts = [];
     parts.push(
-      `${champion.name} ist Madden Bowl Champion: ${fw}:${fl} im Finale gegen ${runnerUp.name}. ${
+      `${champion.name} ist Altima Bowl Champion: ${fw}:${fl} im Finale gegen ${runnerUp.name}. ${
         titleNo === 1 ? "Für ihn ist es der erste Titel überhaupt." : `Es ist bereits Titel Nummer ${titleNo}.`
       }`
     );
@@ -1053,7 +1067,9 @@
       parts.push(`<strong>Die Toilet Bowl.</strong> ${tbWinner.name} setzt sich gegen ${tbLoser.name} durch – und darf sich damit über die undankbarste Trophäe des Turniers freuen.`);
     }
 
-    parts.push("Damit ist die Saison Geschichte. Alle Zahlen wandern in die Hall of Fame – und ab jetzt gilt wieder das Wichtigste beim Madden Bowl: Bis zur Revanche wird fleißig diskutiert.");
+    const wrapComments = buildCommentParagraph(opts && opts.comments);
+    if (wrapComments) parts.push(wrapComments);
+    parts.push("Damit ist die Saison Geschichte. Alle Zahlen wandern in die Hall of Fame – und ab jetzt gilt wieder das Wichtigste beim Altima Bowl: Bis zur Revanche wird fleißig diskutiert.");
 
     return {
       kind: "wrapup",
@@ -1314,7 +1330,7 @@
   global.MB.Blog = {
     buildKickoffArticle,
     buildRetrospectiveArticle,
-    buildProgressArticle,
+    buildProgressArticle, buildCommentParagraph,
     buildRecordArticle,
     buildSongArticle,
     buildFinalsArticle,

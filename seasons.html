@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl — Saison-Verwaltung</title>
+<title>Altima Bowl — Saison-Verwaltung</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
 <link rel="stylesheet" href="styles.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -38,7 +38,7 @@
 </head>
 <body>
 <script>
-  MB.UI.mountHeader({ active: '', adminActive: 'seasons', adminBack: true, showAdminLogin: true, onAdminChange: () => location.reload() });
+  MB.UI.mountHeader({ active: '', showAdminLogin: true, onAdminChange: () => location.reload() });
 </script>
 
 <div id="app"><div class="not-admin">Lade…</div></div>
@@ -65,17 +65,22 @@
       <div class="card" id="ratingsCard"></div>
       <div class="card">
         <h2>⚙️ Turnier-Regeln &amp; Standard-Einstellungen</h2>
-        <div class="hint">Vorbelegung für das "Tournament Setup" in index.html — einmal hier pflegen statt bei jedem neuen Turnier von Hand nachzutragen. Bereits laufende/abgeschlossene Turniere sind davon nicht betroffen.</div>
+        <div class="hint">Vorbelegung für das "Tournament Setup" in admin.html — einmal hier pflegen statt bei jedem neuen Turnier von Hand nachzutragen. Bereits laufende/abgeschlossene Turniere sind davon nicht betroffen.</div>
         <div id="rulesCard">Lade…</div>
       </div>
       <div class="card">
         <h2>🎲 Nächstes Turnier vorbereiten</h2>
-        <div class="hint">Spielerliste vorab festlegen — die Ziehreihenfolge für die Live-Auslosung in index.html wird automatisch aus der Vorsaison berechnet (ToiletBowl-Sieger zuerst, dann Neulinge, Titelverteidiger zuletzt) und lässt sich per Drag &amp; Drop anpassen.</div>
+        <div class="hint">Spielerliste vorab festlegen — die Ziehreihenfolge für die Live-Auslosung in admin.html wird automatisch aus der Vorsaison berechnet (ToiletBowl-Sieger zuerst, dann Neulinge, Titelverteidiger zuletzt) und lässt sich per Drag &amp; Drop anpassen.</div>
         <div id="draftOrderCard">Lade…</div>
       </div>
       <div class="card">
+        <h2>🏷️ Spitznamen</h2>
+        <div class="hint">Wer hier einen Spitznamen hat, den spricht der Ring-Ansager (Enzo) beim Aufruf im Draft <b>vor dem Namen</b> („The Machine Tim“) und die Draft-Bühne zeigt ihn über dem Namen. Leer lassen = nur der Name. Wird im aktuellen Turnier gespeichert; vorbelegt aus dem letzten abgeschlossenen Turnier.</div>
+        <div id="nicknamesCard">Lade…</div>
+      </div>
+      <div class="card">
         <h2>🚫 Teams für den Draft streichen</h2>
-        <div class="hint">Angetippte Teams stehen im Draft nicht zur Wahl — sie erscheinen in der Draft-Show durchgestrichen. Wird mit dem Turnier-Setup in index.html übernommen.</div>
+        <div class="hint">Angetippte Teams stehen im Draft nicht zur Wahl — sie erscheinen in der Draft-Show durchgestrichen. Wird mit dem Turnier-Setup in admin.html übernommen.</div>
         <div id="teamExclCard">Lade…</div>
       </div>
       <div class="card">
@@ -93,6 +98,7 @@
     await renderRulesCard();
     await renderDraftOrderCard();
     drawTeamExclCard();
+    await renderNicknamesCard();
     await loadSeasons();
     renderComposerCard();
   }
@@ -102,7 +108,7 @@
   // -------------------------------------------------------------------
   // Spielerliste + Reihenfolge landen in config.draftOrder des aktuellen
   // "setup"/"running"-Turniers (siehe MB.pushCloudState) und werden von
-  // index.html beim Öffnen der Live-Auslosung automatisch übernommen.
+  // admin.html beim Öffnen der Live-Auslosung automatisch übernommen.
   // =========================================================
   let draftOrderList = []; // [{name, reason}]
   let draftOrderCloudState = null;
@@ -177,6 +183,50 @@
     drawDraftOrderCard();
   }
 
+  // ---- Spitznamen (config.nicknames: Name -> Spitzname) ----
+  let nickNames = [], nickMap = {};
+  async function renderNicknamesCard() {
+    const el = document.getElementById('nicknamesCard');
+    if (!el) return;
+    if (!draftOrderCloudState) { el.innerHTML = '<div class="hint">Turnierstatus nicht verfügbar.</div>'; return; }
+    const cfg = draftOrderCloudState.config || {};
+    let last = null;
+    try { last = await MB.fetchLastCompletedTournament(); } catch (e) { /* ohne Vorbelegung weiter */ }
+    const names = [];
+    const add = (n) => { n = String(n || '').trim(); if (n && !names.some(x => x.toLowerCase() === n.toLowerCase())) names.push(n); };
+    (draftOrderList || []).forEach(e => add(e.name));
+    (draftOrderCloudState.players || []).forEach(p => add(p.name));
+    if (last && last.state) last.state.players.forEach(p => add(p.name));
+    Object.keys(cfg.nicknames || {}).forEach(add);
+    nickNames = names;
+    nickMap = { ...((last && last.state && last.state.config && last.state.config.nicknames) || {}), ...(cfg.nicknames || {}) };
+    drawNicknamesCard();
+  }
+  function drawNicknamesCard() {
+    const el = document.getElementById('nicknamesCard');
+    if (!nickNames.length) { el.innerHTML = '<div class="hint">Noch keine Spielernamen bekannt (erst Draft-Reihenfolge bzw. Spieler anlegen).</div>'; return; }
+    const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const val = (n) => { const k = Object.keys(nickMap).find(x => x.toLowerCase() === n.toLowerCase()); return k ? nickMap[k] : ''; };
+    el.innerHTML = nickNames.map((n, i) => `<div class="row-line" style="display:flex; align-items:center; gap:10px; margin:6px 0;">
+        <span style="width:140px;"><b>${esc(n)}</b></span>
+        <input type="text" id="nick-${i}" maxlength="28" placeholder="Spitzname (optional)" value="${esc(val(n))}" style="flex:1; max-width:320px;">
+      </div>`).join('') + `<button style="margin-top:8px;" onclick="saveNicknames()">💾 Speichern</button>`;
+  }
+  async function saveNicknames() {
+    if (!draftOrderCloudState) return;
+    const out = {};
+    nickNames.forEach((n, i) => {
+      const v = (document.getElementById('nick-' + i).value || '').replace(/["„“”<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 28);
+      if (v) out[n] = v;
+    });
+    const mergedConfig = { ...(draftOrderCloudState.config || {}), nicknames: out };
+    try {
+      await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
+      draftOrderCloudState.config = mergedConfig; nickMap = out;
+      alert(Object.keys(out).length ? 'Spitznamen gespeichert.' : 'Alle Spitznamen entfernt.');
+    } catch (e) { alert('Speichern fehlgeschlagen: ' + e.message); }
+  }
+
   // ---- Teams streichen (config.excludedTeams) ----
   function drawTeamExclCard() {
     const el = document.getElementById('teamExclCard');
@@ -214,7 +264,7 @@
     try {
       await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
       draftOrderCloudState.config = mergedConfig;
-      alert('Ziehreihenfolge gespeichert — wird beim nächsten Öffnen der Auslosung in index.html automatisch geladen.');
+      alert('Ziehreihenfolge gespeichert — wird beim nächsten Öffnen der Auslosung in admin.html automatisch geladen.');
     } catch (e) {
       alert('Speichern fehlgeschlagen: ' + e.message);
     }
@@ -258,37 +308,37 @@
   const draftArticles = [
     {
       kind: "retrospective",
-      title: "Fünf Seasons Madden Bowl – und was bleibt",
-      body: `Fünf Seasons, vier Champions und jede Menge Spiele, die inzwischen ihre eigene kleine Geschichte erzählen. Der Madden Bowl hat sich vom Turnier unter Freunden zu einem Wettbewerb mit Hall of Fame, ewiger Tabelle und inzwischen durchaus ernstzunehmender Rekordliste entwickelt.
+      title: "Fünf Seasons Altima Bowl – und was bleibt",
+      body: `Fünf Seasons, vier Champions und jede Menge Spiele, die inzwischen ihre eigene kleine Geschichte erzählen. Der Altima Bowl hat sich vom Turnier unter Freunden zu einem Wettbewerb mit Hall of Fame, ewiger Tabelle und inzwischen durchaus ernstzunehmender Rekordliste entwickelt.
 
-Die Saison 2026 hatte dabei noch einmal alles, was dieses Turnier ausmacht. Tim verlor in der Gruppenphase überraschend 13:14 gegen Lukas – und gewann am Ende trotzdem den Titel. Im Finale setzte er sich mit 17:14 gegen Alex durch und holte damit nach 2023 seinen zweiten Madden-Bowl-Ring.
+Die Saison 2026 hatte dabei noch einmal alles, was dieses Turnier ausmacht. Tim verlor in der Gruppenphase überraschend 13:14 gegen Lukas – und gewann am Ende trotzdem den Titel. Im Finale setzte er sich mit 17:14 gegen Alex durch und holte damit nach 2023 seinen zweiten Altima-Bowl-Ring.
 
 Auch Markus lieferte 2026 seine ganz eigene Bewerbung für die Geschichtsbücher ab. Gegen Micha gewann er im Playoff unglaubliche 49:0 – bis heute der deutlichste Sieg des Turniers. Wenig später war für den Titelverteidiger allerdings gegen Tim Schluss.
 
-Und dann war da noch Tobi F., der Micha mit 78:32 besiegte. 110 Punkte in einem Spiel: Auch das ist Madden Bowl-Geschichte.
+Und dann war da noch Tobi F., der Micha mit 78:32 besiegte. 110 Punkte in einem Spiel: Auch das ist Altima Bowl-Geschichte.
 
 Alex wiederum erreichte nach seinem Titel 2024 erneut das Finale und wurde 2026 Runner-up. Vier verschiedene Teams in vier Seasons – Miami, San Francisco, Green Bay und New England – und trotzdem immer wieder mitten im Titelrennen.
 
-Was also bleibt nach fünf Seasons? Vor allem die Erkenntnis, dass beim Madden Bowl eigentlich nichts sicher ist. Außer vielleicht, dass irgendjemand irgendwann ein völlig absurdes Ergebnis produziert.
+Was also bleibt nach fünf Seasons? Vor allem die Erkenntnis, dass beim Altima Bowl eigentlich nichts sicher ist. Außer vielleicht, dass irgendjemand irgendwann ein völlig absurdes Ergebnis produziert.
 
 2027 kann kommen.`,
     },
     {
       kind: "kickoff",
-      title: "Madden Bowl 2027 – jetzt wird mitgetippt",
-      body: `Der Madden Bowl geht in die nächste Runde. Und diesmal bleibt es nicht beim Zuschauen.
+      title: "Altima Bowl 2027 – jetzt wird mitgetippt",
+      body: `Der Altima Bowl geht in die nächste Runde. Und diesmal bleibt es nicht beim Zuschauen.
 
-Ab dem Start des Madden Bowl 2027 gibt es hier regelmäßig neue Artikel rund um das Turnier – mit Spielberichten, Zwischenständen, Rekorden und allem, was sonst noch passiert, wenn acht Spieler versuchen, sich gegenseitig vom Thron zu stoßen.
+Ab dem Start des Altima Bowl 2027 gibt es hier regelmäßig neue Artikel rund um das Turnier – mit Spielberichten, Zwischenständen, Rekorden und allem, was sonst noch passiert, wenn acht Spieler versuchen, sich gegenseitig vom Thron zu stoßen.
 
 Nach fünf Seasons gibt es schließlich einiges aufzuarbeiten. Tim geht als amtierender Champion ins neue Turnier, Alex als Runner-up und Markus mit der Erinnerung an seinen 49:0-Auftritt. Wer daraus einen klaren Favoriten ableiten kann, darf es gerne versuchen.
 
 Denn genau dafür gibt es 2027 erstmals den Tippmodus. Wer gewinnt? Wer überrascht? Wer schafft es ins Finale? Jetzt kann man nicht nur hinterher klugscheißen, sondern vorher.
 
-Auch abseits des Spielfelds wächst der Madden Bowl weiter: Eigener Merch ist inzwischen ebenfalls am Start – mit Designs rund um die Spieler, Champions und die Geschichten der vergangenen Seasons.
+Auch abseits des Spielfelds wächst der Altima Bowl weiter: Eigener Merch ist inzwischen ebenfalls am Start – mit Designs rund um die Spieler, Champions und die Geschichten der vergangenen Seasons.
 
 Der Countdown läuft also. Neue Saison, neue Tipps, neue Rekorde und vermutlich wieder mindestens ein Ergebnis, das niemand vorher kommen sah.
 
-Madden Bowl 2027 – wir sind dabei.`,
+Altima Bowl 2027 – wir sind dabei.`,
     },
   ];
   let activeDraftIndex = 0;
@@ -543,9 +593,9 @@ Madden Bowl 2027 – wir sind dabei.`,
   // =========================================================
   // TURNIER-REGELN / STANDARD-EINSTELLUNGEN (app_config: "tournament_defaults")
   // -------------------------------------------------------------------
-  // Werden von index.html beim Öffnen des Tournament-Setups geladen und dort
+  // Werden von admin.html beim Öffnen des Tournament-Setups geladen und dort
   // als Vorbelegung der Formularfelder verwendet (siehe applyTournamentDefaults
-  // in index.html). Diese Defaults hier — falls in der DB noch nichts liegt.
+  // in admin.html). Diese Defaults hier — falls in der DB noch nichts liegt.
   // =========================================================
   const RULES_CONFIG_KEY = 'tournament_defaults';
   const RULES_DEFAULTS = {

@@ -1,5 +1,5 @@
 /* =========================================================================
-   MADDEN BOWL — RECORDS & MEMES (records.js)
+   ALTIMA BOWL — RECORDS & MEMES (records.js)
    -------------------------------------------------------------------------
    Erkennt nach jedem Score-Eintrag automatisch besondere Momente (neuer
    Allzeit-Highscore, größte Klatsche aller Zeiten/des Turniers, neue
@@ -212,13 +212,13 @@
       case "finals":
         return { top: "DAS FINALE STEHT FEST", main: "🏆", bottom: `${record.p1} vs ${record.p2}` };
       case "champion":
-        return { top: "NEUER MADDEN BOWL CHAMPION", main: `${record.player}`, bottom: `Sieg gegen ${record.opponent} ${record.winnerScore}:${record.loserScore}` };
+        return { top: "NEUER ALTIMA BOWL CHAMPION", main: `${record.player}`, bottom: `Sieg gegen ${record.opponent} ${record.winnerScore}:${record.loserScore}` };
       case "storyMeme": {
         const caps = buildStoryCaptions(record);
         return { top: caps.top, main: record.score || "", bottom: caps.bottom };
       }
       default:
-        return { top: "MADDEN BOWL", main: "", bottom: "" };
+        return { top: "ALTIMA BOWL", main: "", bottom: "" };
     }
   }
 
@@ -279,7 +279,7 @@
     ctx.font = "26px sans-serif";
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.textAlign = "right";
-    ctx.fillText("🏈 Madden Bowl", canvas.width - 30, canvas.height - 30);
+    ctx.fillText("🏈 Altima Bowl", canvas.width - 30, canvas.height - 30);
 
     return canvas;
   }
@@ -292,11 +292,11 @@
   // WhatsApp als Option. Sonst Fallback: Bild-Download.
   async function shareOrDownloadMeme(canvas, filename) {
     const blob = await canvasToBlob(canvas);
-    const file = new File([blob], filename || "madden-bowl-meme.png", { type: "image/png" });
+    const file = new File([blob], filename || "altima-bowl-meme.png", { type: "image/png" });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: "Madden Bowl", text: "Schau dir das an! 🏈" });
+        await navigator.share({ files: [file], title: "Altima Bowl", text: "Schau dir das an! 🏈" });
         return "shared";
       } catch (e) {
         if (e.name === "AbortError") return "cancelled";
@@ -306,7 +306,7 @@
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = filename || "madden-bowl-meme.png";
+    a.href = url; a.download = filename || "altima-bowl-meme.png";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
     return "downloaded";
@@ -320,9 +320,9 @@
     try {
       const res = await fetch(url);
       const blob = await res.blob();
-      const file = new File([blob], filename || "madden-bowl-meme.jpg", { type: blob.type || "image/jpeg" });
+      const file = new File([blob], filename || "altima-bowl-meme.jpg", { type: blob.type || "image/jpeg" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Madden Bowl", text: "Schau dir das an! 🏈" });
+        await navigator.share({ files: [file], title: "Altima Bowl", text: "Schau dir das an! 🏈" });
         return "shared";
       }
     } catch (e) {
@@ -330,7 +330,7 @@
     }
     if (navigator.share) {
       try {
-        await navigator.share({ url, title: "Madden Bowl", text: "Schau dir das an! 🏈" });
+        await navigator.share({ url, title: "Altima Bowl", text: "Schau dir das an! 🏈" });
         return "shared-link";
       } catch (e) {
         if (e.name === "AbortError") return "cancelled";
@@ -366,15 +366,12 @@
   const IMGFLIP_TEMPLATE_POOLS = {
     allTimeHigh: [
       { id: 61544, name: "Success Kid", caption: (r) => ({ top: "NEW ALL-TIME HIGH SCORE", bottom: `${r.player}: ${r.value} POINTS` }) },
-      { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `${r.opponent}, WHEN ${String(r.player || "").toUpperCase()}`, bottom: `DROPS ${r.value} POINTS` }) },
-      { id: 28251713, name: "Oprah You Get A", caption: (r) => ({ top: `${r.player} GETS A POINT!`, bottom: `AND ANOTHER! ${r.value} POINTS FOR EVERYONE!` }) },
       { id: 181913649, name: "Drake Hotline Bling", caption: (r) => ({ top: "THE OLD HIGH SCORE", bottom: `${r.value} POINTS BY ${r.player}` }) },
       { id: 4087833, name: "Waiting Skeleton", caption: (r) => ({ top: `WAITING FOR SOMEONE TO BEAT ${r.player}'S ${r.value} POINTS`, bottom: "..." }) },
     ],
     allTimeMargin: [
       { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "IT'S FINE, TOTALLY IN CONTROL" }) },
       { id: 97984, name: "Disaster Girl", caption: (r) => ({ top: r.player, bottom: `AFTER THE ${r.winnerScore}-${r.loserScore} HUMILIATION OF ${r.opponent}` }) },
-      { id: 217743513, name: "UNO Draw 25 Cards", caption: (r) => ({ top: `${r.opponent} vs ${r.player}`, bottom: `DRAWS A ${r.winnerScore}-${r.loserScore}` }) },
       { id: 129242436, name: "Change My Mind", caption: (r) => ({ top: `${r.winnerScore}-${r.loserScore} IS THE BIGGEST BLOWOUT EVER.`, bottom: "Change my mind." }) },
     ],
     tournamentMargin: [
@@ -395,6 +392,7 @@
       { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.player} BEATS ${r.opponent}`, bottom: "I'M JUST SAYING: UPSET" }) },
       { id: 102156234, name: "Mocking Spongebob", caption: (r) => ({ top: `${r.opponent} BEFORE THE GAME: "iM wInNiNg tHiS eAsY"`, bottom: `${r.winnerScore}-${r.loserScore} FOR ${r.player}` }) },
       { id: 123999232, name: "The Scroll Of Truth", caption: (r) => ({ top: `${r.opponent} WASN'T EVEN THAT GOOD`, bottom: `AS THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player} SHOWS` }) },
+      { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.opponent} BEFORE KICKOFF`, bottom: `${r.opponent} AFTER LOSING ${r.winnerScore}-${r.loserScore} TO ${r.player}` }) },
     ],
     shutout: [
       { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AT ${r.loserScore} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL" }) },
@@ -409,15 +407,15 @@
       { id: 124055727, name: "Y'all Got Any More Of That", caption: (r) => ({ top: `${r.player} & ${r.opponent} AT ${r.winnerScore}-${r.loserScore}`, bottom: "Y'ALL GOT ANY MORE OF THAT OFFENSE?" }) },
     ],
     finals: [
-      { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} - BOTH WANT THE MADDEN BOWL` }) },
+      { id: 135256802, name: "Epic Handshake", caption: (r) => ({ top: r.p1, bottom: `${r.p2} - BOTH WANT THE ALTIMA BOWL` }) },
       { id: 101470, name: "Ancient Aliens", caption: (r) => ({ top: `${r.p1} VS ${r.p2} IN THE FINAL`, bottom: "I'M JUST SAYING: LEGENDARY" }) },
       { id: 110133729, name: "Spiderman Pointing At Spiderman", caption: (r) => ({ top: r.p1, bottom: `${r.p2} - MIRROR MATCH IN THE FINAL` }) },
       { id: 3218037, name: "This Is Where I'd Put My Trophy If I Had One", caption: (r) => ({ top: `${r.p1} AND ${r.p2}`, bottom: "FIGHTING FOR THE ONLY TROPHY SPOT" }) },
     ],
     champion: [
-      { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T LOSE FINALS OFTEN", bottom: `BUT NEITHER DOES ${String(r.player || "").toUpperCase()} (${r.winnerScore}-${r.loserScore})` }) },
+      { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T ALWAYS WIN THE ALTIMA BOWL", bottom: `BUT WHEN I DO, I'M ${String(r.player || "").toUpperCase()} (${r.winnerScore}-${r.loserScore})` }) },
       { id: 29617627, name: "Look At Me", caption: (r) => ({ top: "LOOK AT ME", bottom: `I AM THE NEW CHAMPION: ${r.player}` }) },
-      { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW MADDEN BOWL CHAMPION!" }) },
+      { id: 5496396, name: "Leonardo Dicaprio Cheers", caption: (r) => ({ top: `TO ${r.player}`, bottom: "THE NEW ALTIMA BOWL CHAMPION!" }) },
     ],
 
     // SAISONVERLAUF — Memes für die Power-Ranking-Artikel. Beziehen sich
@@ -510,7 +508,7 @@
 
     ctx.textAlign = "center"; ctx.fillStyle = "#b0b7bb";
     ctx.font = "30px Arial, Helvetica, sans-serif";
-    ctx.fillText("Madden Bowl", W / 2, H - 70);
+    ctx.fillText("Altima Bowl", W / 2, H - 70);
     return canvas;
   }
 
@@ -524,8 +522,8 @@
     // Fallback (z.B. beim erzwungenen Test mit fester Template-ID ohne Treffer im Pool).
     switch (record.type) {
       case "allTimeHigh": return { top: "NEW ALL-TIME HIGH SCORE", bottom: `${record.player}: ${record.value} POINTS` };
-      case "champion": return { top: "NEW MADDEN BOWL CHAMPION", bottom: `${record.player}` };
-      default: return { top: "MADDEN BOWL", bottom: "" };
+      case "champion": return { top: "NEW ALTIMA BOWL CHAMPION", bottom: `${record.player}` };
+      default: return { top: "ALTIMA BOWL", bottom: "" };
     }
   }
 
@@ -576,29 +574,22 @@
   // mindestens ein Häkchen setzt.
   // ======================================================================
   const MEME_CONTEXT_TAGS = {
-    ref_error: { label: "Klare Fehlentscheidung", emoji: "🤦" },
-    unfair_call: { label: "Unfaire Entscheidung", emoji: "🚩" },
-    controversial_call: { label: "Strittige Schiri-Entscheidung", emoji: "⚠️" },
-    complaint: { label: "Spieler beschwert sich", emoji: "🗣️" },
+    ref_blame: { label: "Schiri schuld", emoji: "🚩" },
     excuse: { label: "Absurdeste Ausrede", emoji: "🧠" },
     rage: { label: "Spieler sauer", emoji: "😤" },
-    ragequit: { label: "Ragequit", emoji: "💀" },
-    unexpected: { label: "Unerwartetes Ergebnis", emoji: "🤯" },
-    lucky_win: { label: "Glücklicher Sieg", emoji: "🎲" },
+    unexpected: { label: "Überraschung", emoji: "🤯" },
     hype: { label: "Übertriebener Hype", emoji: "📈" },
-    collapse: { label: "Kompletter Kollaps", emoji: "🫠" },
+    collapse: { label: "Führung verspielt", emoji: "🫠" },
     comeback: { label: "Comeback", emoji: "🔥" },
-    decision_game: { label: "Entscheidungsspiel", emoji: "🚨" },
+    decision_game: { label: "Playoff-Spiel", emoji: "🚨" },
   };
 
   // Kontext-Häkchen -> [Story-Kategorie, Priorität]. Bei mehreren Häkchen
   // gewinnt die höchste Priorität. Wird von detectStoryMeme() UND von der
   // Auslöser-Übersicht ("Memes testen") gelesen — nur hier pflegen.
   const STORY_TAG_RULES = {
-    ref_error: ["ref", 110], unfair_call: ["ref", 105], controversial_call: ["ref", 100], complaint: ["ref", 95],
-    excuse: ["excuse", 115], collapse: ["collapse", 105], comeback: ["comeback", 100],
-    ragequit: ["ragequit", 98], rage: ["ragequit", 90], hype: ["hype", 95],
-    lucky_win: ["upset", 88], unexpected: ["upset", 90], decision_game: ["decision_game", 82],
+    ref_blame: ["ref", 110], excuse: ["excuse", 115], collapse: ["collapse", 105], comeback: ["comeback", 100],
+    rage: ["ragequit", 90], hype: ["hype", 95], unexpected: ["upset", 90], decision_game: ["decision_game", 82],
   };
 
   const STORY_MEME_TEMPLATES = {
@@ -606,10 +597,8 @@
       { id: 21900001, name: "NFL Referee", caption: (r) => ({ top: "THE REF AFTER THAT CALL:", bottom: `${r.loser} still isn't over it` }) },
       { id: 129242436, name: "Change My Mind", caption: () => ({ top: "That was never a penalty.", bottom: "Change my mind." }) },
       { id: 61579, name: "One Does Not Simply", caption: (r) => ({ top: "ONE DOES NOT SIMPLY", bottom: `WIN AGAINST ${String(r.opponent || "").toUpperCase()} WITHOUT HELP FROM THE REFS` }) },
-      { id: 26961037, name: "NFL Ref", caption: () => ({ top: "THE REF, LOOKING RIGHT AT IT,", bottom: "STILL MAKES THE WRONG CALL" }) },
       { id: 44811986, name: "Logical Fallacy Referee NFL #85", caption: () => ({ top: "THAT WASN'T A PENALTY BECAUSE...", bottom: "(insert nonsense excuse here)" }) },
       { id: 114267372, name: "NFL Ref Flag", caption: (r) => ({ top: "THE FLAG IS ALREADY IN THE AIR", bottom: `BEFORE ${String(r.loser || "ANYONE").toUpperCase()} EVEN TOUCHED THE BALL` }) },
-      { id: 169261378, name: "NFL Ref – Call/Foul/Penalty", caption: () => ({ top: "PENALTY.", bottom: "NO, REALLY, THAT WAS A PENALTY." }) },
       { id: 567189276, name: "Blind Referees", caption: () => ({ top: "THE REFS", bottom: "SOMEHOW DIDN'T SEE THAT ONE" }) },
       { id: 632249784, name: "NFL Referee – False Start", caption: () => ({ top: "FALSE START", bottom: "ON EVERY SINGLE DRIVE, APPARENTLY" }) },
     ],
@@ -626,12 +615,11 @@
       { id: 268827476, name: "NY Giants Fans", caption: (r) => ({ top: `${r.loser} FANS`, bottom: `AFTER THE ${r.score} COLLAPSE` }) },
       { id: 75583105, name: "NFL MEME", caption: (r) => ({ top: `${r.loser} HAD THIS ONE WON`, bottom: `THEN THIS HAPPENED: ${r.score}` }) },
       { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.loser} EARLY IN THE GAME`, bottom: `${r.loser} AFTER THE ${r.score} COLLAPSE` }) },
+      { id: 208650053, name: "NFL Tackle", caption: (r) => ({ top: `${r.loser}'S COMEBACK ATTEMPT`, bottom: "TACKLED BEFORE IT EVEN STARTED" }) },
     ],
     comeback: [
       { id: 252600902, name: "Always Has Been", caption: (r) => ({ top: `WAIT, ${String(r.winner || "").toUpperCase()} CAME BACK FROM THAT?`, bottom: "ALWAYS HAS BEEN" }) },
       { id: 259237855, name: "Laughing Leo", caption: (r) => ({ top: `${r.winner} AFTER THE COMEBACK`, bottom: r.score }) },
-      { id: 91538330, name: "X, X Everywhere", caption: () => ({ top: "COMEBACKS,", bottom: "COMEBACKS EVERYWHERE" }) },
-      { id: 208650053, name: "NFL Tackle", caption: (r) => ({ top: `${r.loser}'S COMEBACK ATTEMPT`, bottom: "TACKLED BEFORE IT EVEN STARTED" }) },
     ],
     upset: [
       { id: 155067746, name: "Surprised Pikachu", caption: (r) => ({ top: `THE FAVORITE, AFTER LOSING TO ${String(r.winner || "").toUpperCase()}`, bottom: r.score }) },
@@ -669,30 +657,21 @@
       { id: 441850935, name: "Patrick Mahomes Thumbs Up", caption: (r) => ({ top: r.winner || "THE WINNER", bottom: "TOTALLY UNBOTHERED BY THE HYPE" }) },
     ],
     ragequit: [
-      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.loser, bottom: "RAGE QUITS AFTER ONE BAD DRIVE" }) },
-      { id: 61520, name: "Futurama Fry", caption: () => ({ top: "NOT SURE IF CONTROLLER BROKE", bottom: "OR SOMEONE JUST RAGE QUIT" }) },
+      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.loser, bottom: "GETS ANGRY AFTER ONE BAD DRIVE" }) },
+      { id: 61520, name: "Futurama Fry", caption: () => ({ top: "NOT SURE IF THE CONTROLLER BROKE", bottom: "OR SOMEONE JUST GOT REALLY MAD" }) },
+      { id: 627432492, name: "NFL Football", caption: (r) => ({ top: "ALTIMA BOWL,", bottom: `${String(r.loser || "SOMEONE").toUpperCase()} STILL ANGRY ABOUT THAT ONE` }) },
     ],
-    // "Entscheidungsspiel" deckt hier auch Finale/Champion-Momente ab (kein
+    // "Playoff-Spiel" (decision_game) deckt hier auch Finale/Champion-Momente ab (kein
     // eigener Kontext-Tag dafür — inhaltlich dasselbe: viel steht auf dem Spiel).
     decision_game: [
-      { id: 272113903, name: "Tom Brady 4th Down", caption: () => ({ top: "THE MADDEN BOWL FINAL,", bottom: "EVERYTHING ON ONE DRIVE" }) },
-      { id: 456538639, name: "Roger Goodell", caption: () => ({ top: "THE COMMISSIONER HANDING OVER", bottom: "THE MADDEN BOWL TROPHY" }) },
-      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ boxes: ["WHO WINS THE MADDEN BOWL FINAL?", r.opponent || "HIM", r.opponent || "HIM", r.opponent || "HIM", r.player || "OBVIOUSLY HIM"] }) },
-      { id: 627432492, name: "NFL Football", caption: (r) => ({ top: "MADDEN BOWL FINAL", bottom: `${r.player || r.winner || "ONE PLAYER"} WALKS AWAY CHAMPION` }) },
-      { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "EVEN THE CHAMPION", bottom: "DIDN'T SEE THAT FINAL COMING" }) },
-      { id: 127129121, name: "Tom Brady Angry", caption: (r) => ({ top: r.opponent || r.loser || "THE RUNNER-UP", bottom: "AFTER LOSING THE MADDEN BOWL FINAL" }) },
-      { id: 443004391, name: "Tom Brady", caption: (r) => ({ top: "NEW MADDEN BOWL CHAMPION:", bottom: r.player || r.winner || "TBD" }) },
-      { id: 489157989, name: "Taylor Swift Chiefs Game", caption: () => ({ top: "EVERYONE SUDDENLY WATCHING", bottom: "BECAUSE THE FINAL IS THAT BIG" }) },
+      { id: 456538639, name: "Roger Goodell", caption: (r) => ({ top: "THE COMMISSIONER AFTER THAT PLAYOFF GAME:", bottom: `"${String(r.winner || r.player || "THE WINNER").toUpperCase()} IS MOVING ON. NO FURTHER QUESTIONS."` }) },
+      { id: 165567092, name: "Who Wants To Be A Millionaire", caption: (r) => ({ boxes: ["WHO WINS THIS PLAYOFF GAME?", r.opponent || "HIM", r.opponent || "HIM", r.opponent || "HIM", r.player || "OBVIOUSLY HIM"] }) },
+      { id: 627432492, name: "NFL Football", caption: (r) => ({ top: "PLAYOFF GAME: ONE LOSS AND YOU'RE OUT", bottom: `${r.player || r.winner || "ONE PLAYER"} SURVIVES` }) },
+      { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "EVEN THE WINNER", bottom: "DIDN'T SEE THAT PLAYOFF GAME COMING" }) },
+      { id: 127129121, name: "Tom Brady Angry", caption: (r) => ({ top: r.opponent || r.loser || "THE LOSER", bottom: "AFTER LOSING THE PLAYOFF GAME" }) },
+      { id: 489157989, name: "Taylor Swift Chiefs Game", caption: () => ({ top: "EVERYONE SUDDENLY WATCHING", bottom: "BECAUSE THIS PLAYOFF GAME IS THAT BIG" }) },
     ],
-    general: [
-      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: "WELL, THAT HAPPENED.", bottom: r.score }) },
-      { id: 9340393, name: "NFL", caption: (r) => ({ top: "MADDEN BOWL MOMENT:", bottom: r.score || "" }) },
-      { id: 627432492, name: "NFL Football", caption: () => ({ top: "MADDEN BOWL,", bottom: "WEEK AFTER WEEK" }) },
-      { id: 75583105, name: "NFL MEME", caption: (r) => ({ top: "MADDEN BOWL:", bottom: r.score || "SOMETHING ALWAYS HAPPENS" }) },
-      { id: 363893507, name: "Tom Brady Surprised", caption: () => ({ top: "MADDEN BOWL", bottom: "NEVER FAILS TO SURPRISE" }) },
-      { id: 127129121, name: "Tom Brady Angry", caption: () => ({ top: "MADDEN BOWL PLAYERS", bottom: "AFTER ANY LOSS AT ALL" }) },
-      { id: 443004391, name: "Tom Brady", caption: () => ({ top: "MADDEN BOWL", bottom: "WHERE LEGENDS ARE MADE" }) },
-    ],
+
   };
 
   function storyScoreStr(record) {
@@ -727,14 +706,14 @@
   }
 
   function buildStoryCaptions(record) {
-    const key = record.storyKey || "general";
-    const pool = STORY_MEME_TEMPLATES[key] || STORY_MEME_TEMPLATES.general;
+    const key = record.storyKey || "close";
+    const pool = STORY_MEME_TEMPLATES[key] || STORY_MEME_TEMPLATES.close;
     const entry = record._storyEntry || pick(pool);
     return entry.caption(record);
   }
 
   function pickStoryTemplate(record, forcedId) {
-    const pool = STORY_MEME_TEMPLATES[record.storyKey] || STORY_MEME_TEMPLATES.general;
+    const pool = STORY_MEME_TEMPLATES[record.storyKey] || STORY_MEME_TEMPLATES.close;
     const entry = forcedId ? (pool.find((e) => e.id === forcedId) || pool[0]) : pick(pool);
     record._storyEntry = entry; // merkt sich die Wahl, damit Bild & Text zueinander passen
     return entry;
@@ -742,7 +721,7 @@
 
   // ======================================================================
   // SUPABASE-PERSISTENZ — damit Rekord-Momente auch auf einem zweiten
-  // Gerät (z.B. live.html?Altima am Handy) sichtbar sind, nicht nur lokal
+  // Gerät (z.B. im Dashboard am Handy) sichtbar sind, nicht nur lokal
   // im Browser des Admin-Laptops.
   // ======================================================================
   async function uploadMemeToStorage(canvas, tournamentId, recordType) {
@@ -817,11 +796,11 @@
   // AUSLÖSER-KATALOG — wofür/wann welche Memes entstehen. Speist die Reiter
   // in "Memes testen". Die Bedingungen spiegeln detectRecords(),
   // detectMilestoneRecords(), detectStoryMeme() und publishPowerRanking()
-  // (index.html) — bei Änderungen dort bitte hier nachziehen.
+  // (admin.html) — bei Änderungen dort bitte hier nachziehen.
   // source: { pool } = IMGFLIP_TEMPLATE_POOLS-Schlüssel, { story } =
   // STORY_MEME_TEMPLATES-Schlüssel, { canvas } = eigene Grafik ohne Imgflip.
   // ======================================================================
-  const PUBLISH_RECORD = "Popup direkt nach „Ergebnis speichern“ (auch live.html). Danach die Wahl: „📰 Eigener Beitrag“ (Kategorie „Rekord“, sofort) oder „📊 Ins nächste Power Ranking“ (Meme wird dort angehängt, vorgemerkt im Browser des Admins).";
+  const PUBLISH_RECORD = "Popup direkt nach „Ergebnis speichern“ (auch im Dashboard). Danach die Wahl: „📰 Eigener Beitrag“ (Kategorie „Rekord“, sofort) oder „📊 Ins nächste Power Ranking“ (Meme wird dort angehängt, vorgemerkt im Browser des Admins).";
   const PUBLISH_MILESTONE = "Kommt automatisch in den passenden Beitrag (Finale bzw. Champion), kein extra Beitrag. Der Beitrag erscheint, sobald das Meme fertig ist (ohne Meme spätestens nach ca. 25 Sekunden). Zum Teilen gibt es das Meme zusätzlich im Popup.";
   const PUBLISH_STORY = "Popup nach „Meme erzeugen“ (🔁 anderes Motiv, 📱 teilen). Dann die Wahl: „📰 Eigener Beitrag“ (Kategorie „Rekord“, Titel „🎭 Story-Meme“) oder „📊 Ins nächste Power Ranking“.";
   const MANUAL_HOW = "✨ neben dem Ergebnis → „🎭 Meme (mit Kontext-Auswahl)“ → passendes Häkchen setzen → „Meme erzeugen“.";
@@ -858,26 +837,24 @@
         when: `Beim Power Ranking (alle ${every} Spiele), aber nur wenn ein Cowboys-Spieler im Turnier ist und schon verloren hat. Die Liste wächst mit jeder weiteren Niederlage. Eigene Grafik, braucht kein Imgflip.`,
         publish: "Automatisch im nächsten Power-Ranking-Beitrag (kommt vor den Saison-Memes)." },
       // ---------------- manuell (Story) ----------------
-      { id: "story:ref", group: "manual", emoji: "🚩", label: "Schiri / Beschwerde", source: { story: "ref" }, tags: tagsFor("ref"),
+      { id: "story:ref", group: "manual", emoji: "🚩", label: "Schiri schuld", source: { story: "ref" }, tags: tagsFor("ref"),
         when: MANUAL_HOW, publish: PUBLISH_STORY },
       { id: "story:excuse", group: "manual", emoji: "🧠", label: "Ausrede", source: { story: "excuse" }, tags: tagsFor("excuse"),
         when: MANUAL_HOW, publish: PUBLISH_STORY },
-      { id: "story:collapse", group: "manual", emoji: "🫠", label: "Kollaps", source: { story: "collapse" }, tags: tagsFor("collapse"),
+      { id: "story:collapse", group: "manual", emoji: "🫠", label: "Führung verspielt", source: { story: "collapse" }, tags: tagsFor("collapse"),
         when: MANUAL_HOW, publish: PUBLISH_STORY },
       { id: "story:comeback", group: "manual", emoji: "🔥", label: "Comeback", source: { story: "comeback" }, tags: tagsFor("comeback"),
         when: MANUAL_HOW, publish: PUBLISH_STORY },
-      { id: "story:ragequit", group: "manual", emoji: "💀", label: "Ragequit / sauer", source: { story: "ragequit" }, tags: tagsFor("ragequit"),
+      { id: "story:ragequit", group: "manual", emoji: "💀", label: "Spieler sauer", source: { story: "ragequit" }, tags: tagsFor("ragequit"),
         when: MANUAL_HOW, publish: PUBLISH_STORY },
       { id: "story:hype", group: "manual", emoji: "📈", label: "Hype", source: { story: "hype" }, tags: tagsFor("hype"),
         when: MANUAL_HOW, publish: PUBLISH_STORY },
-      { id: "story:upset", group: "manual", emoji: "🤯", label: "Unerwartet / Glück", source: { story: "upset" }, tags: tagsFor("upset"),
-        when: MANUAL_HOW + " Nicht zu verwechseln mit dem automatischen Rekord „Überraschung“ (Setzliste).", publish: PUBLISH_STORY },
-      { id: "story:decision_game", group: "manual", emoji: "🚨", label: "Entscheidungsspiel", source: { story: "decision_game" }, tags: tagsFor("decision_game"),
-        when: MANUAL_HOW + " Deckt auch Finale/Champion-Momente ab.", publish: PUBLISH_STORY },
+      { id: "story:upset", group: "manual", emoji: "🤯", label: "Überraschung (manuell)", source: { story: "upset" }, tags: tagsFor("upset"),
+        when: MANUAL_HOW + " Nicht zu verwechseln mit dem automatischen Rekord „Überraschung“ (greift nur, wenn der Sieger in der Setzliste ≥ 3 Plätze schlechter stand). Das Häkchen deckt Überraschungen ab, die der Automatik entgehen.", publish: PUBLISH_STORY },
+      { id: "story:decision_game", group: "manual", emoji: "🚨", label: "Playoff-Spiel", source: { story: "decision_game" }, tags: tagsFor("decision_game"),
+        when: MANUAL_HOW + " Gedacht für Playoff-Spiele inkl. Finale; die Sprüche sprechen bewusst nur von „Playoff Game“.", publish: PUBLISH_STORY },
       { id: "story:close", group: "manual", emoji: "🤏", label: "Knappes Spiel (Fallback)", source: { story: "close" }, tags: [],
         when: "Nur manuell: Wie oben, aber ohne passendes Häkchen greift bei „Meme erzeugen“ ein Abstand ≤ 3 Punkte als knappes Spiel. Ein gesetztes Häkchen hat immer Vorrang. (Ein Blowout ≥ 21 Punkte erkennt dort ebenfalls noch der Fallback, falls er automatisch unterdrückt wurde.)", publish: PUBLISH_STORY },
-      { id: "story:general", group: "manual", emoji: "🧰", label: "Allgemein (Reserve)", source: { story: "general" }, tags: [],
-        when: "Wird aktuell von keinem Auslöser gewählt, nur als Rückfall, falls eine Story-Kategorie keine Vorlagen hätte.", publish: "—" },
     ];
   }
 

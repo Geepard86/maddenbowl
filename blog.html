@@ -3,26 +3,25 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl VI — Blog</title>
+<title>Altima Bowl VI — Blog</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Madden Bowl">
+<meta name="apple-mobile-web-app-title" content="Altima Bowl">
 <meta name="theme-color" content="#0B162A">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
 <script src="tipp.js"></script>
 <script src="blog.js"></script>
+<script src="comments.js"></script>
 <script src="ui.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  .v2-article { display:block; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; }
-  .v2-article-head { display:flex; gap:12px; align-items:flex-start; margin-bottom:8px; }
-  .v2-article-headtext { min-width:0; flex:1; }
+  .v2-article { display:flex; gap:12px; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; align-items:flex-start; }
   .v2-article img.thumb { width:88px; height:66px; object-fit:cover; border-radius:8px; flex-shrink:0; background:#0007; }
-  .v2-article-body { min-width:0; }
+  .v2-article-body { min-width:0; flex:1; }
   .v2-article-title { font-weight:900; font-size:0.98em; margin:2px 0 4px; }
   .v2-article-subtitle { font-size:0.82em; opacity:0.72; font-style:italic; margin:0 0 6px; }
   .v2-article-excerpt { font-size:0.84em; opacity:0.82; margin-bottom:6px; }
@@ -36,6 +35,19 @@
   .v2-article-highlight { outline: 2px solid var(--v2-gold); outline-offset: 3px; }
   .v2-article-full { font-size:0.86em; opacity:0.92; margin-bottom:6px; line-height:1.5; white-space:pre-line; }
   .v2-article-toggle { background:none; border:none; padding:0; margin-bottom:6px; font-size:0.75em; font-weight:700; color:var(--v2-gold); cursor:pointer; display:inline-block; }
+  .v2-cm-toggle { font-size:0.7em; padding:4px 10px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
+  .v2-cm-toggle:hover, .v2-cm-toggle.open { border-color:var(--v2-gold); color:var(--v2-gold); }
+  .v2-comments { margin-top:8px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid var(--v2-border); }
+  .v2-cm { padding:7px 0; border-top:1px solid rgba(255,255,255,.07); font-size:0.85em; line-height:1.4; }
+  .v2-cm:first-child { border-top:none; }
+  .v2-cm-head { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.8em; color:var(--v2-silver); margin-bottom:2px; }
+  .v2-cm-head b { color:var(--v2-gold); }
+  .v2-cm-del { background:none; border:none; color:var(--v2-silver); cursor:pointer; font-size:0.95em; opacity:.7; }
+  .v2-cm-body { white-space:pre-wrap; word-break:break-word; }
+  .v2-cm-form textarea { width:100%; box-sizing:border-box; min-height:58px; resize:vertical; margin-top:8px; }
+  .v2-cm-form .row { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:4px; font-size:0.75em; color:var(--v2-silver); }
+  .v2-cm-note { font-size:0.8em; color:var(--v2-silver); margin-top:8px; }
+  .v2-cm-err { color:#ff8a8a; font-size:0.8em; margin-top:4px; }
   .v2-article-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
   .v2-share-btn { font-size:0.7em; padding:4px 10px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
   .v2-share-btn:hover { border-color:var(--v2-gold); color:var(--v2-gold); }
@@ -49,7 +61,6 @@
   .v2-lightbox-share:disabled { opacity:0.6; cursor:default; }
   .v2-lightbox-hint { position:absolute; left:0; right:0; bottom:74px; text-align:center; color:#fff; font-size:0.8em; opacity:0.85; pointer-events:none; }
   .v2-article-media + .v2-article-media { margin-top:-2px; }
-  .v2-article-full .v2-article-media { margin:10px 0; }
 </style>
 </head>
 <body class="v2">
@@ -66,7 +77,7 @@
 </div>
 
 <script>
-  MB.UI.mountHeader({ active: 'blog', adminActive: 'blog', adminBack: true, showAdminLogin: true, onAdminChange: () => location.reload() });
+  MB.UI.mountHeader({ active: 'blog', showAdminLogin: true, onAdminChange: () => location.reload() });
   // Admin-Zugang läuft jetzt über den Login im Header statt über den alten
   // "?Altima"-Query-Parameter (siehe MB.UI.doAdminLogin in ui.js).
   const isAdmin = MB.UI.isAdminUnlocked();
@@ -80,23 +91,69 @@
     finals:       { label: 'Finale',          color: '#EF4444', image: 'assets/images/Blog_Finale.png' },
     champion:     { label: 'Champion',        color: '#22C55E', image: 'assets/images/Blog_Sieger.png' },
     song:         { label: 'Song',            color: '#3B82F6', image: 'assets/images/Blog_Song.png' },
-    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_Rueckblick.png' },
+    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_WhoIs.png' },
     spurious:     { label: 'Analyse',         color: '#A855F7', image: 'assets/images/Blog_SpuriousCorrelations.png' },
-    meme:         { label: 'Meme',            color: '#EC4899', image: 'assets/images/Blog_Meme.png' },
     manual:       { label: 'Community',       color: '#94A3B8', image: 'assets/images/Blog_WhoIs.png' },
   };
   function catMeta(kind) { return CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: 'assets/images/Blog_WhoIs.png' }; }
 
   let state = null, articles = [], activeTab = 'aktuell';
   const expandedIds = new Set();
+  // ---- Kommentare ----
+  const commentsByArticle = new Map(), openComments = new Set();
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function commentTime(iso) { try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
+  function threadHtml(id) {
+    const me = MB.UI.currentPlayer();
+    const list = commentsByArticle.get(String(id)) || [];
+    const items = list.length ? list.map(c => `<div class="v2-cm"><div class="v2-cm-head"><span><b>${esc(c.player_name)}</b> · ${commentTime(c.created_at)}</span>${(isAdmin || c.player_name === me) ? `<button class="v2-cm-del" title="Kommentar löschen" onclick="deleteComment('${c.id}','${id}')">🗑️</button>` : ''}</div><div class="v2-cm-body">${esc(c.body)}</div></div>`).join('')
+      : '<div class="v2-cm-note" style="margin:0;">Noch keine Kommentare — schreib den ersten!</div>';
+    const form = me ? `<div class="v2-cm-form"><textarea id="cmText-${id}" maxlength="${MB.Comments.MAX_LEN}" placeholder="Dein Kommentar als ${esc(me)} …" oninput="document.getElementById('cmCount-${id}').textContent=this.value.length+'/${MB.Comments.MAX_LEN}'"></textarea>
+        <div class="row"><span id="cmCount-${id}">0/${MB.Comments.MAX_LEN}</span><button class="v2-share-btn" onclick="postComment('${id}')">💬 Kommentieren</button></div><div class="v2-cm-err" id="cmErr-${id}"></div></div>`
+      : '<div class="v2-cm-note">Zum Kommentieren bitte oben rechts als Spieler einloggen.</div>';
+    const missing = MB.Comments.isTableMissing() ? '<div class="v2-cm-err">Kommentare sind noch nicht eingerichtet (Datenbank-Migration fehlt).</div>' : '';
+    return `${items}${form}${missing}`;
+  }
+  function refreshComments(id) {
+    const box = document.getElementById('cm-' + id); if (box) box.innerHTML = threadHtml(id);
+    const btn = document.getElementById('cmBtn-' + id); if (btn) btn.innerHTML = cmLabel(id);
+  }
+  const cmLabel = (id) => `💬 Kommentare (${(commentsByArticle.get(String(id)) || []).length}) ${openComments.has(String(id)) ? '▴' : '▾'}`;
+  function toggleComments(id) {
+    id = String(id); if (openComments.has(id)) openComments.delete(id); else openComments.add(id);
+    const box = document.getElementById('cm-' + id), btn = document.getElementById('cmBtn-' + id);
+    if (box) { box.style.display = openComments.has(id) ? '' : 'none'; if (openComments.has(id)) box.innerHTML = threadHtml(id); }
+    if (btn) { btn.innerHTML = cmLabel(id); btn.classList.toggle('open', openComments.has(id)); }
+  }
+  async function postComment(id) {
+    const me = MB.UI.currentPlayer(), ta = document.getElementById('cmText-' + id), err = document.getElementById('cmErr-' + id);
+    if (!ta) return; err.textContent = '';
+    try {
+      const c = await MB.Comments.add({ articleId: id, player: me, body: ta.value });
+      const arr = commentsByArticle.get(String(id)) || []; arr.push(c); commentsByArticle.set(String(id), arr);
+      refreshComments(id);
+      const total = await MB.Comments.countByPlayer(me);
+      MB.UI.withAchievements(A => A.track('comment_added', { total }));
+    } catch (e) { err.textContent = e.message || String(e); }
+  }
+  async function deleteComment(cid, aid) {
+    if (!confirm('Kommentar wirklich löschen?')) return;
+    try { await MB.Comments.remove(cid); const arr = (commentsByArticle.get(String(aid)) || []).filter(c => c.id !== cid); commentsByArticle.set(String(aid), arr); refreshComments(aid); }
+    catch (e) { alert('Löschen fehlgeschlagen: ' + e.message); }
+  }
+  // Sammelkarten: wie oft wird der eingeloggte Spieler in den Beiträgen namentlich erwähnt?
+  function countMentions() {
+    const me = MB.UI.currentPlayer(); if (!me || !articles.length) return;
+    const re = new RegExp('(^|[^A-Za-zÄÖÜäöüß])' + me.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-zÄÖÜäöüß]|$)', 'i');
+    const n = articles.filter(a => re.test(String((a.title || '') + ' ' + (a.body || '')).replace(/<[^>]+>/g, ' '))).length;
+    MB.UI.withAchievements(A => A.track('blog_mentions', { count: n }));
+  }
 
-  // TODO: nach dem Deployen des Cloudflare Workers hier die echte
-  // *.workers.dev-URL eintragen (siehe Anleitung), z.B.:
-  // "https://maddenbowl-share.deinaccount.workers.dev"
+  // Basis-URL des Cloudflare Workers, der geteilte Beiträge mit Link-Vorschau ausliefert
   const SHARE_BASE_URL = "https://altima-bowl.geepard86.workers.dev";
 
   function excerpt(text, n) {
-    const clean = (text || '').replace(/\[\[img:\d+\]\]/g, '').replace(/\s+/g, ' ').trim();
+    const clean = (text || '').replace(/\s+/g, ' ').trim();
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
   }
   function formatDate(dateStr) {
@@ -145,7 +202,7 @@
       const blob = await res.blob();
       const type = blob.type || 'image/png';
       const ext = type.includes('jpeg') ? 'jpg' : (type.split('/')[1] || 'png').split('+')[0];
-      const file = new File([blob], 'madden-bowl.' + ext, { type });
+      const file = new File([blob], 'altima-bowl.' + ext, { type });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
@@ -176,6 +233,7 @@
   });
 
   async function shareArticle(id, title, url) {
+    MB.UI.withAchievements(A => A.track('blog_share', { id }));
     const shareData = { title, url };
     if (navigator.share) {
       try { await navigator.share(shareData); return; } catch (e) { /* user cancelled or unsupported, fall through */ }
@@ -192,34 +250,20 @@
     // Weitere Bilder (z.B. Memes + Spurious-Correlation-Chart im Power Ranking)
     // liegen in data.extra_media als Liste von URLs.
     if (a.data && Array.isArray(a.data.extra_media)) a.data.extra_media.forEach(u => { if (u) imageUrls.push(u); });
-    const imgTag = u => `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`;
-    // Power Ranking: Text steht oben, die Bilder erscheinen dort im Text, wo
-    // ein Marker [[img:N]] steht (N = Position in imageUrls). Bilder ohne
-    // Marker folgen am Ende des Textes. Alle anderen Beitragsarten zeigen
-    // ihre Bilder wie bisher vor dem Text.
-    const textFirst = a.kind === 'progress';
-    const usedByMarker = new Set();
+    const media = imageUrls.map(u =>
+      `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`
+    ).join('');
     const adminBtns = isAdmin ? `
       <div class="v2-admin-actions">
         <button onclick="editArticle('${a.id}')">✏️ Bearbeiten</button>
         <button onclick="removeArticle('${a.id}')">🗑️ Löschen</button>
       </div>` : '';
-    const rawBody = (a.body || '');
-    const fullBody = textFirst
-      ? rawBody.replace(/\[\[img:(\d+)\]\]/g, (m, n) => {
-          const u = imageUrls[Number(n)];
-          if (!u) return '';
-          usedByMarker.add(Number(n));
-          return imgTag(u);
-        })
-      : rawBody.replace(/\[\[img:\d+\]\]/g, '');
-    const isLong = rawBody.replace(/\[\[img:\d+\]\]/g, '').replace(/\s+/g, ' ').trim().length > 160 || (textFirst && imageUrls.length > 0);
+    const fullBody = (a.body || '');
+    const isLong = fullBody.replace(/\s+/g, ' ').trim().length > 140;
     const isExpanded = expandedIds.has(String(a.id));
-    const leftoverImgs = imageUrls.filter((u, i) => !usedByMarker.has(i)).map(imgTag).join('');
-    const mediaBefore = textFirst ? '' : imageUrls.map(imgTag).join('');
     const bodyHtml = isExpanded
-      ? `<div class="v2-article-full">${fullBody}${textFirst ? leftoverImgs : ''}</div>`
-      : `<div class="v2-article-excerpt">${excerpt(rawBody, 160)}</div>`;
+      ? `<div class="v2-article-full">${fullBody}</div>`
+      : `<div class="v2-article-excerpt">${excerpt(fullBody, 140)}</div>`;
     const toggleBtn = isLong
       ? `<button class="v2-article-toggle" onclick="toggleArticle('${a.id}')">${isExpanded ? 'Weniger anzeigen ▴' : 'Mehr anzeigen ▾'}</button>`
       : '';
@@ -231,22 +275,22 @@
     const subtitle = (a.data && a.data.subtitle) ? `<div class="v2-article-subtitle">${a.data.subtitle}</div>` : '';
     return `
       <div class="v2-article" id="post-${a.id}">
-        <div class="v2-article-head">
-          <img class="thumb" src="${meta.image}" alt="" onerror="this.onerror=null;this.src='assets/images/Blog_WhoIs.png'">
-          <div class="v2-article-headtext">
-            <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
-            <div class="v2-article-title">${a.title || ''}</div>
-          </div>
-        </div>
+        <img class="thumb" src="${meta.image}" alt="">
         <div class="v2-article-body">
+          <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
+          <div class="v2-article-title">${a.title || ''}</div>
           ${subtitle}
-          ${mediaBefore}
+          ${media}
           ${bodyHtml}
           ${toggleBtn}
           <div class="v2-article-footer">
             <div class="v2-article-meta">📅 ${formatDate(a.created_at)}</div>
-            <button class="v2-share-btn" onclick="shareArticle('${a.id}', '${shareTitle}', '${shareUrl}')">📤 Teilen</button>
+            <span style="display:flex; gap:6px;">
+              <button class="v2-cm-toggle ${openComments.has(String(a.id)) ? 'open' : ''}" id="cmBtn-${a.id}" onclick="toggleComments('${a.id}')">${cmLabel(a.id)}</button>
+              <button class="v2-share-btn" onclick="shareArticle('${a.id}', '${shareTitle}', '${shareUrl}')">📤 Teilen</button>
+            </span>
           </div>
+          <div class="v2-comments" id="cm-${a.id}" style="${openComments.has(String(a.id)) ? '' : 'display:none;'}">${openComments.has(String(a.id)) ? threadHtml(a.id) : ''}</div>
           ${audio}
           ${adminBtns}
         </div>
@@ -265,7 +309,7 @@
         </div>
         <div style="font-size:0.7em; color:var(--v2-silver); margin-top:8px;">
           Weitere Admin-Werkzeuge (Rekord-Momente, Musik, Auslosung, Saisonrückblicke) findest du weiterhin unter
-          <a href="index.html" style="color:var(--v2-gold);">index.html</a> bzw.
+          <a href="admin.html" style="color:var(--v2-gold);">admin.html</a> bzw.
           <a href="seasons.html" style="color:var(--v2-gold);">seasons.html</a>.
         </div>
       </div>`;
@@ -349,11 +393,13 @@
 
   async function reload() {
     articles = await MB.Blog.fetchAllArticles(200);
+    try { (await MB.Comments.fetchForArticles(articles.map(a => a.id))).forEach((v, k) => commentsByArticle.set(k, v)); } catch (e) { /* Kommentare optional */ }
     // Neuester gesehener Beitrag -> Dashboard-Hinweis (siehe renderNoticeBanner)
     try { if (articles[0]) localStorage.setItem('mb_blog_seen', articles[0].created_at); } catch (e) {}
     applyDeepLinkTab();
     renderShell();
     scrollToDeepLinkedPost();
+    countMentions();
   }
 
   async function boot() {
@@ -361,7 +407,7 @@
       document.getElementById('app').innerHTML = `<div class="v2-card">Konnte Turnierdaten nicht laden. (${e.message})</div>`;
       return;
     }
-    MB.UI.setState(state);
+    MB.UI.setState(state, () => { renderList(); countMentions(); });
     await reload();
   }
 

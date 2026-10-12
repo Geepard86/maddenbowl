@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl VI — Spielplan</title>
+<title>Altima Bowl VI — Spielplan</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Madden Bowl">
+<meta name="apple-mobile-web-app-title" content="Altima Bowl">
 <meta name="theme-color" content="#0B162A">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -119,66 +119,22 @@
 
   let state = null, history = null, activeTab = 'tabelle';
 
-  // Odds/Titelchance/Insights je Match — 1:1 aus index.html übernommen
+  // Odds/Titelchance/Insights je Match — 1:1 aus admin.html übernommen
   // (dort renderMatchMeta), nutzt dieselben MB.*-Funktionen aus shared.js.
-  function renderMatchMeta(homeName, awayName, finished) {
-    const H = (homeName || '').trim();
-    const A = (awayName || '').trim();
-    if (!H || !A || !history) return '';
-
-    let odds;
-    try { odds = MB.computeOddsForMatch(history, state, H, A); } catch (e) { odds = null; }
-    if (!odds) return '';
-
-    const qHome = MB.decimalOdds(odds.pHome);
-    const qAway = MB.decimalOdds(odds.pAway);
-
-    const badges = [
-      `Quote: <b>${H}</b> ${qHome} &nbsp;|&nbsp; <b>${A}</b> ${qAway}`,
-      `O/U ${odds.ouLine}`,
-    ];
-
-    if (!finished) {
-      let titleOdds = {};
-      try { titleOdds = MB.computeTitleOdds(history, state) || {}; } catch (e) {}
-      const tHome = titleOdds[H] || 0;
-      const tAway = titleOdds[A] || 0;
-      badges.push(
-        `🏆 Titelchance: <b>${H}</b> ${tHome.toFixed(1)}% <span style="color:#aaa; font-weight:800;">→ +0.0%</span> &nbsp;|&nbsp; <b>${A}</b> ${tAway.toFixed(1)}% <span style="color:#aaa; font-weight:800;">→ +0.0%</span>`
-      );
-    }
-
-    const badgeHtml = badges.filter(Boolean).map(b => `
-      <div class="badge wide">${b}</div>
-    `).join('');
-
-    let insightsSection = '';
-    if (!finished) {
-      let insightsArr = [];
-      try { insightsArr = MB.pickFlavourFacts(history, state, H, A) || []; } catch (e) { insightsArr = []; }
-      const insightsHtml = insightsArr.slice(0, 3).map(t => `
-        <div style="margin-top:6px; padding:8px 10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); border-left:3px solid var(--accent); border-radius:8px; font-size:0.78em; line-height:1.25;">${t}</div>
-      `).join('');
-      insightsSection = insightsHtml ? `<div class="meta-insights">${insightsHtml}</div>` : '';
-    }
-
-    return `
-      <div class="match-meta">
-        <div class="meta-badges">${badgeHtml}</div>
-        ${insightsSection}
-      </div>`;
-  }
+  function renderMatchMeta(homeName, awayName, finished) { return MB.renderMatchMeta(state, history, homeName, awayName, finished, {}); }
 
   function renderTitleOdds() {
     if (!state.players || !state.players.length) return '<div class="empty">—</div>';
     const odds = MB.computeTitleOdds(history, state);
-    const sorted = [...state.players].map(p => ({ name: p.name, pct: odds[p.name] || 0 })).sort((a, b) => b.pct - a.pct);
+    const trend = MB.computeTitleOddsTrend(history, state);
+    const sorted = [...state.players].map(p => ({ name: p.name, pct: odds[p.name] || 0, t: trend[p.name] || { diff: 0, arrow: '→' } })).sort((a, b) => b.pct - a.pct);
     const max = Math.max(...sorted.map(x => x.pct), 1);
+    const col = (a) => (a === '↗' ? 'var(--accent, #3ddc84)' : a === '↘' ? 'var(--nfl-red, #d50a0a)' : '#aaa');
     return sorted.map(x => `
       <div class="title-row">
-        <span class="title-name">${x.name}</span>
+        <span class="title-name">${MB.escHtml(x.name)}</span>
         <div class="title-bar-bg"><div class="title-bar-fill" style="width:${(x.pct / max * 100).toFixed(0)}%"></div></div>
-        <span class="title-pct">${x.pct.toFixed(1)}%</span>
+        <span class="title-pct">${x.pct.toFixed(1)}% <span style="color:${col(x.t.arrow)}; font-weight:800; font-size:0.8em;" title="Veränderung seit dem letzten Ergebnis">${x.t.arrow} ${x.t.diff >= 0 ? '+' : ''}${x.t.diff.toFixed(1)}%</span></span>
       </div>`).join('');
   }
 
@@ -223,9 +179,10 @@
   let groupDetailRows = [];
   let playoffDetailRows = [];
 
-  function openMatchDetail(p1Name, p2Name, played, metaLine) {
+  function openMatchDetail(p1Name, p2Name, played, metaLine, kickoffInfo) {
     document.getElementById('matchDetailTitle').textContent = `${p1Name} vs ${p2Name}`;
-    document.getElementById('matchDetailMeta').textContent = metaLine || '';
+    document.getElementById('matchDetailMeta').textContent = [metaLine, kickoffInfo].filter(Boolean).join('\n');
+    document.getElementById('matchDetailMeta').style.whiteSpace = 'pre-line';
     document.getElementById('matchDetailContent').innerHTML =
       renderMatchMeta(p1Name, p2Name, played) || '<div class="empty">Keine Zusatzinfos verfügbar.</div>';
     document.getElementById('matchDetailModal').classList.add('open');
@@ -234,12 +191,12 @@
   function openGroupMatchDetail(i) {
     const d = groupDetailRows[i];
     if (!d) return;
-    openMatchDetail(d.p1Name, d.p2Name, d.played, d.metaLine);
+    openMatchDetail(d.p1Name, d.p2Name, d.played, d.metaLine, d.kickoffInfo);
   }
   function openPlayoffMatchDetail(i) {
     const d = playoffDetailRows[i];
     if (!d) return;
-    openMatchDetail(d.p1Name, d.p2Name, d.played, d.metaLine);
+    openMatchDetail(d.p1Name, d.p2Name, d.played, d.metaLine, d.kickoffInfo);
   }
 
   function renderGroupSchedule() {
@@ -261,7 +218,7 @@
       const timeLabel = played ? 'Beendet' : `${time} Uhr`;
 
       const detailIdx = groupDetailRows.length;
-      groupDetailRows.push({ p1Name: p1.name, p2Name: p2.name, played, metaLine: `${timeLabel}${stadium ? ' · ' + stadium : ''}` });
+      groupDetailRows.push({ p1Name: p1.name, p2Name: p2.name, played, metaLine: `${timeLabel}${stadium ? ' · ' + stadium : ''}`, kickoffInfo: MB.describeKickoff(liveEntry, m) });
 
       return renderMatchRow({
         p1Name: p1.name, p2Name: p2.name, p1Team: p1.team, p2Team: p2.team,
@@ -296,7 +253,7 @@
         let onClick = null;
         if (isRealMatchup) {
           const detailIdx = playoffDetailRows.length;
-          playoffDetailRows.push({ p1Name, p2Name, played, metaLine: `${timeLabel}${stadium ? ' · ' + stadium : ''}` });
+          playoffDetailRows.push({ p1Name, p2Name, played, metaLine: `${timeLabel}${stadium ? ' · ' + stadium : ''}`, kickoffInfo: m ? MB.describeKickoff(liveEntry, m) : '' });
           onClick = `openPlayoffMatchDetail(${detailIdx})`;
         }
 
@@ -381,7 +338,7 @@
             <div class="lower-floor" style="justify-content:center;">${renderM(m[12], 12, playoffLabels.lf.p1, playoffLabels.lf.p2)}${renderM(findId('tb'), idxOf('tb'), playoffLabels.tb.p1, playoffLabels.tb.p2)}</div>
           </div>
           <div class="bracket-column" style="margin-left:10px; border-left:2px solid var(--v2-red); padding-left:12px;">
-            <div class="column-header"><div class="bracket-title" style="border-color:gold">Madden Bowl</div></div>
+            <div class="column-header"><div class="bracket-title" style="border-color:gold">Altima Bowl</div></div>
             <div class="upper-floor" style="justify-content:center; height:100%;">${renderM(findId('gf'), idxOf('gf'), playoffLabels.gf.p1, playoffLabels.gf.p2)}</div>
           </div>
         </div>

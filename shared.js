@@ -1,11 +1,11 @@
 /* =========================================================================
-   MADDEN BOWL — SHARED CORE (shared.js)
+   ALTIMA BOWL — SHARED CORE (shared.js)
    -------------------------------------------------------------------------
-   Gemeinsam genutzt von: index.html, wettbuero.html, live.html
+   Gemeinsam genutzt von: admin.html, wettbuero.html, index.html
    Enthält: Cloud-Sync, Zeit-Engine, Quoten-Engine, Flavour-Facts-Engine,
    Ranking-Engine, generische Helper.
 
-   WICHTIG — Bugfixes gegenüber der alten index.html:
+   WICHTIG — Bugfixes gegenüber der alten admin.html:
    1) REFRESH-BUG: fetchCloudState() erzwingt jetzt "no-store" + einen
       Cache-Busting-Query-Parameter (?_=timestamp). Vorher wurde beim reinen
       Read-Sync (`syncData()` ohne isUpload) OHNE Cache-Control geladen,
@@ -83,7 +83,7 @@
     { session: "Survival Round", ids: ["lb3", "lb4"] },
     { session: "Finals", ids: ["uf", "ls"] },
     { session: "Judgement Day", ids: ["lf", "tb"] },
-    { session: "Madden Bowl", ids: ["gf"] },
+    { session: "Altima Bowl", ids: ["gf"] },
   ];
 
   // ======================================================================
@@ -91,8 +91,8 @@
   // -------------------------------------------------------------------------
   // WICHTIG: fetchCloudState()/pushCloudState() liefern/erwarten weiterhin
   // exakt dieselbe `state`-Objektform wie vorher (players/matches/slots/
-  // playoffMatches/config/wettbuero) — dadurch mussten index.html,
-  // wettbuero.html und live.html für die Migration NICHT angefasst werden,
+  // playoffMatches/config/wettbuero) — dadurch mussten admin.html,
+  // wettbuero.html und index.html für die Migration NICHT angefasst werden,
   // nur diese eine Übersetzungsschicht hier.
   // ======================================================================
   const SUPABASE_URL = "https://ylleuggomnktcjyiowtv.supabase.co";
@@ -117,6 +117,161 @@
   function emptyState() {
     return { players: [], matches: [], slots: [], playoffMatches: [], config: {}, currentView: "setup" };
   }
+
+  // Speichert Spiel-Zeilen inkl. finished_at. Fehlt die Spalte in der Datenbank noch (Migration
+  // supabase-migration-finished-at.sql nicht eingespielt), wird OHNE den Zeitstempel erneut
+  // gespeichert, damit das Eintragen von Ergebnissen nie daran scheitert.
+  let _finishedAtColumnMissing = false;
+  async function upsertWithFinishedAtFallback(sb, table, rows, onConflict) {
+    const strip = (rs) => rs.map(({ finished_at, ...rest }) => rest);
+    if (_finishedAtColumnMissing) { const { error } = await sb.from(table).upsert(strip(rows), { onConflict }); if (error) throw error; return; }
+    const { error } = await sb.from(table).upsert(rows, { onConflict });
+    if (!error) return;
+    if (/finished_at/i.test(error.message || "") || error.code === "PGRST204" || error.code === "42703") {
+      console.warn("Spalte finished_at fehlt in " + table + " — bitte supabase-migration-finished-at.sql ausführen. Speichere vorerst ohne Zeitstempel.");
+      _finishedAtColumnMissing = true;
+      const retry = await sb.from(table).upsert(strip(rows), { onConflict });
+      if (retry.error) throw retry.error;
+      return;
+    }
+    throw error;
+  }
+  function isFinishedAtPersistenceMissing() { return _finishedAtColumnMissing; }
+
+  // ---------------------------------------------------------------------------
+  // Zustand kopieren / Tabelle neu rechnen / Titelchancen-TREND
+  // (früher: Kopien in replay.js und ein Vorher-Stand nur im Admin-Browser)
+  // ---------------------------------------------------------------------------
+  // Tiefe Kopie mit erhaltenen Referenzen (slots <-> matches, Playoff-Spieler <-> players).
+  function cloneStateDeep(src) {
+    const players = (src.players || []).map((p) => ({ ...p }));
+    const byId = new Map(players.map((p) => [p.id, p]));
+    const matches = (src.matches || []).map((m) => ({ ...m }));
+    const idxOf = new Map((src.matches || []).map((m, i) => [m, i]));
+    const slots = (src.slots || []).map((s) => s.map((m) => matches[idxOf.get(m)]).filter(Boolean));
+    const mapP = (p) => (!p ? null : (p.id === -1 ? { ...p } : (byId.get(p.id) || { ...p })));
+    const playoffMatches = (src.playoffMatches || []).map((m) => ({ ...m, p1: mapP(m.p1), p2: mapP(m.p2) }));
+    return { ...src, players, matches, slots, playoffMatches, config: { ...(src.config || {}) } };
+  }
+  // Gleiche Logik wie renderTable() im Admin: Siege/Differenz/Punkte aus den Gruppenspielen.
+  function recomputeStandings(st) {
+    st.players.forEach((p) => { p.wins = 0; p.diff = 0; p.pointsFor = 0; p.played = 0; });
+    st.matches.forEach((m) => {
+      if (m.s1 !== null && m.s2 !== null && m.s1 !== undefined && m.s2 !== undefined) {
+        const a = st.players[m.p1], b = st.players[m.p2];
+        a.played++; b.played++; a.pointsFor += m.s1; b.pointsFor += m.s2;
+        a.diff += (m.s1 - m.s2); b.diff += (m.s2 - m.s1);
+        if (m.s1 > m.s2) a.wins++; else if (m.s2 > m.s1) b.wins++;
+      }
+    });
+  }
+  // Jüngstes eingetragenes Ergebnis: nach finishedAt, sonst letztes Playoff-Spiel, sonst letztes Gruppenspiel in Spielreihenfolge.
+  function findLastFinishedResult(state) {
+    const done = (m) => m && m.s1 !== null && m.s2 !== null && m.s1 !== undefined && m.s2 !== undefined;
+    const cands = [];
+    (state.matches || []).forEach((m, i) => { if (done(m)) cands.push({ kind: "g", i, m, order: i }); });
+    (state.playoffMatches || []).forEach((m, i) => { if (done(m) && m.p1 && m.p2 && m.p1.id !== -1 && m.p2.id !== -1) cands.push({ kind: "p", i, m, order: 10000 + i }); });
+    if (!cands.length) return null;
+    const ts = (c) => (c.m.finishedAt ? Date.parse(c.m.finishedAt) : NaN);
+    const timed = cands.filter((c) => !isNaN(ts(c)));
+    if (timed.length) return timed.sort((a, b) => ts(b) - ts(a) || b.order - a.order)[0];
+    const po = cands.filter((c) => c.kind === "p"); if (po.length) return po[po.length - 1];
+    const slotOrder = new Map(); (state.slots || []).forEach((s, si) => s.forEach((m, pi) => slotOrder.set(m, si * 10 + pi)));
+    return cands.sort((a, b) => (slotOrder.has(b.m) ? slotOrder.get(b.m) : b.order) - (slotOrder.has(a.m) ? slotOrder.get(a.m) : a.order))[0];
+  }
+  // Titelchance JETZT und VOR dem letzten Ergebnis (rein aus dem Stand berechnet — kein Zwischenspeicher nötig,
+  // gilt auf jeder Seite und nach dem Neuladen). In den Playoffs wird nur dieses eine Ergebnis zurückgenommen,
+  // spätere Paarungen bleiben besetzt: dort ist der Trend leicht ungenau.
+  const _trendCache = { key: "", val: null };
+  function computeTitleOddsTrend(history, state) {
+    const last = findLastFinishedResult(state);
+    const key = [state.players.length, last ? last.kind + last.i + (last.m.finishedAt || "") + last.m.s1 + ":" + last.m.s2 : "-",
+      state.matches.filter((m) => m.s1 != null && m.s2 != null).length].join("|");
+    if (_trendCache.key === key && _trendCache.hist === history && _trendCache.val) return _trendCache.val;
+    const nowOdds = computeTitleOdds(history, state) || {};
+    let prevOdds = nowOdds;
+    if (last) {
+      const prev = cloneStateDeep(state);
+      const pm = last.kind === "g" ? prev.matches[last.i] : prev.playoffMatches[last.i];
+      pm.s1 = null; pm.s2 = null;
+      if (last.kind === "g") recomputeStandings(prev);
+      try { prevOdds = computeTitleOdds(history, prev) || nowOdds; } catch (e) { prevOdds = nowOdds; }
+    }
+    const out = {};
+    state.players.forEach((p) => {
+      const now = nowOdds[p.name] || 0, before = prevOdds[p.name] != null ? prevOdds[p.name] : now, diff = now - before;
+      out[p.name] = { now, prev: before, diff, arrow: diff > 0.8 ? "↗" : diff < -0.8 ? "↘" : "→" };
+    });
+    _trendCache.key = key; _trendCache.hist = history; _trendCache.val = out;
+    return out;
+  }
+  function makeTitleTrendFn(history, state) {
+    let trend = null; try { trend = computeTitleOddsTrend(history, state); } catch (e) { trend = null; }
+    return (name) => (trend && trend[name]) || { diff: 0, arrow: "→" };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Gemeinsame Hilfsfunktionen (früher doppelt in ui.js, admin.html bzw. hall_of_fame.html)
+  // ---------------------------------------------------------------------------
+  function escHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  async function sha256Hex(str) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  // ---------------------------------------------------------------------------
+  // QUOTEN-/INSIGHT-ANZEIGE EINES SPIELS (früher dreimal: index, spielplan, admin)
+  // Liefert das HTML für Quote, O/U, Titelchance (nur offene Spiele) und Insights.
+  // opts:
+  //   titleTrend       Funktion(name) -> { now?, diff, arrow } | false (kein Pfeil) | weglassen = echter Trend
+  //                    (Titelchance jetzt vs. vor dem letzten Ergebnis, siehe computeTitleOddsTrend)
+  //   inlineBadges     true = Badges mit Inline-Style (Admin), sonst CSS-Klasse "badge wide"
+  //   wrapperStyle     optionaler Style für den äußeren Container
+  // ---------------------------------------------------------------------------
+  function renderMatchMeta(state, history, homeName, awayName, finished, opts) {
+    opts = opts || {};
+    const H = (homeName || "").trim(), A = (awayName || "").trim();
+    if (!H || !A || !history) return "";
+    let odds;
+    try { odds = computeOddsForMatch(history, state, H, A); } catch (e) { odds = null; }
+    if (!odds) return "";
+    const eH = escHtml(H), eA = escHtml(A);
+    const badges = [
+      `Quote: <b>${eH}</b> ${decimalOdds(odds.pHome)} &nbsp;|&nbsp; <b>${eA}</b> ${decimalOdds(odds.pAway)}`,
+      `O/U ${odds.ouLine}`,
+    ];
+    if (!finished) {
+      let titleOdds = {};
+      try { titleOdds = computeTitleOdds(history, state) || {}; } catch (e) { /* ohne Titelchance weiter */ }
+      // titleTrend: Funktion = eigener Trend, false = nur Prozentwert ohne Pfeil, sonst echter Trend aus dem Stand
+      const trendFn = typeof opts.titleTrend === "function" ? opts.titleTrend : (opts.titleTrend === false ? null : makeTitleTrendFn(history, state));
+      const trendOf = (name) => {
+        let t = { now: titleOdds[name] || 0, diff: 0, arrow: "→" };
+        if (trendFn) { try { t = Object.assign(t, trendFn(name) || {}); } catch (e) { /* Standard */ } }
+        return t;
+      };
+      const color = (arrow) => (arrow === "↗" ? "var(--accent, #3ddc84)" : arrow === "↘" ? "var(--nfl-red, #d50a0a)" : "#aaa");
+      const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
+      const part = (name, label) => { const t = trendOf(name); const tail = trendFn ? ` <span style="color:${color(t.arrow)}; font-weight:800;">${t.arrow} ${fmtDelta(t.diff)}</span>` : ""; return `<b>${label}</b> ${t.now.toFixed(1)}%${tail}`; };
+      badges.push(`🏆 Titelchance: ${part(H, eH)} &nbsp;|&nbsp; ${part(A, eA)}`);
+    }
+    const badgeStyle = "display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border:1px solid rgba(255,255,255,0.10); background:rgba(0,0,0,0.22); border-radius:999px; font-size:0.72em; line-height:1.2; white-space:nowrap;";
+    const badgeHtml = badges.filter(Boolean).map((b) => (opts.inlineBadges ? `<div style="${badgeStyle}">${b}</div>` : `<div class="badge wide">${b}</div>`)).join("");
+    let insightsSection = "";
+    if (!finished) {
+      let arr = [];
+      try { arr = pickFlavourFacts(history, state, H, A) || []; } catch (e) { arr = []; }
+      const html = arr.slice(0, 3).map((t) => `<div style="margin-top:6px; padding:8px 10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); border-left:3px solid var(--accent); border-radius:8px; font-size:0.78em; line-height:1.25;">${t}</div>`).join("");
+      insightsSection = html ? `<div class="meta-insights">${html}</div>` : "";
+    }
+    return `<div class="match-meta"${opts.wrapperStyle ? ` style="${opts.wrapperStyle}"` : ""}><div class="meta-badges">${badgeHtml}</div>${insightsSection}</div>`;
+  }
+
+  // Ältere Datenbankzeilen tragen für das Finale noch den früheren Turniernamen — nur lesend auf den
+  // heutigen Namen abbilden (der gespeicherte Wert bleibt, bis das Turnier das nächste Mal gespeichert wird).
+  function normalizeLegacyPhase(v) { return v === "Madden Bowl" ? "Altima Bowl" : v; }
 
   async function fetchCloudState() {
     const sb = getSupabaseClient();
@@ -155,7 +310,7 @@
     const playerByIdx = new Map(players.map((p) => [p.id, p]));
 
     const matchesRaw = (gmRes.data || []).sort((a, b) => a.idx - b.idx);
-    const matches = matchesRaw.map((r) => ({ p1: r.p1_idx, p2: r.p2_idx, s1: r.s1, s2: r.s2 }));
+    const matches = matchesRaw.map((r) => ({ p1: r.p1_idx, p2: r.p2_idx, s1: r.s1, s2: r.s2, finishedAt: r.finished_at || null }));
 
     // state.slots aus slot_index/slot_position rekonstruieren (die App braucht
     // dieselben Objekt-Referenzen wie in state.matches, kein Klon!)
@@ -167,10 +322,10 @@
     const slots = [...slotsMap.keys()].sort((a, b) => a - b).map((k) => slotsMap.get(k).filter(Boolean));
 
     const playoffMatches = (pmRes.data || []).map((r) => ({
-      id: r.match_key, phase: r.phase, session: r.session, offset: 0,
+      id: r.match_key, phase: normalizeLegacyPhase(r.phase), session: normalizeLegacyPhase(r.session), offset: 0,
       p1: r.p1_is_bye ? { id: -1, name: "BYE", team: null } : (r.p1_idx != null ? playerByIdx.get(r.p1_idx) || null : null),
       p2: r.p2_is_bye ? { id: -1, name: "BYE", team: null } : (r.p2_idx != null ? playerByIdx.get(r.p2_idx) || null : null),
-      s1: r.s1, s2: r.s2,
+      s1: r.s1, s2: r.s2, finishedAt: r.finished_at || null,
     }));
 
     // "wettbuero" trägt hier nur noch die Login-Accounts (Name -> PIN).
@@ -219,10 +374,9 @@
       const rows = state.matches.map((m, idx) => {
         const slotIndex = (state.slots || []).findIndex((slot) => slot.includes(m));
         const slotPosition = slotIndex >= 0 ? state.slots[slotIndex].indexOf(m) : 0;
-        return { tournament_id: tid, idx, slot_index: Math.max(0, slotIndex), slot_position: slotPosition, p1_idx: m.p1, p2_idx: m.p2, s1: m.s1, s2: m.s2 };
+        return { tournament_id: tid, idx, slot_index: Math.max(0, slotIndex), slot_position: slotPosition, p1_idx: m.p1, p2_idx: m.p2, s1: m.s1, s2: m.s2, finished_at: m.finishedAt || null };
       });
-      const { error } = await sb.from("group_matches").upsert(rows, { onConflict: "tournament_id,idx" });
-      if (error) throw error;
+      await upsertWithFinishedAtFallback(sb, "group_matches", rows, "tournament_id,idx");
     }
 
     if (state.playoffMatches && state.playoffMatches.length) {
@@ -230,10 +384,9 @@
         tournament_id: tid, match_key: m.id, seq, phase: m.phase, session: m.session,
         p1_idx: (m.p1 && m.p1.id !== -1) ? m.p1.id : null, p1_is_bye: !!(m.p1 && m.p1.id === -1),
         p2_idx: (m.p2 && m.p2.id !== -1) ? m.p2.id : null, p2_is_bye: !!(m.p2 && m.p2.id === -1),
-        s1: m.s1, s2: m.s2,
+        s1: m.s1, s2: m.s2, finished_at: m.finishedAt || null,
       }));
-      const { error } = await sb.from("playoff_matches").upsert(rows, { onConflict: "tournament_id,match_key" });
-      if (error) throw error;
+      await upsertWithFinishedAtFallback(sb, "playoff_matches", rows, "tournament_id,match_key");
     }
 
     // Nur noch Login-Accounts (PIN) synchronisieren — bets/settledRounds
@@ -318,6 +471,53 @@
 
     const results = await Promise.all(seasonPromises);
     return results.filter(Boolean);
+  }
+
+  // Lädt das ZULETZT ABGESCHLOSSENE Turnier (höchstes Jahr) komplett als state-Objekt
+  // (gleiche Form wie fetchCloudState) plus die Historie aus den Saisons DAVOR.
+  // Wird für die Test-Funktionen (Song-Fakten, Ansagen-/Blog-Testlauf) genutzt,
+  // damit sie mit echten Daten statt mit Platzhaltern arbeiten.
+  async function fetchLastCompletedTournament() {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error("Supabase-Client nicht verfügbar");
+    const { data: tRows, error: tErr } = await sb
+      .from("tournaments").select("*").eq("status", "completed")
+      .order("year", { ascending: false }).order("created_at", { ascending: false }).limit(1);
+    if (tErr) throw tErr;
+    if (!tRows || !tRows.length) return null;
+    const t = tRows[0];
+    const [playersRes, gmRes, pmRes] = await Promise.all([
+      sb.from("players").select("*").eq("tournament_id", t.id).order("idx"),
+      sb.from("group_matches").select("*").eq("tournament_id", t.id).order("idx"),
+      sb.from("playoff_matches").select("*").eq("tournament_id", t.id).order("seq"),
+    ]);
+    for (const r of [playersRes, gmRes, pmRes]) if (r.error) throw r.error;
+
+    const players = (playersRes.data || []).map((r) => ({
+      id: r.idx, name: r.name, team: r.team, wins: r.wins, diff: r.diff, pointsFor: r.points_for, played: r.played,
+    }));
+    const playerByIdx = new Map(players.map((p) => [p.id, p]));
+    const matchesRaw = (gmRes.data || []).sort((a, b) => a.idx - b.idx);
+    const matches = matchesRaw.map((r) => ({ p1: r.p1_idx, p2: r.p2_idx, s1: r.s1, s2: r.s2, finishedAt: r.finished_at || null }));
+    const slotsMap = new Map();
+    matchesRaw.forEach((r, i) => {
+      if (!slotsMap.has(r.slot_index)) slotsMap.set(r.slot_index, []);
+      slotsMap.get(r.slot_index)[r.slot_position] = matches[i];
+    });
+    const slots = [...slotsMap.keys()].sort((a, b) => a - b).map((k) => slotsMap.get(k).filter(Boolean));
+    const playoffMatches = (pmRes.data || []).map((r) => ({
+      id: r.match_key, phase: normalizeLegacyPhase(r.phase), session: normalizeLegacyPhase(r.session), offset: 0,
+      p1: r.p1_is_bye ? { id: -1, name: "BYE", team: null } : (r.p1_idx != null ? playerByIdx.get(r.p1_idx) || null : null),
+      p2: r.p2_is_bye ? { id: -1, name: "BYE", team: null } : (r.p2_idx != null ? playerByIdx.get(r.p2_idx) || null : null),
+      s1: r.s1, s2: r.s2, finishedAt: r.finished_at || null,
+    }));
+    const state = {
+      config: t.config || {}, players, matches, slots, playoffMatches,
+      wettbuero: { accounts: {}, bets: [], settledRounds: [] }, currentView: "running", songs: t.songs || {},
+    };
+    const allSeasons = await loadHistorySeasons();
+    const priorSeasons = allSeasons.filter((s) => (s.season || 0) < (t.year || 0));
+    return { state, history: buildHistoryIndex(priorSeasons), priorSeasons, year: t.year, tournamentId: t.id };
   }
 
   async function loadAndBuildHistory() {
@@ -511,8 +711,8 @@
   }
 
   // EINZIGE Quelle für "welche Spiele stehen als Nächstes an, mit Zeit,
-  // Stadion, Teams" — wird von index.html (Next-Games-Box + KI-Ansage),
-  // wettbuero.html (wettbare Spiele) und live.html (Live-Tracking) gemeinsam
+  // Stadion, Teams" — wird von admin.html (Next-Games-Box + KI-Ansage),
+  // wettbuero.html (wettbare Spiele) und index.html (Live-Tracking) gemeinsam
   // genutzt, statt (wie vorher) an 4 Stellen separat nachgebaut zu werden.
   function getUpcomingMatches(state, opts = {}) {
     const { excludePlayerName = null, limit = Infinity } = opts;
@@ -581,6 +781,13 @@
   // matchId-Format identisch zu getUpcomingMatches(): `g-<index>` / `p-<id>`.
   const KICKOFF_LOCK_BUFFER_MINUTES = 5;
 
+  // Puffer zwischen Ergebnis-Eintrag und nächstem Kickoff auf demselben Feld (Standard 5 Min.,
+  // per state.config.kickoffBuffer z.B. auf 10 stellbar).
+  function getKickoffBuffer(state) {
+    const b = Number(state && state.config && state.config.kickoffBuffer);
+    return Number.isFinite(b) && b >= 0 && b <= 60 ? b : KICKOFF_LOCK_BUFFER_MINUTES;
+  }
+
   function timeStrToMinutes(timeStr) {
     const [h, m] = String(timeStr).split(":").map(Number);
     return h * 60 + m;
@@ -642,7 +849,7 @@
 
         if (entry.match.finishedAt) {
           const fin = new Date(entry.match.finishedAt);
-          runningMin = (fin.getHours() * 60 + fin.getMinutes()) + KICKOFF_LOCK_BUFFER_MINUTES;
+          runningMin = (fin.getHours() * 60 + fin.getMinutes()) + getKickoffBuffer(state);
           anchorIsReal = true;
         } else {
           runningMin += entry.durationMin;
@@ -651,6 +858,22 @@
     });
 
     return { byMatchId, drift };
+  }
+
+  // Detailtext für Spiel-Infos (Klick auf ein Spiel): tatsächlicher Kickoff, geplante Zeit und
+  // Vorsprung/Verzug. entry = byMatchId.get(...), match = state-Match (für finishedAt).
+  function describeKickoff(entry, match) {
+    if (!entry) return "";
+    const diff = timeStrToMinutes(entry.time) - timeStrToMinutes(entry.plannedTime);
+    const fin = match && match.finishedAt ? new Date(match.finishedAt) : null;
+    const played = match && match.s1 != null && match.s2 != null;
+    if (played) {
+      return fin ? `Ergebnis eingetragen um ${String(fin.getHours()).padStart(2, "0")}:${String(fin.getMinutes()).padStart(2, "0")} Uhr` : "";
+    }
+    if (!entry.isReal) return `Kickoff voraussichtlich ${entry.time} Uhr (laut Plan)`;
+    const abs = Math.abs(diff);
+    const delta = diff === 0 ? "genau im Plan" : `${abs} Min. ${diff > 0 ? "im Verzug" : "voraus"}`;
+    return `Kickoff ${entry.time} Uhr · geplant ${entry.plannedTime} Uhr · ${delta}`;
   }
 
   // Kurzer, fertig formatierter Text fürs UI, z.B.
@@ -867,7 +1090,7 @@
   // werden - das wäre bei jedem neuen/geänderten Textbaustein hier eine
   // stille Fehlerquelle. pickFlavourFacts() bleibt als abwärtskompatibler
   // Wrapper (nur Text, Top 2) für die bestehenden Anzeige-Stellen
-  // (index.html/live.html/music.js) unverändert erhalten.
+  // (admin.html/index.html/music.js) unverändert erhalten.
   function pickFlavourFactsTyped(history, state, homePlayer, awayPlayer) {
     const H = normName(homePlayer), A = normName(awayPlayer);
     if (!H || !A) return [];
@@ -952,7 +1175,7 @@
   }
 
   // Abwärtskompatibler Wrapper: nur Text, wie bisher auf max. 2 Einträge
-  // begrenzt. Wird weiterhin von index.html/live.html/music.js für die
+  // begrenzt. Wird weiterhin von admin.html/index.html/music.js für die
   // sichtbaren Insight-Badges genutzt - deren Verhalten/Formatierung ändert
   // sich durch die Typisierung oben nicht.
   function pickFlavourFacts(history, state, homePlayer, awayPlayer) {
@@ -986,7 +1209,7 @@
   const PLAYOFF_SPOTS = 8;
 
   // Echte K.o.-Spiele im Doppel-Elimination-Bracket (siehe initPlayoffs() /
-  // elimOrder in index.html): wer hier verliert, ist raus aus dem Turnier.
+  // elimOrder in admin.html): wer hier verliert, ist raus aus dem Turnier.
   // ub1-ub4 (Wildcard) und us1/us2 (Upper Semi) sind KEINE K.o.-Spiele - der
   // Verlierer rutscht dort nur ins Lower Bracket und spielt weiter. "gf"
   // (Finale) und "tb" (Platzierungsspiel) haben eigene Ansagen/Artikel
@@ -1403,7 +1626,7 @@
   // APP-CONFIG (generische Key-Value-Ablage in Supabase für geräteübergreifende
   // Einstellungen — Tabelle: app_config(key text primary key, value text).
   // Start: Admin-Passwort-Hash; später auch Ziel für Regeln/Settings aus
-  // index.html, die aktuell noch pro Browser in localStorage liegen.
+  // admin.html, die aktuell noch pro Browser in localStorage liegen.
   // ======================================================================
   async function getAppConfig(key) {
     const sb = getSupabaseClient();
@@ -1529,11 +1752,12 @@
     loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
     getAppConfig, setAppConfig,
     computeRingIntroBadges, computeTeamTitleHistory,
-    loadHistorySeasons, loadAndBuildHistory, buildHistoryIndex,
+    loadHistorySeasons, loadAndBuildHistory, buildHistoryIndex, fetchLastCompletedTournament,
     normName, pairKey, computeDraftOrder, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
-    computeLiveKickoffSchedule, formatScheduleDriftText,
+    escHtml, sha256Hex, renderMatchMeta, cloneStateDeep, recomputeStandings, computeTitleOddsTrend, makeTitleTrendFn,
+    computeLiveKickoffSchedule, formatScheduleDriftText, describeKickoff, getKickoffBuffer, isFinishedAtPersistenceMissing,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
     pickFlavourFactsTyped, getAnnouncerResultImpacts, computeBiggestRivalry, computeCurrentStreakInfo,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,

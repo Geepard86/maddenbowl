@@ -1,5 +1,5 @@
 /* =========================================================================
-   MADDEN BOWL — ANNOUNCER (announcer.js)
+   ALTIMA BOWL — ANNOUNCER (announcer.js)
    -------------------------------------------------------------------------
    Erzeugt aus Quoten, Namen, Flavour-Facts eine launige Gameshow-Ansage für
    ein gerade beendetes Spiel + die kommende Partie, und liest sie per
@@ -7,7 +7,7 @@
    als Text angezeigt, nur gesprochen.
 
    Voraussetzung: shared.js ist vorher geladen (window.MB).
-   Nutzung (in index.html, im setScore-Handler):
+   Nutzung (in admin.html, im setScore-Handler):
      MB.Announcer.announce({ state, history, finishedMatchId, homeName,
                               awayName, homeScore, awayScore, homeTeam, awayTeam });
    ========================================================================= */
@@ -123,6 +123,22 @@
   // Auswahl der Ankündigung kommt aus MB.computeRingIntroBadges() (shared.js),
   // Priorität: Champion > Serien-Champion > Rekordhalter > Contender >
   // Toilet-Bowl-Sieger > Rookie > Routinier (Fallback).
+  // ----------------------------------------------------------------------
+  // SPITZNAMEN (nur für den Ring-Ansager): steht ein Spitzname im Turnier-Setup
+  // (state.config.nicknames, gepflegt unter Seasons), spricht Enzo ihn VOR dem Namen.
+  // ----------------------------------------------------------------------
+  let _nicknames = {};
+  function setNicknames(map) { _nicknames = (map && typeof map === "object") ? { ...map } : {}; }
+  function getNickname(name) {
+    const key = String(name || "").trim().toLowerCase();
+    const k = Object.keys(_nicknames).find((x) => x.trim().toLowerCase() === key);
+    return k ? String(_nicknames[k] || "").trim() : "";
+  }
+  function ringName(name) {
+    const nick = getNickname(name);
+    return nick ? `${nick} ${speechName(name)}` : speechName(name);
+  }
+
   // ======================================================================
   const RING_INTRO_PREFIXES = [
     "Und hier kommt er:",
@@ -169,7 +185,7 @@
   // formatPacingForModel für die modellabhängige Pausen-Behandlung).
   function buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId } = {}) {
     if (!badge) return "";
-    const n = speechName(badge.name);
+    const n = ringName(badge.name);
     const prefix = isFirstPick ? RING_INTRO_FIRST_PICK_PREFIX : (isLastPick ? RING_INTRO_LAST_PICK_PREFIX : pick(RING_INTRO_PREFIXES));
     const announcement = ringAnnouncementFor(badge);
     if (isV3Model(modelId)) {
@@ -250,7 +266,7 @@
     return parts.join(" ");
   }
 
-  // speakerIndex: 0 = Kommentator, 1 = Moderator (im Wechsel von index.html gesteuert)
+  // speakerIndex: 0 = Kommentator, 1 = Moderator (im Wechsel von admin.html gesteuert)
   async function announceTeamPick(text, speakerIndex, gate) {
     if (!text) return;
     const settings = getTtsSettings();
@@ -297,7 +313,7 @@
   // herleiten, daher: Default "im" (deckt die meisten Fälle wie "...-Stadion"
   // oder "...Field" ab) mit Möglichkeit, pro Stadion eine andere Präposition
   // zu übergeben (z.B. "in der" für "Energiequelle") - siehe Admin-Konfig in
-  // index.html. Bereits vorhandene Präpositionen werden nicht verdoppelt.
+  // admin.html. Bereits vorhandene Präpositionen werden nicht verdoppelt.
   function stadiumPhrase(stadium, preposition) {
     if (!stadium) return "";
     const s = String(stadium).trim();
@@ -332,7 +348,7 @@
       // sonst wäre jede beliebige Erstpaarung automatisch "die größte".
       if (!rivalry || rivalry.count < 3) return null;
       if (rivalry.pairKey !== MB.pairKey(homeName, awayName)) return null;
-      return { type: "rivalry", text: `Das ist mit ${rivalry.count} Spielen die meistgespielte Partie der Madden-Bowl-Geschichte.`, score: 13 };
+      return { type: "rivalry", text: `Das ist mit ${rivalry.count} Spielen die meistgespielte Partie der Altima-Bowl-Geschichte.`, score: 13 };
     } catch (e) { return null; }
   }
 
@@ -355,7 +371,7 @@
     } catch (e) { return null; }
   }
 
-  // Runde Gesamtspielzahl in der Madden-Bowl-Geschichte (Historie + laufendes
+  // Runde Gesamtspielzahl in der Altima-Bowl-Geschichte (Historie + laufendes
   // Turnier bis inkl. dem gerade beendeten Spiel) - reine Trivia, alle 50 Spiele.
   function buildRoundNumberFact(history, state) {
     try {
@@ -363,7 +379,7 @@
       const curCount = MB.getCurrentMatchesNormalized(state).filter((m) => m.homeScore != null && m.awayScore != null).length;
       const total = histCount + curCount;
       if (total > 0 && total % 50 === 0) {
-        return { type: "milestone", text: `Nebenbei: Das war gerade Spiel Nummer ${total} in der gesamten Madden-Bowl-Geschichte.`, score: 14 };
+        return { type: "milestone", text: `Nebenbei: Das war gerade Spiel Nummer ${total} in der gesamten Altima-Bowl-Geschichte.`, score: 14 };
       }
     } catch (e) {}
     return null;
@@ -411,7 +427,7 @@
     const opponent = rec.opponent ? speechName(rec.opponent) : "";
     switch (rec.type) {
       case "allTimeMargin":
-        return `Das ist die größte Klatsche der gesamten Madden-Bowl-Geschichte!`;
+        return `Das ist die größte Klatsche der gesamten Altima-Bowl-Geschichte!`;
       case "tournamentMargin":
         return `Das ist der bisher größte Blowout dieses Turniers!`;
       case "allTimeHigh":
@@ -514,7 +530,7 @@
     }
 
     // Song-Meilenstein, der GENAU JETZT (im selben Score-Commit) entschieden
-    // wurde - siehe index.html/promptSongMomentPopup(). Nur wenn tatsächlich
+    // wurde - siehe admin.html/promptSongMomentPopup(). Nur wenn tatsächlich
     // ein Song generiert wurde, sonst kein Wort darüber. Der Song selbst wird
     // separat über announceSong() angesagt/abgespielt (eigene Intro-Zeile).
     if (songGenerated) {
@@ -547,15 +563,15 @@
   ];
   // Sonderfälle: Toilet Bowl und Finale sind kein normales Spiel und
   // verdienen keine 08/15-Ansage. `phase` kommt 1:1 aus MB.getUpcomingMatches()
-  // (state.playoffMatches[i].phase, z.B. "Toilet Bowl"/"Madden Bowl").
+  // (state.playoffMatches[i].phase, z.B. "Toilet Bowl"/"Altima Bowl").
   const SPECIAL_PHASE_LEAD_INS = {
     "Toilet Bowl": [
       "Es geht um die rote Laterne: als Nächstes die Toilet Bowl zwischen {away} und {home}",
       "Niemand will dieses Spiel gewinnen - jetzt die Toilet Bowl zwischen {away} und {home}",
     ],
-    "Madden Bowl": [
+    "Altima Bowl": [
       "Das Finale! {away} gegen {home} um den Titel",
-      "Jetzt geht's um alles: {away} gegen {home} im großen Finale, dem Madden Bowl",
+      "Jetzt geht's um alles: {away} gegen {home} im großen Finale, dem Altima Bowl",
     ],
   };
   // Gelegentlicher kleiner Konnektor vor dem Fakt, statt immer nahtlos
@@ -667,7 +683,7 @@
     return text
       // Dezimalzahlen für deutsche TTS (Anforderungen 23/24/25) - NUR hier im
       // Sprachpfad, nicht in shared.js/one(), damit die sichtbaren
-      // Insight-Texte auf index.html/live.html/music.js unverändert bleiben.
+      // Insight-Texte auf admin.html/index.html/music.js unverändert bleiben.
       // "42.0"/"42,0" -> "zweiundvierzig" (keine unnötige Nachkommastelle).
       // Nachkommastellen werden EINZELN gesprochen ("1,39" -> "eins Komma
       // drei neun"), nicht als zusammengesetzte Zahl ("neununddreißig") -
@@ -886,40 +902,38 @@
   // ======================================================================
   // TURNIERSTART-INTRO (Anforderungen 26-28) — beide Rollen stellen sich mit
   // den aktuell konfigurierten Namen vor, Teilnehmernamen kommen 1:1 aus dem
-  // Aufrufer (index.html reicht state.players.map(p => p.name) durch).
+  // Aufrufer (admin.html reicht state.players.map(p => p.name) durch).
   // ======================================================================
-  async function _announceTournamentStartNow({ athleteNames, context } = {}) {
+  // Texte der Turnier-/Draft-Eröffnung als [{role, text}] — gemeinsam genutzt von der
+  // echten Ansage und vom Testlauf (Transkript), damit beide nie auseinanderlaufen.
+  function getTournamentStartSegments({ athleteNames, context } = {}) {
     const names = getSpeakerNames();
+    // Draft-Night-Intro: Kommentator und Moderation übergeben sich den Satz
+    // ("... neben mir sitzt…" / "…Mona!"), daher bewusst keine Namensliste.
+    if (context === "draft") {
+      return [
+        { role: "commentator", text: `Guten Abend und herzlich willkommen zur Altima Bowl Draft Night! Ich bin ${names.commentator}, und neben mir sitzt…` },
+        { role: "moderator", text: `…${names.moderator}! Heute Abend werden die Slots gezogen und die Teams vergeben. Wer erwischt den Top-Pick, wer muss mit dem Rest leben?` },
+        { role: "commentator", text: "Allen Athletinnen und Athleten, viel Erfolg am Controller. Und nun: Lasset den Draft beginnen!" },
+      ];
+    }
+    const segments = [
+      { role: "commentator", text: `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!` },
+      { role: "moderator", text: `${names.moderator} begleitet euch durch den Abend.` },
+    ];
+    const athletes = (athleteNames || []).filter(Boolean).map(speechName);
+    if (athletes.length) segments.push({ role: "commentator", text: `Allen Athletinnen und Athleten, ${athletes.join(", ")}, viel Erfolg am Controller!` });
+    return segments;
+  }
+
+  async function _announceTournamentStartNow({ athleteNames, context } = {}) {
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
     const resultVoice = useElevenLabs ? settings.voiceIdResult : null;
     const previewVoice = useElevenLabs ? settings.voiceIdPreview : null;
-
-    // Draft-Night-Intro: Kommentator und Moderation übergeben sich den Satz
-    // ("... neben mir sitzt…" / "…Mona!"), daher bewusst keine Namensliste.
-    if (context === "draft") {
-      await speakSequence([
-        { text: `Guten Abend und herzlich willkommen zur Altima Bowl Draft Night! Ich bin ${names.commentator}, und neben mir sitzt…`, voiceId: resultVoice, role: "commentator" },
-        { text: `…${names.moderator}! Heute Abend werden die Slots gezogen und die Teams vergeben. Wer erwischt den Top-Pick, wer muss mit dem Rest leben?`, voiceId: previewVoice, role: "moderator" },
-        { text: "Allen Athletinnen und Athleten, viel Erfolg am Controller. Und nun: Lasset den Draft beginnen!", voiceId: resultVoice, role: "commentator" },
-      ]);
-      return;
-    }
-
-    const welcomeText = `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`;
-    const segments = [
-      { text: welcomeText, voiceId: resultVoice, role: "commentator" },
-      { text: `${names.moderator} begleitet euch durch den Abend.`, voiceId: previewVoice, role: "moderator" },
-    ];
-    const athletes = (athleteNames || []).filter(Boolean).map(speechName);
-    if (athletes.length) {
-      segments.push({
-        text: `Allen Athletinnen und Athleten, ${athletes.join(", ")}, viel Erfolg am Controller!`,
-        voiceId: resultVoice,
-        role: "commentator",
-      });
-    }
-    await speakSequence(segments);
+    await speakSequence(getTournamentStartSegments({ athleteNames, context }).map((seg) => ({
+      text: seg.text, role: seg.role, voiceId: seg.role === "moderator" ? previewVoice : resultVoice,
+    })));
   }
 
   function announceTournamentStart(args) {
@@ -953,11 +967,39 @@
     ],
   };
 
-  async function _announceSongNow(milestone, url, { voiceId } = {}) {
+  // Sprechtexte der Song-Ansage (Kommentator-Anmoderation + Moderator "Am Mikrofon") als [{role,text}].
+  function getSongAnnounceSegments(milestone, performers) {
+    const intro = pick(SONG_ANNOUNCE_INTROS[milestone] || ["Dazu gibt's jetzt extra einen Song, hört mal rein:"]);
+    const segs = [{ role: "commentator", text: intro }];
+    if (performers && performers.length) {
+      const pn = performers.map((p) => speechName(p.name));
+      const micLine = performers[0] && performers[0].host ? `Und wir schalten live ins Studio zu ${pn[0]}!` : (pn.length === 1 ? `Am Mikrofon: ${pn[0]}!` : `Am Mikrofon: ${pn[0]} und ${pn[1]}!`);
+      segs.push({ role: "moderator", text: micLine });
+    }
+    return segs;
+  }
+
+  async function _announceSongNow(milestone, url, { voiceId, performers, target, players, record } = {}) {
     if (!url) return;
     const settings = getTtsSettings();
     const spokenVoiceId = settings.provider === "elevenlabs" ? (voiceId || settings.voiceIdResult || settings.voiceIdPreview) : null;
+    const modVoiceId = settings.provider === "elevenlabs" ? (settings.voiceIdPreview || spokenVoiceId) : null;
     const intro = pick(SONG_ANNOUNCE_INTROS[milestone] || ["Dazu gibt's jetzt extra einen Song, hört mal rein:"]);
+
+    // TV-Bühne (song-stage.js): Kommentatoren in der Booth + Musikvideo mit Rapper-Figur(en).
+    // Gilt für Spieler-Songs (Performer bekannt); der Recap-Song nutzt vorerst den klassischen Ablauf.
+    if (global.MB.SongStage && performers && performers.length) {
+      const pn = performers.map((p) => speechName(p.name));
+      const micLine = performers[0] && performers[0].host ? `Und wir schalten live ins Studio zu ${pn[0]}!` : (pn.length === 1 ? `Am Mikrofon: ${pn[0]}!` : `Am Mikrofon: ${pn[0]} und ${pn[1]}!`);
+      const shown = await global.MB.SongStage.play({
+        milestone, url, performers, target, players, record,
+        speakIntro: () => speakSequence([
+          { text: intro, voiceId: spokenVoiceId, role: "commentator" },
+          { text: micLine, voiceId: modVoiceId, role: "moderator" },
+        ]),
+      });
+      if (shown) return; // null = Bühne nicht verfügbar -> klassischer Fallback unten
+    }
     await speakSequence([{ text: intro, voiceId: spokenVoiceId }]);
     await playAudioUrl(url); // fertiges Audio (Supabase-URL) — kein TTS mehr nötig
   }
@@ -991,7 +1033,7 @@
     const heading = (n, title) => { lines.push(""); lines.push("=".repeat(70)); lines.push(`${n}. ${title}`); lines.push("=".repeat(70)); };
     const note = (text) => lines.push(`   (${text})`);
 
-    lines.push("MADDEN BOWL ANNOUNCER — TESTLAUF MIT FIKTIVEN DATEN");
+    lines.push("ALTIMA BOWL ANNOUNCER — TESTLAUF MIT FIKTIVEN DATEN");
     lines.push(`Erzeugt am ${new Date().toLocaleString("de-DE")}`);
     lines.push(`Sprecher: Kommentator = ${names.commentator}, Moderator = ${names.moderator}`);
     lines.push("Hinweis: Zahlen stehen hier schon in der gesprochenen Form (z.B. Quoten als 'eins Komma ...').");
@@ -1077,7 +1119,7 @@
       const state = fakeState(["Alex", "Marco"]);
       const r = buildResultLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Jonas", awayName: "Marco", homeScore: 17, awayScore: 27, stadium: "Altima Field", matchKind: "playoff", matchId: "uf" });
       say("commentator", r.line);
-      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Marco", time: "20:00", stadium: "Altima Field", stadiumPreposition: "im", phase: "Madden Bowl", usedFactTypes: r.usedFactTypes, songMilestone: "finals", songGenerated: true }));
+      say("moderator", buildUpcomingLine({ state, history: FAKE_HISTORY_EMPTY, homeName: "Alex", awayName: "Marco", time: "20:00", stadium: "Altima Field", stadiumPreposition: "im", phase: "Altima Bowl", usedFactTypes: r.usedFactTypes, songMilestone: "finals", songGenerated: true }));
       note(`[Song-Intro] ${pick(SONG_ANNOUNCE_INTROS.finals)} [Song wird hier abgespielt]`);
     }
 
@@ -1141,7 +1183,7 @@
   }
 
 
-  // Wird z.B. in index.html aus finishScoreUpdate() OHNE await aufgerufen.
+  // Wird z.B. in admin.html aus finishScoreUpdate() OHNE await aufgerufen.
   // Wenn kurz hintereinander zwei Spiele fertig werden, laufen dadurch zwei
   // announce()-Aufrufe parallel. Für die kostenlose Browser-Stimme wäre das
   // egal (speechSynthesis hat eine eigene interne Warteschlange), aber im
@@ -1176,8 +1218,9 @@
     getTtsSettings, setTtsSettings, fetchElevenLabsVoices, speakElevenLabs, speakSmart,
     speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
     getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
-    buildDryRunTranscript,
+    buildDryRunTranscript, getTournamentStartSegments, getSongAnnounceSegments,
     buildRingIntroLine, announceRingIntro, buildTeamPickLine, announceTeamPick,
+    setNicknames, getNickname,
     onSpeak,
   };
 })(window);

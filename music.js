@@ -1,5 +1,5 @@
 /* =========================================================================
-   MADDEN BOWL — MUSIC (music.js)
+   ALTIMA BOWL — MUSIC (music.js)
    -------------------------------------------------------------------------
    Generiert an fünf Meilensteinen (Regular Season beendet, erstes
    Ausscheiden, Toilet Bowl entschieden, Finals stehen fest, Turniersieger
@@ -10,8 +10,10 @@
    Jeder Meilenstein hat einen eigenen "Modus", der die Textrichtung prägt
    (siehe MODE_DIRECTIVES): "recap" (reimende Zusammenfassung des bisherigen
    Turnierverlaufs inkl. Tabelle), "hype" (Hype-Anthem), "brag" (Sieger
-   rappt großspurig aus der Ich-Perspektive) und "diss" (Disstrack für die
-   Toilet-Bowl-Verlierer). Vor dem eigentlichen Generieren lassen sich pro
+   rappt großspurig aus der Ich-Perspektive), "victor" (der Besieger des ersten Ausgeschiedenen
+   rappt aus der Ich-Perspektive), "self" (der Toilet-Bowl-Letzte
+   rappt selbstironisch über sich und kündigt sein Comeback an) und "diss"
+   (Disstrack, aktuell keinem Moment zugeordnet). Vor dem eigentlichen Generieren lassen sich pro
    Song Stil, die mitgegebenen Fakten (Text), Sprache, Dauer und ein
    Testmodus (kein API-Call, keine Credits) anpassen — siehe
    generateAndStoreSong().
@@ -56,8 +58,8 @@
   // wie die Fakten unten in ein Songkonzept übersetzt werden.
   const MILESTONE_META = {
     regularSeason: { label: "Regular Season beendet", mode: "recap", defaultStyleId: "conscious" },
-    firstElimination: { label: "Erstes Ausscheiden", mode: "hype", defaultStyleId: "drill" },
-    toiletBowl: { label: "Toilet Bowl entschieden", mode: "diss", defaultStyleId: "drill" },
+    firstElimination: { label: "Erstes Ausscheiden", mode: "victor", defaultStyleId: "drill" },
+    toiletBowl: { label: "Toilet Bowl entschieden", mode: "self", defaultStyleId: "drill" },
     finals: { label: "Finals stehen fest", mode: "hype", defaultStyleId: "trap" },
     champion: { label: "Turniersieger steht fest", mode: "brag", defaultStyleId: "rage" },
   };
@@ -121,13 +123,13 @@
       const table = buildStandingsTable(state, seedByName, lang);
       const best = biggestGroupWin(state);
       if (lang === "de") {
-        let facts = `Die Regular Season eines Fantasy-Football-Turniers namens Madden Bowl ist gerade zu Ende gegangen. ` +
+        let facts = `Die Regular Season eines Fantasy-Football-Turniers namens Altima Bowl ist gerade zu Ende gegangen. ` +
           `Hier die komplette Abschlusstabelle, vom besten zum schlechtesten Seed: ${table}. `;
         if (best) facts += `Der deutlichste Sieg der Saison war ${best.winner.name}s ${best.winnerScore}:${best.loserScore} gegen ${best.loser.name}. `;
         facts += `Die Playoffs beginnen gleich, gesetzt genau in dieser Reihenfolge.`;
         return facts;
       }
-      let facts = `The regular season of a fantasy football tournament called the Madden Bowl just wrapped up. ` +
+      let facts = `The regular season of a fantasy football tournament called the Altima Bowl just wrapped up. ` +
         `Here is the complete final regular-season standings table, from best to worst seed: ${table}. `;
       if (best) facts += `The most dominant win of the season was ${best.winner.name} crushing ${best.loser.name} ${best.winnerScore}-${best.loserScore}. `;
       facts += `The playoffs are about to begin, seeded exactly in this order.`;
@@ -140,13 +142,13 @@
       const eliminatedMatch = MB.loserOf(lb1) ? lb1 : lb2;
       const winner = MB.winnerOf(eliminatedMatch);
       if (lang === "de") {
-        let facts = `In einem Fantasy-Football-Turnier namens Madden Bowl ist gerade der allererste Spieler aus den Playoffs ausgeschieden. `;
+        let facts = `In einem Fantasy-Football-Turnier namens Altima Bowl ist gerade der allererste Spieler aus den Playoffs ausgeschieden. `;
         if (loser) facts += `${loser.name}, mit den ${loser.team}, ist als Erster raus, `;
         if (winner) facts += `ausgeschieden gegen ${winner.name} (${winner.team}) mit einem Ergebnis von ${eliminatedMatch.s1}:${eliminatedMatch.s2}. `;
         facts += `Der Titeltraum endet hier, während alle anderen eine weitere Runde überleben.`;
         return facts;
       }
-      let facts = `In a fantasy football tournament called the Madden Bowl, the very first player has just been eliminated from the playoffs. `;
+      let facts = `In a fantasy football tournament called the Altima Bowl, the very first player has just been eliminated from the playoffs. `;
       if (loser) facts += `${loser.name}, playing as the ${loser.team}, is the first one out, `;
       if (winner) facts += `eliminated by ${winner.name} (${winner.team}) with a score of ${eliminatedMatch.s1}-${eliminatedMatch.s2}. `;
       facts += `Their championship run ends here, while everyone else survives another round.`;
@@ -158,22 +160,24 @@
       const winner = MB.winnerOf(tb); // gewinnt das Spiel, landet damit aber auf dem allerletzten Platz
       const loser = MB.loserOf(tb); // verliert das Spiel, rutscht dadurch in der Tabelle nach oben
       if (lang === "de") {
-        let facts = `In einem Fantasy-Football-Turnier namens Madden Bowl sind gerade die zwei schwächsten Spieler des ganzen Turniers in der "Toilet Bowl" aufeinandergetroffen — einem Spiel, das niemand gewinnen will. `;
+        let facts = `In einem Fantasy-Football-Turnier namens Altima Bowl sind gerade die zwei schwächsten Spieler des ganzen Turniers in der "Toilet Bowl" aufeinandergetroffen — einem Spiel, das niemand gewinnen will. `;
         if (winner && loser && tb) {
           facts += `${winner.name} (${winner.team}) hat gegen ${loser.name} (${loser.team}) ${tb.s1}:${tb.s2} im Spiel selbst gewonnen, ` +
             `aber nach den Turnierregeln heißt das, dass ${winner.name} in der Endtabelle ganz unten landet, ` +
             `während ${loser.name} durch die Niederlage in der Tabelle wieder nach oben klettert. `;
         }
-        facts += `Es ist die peinlichste Trophäe im Madden Bowl, und das weiß auch jeder.`;
+        facts += `Es ist die peinlichste Trophäe im Altima Bowl, und das weiß auch jeder. `;
+        if (winner) facts += `Der Trost: Mit diesem Sieg hat sich ${winner.name} den allerersten Pick im Draft des nächsten Jahres gesichert.`;
         return facts;
       }
-      let facts = `In a fantasy football tournament called the Madden Bowl, the two worst-performing players of the whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. `;
+      let facts = `In a fantasy football tournament called the Altima Bowl, the two worst-performing players of the whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. `;
       if (winner && loser && tb) {
         facts += `${winner.name} (${winner.team}) beat ${loser.name} (${loser.team}) ${tb.s1}-${tb.s2} in the game itself, ` +
           `but by the tournament's rules that means ${winner.name} is the one who ends up dead last in the final standings, ` +
           `while ${loser.name} actually climbs back up the table for losing. `;
       }
-      facts += `It's the most embarrassing trophy in the Madden Bowl, and everybody knows it.`;
+      facts += `It's the most embarrassing trophy in the Altima Bowl, and everybody knows it. `;
+      if (winner) facts += `The consolation: with this win, ${winner.name} has locked up the very first pick in next year's draft.`;
       return facts;
     }
 
@@ -186,7 +190,7 @@
       const tb = MB.getPlayoffMatch(state, "tb");
       const tbLoserRankWinner = MB.winnerOf(tb); // gewinnt das Spiel, landet aber ganz unten
       if (lang === "de") {
-        let facts = `Das große Finale eines Fantasy-Football-Turniers namens Madden Bowl, "der Madden Bowl", steht fest. `;
+        let facts = `Das große Finale eines Fantasy-Football-Turniers namens Altima Bowl, "der Altima Bowl", steht fest. `;
         if (p1 && p2) {
           facts += `${p1.name} (${p1.team}) trifft auf ${p2.name} (${p2.team}) um die Meisterschaft. `;
           try {
@@ -199,7 +203,7 @@
         }
         return facts;
       }
-      let facts = `The grand final of a fantasy football tournament called the Madden Bowl, "The Madden Bowl", is set. `;
+      let facts = `The grand final of a fantasy football tournament called the Altima Bowl, "The Altima Bowl", is set. `;
       if (p1 && p2) {
         facts += `${p1.name} (${p1.team}) faces off against ${p2.name} (${p2.team}) for the championship. `;
         try {
@@ -217,22 +221,22 @@
       const gf = MB.getPlayoffMatch(state, "gf");
       const champion = MB.winnerOf(gf), runnerUp = MB.loserOf(gf);
       if (lang === "de") {
-        let facts = `Ein Fantasy-Football-Turnier namens Madden Bowl hat seinen Champion gekrönt. `;
+        let facts = `Ein Fantasy-Football-Turnier namens Altima Bowl hat seinen Champion gekrönt. `;
         if (champion && runnerUp && gf) {
           facts += `${champion.name}, mit den ${champion.team}, hat das Finale gegen ${runnerUp.name} (${runnerUp.team}) mit einem Endstand von ${Math.max(gf.s1, gf.s2)}:${Math.min(gf.s1, gf.s2)} gewonnen. `;
-          facts += `${champion.name} ist der neue Madden-Bowl-Champion, der beste Spieler des gesamten Turniers.`;
+          facts += `${champion.name} ist der neue Altima-Bowl-Champion, der beste Spieler des gesamten Turniers.`;
         }
         return facts;
       }
-      let facts = `A fantasy football tournament called the Madden Bowl has crowned its champion. `;
+      let facts = `A fantasy football tournament called the Altima Bowl has crowned its champion. `;
       if (champion && runnerUp && gf) {
         facts += `${champion.name}, playing as the ${champion.team}, won the championship game against ${runnerUp.name} (${runnerUp.team}) with a final score of ${Math.max(gf.s1, gf.s2)}-${Math.min(gf.s1, gf.s2)}. `;
-        facts += `${champion.name} is the new Madden Bowl champion, the best player of the whole tournament.`;
+        facts += `${champion.name} is the new Altima Bowl champion, the best player of the whole tournament.`;
       }
       return facts;
     }
 
-    return lang === "de" ? "Ein Fantasy-Football-Turnier namens Madden Bowl läuft gerade." : "A fantasy football tournament called the Madden Bowl is underway.";
+    return lang === "de" ? "Ein Fantasy-Football-Turnier namens Altima Bowl läuft gerade." : "A fantasy football tournament called the Altima Bowl is underway.";
   }
 
   // Textrichtung je Modus — bestimmt WIE (nicht WAS) über die Fakten
@@ -254,6 +258,20 @@
       `tradition. It should sting a little, but stay good-natured, funny, and clearly all in good ` +
       `sport rather than genuinely mean. Roast the scoreline and the standings. You decide the ` +
       `exact structure, hook, and ad-libs.`,
+    victor: () =>
+      `Write this from the FIRST-PERSON perspective of the player who just knocked out the very first player ` +
+      `of the playoffs (the winner named in the facts) — cocky, confident and playful. They talk directly about ` +
+      `the player they eliminated (also named in the facts): how the game went, the scoreline, how they sent ` +
+      `them home early, "taking out the trash", waving goodbye as they pack their things — while staying ` +
+      `good-natured and clearly all in good sport rather than genuinely mean. They are only getting started ` +
+      `and set their sights on the title. You decide the exact structure, hook, and ad-libs.`,
+    self: () =>
+      `Write this from the FIRST-PERSON perspective of the player who "won" the Toilet Bowl and therefore ` +
+      `ends up dead last (named in the facts) — self-deprecating, funny and self-ironic about finishing last ` +
+      `and holding the most embarrassing trophy of the tournament. But turn it around with swagger: by winning ` +
+      `it, this player has locked up the FIRST PICK in next year's draft, vows to come back and attack big, ` +
+      `and withdraws into training camp until then (early mornings, sprints, gym, film study, grinding in ` +
+      `silence). Good-natured and clearly all in good sport. You decide the exact structure, hook, and ad-libs.`,
     recap: () =>
       `This is a RECAP track, not a hype anthem: rap through the story of the tournament so far ` +
       `like a hype-man sports commentator putting the whole season into rhyme. Walk through the ` +
@@ -283,6 +301,20 @@
       `klassischer Rap-Battle-Tradition. Es darf ruhig etwas wehtun, soll aber gutmütig, witzig und ` +
       `klar als Spaß erkennbar bleiben, nicht wirklich gemein. Zieh über den Spielstand und die ` +
       `Tabelle her. Struktur, Hook und Ad-Libs darfst du frei gestalten.`,
+    victor: () =>
+      `Schreib das Ganze aus der ICH-Perspektive des Spielers, der gerade den allerersten Spieler der Playoffs ` +
+      `rausgeworfen hat (der Sieger aus den Fakten) — selbstbewusst, großspurig und verspielt. Er redet direkt ` +
+      `über den Spieler, den er ausgeschaltet hat (steht ebenfalls in den Fakten): wie das Spiel lief, der ` +
+      `Spielstand, wie er ihn früh nach Hause geschickt hat, "den Müll rausbringen", Tschüss winken, während ` +
+      `der seine Sachen packt — dabei gutmütig und klar als Spaß erkennbar, nicht wirklich gemein. Er fängt ` +
+      `gerade erst an und hat den Titel im Visier. Struktur, Hook und Ad-Libs darfst du frei gestalten.`,
+    self: () =>
+      `Schreib das Ganze aus der ICH-Perspektive des Spielers, der die Toilet Bowl "gewonnen" hat und damit ` +
+      `ganz unten landet (steht in den Fakten) — selbstironisch und witzig über den letzten Platz und die ` +
+      `peinlichste Trophäe des Turniers. Dreh es aber mit Selbstbewusstsein um: Durch den Sieg hat er sich den ` +
+      `ALLERERSTEN PICK im Draft des nächsten Jahres gesichert, kündigt an, groß anzugreifen, und zieht sich bis ` +
+      `dahin ins Trainingslager zurück (früh aufstehen, Sprints, Gym, Videostudium, still schuften). Gutmütig ` +
+      `und klar als Spaß erkennbar. Struktur, Hook und Ad-Libs darfst du frei gestalten.`,
     recap: () =>
       `Das hier ist ein RECAP-Track, keine Hype-Hymne: rapp die bisherige Turniergeschichte wie ein ` +
       `Hype-Man-Sportkommentator, der die ganze Saison in Reime packt. Geh die Tabelle und die ` +
@@ -319,30 +351,166 @@
   // ======================================================================
   // ELEVENLABS MUSIC API
   // ======================================================================
-  async function generateSong({ apiKey, prompt, lengthMs, modelId }) {
-    const res = await fetch("https://api.elevenlabs.io/v1/music", {
-      method: "POST",
-      headers: { "xi-api-key": apiKey, "Content-Type": "application/json", "Accept": "audio/mpeg" },
-      body: JSON.stringify({
-        prompt,
-        music_length_ms: lengthMs || 60000,
-        model_id: modelId || "music_v2",
-      }),
-    });
-    if (!res.ok) {
-      let detail = "";
-      try {
-        const errJson = await res.json();
-        const d = errJson?.detail;
-        if (typeof d === "string") detail = d;
-        else if (Array.isArray(d)) detail = d.map((item) => `${(item.loc || []).join(".")}: ${item.msg || item.message || ""}`).join("; ");
-        else if (d?.message) detail = d.message;
-        else if (errJson?.message) detail = errJson.message;
-        else if (d) detail = JSON.stringify(d).slice(0, 300);
-      } catch (e) {}
-      throw new Error(`ElevenLabs Music-Fehler HTTP ${res.status}${detail ? ": " + detail : " (keine weitere Fehlermeldung vom Server)"}`);
+  // ----- Antwort-Parser für /v1/music/detailed (multipart/mixed) -----
+  function _findBytes(hay, needle, from) {
+    outer: for (let i = from || 0; i <= hay.length - needle.length; i++) {
+      for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
+      return i;
     }
-    return res.blob();
+    return -1;
+  }
+  function parseMultipart(buf, contentType) {
+    const m = /boundary="?([^";]+)"?/i.exec(contentType || "");
+    if (!m) return null;
+    const enc = new TextEncoder(), dec = new TextDecoder("latin1");
+    const u8 = new Uint8Array(buf);
+    const delim = enc.encode("--" + m[1]);
+    const parts = [];
+    let pos = _findBytes(u8, delim, 0);
+    while (pos !== -1) {
+      const next = _findBytes(u8, delim, pos + delim.length);
+      if (next === -1) break;
+      let chunk = u8.subarray(pos + delim.length, next);
+      // führendes CRLF und abschließendes CRLF vor der nächsten Grenze abziehen
+      if (chunk[0] === 13 && chunk[1] === 10) chunk = chunk.subarray(2);
+      if (chunk.length >= 2 && chunk[chunk.length - 2] === 13 && chunk[chunk.length - 1] === 10) chunk = chunk.subarray(0, chunk.length - 2);
+      const sep = _findBytes(chunk, enc.encode("\r\n\r\n"), 0);
+      if (sep !== -1) parts.push({ headers: dec.decode(chunk.subarray(0, sep)).toLowerCase(), body: chunk.subarray(sep + 4) });
+      pos = next;
+    }
+    return parts;
+  }
+
+  // Sucht rekursiv ein Array von Wort-Objekten mit Start/Ende (Einheit wird erkannt).
+  function _num(o, keys) { for (const k of keys) if (typeof o[k] === "number" && isFinite(o[k])) return { v: o[k], k }; return null; }
+  function _findWordArray(node, depth) {
+    if (!node || depth > 6) return null;
+    if (Array.isArray(node)) {
+      if (node.length >= 3 && node.every((x) => x && typeof x === "object")) {
+        const sample = node[0];
+        const txt = ["text", "word", "token", "value", "character"].find((k) => typeof sample[k] === "string");
+        const st = _num(sample, ["start_s", "start_ms", "start_time", "start", "begin", "t0", "from"]);
+        if (txt && st) return node;
+      }
+      for (const it of node) { const r = _findWordArray(it, depth + 1); if (r) return r; }
+      return null;
+    }
+    if (typeof node === "object") for (const k of Object.keys(node)) { const r = _findWordArray(node[k], depth + 1); if (r) return r; }
+    return null;
+  }
+  function _planLines(plan) {
+    const lines = [];
+    if (!plan) return lines;
+    const items = plan.sections || plan.chunks || [];
+    items.forEach((sec) => {
+      const raw = Array.isArray(sec.lines) ? sec.lines : String(sec.text || "").split(/\n/);
+      raw.forEach((l) => {
+        const t = String(l).replace(/^\s*\[[^\]]*\]\s*$/, "").replace(/\{[^}]*\}/g, "").trim();
+        if (t) lines.push(t);
+      });
+    });
+    return lines;
+  }
+  function buildTiming(meta, lengthMs) {
+    try {
+      const timing = { v: 1, estimated: false, words: [], lines: _planLines(meta && meta.composition_plan) };
+      const arr = _findWordArray(meta, 0);
+      if (arr) {
+        const txtKey = ["text", "word", "token", "value", "character"].find((k) => typeof arr[0][k] === "string");
+        const raw = arr.map((x) => {
+          const st = _num(x, ["start_s", "start_ms", "start_time", "start", "begin", "t0", "from"]);
+          const en = _num(x, ["end_s", "end_ms", "end_time", "end", "t1", "to"]);
+          return { w: String(x[txtKey] || "").trim(), s: st ? st.v : null, e: en ? en.v : null, sk: st ? st.k : "" };
+        }).filter((x) => x.w && x.s != null);
+        if (raw.length) {
+          const maxV = Math.max(...raw.map((x) => (x.e != null ? x.e : x.s)));
+          const isMs = raw[0].sk.endsWith("ms") || maxV > ((lengthMs || 180000) / 1000) * 1.6;
+          const k = isMs ? 0.001 : 1;
+          raw.forEach((x, i) => {
+            const s0 = x.s * k;
+            const e0 = x.e != null ? x.e * k : (raw[i + 1] ? raw[i + 1].s * k : s0 + 0.4);
+            timing.words.push({ w: x.w, s: s0, e: Math.max(e0, s0 + 0.08) });
+          });
+        }
+      }
+      // Fallback: Songtext aus dem Plan gleichmäßig über die Abschnitts-Dauer verteilen (grobe Schätzung)
+      if (!timing.words.length && meta && meta.composition_plan) {
+        const items = meta.composition_plan.sections || meta.composition_plan.chunks || [];
+        let t0 = 0;
+        items.forEach((sec) => {
+          const dur = (sec.duration_ms || 0) / 1000;
+          const raw = Array.isArray(sec.lines) ? sec.lines : String(sec.text || "").split(/\n/);
+          const words = raw.map((l) => String(l).replace(/^\s*\[[^\]]*\]\s*$/, "").replace(/\{[^}]*\}/g, "").trim()).join(" ").split(/\s+/).filter(Boolean);
+          if (words.length && dur > 0) {
+            const usable = dur * 0.88, step = usable / words.length, off = dur * 0.06;
+            words.forEach((w, i) => timing.words.push({ w, s: t0 + off + i * step, e: t0 + off + (i + 0.85) * step }));
+          }
+          t0 += dur;
+        });
+        if (timing.words.length) timing.estimated = true;
+      }
+      if (meta && meta.song_metadata && meta.song_metadata.title) timing.title = meta.song_metadata.title;
+      return (timing.words.length || timing.lines.length) ? timing : null;
+    } catch (e) { console.warn("Timing-Parser:", e); return null; }
+  }
+
+  async function _readError(res) {
+    let detail = "";
+    try {
+      const errJson = await res.json();
+      const d = errJson?.detail;
+      if (typeof d === "string") detail = d;
+      else if (Array.isArray(d)) detail = d.map((item) => `${(item.loc || []).join(".")}: ${item.msg || item.message || ""}`).join("; ");
+      else if (d?.message) detail = d.message;
+      else if (errJson?.message) detail = errJson.message;
+      else if (d) detail = JSON.stringify(d).slice(0, 300);
+    } catch (e) {}
+    return `ElevenLabs Music-Fehler HTTP ${res.status}${detail ? ": " + detail : " (keine weitere Fehlermeldung vom Server)"}`;
+  }
+
+  // Liefert einen Blob (MP3). Falls die API Wort-Zeitstempel/Songtext mitschickt,
+  // hängt sie als blob.__timing an (wird beim Upload als .json neben die MP3 gelegt).
+  async function generateSong({ apiKey, prompt, lengthMs, modelId }) {
+    const body = JSON.stringify({ prompt, music_length_ms: lengthMs || 60000, model_id: modelId || "music_v2", with_timestamps: true });
+    let res = null;
+    try {
+      res = await fetch("https://api.elevenlabs.io/v1/music/detailed", {
+        method: "POST", headers: { "xi-api-key": apiKey, "Content-Type": "application/json" }, body,
+      });
+    } catch (e) { console.warn("music/detailed nicht erreichbar, nutze /v1/music:", e); }
+
+    if (res && res.ok) {
+      try {
+        const ct = res.headers.get("content-type") || "";
+        const buf = await res.arrayBuffer();
+        let meta = null, audioBlob = null;
+        if (/multipart/i.test(ct)) {
+          const parts = parseMultipart(buf, ct) || [];
+          for (const part of parts) {
+            if (/application\/json/.test(part.headers) && !meta) { try { meta = JSON.parse(new TextDecoder().decode(part.body)); } catch (e) {} }
+            else if (/audio\//.test(part.headers) || /octet-stream/.test(part.headers)) audioBlob = new Blob([part.body], { type: "audio/mpeg" });
+          }
+        } else if (/audio\//.test(ct)) {
+          audioBlob = new Blob([buf], { type: "audio/mpeg" });
+        }
+        if (audioBlob && audioBlob.size > 1000) {
+          const timing = buildTiming(meta, lengthMs);
+          if (timing) audioBlob.__timing = timing;
+          console.info("Song generiert (detailed). Zeitstempel:", timing ? `${timing.words.length} Wörter${timing.estimated ? " (geschätzt)" : ""}` : "keine");
+          return audioBlob;
+        }
+        console.warn("music/detailed: Antwort nicht lesbar — die Credits für diesen Aufruf sind bereits verbraucht. Metadaten:", meta);
+        throw new Error("Song-Antwort (detailed) konnte nicht gelesen werden — Details in der Browser-Konsole.");
+      } catch (e) { throw e; }
+    }
+    // Nur bei "Endpunkt/Parameter unbekannt" (kein Credit-Verbrauch) auf den alten Aufruf zurückfallen
+    if (res && ![400, 404, 405, 422].includes(res.status)) throw new Error(await _readError(res));
+    const res2 = await fetch("https://api.elevenlabs.io/v1/music", {
+      method: "POST", headers: { "xi-api-key": apiKey, "Content-Type": "application/json", "Accept": "audio/mpeg" },
+      body: JSON.stringify({ prompt, music_length_ms: lengthMs || 60000, model_id: modelId || "music_v2" }),
+    });
+    if (!res2.ok) throw new Error(await _readError(res2));
+    return res2.blob();
   }
 
   async function uploadSongToStorage(blob, tournamentId, milestone) {
@@ -351,6 +519,14 @@
     const path = `${tournamentId || "unbekannt"}/${milestone}-${Date.now()}.mp3`;
     const { error } = await sb.storage.from("mb-songs").upload(path, blob, { contentType: "audio/mpeg", upsert: true });
     if (error) throw error;
+    // Zeitstempel/Songtext (falls vorhanden) als .json neben die MP3 legen — nie ein Show-Stopper
+    if (blob.__timing) {
+      try {
+        const jsonBlob = new Blob([JSON.stringify(blob.__timing)], { type: "application/json" });
+        const { error: jErr } = await sb.storage.from("mb-songs").upload(path.replace(/\.mp3$/, ".json"), jsonBlob, { contentType: "application/json", upsert: true });
+        if (jErr) console.warn("Song-Timing konnte nicht gespeichert werden:", jErr.message || jErr);
+      } catch (e) { console.warn("Song-Timing-Upload:", e); }
+    }
     const { data } = sb.storage.from("mb-songs").getPublicUrl(path);
     return data.publicUrl;
   }
@@ -408,6 +584,8 @@
     }
     if (!apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
     const blob = await generateSong({ apiKey, prompt, lengthMs, modelId });
+    // Stil-ID neben dem Songtext-Timing ablegen, damit die Video-Bühne später den passenden Look wählt
+    blob.__timing = Object.assign(blob.__timing || { v: 1, words: [], lines: [] }, { style: pickStyle(styleId, milestone).id });
     const url = await uploadSongToStorage(blob, tournamentId, milestone);
     await saveSongUrl(tournamentId, milestone, url);
     return { url, styleLabel, languageLabel, prompt, facts };
@@ -421,7 +599,7 @@
   function buildDownloadUrl(url, filename) {
     if (!url) return url;
     const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}download=${encodeURIComponent(filename || "madden-bowl-song.mp3")}`;
+    return `${url}${sep}download=${encodeURIComponent(filename || "altima-bowl-song.mp3")}`;
   }
 
   // Realistische Platzhalter-Fakten pro Meilenstein — unabhängig vom
@@ -430,52 +608,54 @@
   // oben liefert für nicht erreichte Meilensteine nur einen sehr generischen
   // Satz ohne Namen/Zahlen, weil die echten Daten schlicht noch fehlen).
   const TEST_FACTS = {
-    regularSeason: `The regular season of a fantasy football tournament called the Madden Bowl just wrapped up. ` +
+    regularSeason: `The regular season of a fantasy football tournament called the Altima Bowl just wrapped up. ` +
       `Here is the complete final regular-season standings table, from best to worst seed: ` +
       `#1 Tobi F. (Chiefs) with a record of 5-1; #2 Marco (49ers) with a record of 4-2; ` +
       `#3 Jonas (Cowboys) with a record of 3-3; #4 Kevin (Eagles) with a record of 3-3; ` +
       `#5 Nico (Bills) with a record of 2-4; #6 Basti (Ravens) with a record of 1-5. ` +
       `The most dominant win of the season was Tobi F. crushing Basti 42-7. ` +
       `The playoffs are about to begin, seeded exactly in this order.`,
-    firstElimination: `In a fantasy football tournament called the Madden Bowl, the very first player has just been ` +
+    firstElimination: `In a fantasy football tournament called the Altima Bowl, the very first player has just been ` +
       `eliminated from the playoffs. Nico, playing as the Bills, is the first one out, eliminated by ` +
       `Kevin (Eagles) with a score of 24-14. Their championship run ends here, while everyone else ` +
       `survives another round.`,
-    toiletBowl: `In a fantasy football tournament called the Madden Bowl, the two worst-performing players of the ` +
+    toiletBowl: `In a fantasy football tournament called the Altima Bowl, the two worst-performing players of the ` +
       `whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. Basti (Ravens) ` +
       `beat Nico (Bills) 17-13 in the game itself, but by the tournament's rules that means Basti is the ` +
       `one who ends up dead last in the final standings, while Nico actually climbs back up the table for ` +
-      `losing. It's the most embarrassing trophy in the Madden Bowl, and everybody knows it.`,
-    finals: `The grand final of a fantasy football tournament called the Madden Bowl, "The Madden Bowl", is set. ` +
+      `losing. It's the most embarrassing trophy in the Altima Bowl, and everybody knows it. The consolation: ` +
+      `with this win, Basti has locked up the very first pick in next year's draft.`,
+    finals: `The grand final of a fantasy football tournament called the Altima Bowl, "The Altima Bowl", is set. ` +
       `Tobi F. (Chiefs) faces off against Marco (49ers) for the championship. The two have split their ` +
       `two regular-season meetings, and this is the rematch to settle it once and for all.`,
-    champion: `A fantasy football tournament called the Madden Bowl has crowned its champion. Tobi F., playing as ` +
+    champion: `A fantasy football tournament called the Altima Bowl has crowned its champion. Tobi F., playing as ` +
       `the Chiefs, won the championship game against Marco (49ers) with a final score of 31-24. Tobi F. is ` +
-      `the new Madden Bowl champion, the best player of the whole tournament.`,
+      `the new Altima Bowl champion, the best player of the whole tournament.`,
   };
 
   const TEST_FACTS_DE = {
-    regularSeason: `Die Regular Season eines Fantasy-Football-Turniers namens Madden Bowl ist gerade zu Ende ` +
+    regularSeason: `Die Regular Season eines Fantasy-Football-Turniers namens Altima Bowl ist gerade zu Ende ` +
       `gegangen. Hier die komplette Abschlusstabelle, vom besten zum schlechtesten Seed: ` +
       `#1 Tobi F. (Chiefs) mit einer Bilanz von 5-1; #2 Marco (49ers) mit einer Bilanz von 4-2; ` +
       `#3 Jonas (Cowboys) mit einer Bilanz von 3-3; #4 Kevin (Eagles) mit einer Bilanz von 3-3; ` +
       `#5 Nico (Bills) mit einer Bilanz von 2-4; #6 Basti (Ravens) mit einer Bilanz von 1-5. ` +
       `Der deutlichste Sieg der Saison war Tobi F.s 42:7 gegen Basti. ` +
       `Die Playoffs beginnen gleich, gesetzt genau in dieser Reihenfolge.`,
-    firstElimination: `In einem Fantasy-Football-Turnier namens Madden Bowl ist gerade der allererste Spieler aus ` +
+    firstElimination: `In einem Fantasy-Football-Turnier namens Altima Bowl ist gerade der allererste Spieler aus ` +
       `den Playoffs ausgeschieden. Nico, mit den Bills, ist als Erster raus, ausgeschieden gegen Kevin (Eagles) ` +
       `mit einem Ergebnis von 24:14. Der Titeltraum endet hier, während alle anderen eine weitere Runde überleben.`,
-    toiletBowl: `In einem Fantasy-Football-Turnier namens Madden Bowl sind gerade die zwei schwächsten Spieler ` +
+    toiletBowl: `In einem Fantasy-Football-Turnier namens Altima Bowl sind gerade die zwei schwächsten Spieler ` +
       `des ganzen Turniers in der "Toilet Bowl" aufeinandergetroffen — einem Spiel, das niemand gewinnen will. ` +
       `Basti (Ravens) hat gegen Nico (Bills) 17:13 im Spiel selbst gewonnen, aber nach den Turnierregeln heißt ` +
       `das, dass Basti in der Endtabelle ganz unten landet, während Nico durch die Niederlage in der Tabelle ` +
-      `wieder nach oben klettert. Es ist die peinlichste Trophäe im Madden Bowl, und das weiß auch jeder.`,
-    finals: `Das große Finale eines Fantasy-Football-Turniers namens Madden Bowl, "der Madden Bowl", steht fest. ` +
+      `wieder nach oben klettert. Es ist die peinlichste Trophäe im Altima Bowl, und das weiß auch jeder. Der Trost: ` +
+      `Mit diesem Sieg hat sich Basti den allerersten Pick im Draft des nächsten Jahres gesichert.`,
+    finals: `Das große Finale eines Fantasy-Football-Turniers namens Altima Bowl, "der Altima Bowl", steht fest. ` +
       `Tobi F. (Chiefs) trifft auf Marco (49ers) um die Meisterschaft. Die beiden haben ihre zwei ` +
       `Regular-Season-Duelle geteilt, das hier ist das Rückspiel, das alles klärt.`,
-    champion: `Ein Fantasy-Football-Turnier namens Madden Bowl hat seinen Champion gekrönt. Tobi F., mit den ` +
+    champion: `Ein Fantasy-Football-Turnier namens Altima Bowl hat seinen Champion gekrönt. Tobi F., mit den ` +
       `Chiefs, hat das Finale gegen Marco (49ers) mit einem Endstand von 31:24 gewonnen. Tobi F. ist der neue ` +
-      `Madden-Bowl-Champion, der beste Spieler des gesamten Turniers.`,
+      `Altima-Bowl-Champion, der beste Spieler des gesamten Turniers.`,
   };
 
   function getTestFacts(milestone, languageId) {
@@ -501,6 +681,8 @@
     }
     if (!apiKey) throw new Error("Kein ElevenLabs-API-Key konfiguriert.");
     const blob = await generateSong({ apiKey, prompt, lengthMs, modelId });
+    // Stil-ID neben dem Songtext-Timing ablegen, damit die Video-Bühne später den passenden Look wählt
+    blob.__timing = Object.assign(blob.__timing || { v: 1, words: [], lines: [] }, { style: pickStyle(styleId, milestone).id });
     const url = await uploadSongToStorage(blob, tournamentId, `test-${milestone}`);
     return { url, styleLabel, languageLabel, prompt, facts };
   }

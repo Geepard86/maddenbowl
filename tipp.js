@@ -1,5 +1,5 @@
 /* =========================================================================
-   MADDEN BOWL — TIPPSPIEL (tipp.js)
+   ALTIMA BOWL — TIPPSPIEL (tipp.js)
    -------------------------------------------------------------------------
    Ersetzt das alte Kapital-/Einsatz-Wettbüro durch ein klassisches
    Tippspiel ohne virtuelle Währung:

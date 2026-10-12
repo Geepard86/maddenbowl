@@ -1,8 +1,8 @@
 /* =========================================================================
-   MADDEN BOWL — UI-KERN (ui.js)
+   ALTIMA BOWL — UI-KERN (ui.js)
    -------------------------------------------------------------------------
    Gemeinsamer Header (Logo, Anmelden-Button, Burger-Menü) + Login-Modal für
-   die neuen v2-Seiten (dashboard.html, blog.html, spielplan.html,
+   die neuen v2-Seiten (index.html, blog.html, spielplan.html,
    wettbuero.html). Nutzt denselben PIN-Login-Mechanismus wie bisher
    (state.wettbuero.accounts, sessionStorage-Key "mb_tipp_player") — nur
    jetzt an einer Stelle statt vier Mal, damit "Anmelden" im Header überall
@@ -17,195 +17,13 @@
   "use strict";
 
   const NAV_ITEMS = [
-    { key: "dashboard", label: "Dashboard", href: "dashboard.html", icon: "assets/icons/home.svg" },
+    { key: "dashboard", label: "Dashboard", href: "index.html", icon: "assets/icons/home.svg" },
     { key: "spielplan", label: "Spielplan", href: "spielplan.html", icon: "assets/icons/calendar.svg" },
     { key: "tippspiel", label: "Tippspiel", href: "wettbuero.html", icon: "assets/icons/trophy.svg" },
     { key: "blog", label: "Blog", href: "blog.html", icon: "assets/icons/blog.svg" },
     { key: "hallOfFame", label: "Hall of Fame", href: "hall_of_fame.html", icon: "assets/icons/crown.svg" },
     { key: "shop", label: "Shop", href: "shop.html", icon: "assets/icons/cart.svg" },
   ];
-
-  // Admin-Navigation: ersetzt im Admin-Modus die Spieler-Links im Burger-Menü.
-  // Nur Bereiche, die sich bearbeiten lassen. "index" ist die Admin-Startseite
-  // (index.html), die Abschnitte dort werden über den URL-Hash umgeschaltet.
-  const ADMIN_NAV_ITEMS = [
-    { key: "setup", label: "Turnier-Setup", href: "index.html#setup", emoji: "🏈" },
-    { key: "schedule", label: "Spielplan & Ergebnisse", href: "index.html#schedule", emoji: "📅" },
-    { key: "settings", label: "Einstellungen", href: "index.html#settings", emoji: "⚙️" },
-    { key: "access", label: "Zugänge & Kennwörter", href: "index.html#access", emoji: "🔑" },
-    { key: "seasons", label: "Saison verwalten", href: "seasons.html", emoji: "🗂️" },
-    { key: "blog", label: "Blog", href: "blog.html", emoji: "📰" },
-  ];
-
-  // Einweisung beim ersten Öffnen des Dashboards (nur Spieler/Gäste).
-  // Jeder Schritt markiert den passenden Punkt auf der Seite (Spotlight) und
-  // zeigt die Erklärung direkt daneben. Fehlt der Punkt (z.B. kein laufendes
-  // Turnier, deshalb keine Tippspiel-Karte), erscheint nur die Erklärung.
-  const TOUR_KEY = "mb_tour_dashboard_v1";
-  function tourCard(href) {
-    const a = document.querySelector(`#app a[href="${href}"]`);
-    return a ? (a.closest(".v2-card") || a) : null;
-  }
-  const TOUR_STEPS = [
-    { icon: "🏈", title: "Willkommen beim Madden Bowl",
-      text: "Hier siehst du auf einen Blick, was gerade läuft: den Spielplan mit Live-Spielen, das Tippspiel und die neuesten Blog-Beiträge. Alles Weitere erreichst du über das Menü – dieses Symbol hier.",
-      target: () => document.querySelector(".v2-burger") },
-    { icon: "👤", title: "Anmelden",
-      text: "Hier meldest du dich an: Du wählst deinen Namen und gibst eine PIN mit 4–6 Ziffern ein. Beim allerersten Mal legst du damit deine eigene PIN fest – merk sie dir gut, bei Verlust setzt der Admin sie zurück. Wichtig: Anmelden und das Tippspiel sind nur für Teilnehmer des laufenden Turniers möglich. Gäste können alles lesen, aber nicht mittippen.",
-      target: () => document.getElementById("mbAuthArea") },
-    { icon: "🎯", title: "Tippspiel",
-      text: "Nur für Turnier-Teilnehmer: Tippe vor jedem Spieltag auf die Sieger der Spiele und auf Over/Under der Gesamtpunkte. Dazu kommen Tipps auf Champion, Zweiten und Toilet-Bowl-Sieger. Ein Sieger-Tipp bringt 1 Punkt, Over/Under 2, der Champion 5. Tipps sind nur bis zum Kickoff möglich – du darfst auch auf deine eigenen Spiele tippen. Hier siehst du den aktuellen Tippstand.",
-      target: () => tourCard("wettbuero.html") },
-    { icon: "📰", title: "Blog",
-      text: "Hier stehen die neuesten Beiträge: Power Rankings, Spielerporträts, Rekorde, Memes und Songs rund um das Turnier. Ein Tipp auf die Karte öffnet den Blog, dort kannst du jeden Beitrag aufklappen und mit der Teilen-Funktion direkt in die Gruppe schicken.",
-      target: () => tourCard("blog.html") },
-    { icon: "👑", title: "Hall of Fame",
-      text: "Die Hall of Fame sammelt alle bisherigen Saisons: Champions, die ewige Tabelle und alle gespielten Partien. Hier siehst du, wer die Geschichte des Madden Bowl geschrieben hat.",
-      target: () => tourCard("hall_of_fame.html") },
-  ];
-  let _tourIndex = 0;
-  let _tourOpen = false;
-  let _tourTimer = null;
-
-  function tourSeen() { try { return localStorage.getItem(TOUR_KEY) === "1"; } catch (e) { return true; } }
-  function markTourSeen() { try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) { /* egal */ } }
-
-  function tourHeaderHeight() {
-    const h = document.querySelector(".v2-header");
-    return h ? h.offsetHeight : 0;
-  }
-
-  // Zielelement ermitteln. Ist die Karte höher als der freie Platz neben der
-  // Erklärung, wird nur ihre Überschrift markiert.
-  function resolveTourTarget(step, tipH) {
-    let el = step.target ? step.target() : null;
-    if (!el) return null;
-    if (!el.closest(".v2-header")) {
-      const avail = window.innerHeight - tourHeaderHeight() - tipH - 48;
-      if (el.offsetHeight > avail) el = el.querySelector(".v2-card-title") || el;
-    }
-    return el;
-  }
-
-  // Spotlight + Erklärung positionieren. scroll=true nur beim Schrittwechsel.
-  function layoutTour(scroll) {
-    if (!_tourOpen) return;
-    const tip = document.getElementById("mbTourTip");
-    const spot = document.getElementById("mbTourSpot");
-    const blocker = document.getElementById("mbTourBlocker");
-    if (!tip || !spot) return;
-    const step = TOUR_STEPS[_tourIndex];
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const headerH = tourHeaderHeight();
-    const tipH = tip.offsetHeight;
-    const el = resolveTourTarget(step, tipH);
-
-    if (!el) {
-      spot.style.display = "none";
-      blocker.style.background = "rgba(8,12,20,0.78)";
-      tip.style.top = Math.max(headerH + 8, Math.round((vh - tipH) / 2)) + "px";
-      return;
-    }
-    blocker.style.background = "transparent";
-
-    const inHeader = !!el.closest(".v2-header");
-    if (scroll && !inHeader) {
-      const r0 = el.getBoundingClientRect();
-      window.scrollTo({ top: window.scrollY + r0.top - headerH - 12, behavior: "auto" });
-    }
-    const r = el.getBoundingClientRect();
-    const pad = 6;
-    spot.style.display = "block";
-    spot.style.left = (r.left - pad) + "px";
-    spot.style.top = (r.top - pad) + "px";
-    spot.style.width = (r.width + pad * 2) + "px";
-    spot.style.height = (r.height + pad * 2) + "px";
-
-    // Erklärung unter dem Ziel, sonst darüber, sonst am unteren Rand
-    const gap = 14;
-    const spaceBelow = vh - r.bottom - pad;
-    const spaceAbove = r.top - pad - headerH;
-    let top;
-    if (spaceBelow >= tipH + gap + 8) top = r.bottom + pad + gap;
-    else if (spaceAbove >= tipH + gap + 8) top = r.top - pad - gap - tipH;
-    else top = vh - tipH - 12;
-    tip.style.top = Math.min(Math.max(top, headerH + 8), vh - tipH - 8) + "px";
-  }
-
-  function renderTourStep(scroll) {
-    const step = TOUR_STEPS[_tourIndex];
-    const last = _tourIndex === TOUR_STEPS.length - 1;
-    const first = _tourIndex === 0;
-    const dots = TOUR_STEPS.map((_, i) => `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 3px;background:${i === _tourIndex ? "var(--v2-gold)" : "rgba(255,255,255,0.25)"};"></span>`).join("");
-    document.getElementById("mbTourTip").innerHTML = `
-      <button class="v2-modal-close" style="position:absolute; top:8px; right:10px; background:none; border:none; color:inherit; font-size:1.1em; cursor:pointer; opacity:0.6;" onclick="MB.UI.closeTour()" aria-label="Einweisung schließen">✕</button>
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding-right:22px;">
-        <span style="font-size:1.6em;">${step.icon}</span>
-        <h3 style="margin:0;">${escHtml(step.title)}</h3>
-      </div>
-      <div class="v2-info-content" style="font-size:0.88em; line-height:1.5; margin-bottom:12px;">${escHtml(step.text)}</div>
-      <div style="text-align:center; margin-bottom:12px;">${dots}</div>
-      <div class="v2-modal-actions">
-        <button class="v2-btn-ghost" onclick="MB.UI.${first ? "closeTour" : "prevTourStep"}()">${first ? "Überspringen" : "Zurück"}</button>
-        <button class="v2-btn-primary" onclick="MB.UI.${last ? "closeTour" : "nextTourStep"}()">${last ? "Los geht's" : "Weiter"}</button>
-      </div>`;
-    layoutTour(scroll);
-  }
-
-  function openTour() {
-    closeNav();
-    if (_tourOpen) return;
-    _tourOpen = true;
-    _tourIndex = 0;
-    document.body.insertAdjacentHTML("beforeend", `
-      <div id="mbTourBlocker" style="position:fixed; inset:0; z-index:9990; touch-action:none; background:transparent;"></div>
-      <div id="mbTourSpot" style="position:fixed; z-index:9991; display:none; pointer-events:none; border-radius:12px; border:2px solid var(--v2-gold); box-shadow:0 0 0 9999px rgba(8,12,20,0.78); transition:left .2s, top .2s, width .2s, height .2s;"></div>
-      <div id="mbTourTip" class="v2-modal-box" style="position:fixed; z-index:9992; left:50%; transform:translateX(-50%); width:min(400px, calc(100vw - 24px)); max-width:none; box-sizing:border-box; box-shadow:0 8px 30px rgba(0,0,0,0.5);"></div>`);
-    const blocker = document.getElementById("mbTourBlocker");
-    blocker.addEventListener("wheel", (e) => e.preventDefault(), { passive: false });
-    window.addEventListener("resize", onTourResize);
-    document.addEventListener("keydown", onTourKey);
-    // Seite kann sich während der Tour neu aufbauen (Auto-Refresh): Position nachziehen
-    _tourTimer = setInterval(() => layoutTour(false), 500);
-    renderTourStep(true);
-  }
-  function onTourResize() { layoutTour(false); }
-  function onTourKey(e) { if (e.key === "Escape") closeTour(); }
-
-  function nextTourStep() {
-    if (_tourIndex < TOUR_STEPS.length - 1) { _tourIndex++; renderTourStep(true); }
-  }
-  function prevTourStep() {
-    if (_tourIndex > 0) { _tourIndex--; renderTourStep(true); }
-  }
-  function closeTour() {
-    markTourSeen();
-    _tourOpen = false;
-    clearInterval(_tourTimer);
-    window.removeEventListener("resize", onTourResize);
-    document.removeEventListener("keydown", onTourKey);
-    ["mbTourBlocker", "mbTourSpot", "mbTourTip"].forEach((id) => { const n = document.getElementById(id); if (n) n.remove(); });
-  }
-  // Wird vom Dashboard nach dem ersten Rendern aufgerufen: zeigt die
-  // Einweisung nur beim ersten Besuch (pro Browser) und nie im Admin-Modus.
-  function maybeStartTour() {
-    if (isAdminUnlocked() || tourSeen()) return;
-    setTimeout(openTour, 400);
-  }
-
-  // Admin: Abschnitt in der Standort-Zeile + Menü hervorheben (von index.html aufgerufen)
-  function setAdminSection(key) {
-    const item = ADMIN_NAV_ITEMS.find((i) => i.key === key);
-    document.querySelectorAll(".v2-nav-link[data-admin-key]").forEach((a) => a.classList.toggle("active", a.dataset.adminKey === key));
-    const titleEl = document.getElementById("mbPageBarTitle");
-    const iconEl = document.getElementById("mbPageBarEmoji");
-    if (item && titleEl) titleEl.textContent = item.label;
-    if (item && iconEl) iconEl.textContent = item.emoji;
-  }
-  function setAdminNavItemHidden(key, hidden) {
-    const a = document.querySelector(`.v2-nav-link[data-admin-key="${key}"]`);
-    if (a) a.style.display = hidden ? "none" : "";
-  }
 
   // ---------------------------------------------------------------
   // "ZUM HOME-BILDSCHIRM HINZUFÜGEN" (PWA-Installation)
@@ -271,13 +89,11 @@
     stadium1: "Altima Field", stadium2: "KEVAG Stadium", playerCount: 8,
   };
 
-  function escHtml(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
+  const escHtml = (s) => MB.escHtml(s);
 
   let _state = null;
   let _onChange = null; // optionaler Callback, den die Seite bei Spieler-Login/Logout ausführen kann
-  let _showAdminLogin = false; // nur auf Seiten mit Admin-Bereich (aktuell index.html)
+  let _showAdminLogin = false; // nur auf Seiten mit Admin-Bereich (aktuell admin.html)
   let _onAdminChange = null; // optionaler Callback bei Admin-Login/Logout
 
   const ADMIN_SESSION_KEY = "mb_admin_session";
@@ -298,9 +114,22 @@
     return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
   }
 
-  async function sha256Hex(str) {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  const sha256Hex = (s) => MB.sha256Hex(s);
+
+  // Achievements (Sammelkarten) werden bei Bedarf nachgeladen — kein Eintrag in den einzelnen Seiten nötig.
+  let _achLoading = null;
+  function withAchievements(cb) {
+    try {
+      if (MB.Achievements) { cb(MB.Achievements); return; }
+      if (!_achLoading) {
+        _achLoading = new Promise((resolve) => {
+          const s = document.createElement("script"); s.src = "achievements.js";
+          s.onload = () => resolve(MB.Achievements || null); s.onerror = () => resolve(null);
+          document.head.appendChild(s);
+        });
+      }
+      _achLoading.then((A) => { if (A) cb(A); });
+    } catch (e) { /* Achievements sind optional */ }
   }
 
   function setState(state, onChange) {
@@ -308,6 +137,7 @@
     if (onChange) _onChange = onChange;
     if (_state) MB.ensureWettbuero(_state);
     renderAuthArea();
+    withAchievements((A) => A.init(_state));
   }
 
   // ---------------------------------------------------------------
@@ -315,18 +145,10 @@
   // ---------------------------------------------------------------
   function mountHeader(opts) {
     const active = (opts && opts.active) || "";
+    withAchievements((A) => A.setPage(active));
     _showAdminLogin = !!(opts && opts.showAdminLogin);
     _onAdminChange = (opts && opts.onAdminChange) || null;
-    // Admin-Modus (nur auf Seiten, die adminActive übergeben): eigene Links im
-    // Burger-Menü und Standort-Zeile mit Zurück-Pfeil zur Admin-Startseite.
-    const adminMode = isAdminUnlocked() && !!(opts && opts.adminActive);
-    const adminActive = adminMode ? opts.adminActive : "";
-    const navHtml = adminMode
-      ? ADMIN_NAV_ITEMS.map(item => `
-      <a class="v2-nav-link ${item.key === adminActive ? "active" : ""}" data-admin-key="${item.key}" href="${item.href}" onclick="MB.UI.closeNav()">
-        <span style="width:18px; text-align:center;">${item.emoji}</span> ${item.label}
-      </a>`).join("")
-      : NAV_ITEMS.map(item => `
+    const navHtml = NAV_ITEMS.map(item => `
       <a class="v2-nav-link ${item.key === active ? "active" : ""}" href="${item.href}">
         <img src="${item.icon}" alt=""> ${item.label}
       </a>`).join("");
@@ -335,25 +157,18 @@
     // zum Dashboard. Nur auf Unterseiten — auf dem Dashboard selbst (active
     // === "dashboard") weglassen, da man dort schon "zuhause" ist.
     const activeItem = NAV_ITEMS.find(item => item.key === active);
-    const adminItem = adminMode ? ADMIN_NAV_ITEMS.find(i => i.key === adminActive) : null;
-    const adminBackHref = (opts && opts.adminBack) ? "index.html" : "";
-    const pageBarHtml = adminItem ? `
+    const pageBarHtml = (activeItem && active !== "dashboard") ? `
       <div class="v2-page-bar">
-        ${adminBackHref ? `<a class="v2-page-back" href="${adminBackHref}" aria-label="Zurück zur Admin-Startseite">←</a>` : ""}
-        <span id="mbPageBarEmoji" style="font-size:0.95em;">${adminItem.emoji}</span>
-        <span class="v2-page-bar-title" id="mbPageBarTitle">${adminItem.label}</span>
-      </div>` : (activeItem && active !== "dashboard") ? `
-      <div class="v2-page-bar">
-        <a class="v2-page-back" href="dashboard.html" aria-label="Zurück zum Dashboard">←</a>
+        <a class="v2-page-back" href="index.html" aria-label="Zurück zum Dashboard">←</a>
         <img src="${activeItem.icon}" alt="">
         <span class="v2-page-bar-title">${activeItem.label}</span>
       </div>` : "";
 
     const headerHtml = `
       <header class="v2-header">
-        <a class="v2-logo" href="dashboard.html">
+        <a class="v2-logo" href="index.html">
           <img src="assets/icons/crown.svg" alt="">
-          <span class="v2-logo-text">Madden Bowl VI</span>
+          <span class="v2-logo-text">Altima Bowl VI</span>
         </a>
         <div class="v2-header-right">
           <div id="mbAuthArea"></div>
@@ -368,9 +183,7 @@
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
         <div class="v2-nav-divider"></div>
-        ${adminMode ? `<a class="v2-nav-secondary" href="dashboard.html" style="text-decoration:none; display:block;">Zum Dashboard (Spieleransicht)</a>` : ""}
         <button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
-        ${(!adminMode && active === "dashboard") ? `<button class="v2-nav-secondary" onclick="MB.UI.openTour()">Einweisung ansehen</button>` : ""}
         <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
@@ -523,7 +336,6 @@
     const names = _state.players.map(p => p.name);
     document.getElementById("mbLoginModalContent").innerHTML = `
       <h3>Anmelden</h3>
-      <div style="font-size:0.78em; opacity:0.7; line-height:1.4;">Anmeldung und Tippspiel sind nur für Teilnehmer des aktuellen Turniers möglich.</div>
       <label for="mbLoginName">Spieler</label>
       <select id="mbLoginName">${names.map(n => `<option value="${n}">${n}</option>`).join("")}</select>
       <label for="mbLoginPin">PIN</label>
@@ -629,6 +441,7 @@
     sessionStorage.setItem("mb_tipp_player", name);
     closeLogin();
     renderAuthArea();
+    withAchievements((A) => A.onLogin(name));
     if (_onChange) _onChange(name);
   }
 
@@ -636,18 +449,17 @@
     sessionStorage.removeItem("mb_tipp_player");
     document.getElementById("mbUserMenu").classList.remove("open");
     renderAuthArea();
+    withAchievements((A) => A.onLogout());
     if (_onChange) _onChange(null);
   }
 
   global.MB = global.MB || {};
   global.MB.UI = {
-    NAV_ITEMS, mountHeader, setState, currentPlayer, isAdminUnlocked,
+    NAV_ITEMS, mountHeader, setState, currentPlayer, isAdminUnlocked, withAchievements,
     toggleNav, closeNav, toggleUserMenu,
     openRules, closeInfo, installApp, isStandalone,
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,
     openLogin, closeLogin, doLogin, doLogout,
     openAdminLogin, doAdminLogin, doAdminLogout,
-    openTour, nextTourStep, prevTourStep, closeTour, maybeStartTour,
-    setAdminSection, setAdminNavItemHidden, ADMIN_NAV_ITEMS,
   };
 })(window);

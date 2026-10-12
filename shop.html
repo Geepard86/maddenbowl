@@ -3,11 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Madden Bowl VI — Fan-Shop</title>
+<title>Altima Bowl VI — Fan-Shop</title>
 <link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="shared.js"></script>
 <script src="ui.js"></script>
+<script src="shop-products.js"></script>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body class="v2">
@@ -52,6 +56,17 @@
   };
   if (startToken) spread_shop_config.startToken = startToken;
 
+  // Sammelkarten: Produkt-Aufruf per Deep-Link zählt als "angeschaut" (der Shop selbst läuft
+  // als fremdes Widget und lässt sich von außen nicht beobachten).
+  (function trackProductView() {
+    try {
+      const prods = (MB.Shop && MB.Shop.PRODUCTS) || [];
+      const withToken = prods.filter(function (x) { return x.startToken; });
+      const match = startToken ? withToken.find(function (x) { return x.startToken === startToken || x.startToken.split('?')[0] === startToken.split('?')[0]; }) : null;
+      if (match) MB.UI.withAchievements(function (A) { A.track('shop_view', { token: match.id, total: withToken.length }); });
+    } catch (e) { /* optional */ }
+  })();
+
   // FALLBACK: Das offizielle Spreadshop-Widget-Skript ersetzt #myShop nach
   // dem Laden komplett. Läuft das aus irgendeinem Grund nicht durch (Skript
   // blockiert/langsam/Fehler — z.B. durch einen Werbeblocker, der Domains
@@ -68,7 +83,7 @@
     if (!el) return;
     var iframe = document.createElement('iframe');
     iframe.src = startToken ? (spread_shop_config.prefix + '/' + startToken) : spread_shop_config.prefix;
-    iframe.title = 'Madden Bowl Fan-Shop';
+    iframe.title = 'Altima Bowl Fan-Shop';
     iframe.loading = 'lazy';
     iframe.style.cssText = 'width:100%; min-height:80vh; border:0; border-radius:8px; display:block;';
     el.innerHTML = '';
