@@ -1272,7 +1272,7 @@
         const titleOdds = computeTitleOdds(history, state);
         const pct = titleOdds[loserName];
         if (pct != null && Math.random() < 0.5) {
-          impacts.push({ type: "titleImpact", text: `Damit liegen ${loserName}s Titelchancen jetzt bei ${Math.round(pct)} Prozent.` });
+          impacts.push({ type: "titleImpact", text: `Damit liegen die Titelchancen von ${loserName} jetzt bei ${Math.round(pct)} Prozent.` });
         }
       } catch (e) {}
     }

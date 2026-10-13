@@ -18,6 +18,7 @@
   <script src="spurious.js"></script>
   <script src="replay.js"></script>
   <script src="llm-test.js"></script>
+  <script src="llm-blog.js"></script>
   <script src="comments.js"></script>
 
   <link rel="stylesheet" href="styles.css">
@@ -1229,7 +1230,13 @@ function isFinished(match) { return MB.isFinished(match); }
     function finishDraftShow() {
       stopDraftShowMusic();
       if (MB.DraftStage.isOpen()) MB.DraftStage.phase({ kickoff: true });
-      playAltimaBowlFanfare().then(() => { MB.DraftStage.close(); startTournament(); });
+      playAltimaBowlFanfare().then(() => { MB.DraftStage.close(); return startTournament(); }).then(() => {
+        if (!isAdmin) return;
+        try {
+          const upcoming = (MB.getUpcomingMatches(state, { limit: 2 }) || []).map(u => ({ ...u, stadiumPreposition: u.stadium === state.config.s2 ? (state.config.s2Prep || 'im') : (state.config.s1Prep || 'im') }));
+          MB.Announcer.announceTournamentStart({ context: 'afterDraft', upcoming });
+        } catch (e) { console.warn('Ansage nach dem Draft fehlgeschlagen:', e); }
+      });
     }
 
     // ---- Draft-Bühne (draft-stage.js): Datenquelle + Anbindung ----
@@ -1741,7 +1748,7 @@ document.querySelectorAll('.draft-row').forEach(row => {
       if (isAdmin) {
         await syncData(true); // Tournament-ID entsteht hier (siehe MB.pushCloudState)
         // Turnierblog: Kickoff-Artikel, sobald wir die frische Tournament-ID haben.
-        MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state));
+        MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state, history));
         progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
         songMomentFlags = {}; // neues Turnier -> alte Song-Momente-Flags verwerfen
         // Willkommensansage läuft jetzt zu Beginn der Draft-Show (siehe
@@ -2071,7 +2078,7 @@ const ringsHtml = rings > 0
           const entryPromise = addSessionRecord(r);
           const milestoneEntry = sessionRecords[0]; // addSessionRecord unshiftet synchron
           MB.Records.pushRecordMoment(MB.getCurrentTournamentId(), r);
-          const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r) : MB.Blog.buildChampionArticle(r);
+          const article = r.type === 'finals' ? MB.Blog.buildFinalsArticle(r, { state, history }) : MB.Blog.buildChampionArticle(r, { state, history });
           // Der Beitrag wartet kurz auf das Meme und nimmt es als Bild auf
           // (kein extra Beitrag). Bei champion folgt danach der Abschluss-Artikel.
           publishMilestoneArticle(milestoneEntry, entryPromise, article, r.type);
@@ -3313,7 +3320,7 @@ function renderRanking() {
       });
       if (result.testMode) return result;
       state.songs = { ...(state.songs || {}), [milestone]: result.url };
-      MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url));
+      MB.Blog.pushArticle(tournamentId, MB.Blog.buildSongArticle(milestone, result.url, { state, history }));
       renderSongMomentsPanel();
       return result;
     }
@@ -4107,7 +4114,7 @@ function renderRanking() {
         if (!MB.Blog.isPortraitDue(state, published, history)) return;
         const group = MB.Blog.nextPortraitGroup(state, history, published);
         if (!group) { portraitsComplete = true; return; }
-        const article = MB.Blog.buildPortraitArticle(group, state, history);
+        const article = MB.Blog.buildPortraitArticle(group, state, history, published);
         if (article) await MB.Blog.pushArticle(tid, article);
       } catch (e) {
         console.warn('Spielerporträt konnte nicht veröffentlicht werden:', e);
@@ -4124,6 +4131,11 @@ function renderRanking() {
         const cc = await getCommentContext();
         const article = MB.Blog.buildWrapUpArticle(state, history, { comments: cc.comments });
         if (article) { await MB.Blog.pushArticle(tid, article); cc.commit(); }
+        // Toilet-Bowl-Beitrag (inkl. Song, falls vorhanden) direkt hinterher
+        if ((await MB.Blog.countArticlesByKind(tid, 'toiletbowl')) === 0) {
+          const tbArticle = MB.Blog.buildToiletBowlArticle(state, history);
+          if (tbArticle) await MB.Blog.pushArticle(tid, tbArticle);
+        }
       } catch (e) {
         console.warn('Abschluss-Artikel konnte nicht veröffentlicht werden:', e);
       }
@@ -4227,7 +4239,7 @@ function renderRanking() {
 
     async function postRecordBlogArticle(entry) {
       const tournamentId = MB.getCurrentTournamentId();
-      const article = MB.Blog.buildRecordArticle(entry.record);
+      const article = MB.Blog.buildRecordArticle(entry.record, { state, history });
       try {
         if (entry.imageUrl) {
           article.media_url = entry.imageUrl;
@@ -4331,7 +4343,7 @@ function renderRanking() {
       if (!sessionRecords.length) {
         el.innerHTML = `<div class="hint" style="font-size:0.85em; opacity:0.7;">
           Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore, Allzeit-/Turnier-Klatsche,
-          Siegesserie, Überraschung, Abgeschossen, Shootout, Finaleinzug, neuer Champion) — auch am Handy über
+          Siegesserie, Überraschung, Blowout, Shootout, Finaleinzug, neuer Champion) — auch am Handy über
           im Dashboard sichtbar.
         </div>`;
         return;
@@ -4727,7 +4739,51 @@ function renderRanking() {
           <div id="orStatus" class="hint" style="font-size:0.8em; opacity:0.8; margin-bottom:6px;"></div>
           <div id="orResults"></div>
         </div>
+
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304333;">
+          <div style="font-weight:bold; margin-bottom:4px;">🤖 KI-Texte für den Blog (alle Beitragsarten, Stil 11FREUNDE)</div>
+          <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:8px;">
+            Hier legst du fest, <b>welche Beitragsarten</b> beim Veröffentlichen von einer KI statt aus den festen Bausteinen geschrieben werden und
+            <b>mit welchem Modell</b>. Standard: alles aus (Bausteine). Die KI bekommt alle verwertbaren Fakten (Tabelle, Bilanzen, Historie, Playoff-Status,
+            Duell-Fakten, Rekord-Daten) plus den Baustein-Text als Ausgangstext. Enthält ihr Text Zahlen, die nicht in den Fakten stehen, oder ist er
+            unbrauchbar, wird er verworfen und der Baustein-Text veröffentlicht. Der Key ist derselbe wie im OpenRouter-Test oben (liegt nur in diesem Browser).
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+            <input type="password" id="llmKey" placeholder="OpenRouter API-Key (sk-or-…)" style="max-width:280px;" onchange="saveLlmKey()">
+            <label style="font-size:0.85em;">Standard-Modell:
+              <input type="text" id="llmDefaultModel" list="llmModelList" placeholder="z.B. openrouter/free" style="width:260px; display:inline-block;"></label>
+            <datalist id="llmModelList"></datalist>
+            <button class="btn-secondary" style="width:auto;" onclick="loadLlmModels()">📋 Free-Modelle laden</button>
+            <label style="font-size:0.85em;">Kreativität:
+              <input type="number" id="llmTemp" min="0" max="1.5" step="0.1" style="width:70px; display:inline-block;"></label>
+          </div>
+          <div id="llmKindTable" style="font-size:0.88em; margin-bottom:8px;"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+            <button class="btn-secondary" style="width:auto;" onclick="saveLlmSettings()">💾 Einstellungen speichern</button>
+            <span id="llmSaveStatus" class="hint" style="font-size:0.8em; opacity:0.8;"></span>
+          </div>
+          <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Stil-Prompt (System) anzeigen</summary><pre id="llmSystemPrompt" style="white-space:pre-wrap; font-size:0.75em; opacity:0.85;"></pre></details>
+
+          <div style="font-weight:bold; margin:10px 0 4px;">Test: Beiträge des letzten Turniers von der KI schreiben lassen</div>
+          <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:6px;">
+            Spielt das letzte abgeschlossene Turnier nach (wie der Blog-Testlauf), nimmt je Beitragsart die gewählte Anzahl Beiträge und lässt das Modell sie neu schreiben –
+            daneben siehst du den Baustein-Text, die mitgegebenen Fakten und ob die Prüfung den KI-Text durchgelassen hätte. Es wird nichts veröffentlicht.
+          </div>
+          <div id="llmTestKinds" style="font-size:0.85em; margin-bottom:6px;"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+            <label style="font-size:0.85em;">Beiträge je Art:
+              <select id="llmPerKind" style="width:auto; display:inline-block;"><option>1</option><option selected>2</option><option>3</option></select></label>
+            <label style="font-size:0.85em;">Vergleichsmodell (optional):
+              <input type="text" id="llmCompareModel" list="llmModelList" placeholder="zweites Modell" style="width:220px; display:inline-block;"></label>
+            <button class="btn-secondary" style="width:auto;" onclick="runLlmBlogTest()">▶ Test starten</button>
+            <button class="btn-secondary" style="width:auto;" onclick="downloadLlmBlogResults()">⬇️ Ergebnisse (.txt)</button>
+          </div>
+          <div id="llmStatus" class="hint" style="font-size:0.8em; opacity:0.8; margin-bottom:6px;"></div>
+          <div id="llmResults"></div>
+        </div>
       `;
+      try { initOrPanel(); } catch (e) { /* optional */ }
+      try { initLlmBlogPanel(); } catch (e) { /* optional */ }
     }
 
     // Reines Text-Testprotokoll aller Ansage-Varianten (siehe
@@ -4849,6 +4905,120 @@ function renderRanking() {
         rec.outputs.forEach(o => out.push('', o.error ? `--- ${o.model}: FEHLER: ${o.error}` : `--- ${o.model} (${o.seconds.toFixed(0)} s) ---`, ...(o.error ? [] : [`TITEL: ${o.title}`, '', o.body])));
       });
       saveTextFile(out.join('\n'), `blog-llm-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
+    }
+
+    // ---------- KI-Texte für den Blog (alle Beitragsarten) ----------
+    let llmModelsLoaded = [], llmResults = [], llmRunning = false;
+    function initLlmBlogPanel() {
+      if (!document.getElementById('llmKindTable') || !MB.LlmBlog) return;
+      const k = document.getElementById('llmKey'); if (k && !k.value) k.value = localStorage.getItem('mb_openrouter_key') || '';
+      const s = MB.LlmBlog.getSettings();
+      document.getElementById('llmDefaultModel').value = s.defaultModel || '';
+      document.getElementById('llmTemp').value = s.temperature;
+      document.getElementById('llmSystemPrompt').textContent = MB.LlmBlog.SYSTEM_PROMPT;
+      document.getElementById('llmKindTable').innerHTML =
+        `<table style="border-collapse:collapse; width:100%;"><tr style="opacity:.7; text-align:left;"><th>KI schreibt produktiv</th><th>Beitragsart</th><th>Modell (leer = Standard)</th></tr>` +
+        Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) =>
+          `<tr><td style="padding:3px 6px;"><input type="checkbox" class="llmKindOn" data-kind="${kind}" ${s.kinds[kind].enabled ? 'checked' : ''}></td>` +
+          `<td style="padding:3px 6px;">${orEsc(meta.label)}</td>` +
+          `<td style="padding:3px 6px;"><input type="text" class="llmKindModel" data-kind="${kind}" list="llmModelList" value="${orEsc(s.kinds[kind].model || '')}" placeholder="Standard" style="width:260px;"></td></tr>`).join('') + `</table>`;
+      document.getElementById('llmTestKinds').innerHTML = 'Beitragsarten im Test: ' + Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) =>
+        `<label style="margin-right:10px; white-space:nowrap;"><input type="checkbox" class="llmTestKind" value="${kind}" checked> ${orEsc(meta.label)}</label>`).join('');
+    }
+    window.addEventListener('load', () => { try { initLlmBlogPanel(); } catch (e) { /* Panel optional */ } });
+    function saveLlmKey() { localStorage.setItem('mb_openrouter_key', document.getElementById('llmKey').value.trim()); }
+    function saveLlmSettings() {
+      const s = MB.LlmBlog.getSettings();
+      s.defaultModel = document.getElementById('llmDefaultModel').value.trim() || 'openrouter/free';
+      s.temperature = parseFloat(document.getElementById('llmTemp').value) || 0.8;
+      document.querySelectorAll('.llmKindOn').forEach(c => { s.kinds[c.dataset.kind].enabled = c.checked; });
+      document.querySelectorAll('.llmKindModel').forEach(c => { s.kinds[c.dataset.kind].model = c.value.trim(); });
+      MB.LlmBlog.saveSettings(s); saveLlmKey();
+      const on = Object.entries(s.kinds).filter(([, v]) => v.enabled).map(([k]) => MB.LlmBlog.KINDS[k].label);
+      document.getElementById('llmSaveStatus').textContent = on.length ? `Gespeichert. KI schreibt künftig: ${on.join(', ')}.` : 'Gespeichert. Alle Beiträge kommen weiter aus den Bausteinen.';
+    }
+    async function loadLlmModels() {
+      const st = document.getElementById('llmStatus'); st.textContent = 'Lade Free-Modelle von OpenRouter …';
+      try {
+        llmModelsLoaded = await MB.LlmTest.fetchFreeModels();
+        document.getElementById('llmModelList').innerHTML = ['openrouter/free', ...llmModelsLoaded.map(m => m.id)].map(id => `<option value="${orEsc(id)}">`).join('');
+        st.textContent = `${llmModelsLoaded.length} Free-Modelle geladen (Vorschläge in den Modell-Feldern, dort kann auch jede andere OpenRouter-Modell-ID stehen).`;
+      } catch (e) { st.textContent = 'Fehler: ' + e.message; }
+    }
+    async function runLlmBlogTest() {
+      if (llmRunning) return;
+      initLlmBlogPanel(); saveLlmKey();
+      const key = document.getElementById('llmKey').value.trim();
+      const st = document.getElementById('llmStatus'), box = document.getElementById('llmResults');
+      if (!key) { st.textContent = 'Bitte zuerst den OpenRouter-API-Key eintragen.'; return; }
+      const models = [document.getElementById('llmDefaultModel').value.trim() || 'openrouter/free'];
+      const cmp = document.getElementById('llmCompareModel').value.trim(); if (cmp && !models.includes(cmp)) models.push(cmp);
+      const kinds = new Set([...document.querySelectorAll('.llmTestKind:checked')].map(c => c.value));
+      const perKind = parseInt(document.getElementById('llmPerKind').value, 10) || 2;
+      llmRunning = true; llmResults = []; box.innerHTML = '';
+      try {
+        st.textContent = 'Lade das letzte abgeschlossene Turnier …';
+        const lt = await loadLastTournament(true);
+        if (!lt || !lt.state) throw new Error('Kein abgeschlossenes Turnier gefunden' + (lastTournamentError ? ': ' + lastTournamentError : ''));
+        st.textContent = `Spiele Turnier ${lt.year} nach …`;
+        await new Promise(r => setTimeout(r, 30));
+        const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
+        // je Art gleichmäßig über das Turnier verteilt auswählen
+        const picked = [];
+        Object.keys(MB.LlmBlog.KINDS).filter(k => kinds.has(k)).forEach(kind => {
+          const list = res.articles.filter(x => x.kind === kind);
+          if (!list.length) return;
+          const n = Math.min(perKind, list.length);
+          for (let i = 0; i < n; i++) picked.push(list[Math.floor((i + 0.5) * list.length / n)]);
+        });
+        if (!picked.length) throw new Error('Keine Beiträge der gewählten Arten im Testlauf gefunden.');
+        const total = picked.length * models.length; let done = 0;
+        for (const art of picked) {
+          const label = MB.LlmBlog.KINDS[art.kind].label;
+          const base = MB.LlmBlog.buildMessages(art, null);
+          const card = document.createElement('div');
+          card.style.cssText = 'border:1px solid #2a3a55; border-radius:8px; padding:12px; margin:10px 0; background:rgba(0,0,0,.18);';
+          card.innerHTML = `<div style="font-weight:bold; margin-bottom:4px;">${orEsc(label)}: ${orEsc(art.title)} <span style="opacity:.6; font-weight:normal;">· ${orEsc(art.when || '')}</span></div>
+            <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Mitgegebene Fakten + Prompt anzeigen</summary><pre style="white-space:pre-wrap; font-size:0.75em; opacity:.85;">${orEsc(base.messages[1].content)}</pre></details>
+            <div style="font-size:0.8em; opacity:.7; margin-bottom:2px;">Baustein-Text (so wäre er ohne KI erschienen)</div>
+            <div style="padding:8px; background:rgba(255,255,255,.05); border-radius:6px; white-space:pre-wrap; font-size:0.9em;">${orEsc(String(art.body).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''))}</div>
+            <div class="llmOut"></div>`;
+          box.appendChild(card);
+          const out = card.querySelector('.llmOut');
+          const rec = { label, title: art.title, when: art.when, prompt: base.messages[1].content, current: String(art.body).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''), outputs: [] };
+          llmResults.push(rec);
+          for (const model of models) {
+            st.textContent = `Schreibe Beitrag ${done + 1}/${total} (${label}) mit ${model} …`;
+            const t0 = Date.now(); let html, entry;
+            try {
+              const r = await MB.LlmBlog.generate({ key, model, article: art, ctx: null, temperature: MB.LlmBlog.getSettings().temperature });
+              const words = r.body.split(/\s+/).filter(Boolean).length;
+              entry = { model: r.model, title: r.title, body: r.body, problems: r.problems, seconds: (Date.now() - t0) / 1000 };
+              const verdict = r.problems.length ? `<span style="color:#ff8a8a;">⚠ würde verworfen: ${orEsc(r.problems.join('; '))}</span>` : '<span style="color:#7fdc9b;">✓ Prüfung bestanden</span>';
+              html = `<div style="margin-top:10px;"><div style="font-size:0.8em; color:var(--v2-gold);">${orEsc(r.model)} · ${words} Wörter · ${entry.seconds.toFixed(0)} s · ${verdict}</div>
+                <div style="font-weight:bold; margin:2px 0;">${orEsc(r.title || '(kein Titel erkannt)')}</div>
+                <div style="white-space:pre-wrap; font-size:0.92em; padding:8px; background:rgba(201,151,0,.08); border-radius:6px;">${orEsc(r.body)}</div></div>`;
+            } catch (e) {
+              entry = { model, error: e.message };
+              html = `<div style="margin-top:10px; font-size:0.85em; color:#ff8a8a;">${orEsc(model)}: ${orEsc(e.message)}</div>`;
+            }
+            rec.outputs.push(entry); out.insertAdjacentHTML('beforeend', html);
+            done++;
+            if (done < total) await new Promise(r => setTimeout(r, 3500)); // Free-Limit: 20 Anfragen/Minute
+          }
+        }
+        st.textContent = `Fertig: ${picked.length} Beiträge × ${models.length} Modell(e).`;
+      } catch (e) { st.textContent = 'Fehler: ' + e.message; console.error(e); }
+      llmRunning = false;
+    }
+    function downloadLlmBlogResults() {
+      if (!llmResults.length) { alert('Noch keine Ergebnisse — erst den Test starten.'); return; }
+      const out = ['ALTIMA BOWL — KI-BLOG-TEST (alle Beitragsarten)', `Erzeugt am ${new Date().toLocaleString('de-DE')}`, '', 'SYSTEM-PROMPT:', MB.LlmBlog.SYSTEM_PROMPT];
+      llmResults.forEach((rec, i) => {
+        out.push('', '='.repeat(72), `BEITRAG ${i + 1} · ${rec.label}: ${rec.title} (${rec.when || ''})`, '='.repeat(72), '', 'USER-PROMPT (inkl. Fakten):', rec.prompt, '', '--- BAUSTEIN-TEXT ---', rec.current);
+        rec.outputs.forEach(o => out.push('', o.error ? `--- ${o.model}: FEHLER: ${o.error}` : `--- ${o.model} (${o.seconds.toFixed(0)} s)${o.problems && o.problems.length ? ' — WÜRDE VERWORFEN: ' + o.problems.join('; ') : ' — Prüfung bestanden'} ---`, ...(o.error ? [] : [`TITEL: ${o.title}`, '', o.body])));
+      });
+      saveTextFile(out.join('\n'), `blog-ki-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
     }
 
     function downloadAnnouncerDryRun() {

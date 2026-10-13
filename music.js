@@ -102,6 +102,62 @@
     return best;
   }
 
+  // Bilanz eines Spielers im bisherigen Turnier (Gruppenphase + Playoffs), nur
+  // abgeschlossene Spiele ohne Freilose. Liefert Siege/Niederlagen insgesamt,
+  // in der Gruppenphase, Seed und Historien-Badges (Neuling, Titel, ...).
+  function playerTournamentFacts(state, history, player) {
+    if (!player || !player.name) return null;
+    const name = player.name;
+    const done = (m) => m && m.s1 != null && m.s2 != null;
+    let gw = 0, gl = 0, pw = 0, pl = 0;
+    (state.matches || []).forEach((m) => {
+      if (!done(m)) return;
+      const a = state.players[m.p1], b = state.players[m.p2];
+      if (!a || !b || (a.name !== name && b.name !== name)) return;
+      const won = (a.name === name) === (m.s1 > m.s2);
+      if (m.s1 === m.s2) return;
+      won ? gw++ : gl++;
+    });
+    (state.playoffMatches || []).forEach((m) => {
+      if (!done(m) || !m.p1 || !m.p2 || m.p1.id === -1 || m.p2.id === -1) return;
+      if (m.p1.name !== name && m.p2.name !== name) return;
+      if (m.s1 === m.s2) return;
+      const won = (m.p1.name === name) === (m.s1 > m.s2);
+      won ? pw++ : pl++;
+    });
+    let seed = null, badge = null;
+    try { seed = MB.getGroupSeedsFinal(state).get(name) || null; } catch (e) {}
+    try { badge = MB.computeRingIntroBadges(history, [name]).get(String(name).trim().toLowerCase()) || null; } catch (e) {}
+    return { name, team: player.team, seed, groupWins: gw, groupLosses: gl, playoffWins: pw, playoffLosses: pl, wins: gw + pw, losses: gl + pl, badge };
+  }
+
+  function describePlayerFactsDE(f) {
+    if (!f) return "";
+    const parts = [];
+    if (f.seed) parts.push(`als Seed ${f.seed} aus der Gruppenphase gekommen`);
+    parts.push(`im ganzen Turnier bisher ${f.wins} ${f.wins === 1 ? "Sieg" : "Siege"} und ${f.losses} ${f.losses === 1 ? "Niederlage" : "Niederlagen"} (Gruppenphase ${f.groupWins}-${f.groupLosses}, Playoffs ${f.playoffWins}-${f.playoffLosses})`);
+    const b = f.badge;
+    if (b) {
+      if (b.isRookie) parts.push("Neuling beim ersten Turnier");
+      else if (b.titles) parts.push(`${b.titles} ${b.titles === 1 ? "früherer Titel" : "frühere Titel"}`);
+      if (b.isDefendingChampion) parts.push("amtierender Champion der Vorsaison");
+    }
+    return `${f.name}: ${parts.join(", ")}.`;
+  }
+  function describePlayerFactsEN(f) {
+    if (!f) return "";
+    const parts = [];
+    if (f.seed) parts.push(`came out of the group stage as seed ${f.seed}`);
+    parts.push(`${f.wins} ${f.wins === 1 ? "win" : "wins"} and ${f.losses} ${f.losses === 1 ? "loss" : "losses"} in the whole tournament so far (group stage ${f.groupWins}-${f.groupLosses}, playoffs ${f.playoffWins}-${f.playoffLosses})`);
+    const b = f.badge;
+    if (b) {
+      if (b.isRookie) parts.push("a rookie in their first tournament");
+      else if (b.titles) parts.push(`${b.titles} previous ${b.titles === 1 ? "title" : "titles"}`);
+      if (b.isDefendingChampion) parts.push("the reigning champion");
+    }
+    return `${f.name}: ${parts.join(", ")}.`;
+  }
+
   // Reimbare Kurzfassung der Abschlusstabelle nach der Regular Season
   // (Seed-Reihenfolge, Team, Bilanz) — Grundlage für den "recap"-Song.
   function buildStandingsTable(state, seedByName, lang) {
@@ -125,7 +181,7 @@
       if (lang === "de") {
         let facts = `Die Regular Season eines Fantasy-Football-Turniers namens Altima Bowl ist gerade zu Ende gegangen. ` +
           `Hier die komplette Abschlusstabelle, vom besten zum schlechtesten Seed: ${table}. `;
-        if (best) facts += `Der deutlichste Sieg der Saison war ${best.winner.name}s ${best.winnerScore}:${best.loserScore} gegen ${best.loser.name}. `;
+        if (best) facts += `Der deutlichste Sieg der Saison war das ${best.winnerScore}:${best.loserScore} von ${best.winner.name} gegen ${best.loser.name}. `;
         facts += `Die Playoffs beginnen gleich, gesetzt genau in dieser Reihenfolge.`;
         return facts;
       }
@@ -145,14 +201,16 @@
         let facts = `In einem Fantasy-Football-Turnier namens Altima Bowl ist gerade der allererste Spieler aus den Playoffs ausgeschieden. `;
         if (loser) facts += `${loser.name}, mit den ${loser.team}, ist als Erster raus, `;
         if (winner) facts += `ausgeschieden gegen ${winner.name} (${winner.team}) mit einem Ergebnis von ${eliminatedMatch.s1}:${eliminatedMatch.s2}. `;
-        facts += `Der Titeltraum endet hier, während alle anderen eine weitere Runde überleben.`;
-        return facts;
+        facts += `Der Titeltraum endet hier, während alle anderen eine weitere Runde überleben. `;
+        facts += `Hintergrund zu den Beteiligten — ${describePlayerFactsDE(playerTournamentFacts(state, history, loser))} ${describePlayerFactsDE(playerTournamentFacts(state, history, winner))}`;
+        return facts.trim();
       }
       let facts = `In a fantasy football tournament called the Altima Bowl, the very first player has just been eliminated from the playoffs. `;
       if (loser) facts += `${loser.name}, playing as the ${loser.team}, is the first one out, `;
       if (winner) facts += `eliminated by ${winner.name} (${winner.team}) with a score of ${eliminatedMatch.s1}-${eliminatedMatch.s2}. `;
-      facts += `Their championship run ends here, while everyone else survives another round.`;
-      return facts;
+      facts += `Their championship run ends here, while everyone else survives another round. `;
+      facts += `Background on the two players — ${describePlayerFactsEN(playerTournamentFacts(state, history, loser))} ${describePlayerFactsEN(playerTournamentFacts(state, history, winner))}`;
+      return facts.trim();
     }
 
     if (milestone === "toiletBowl") {
@@ -167,8 +225,9 @@
             `während ${loser.name} durch die Niederlage in der Tabelle wieder nach oben klettert. `;
         }
         facts += `Es ist die peinlichste Trophäe im Altima Bowl, und das weiß auch jeder. `;
-        if (winner) facts += `Der Trost: Mit diesem Sieg hat sich ${winner.name} den allerersten Pick im Draft des nächsten Jahres gesichert.`;
-        return facts;
+        if (winner) facts += `Der Trost: Mit diesem Sieg hat sich ${winner.name} den allerersten Pick im Draft des nächsten Jahres gesichert. `;
+        facts += `Hintergrund zu den Beteiligten — ${describePlayerFactsDE(playerTournamentFacts(state, history, winner))} ${describePlayerFactsDE(playerTournamentFacts(state, history, loser))}`;
+        return facts.trim();
       }
       let facts = `In a fantasy football tournament called the Altima Bowl, the two worst-performing players of the whole tournament just faced off in the "Toilet Bowl" — a game nobody wants to win. `;
       if (winner && loser && tb) {
@@ -177,8 +236,9 @@
           `while ${loser.name} actually climbs back up the table for losing. `;
       }
       facts += `It's the most embarrassing trophy in the Altima Bowl, and everybody knows it. `;
-      if (winner) facts += `The consolation: with this win, ${winner.name} has locked up the very first pick in next year's draft.`;
-      return facts;
+      if (winner) facts += `The consolation: with this win, ${winner.name} has locked up the very first pick in next year's draft. `;
+      facts += `Background on the two players — ${describePlayerFactsEN(playerTournamentFacts(state, history, winner))} ${describePlayerFactsEN(playerTournamentFacts(state, history, loser))}`;
+      return facts.trim();
     }
 
     if (milestone === "finals") {
@@ -224,16 +284,26 @@
         let facts = `Ein Fantasy-Football-Turnier namens Altima Bowl hat seinen Champion gekrönt. `;
         if (champion && runnerUp && gf) {
           facts += `${champion.name}, mit den ${champion.team}, hat das Finale gegen ${runnerUp.name} (${runnerUp.team}) mit einem Endstand von ${Math.max(gf.s1, gf.s2)}:${Math.min(gf.s1, gf.s2)} gewonnen. `;
-          facts += `${champion.name} ist der neue Altima-Bowl-Champion, der beste Spieler des gesamten Turniers.`;
+          facts += `${champion.name} ist der neue Altima-Bowl-Champion, der beste Spieler des gesamten Turniers. `;
+          const cf = playerTournamentFacts(state, history, champion);
+          facts += `Sein Weg zum Titel — ${describePlayerFactsDE(cf)} `;
+          if (cf && cf.badge && !cf.badge.isRookie) facts += `Es ist sein ${(cf.badge.titles || 0) + 1}. Titel. `;
+          if (cf && cf.badge && cf.badge.isRookie) facts += `Er hat das Turnier als Neuling direkt gewonnen. `;
+          facts += `Der Unterlegene im Finale — ${describePlayerFactsDE(playerTournamentFacts(state, history, runnerUp))}`;
         }
-        return facts;
+        return facts.trim();
       }
       let facts = `A fantasy football tournament called the Altima Bowl has crowned its champion. `;
       if (champion && runnerUp && gf) {
         facts += `${champion.name}, playing as the ${champion.team}, won the championship game against ${runnerUp.name} (${runnerUp.team}) with a final score of ${Math.max(gf.s1, gf.s2)}-${Math.min(gf.s1, gf.s2)}. `;
-        facts += `${champion.name} is the new Altima Bowl champion, the best player of the whole tournament.`;
+        facts += `${champion.name} is the new Altima Bowl champion, the best player of the whole tournament. `;
+        const cf = playerTournamentFacts(state, history, champion);
+        facts += `Their road to the title — ${describePlayerFactsEN(cf)} `;
+        if (cf && cf.badge && !cf.badge.isRookie) facts += `It is their title number ${(cf.badge.titles || 0) + 1}. `;
+        if (cf && cf.badge && cf.badge.isRookie) facts += `They won the whole thing as a rookie. `;
+        facts += `The runner-up — ${describePlayerFactsEN(playerTournamentFacts(state, history, runnerUp))}`;
       }
-      return facts;
+      return facts.trim();
     }
 
     return lang === "de" ? "Ein Fantasy-Football-Turnier namens Altima Bowl läuft gerade." : "A fantasy football tournament called the Altima Bowl is underway.";

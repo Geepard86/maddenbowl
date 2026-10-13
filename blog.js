@@ -19,8 +19,45 @@
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
+  // Redaktionelle Nachbearbeitung jedes Absatzes: keine doppelten Punkte hinter
+  // abgekürzten Namen ("Tobi F.." -> "Tobi F."), keine Leerzeichen vor
+  // Satzzeichen, keine losen Ordnungspunkte ("5 ." -> "5."). Auslassungspunkte
+  // ("...") bleiben erhalten.
+  function tidy(text) {
+    return String(text == null ? "" : text)
+      .replace(/(?<![.])\.\.(?![.])/g, ".")
+      .replace(/[ \t]+([.,;!?])/g, "$1")
+      .replace(/,{2,}/g, ",")
+      .replace(/[ \t]{2,}/g, " ");
+  }
+
   function paragraphs(parts) {
-    return parts.filter(Boolean).join("\n\n");
+    return parts.filter(Boolean).map(tidy).join("\n\n");
+  }
+
+  // "A", "A und B", "A, B und C"
+  function joinNames(names) {
+    const list = (names || []).filter(Boolean);
+    if (list.length <= 1) return list[0] || "";
+    return list.slice(0, -1).join(", ") + " und " + list[list.length - 1];
+  }
+
+  function pluralDE(n, one, many) {
+    return `${n} ${Number(n) === 1 ? one : many}`;
+  }
+
+  // Wie pick(), vermeidet aber, dasselbe Element wie in den letzten Aufrufen
+  // derselben Gruppe zu wählen (z.B. den Abschlusssatz zweier Rekord-Beiträge
+  // hintereinander).
+  const _lastPicked = {};
+  function pickFresh(key, arr, memory) {
+    const hist = _lastPicked[key] || (_lastPicked[key] = []);
+    let pool = arr.filter((x) => !hist.includes(x));
+    if (!pool.length) pool = arr;
+    const chosen = pick(pool);
+    hist.push(chosen);
+    while (hist.length > Math.min(memory == null ? 3 : memory, Math.max(arr.length - 1, 1))) hist.shift();
+    return chosen;
   }
 
   function fill(template, vars) {
@@ -68,7 +105,7 @@
         "Ein paar Spiele sind gespielt, und langsam bekommt der Altima Bowl Konturen. Noch ist nichts entschieden – aber einige Herren arbeiten bereits fleißig daran, diese Aussage zu widerlegen.",
 
       focus: (leader) =>
-        `${leader.name} steht aktuell ganz oben. ${leader.wins || 0} Siege hat er bereits gesammelt${
+        `${leader.name} steht aktuell ganz oben. ${pluralDE(leader.wins || 0, "Sieg", "Siege")} hat er bereits gesammelt${
           leader.diff != null
             ? `, dazu eine Punktedifferenz von ${
                 leader.diff >= 0 ? "+" : ""
@@ -128,7 +165,7 @@
       opener:
         "Ein Spieltag muss nicht spektakulär aussehen, um etwas zu verändern. Manchmal reicht schon ein Ergebnis zur richtigen Zeit.",
 
-      focus: (leader, runnerUp, recent) =>
+      focus: (leader, runnerUp, third, recent) =>
         recent
           ? `${recent.winner} hat zuletzt gegen ${recent.loser} mit ${recent.score} gewonnen. Solche Partien wirken auf den ersten Blick wie ein einzelnes Ergebnis – in einer engen Tabelle können sie aber genau der Unterschied sein, der später über Playoff-Platz oder Zittern entscheidet.`
           : `${leader.name} führt aktuell das Feld an. Dahinter bleibt genug Bewegung, dass sich aus dem Zwischenstand noch keine gemütliche Meisterschaft machen lässt.`,
@@ -175,6 +212,17 @@
       "{winnerScore}:{loserScore}. Mehr muss man über die Kräfteverhältnisse zwischen {player} und {opponent} eigentlich nicht sagen. Es ist die deutlichste Niederlage, die der Altima Bowl bisher gesehen hat.",
     ],
 
+    // Highscore UND Klatsche im selben Spiel: EIN Eintrag statt mehrerer Beiträge.
+    allTimeMarginHigh: [
+      "Es gibt Spiele, die gewinnt man. Und es gibt Spiele, nach denen man einen Eintrag in den Geschichtsbüchern bekommt. {player} schlägt {opponent} {winnerScore}:{loserScore}. Das war nicht nur ein echtes Punktefeuerwerk, sondern auch der höchste Score und sogar die größte Klatsche der Turniergeschichte.",
+      "{winnerScore}:{loserScore} – {player} nimmt {opponent} auseinander und schreibt dabei gleich doppelt Geschichte: höchster Score und größte Klatsche, die der Altima Bowl je gesehen hat.",
+    ],
+
+    tournamentMarginHigh: [
+      "{player} schlägt {opponent} {winnerScore}:{loserScore}. Das ist nicht nur der deutlichste Sieg dieses Turniers, sondern mit {winnerScore} Punkten auch ein neuer Allzeit-Highscore.",
+      "So ein Ergebnis gibt es nicht alle Tage: {winnerScore}:{loserScore} für {player} gegen {opponent}. Größte Differenz des Turniers und gleichzeitig höchster Score aller Zeiten.",
+    ],
+
     tournamentMargin: [
       "Für den Allzeit-Rekord hat es diesmal nicht gereicht. Für eine Ansage innerhalb dieser Saison schon: {player} schlägt {opponent} {winnerScore}:{loserScore}.",
       "{player} hat heute offenbar beschlossen, keine Fragen offenzulassen. Mit {winnerScore}:{loserScore} gegen {opponent} steht die größte Differenz dieses Turniers.",
@@ -193,11 +241,6 @@
     blowout: [
       "{player} lässt {opponent} keine Chance: {winnerScore}:{loserScore}. Bei so einem Abstand geht es nicht mehr um die Frage, wer gewonnen hat, sondern nur noch darum, wie lange man darüber redet.",
       "Manche Spiele sind früh entschieden, dieses war es wohl noch früher. {player} schlägt {opponent} mit {winnerScore}:{loserScore} und lässt kaum Fragen offen.",
-    ],
-
-    shutout: [
-      "Ein Spiel, das vor allem eine Zahl hinterlässt: {loserScore}. {player} gewinnt gegen {opponent} {winnerScore}:{loserScore} und lässt dem Gegner kaum Raum für eine Antwort.",
-      "Für {opponent} war es einer dieser Abende, an denen selbst ein guter Start wahrscheinlich nicht geholfen hätte. {player} gewinnt {winnerScore}:{loserScore}.",
     ],
 
     shootout: [
@@ -388,7 +431,105 @@
     return `${head} ${quotes.join(" ")} – weiter so, die Spalte darf gern noch voller werden.`;
   }
 
+  // ----------------------------------------------------------------------
+  // POWER RANKING IN DEN PLAYOFFS
+  // Die Gruppentabelle ist dann irrelevant. Stattdessen: Wer ist im Upper
+  // Bracket noch ungeschlagen, wem reicht die nächste Niederlage zum Aus (Lower
+  // Bracket), wer ist schon draußen. Jeder Spieler kommt nur einmal vor.
+  // ----------------------------------------------------------------------
+  const PLAYOFF_ELIM_IDS = new Set(["lb1", "lb2", "lb3", "lb4", "ls", "lf"]);
+  const PLAYOFF_PHASE_TEXT = {
+    "Wildcard": "die Wildcard-Runde",
+    "Elim. R1": "die erste Runde im Lower Bracket",
+    "Upper Semi": "das Upper Semifinale",
+    "Elim. R2": "die zweite Runde im Lower Bracket",
+    "Upper Final": "das Upper Final",
+    "Elim. Semi": "das Halbfinale im Lower Bracket",
+    "Elim. Final": "das Elimination-Finale",
+    "Toilet Bowl": "die Toilet Bowl",
+    "Altima Bowl": "das große Finale",
+  };
+
+  function computePlayoffStatus(state) {
+    const status = new Map(); // name -> { losses, eliminated }
+    const matches = state.playoffMatches || [];
+    matches.forEach((m) => {
+      [m.p1, m.p2].forEach((p) => {
+        if (p && p.id !== -1 && p.name && !status.has(p.name)) status.set(p.name, { losses: 0, eliminated: false });
+      });
+    });
+    matches.forEach((m) => {
+      if (!m.p1 || !m.p2 || m.p2.id === -1 || !MB.isFinished(m)) return;
+      if (m.id === "tb" || m.id === "gf") return; // Platzierungs-/Finalspiel: kein Bracket-Status
+      const loser = MB.loserOf(m);
+      if (!loser || !status.has(loser.name)) return;
+      const st = status.get(loser.name);
+      st.losses++;
+      if (PLAYOFF_ELIM_IDS.has(m.id)) st.eliminated = true;
+    });
+    const upper = [], lower = [], out = [];
+    status.forEach((st, name) => {
+      if (st.eliminated) out.push(name);
+      else if (st.losses === 0) upper.push(name);
+      else lower.push(name);
+    });
+    return { upper, lower, out };
+  }
+
+  function isPlayoffPhaseStarted(state) {
+    return (state.playoffMatches || []).some((m) => m.p1 && m.p2 && m.p2.id !== -1 && MB.isFinished(m));
+  }
+
+  function buildPlayoffProgressArticle(state, history, finishedCount, opts) {
+    const { upper, lower, out } = computePlayoffStatus(state);
+    const next = (state.playoffMatches || []).find((m) => m.p1 && m.p2 && m.p2.id !== -1 && !MB.isFinished(m));
+    const nextText = next && PLAYOFF_PHASE_TEXT[next.phase];
+    const parts = [pick([
+      "Die Gruppenphase ist Geschichte, jetzt zählt jedes Spiel doppelt: Wer verliert, rutscht ab – und wer ein zweites Mal verliert, ist raus.",
+      "In den Playoffs wird nicht mehr gerechnet, sondern gespielt. Ein Blick darauf, wer noch alle Optionen hat und wer auf Messers Schneide steht.",
+      "Playoff-Zeit heißt: Fehler werden bestraft. Zeit für eine Bestandsaufnahme im Bracket.",
+    ])];
+
+    if (upper.length) {
+      parts.push(
+        upper.length === 1
+          ? `Im Upper Bracket ist ${upper[0]} als Einziger noch ungeschlagen und hat damit den direkten Weg ins Finale vor sich.`
+          : `Im Upper Bracket sind ${joinNames(upper)} noch ungeschlagen. Wer von ihnen verliert, bekommt im Lower Bracket eine zweite Chance – mehr aber nicht.`
+      );
+    }
+    if (lower.length) {
+      parts.push(
+        lower.length === 1
+          ? `Im Lower Bracket steht ${lower[0]} mit dem Rücken zur Wand: Die nächste Niederlage bedeutet das Aus.`
+          : `Im Lower Bracket gilt für ${joinNames(lower)} dasselbe Gesetz: Die nächste Niederlage bedeutet das Aus.`
+      );
+    }
+    if (out.length) {
+      parts.push(
+        out.length === 1
+          ? `Schon ausgeschieden ist ${out[0]}. Für ihn bleibt nur noch der Blick auf die anderen.`
+          : `Schon ausgeschieden sind ${joinNames(out)}. Für sie bleibt nur noch der Blick auf die anderen.`
+      );
+    }
+    if (nextText) parts.push(`Als Nächstes steht ${nextText} an. Dort wird sich entscheiden, wer im Rennen um den Ring bleibt.`);
+
+    const commentPara = buildCommentParagraph(opts && opts.comments);
+    if (commentPara) parts.push(commentPara);
+    parts.push(pick([
+      "Jetzt zählt nur noch Gewinnen. Alles andere ist Statistik.",
+      "Ab hier gibt es keine zweite Chance mehr für die, die im Lower Bracket stehen – und für alle anderen höchstens eine.",
+      "Der Weg zum Ring ist kürzer geworden. Und deutlich unbequemer.",
+    ]));
+
+    return {
+      kind: "progress",
+      title: `Power Ranking: Die Playoffs im Überblick (nach ${finishedCount} Spielen)`,
+      body: paragraphs(parts),
+    };
+  }
+
   function buildProgressArticle(state, history, finishedCount, opts) {
+    if (isPlayoffPhaseStarted(state)) return buildPlayoffProgressArticle(state, history, finishedCount, opts);
     const sorted = [...(state.players || [])].sort(
       (a, b) =>
         (b.wins || 0) - (a.wins || 0) ||
@@ -433,6 +574,9 @@
       : null;
 
     const parts = [style.opener];
+    // Jeder Spieler soll im Text nur einmal vorkommen: der Fokus-Absatz nennt
+    // je nach Stil schon Platz 2/3, die Folge-Absätze ergänzen nur, wer noch fehlt.
+    const mentioned = () => parts.join(" ");
 
     if (leaders.length) {
       parts.push(
@@ -444,9 +588,14 @@
         )
       );
 
-      if (leaders[1] && leaders[2]) {
+      const rest = [leaders[1], leaders[2]].filter((p) => p && !mentioned().includes(p.name));
+      if (rest.length === 2) {
         parts.push(
-          `Dahinter bleiben ${leaders[1].name} und ${leaders[2].name} in Schlagdistanz. Gerade dort wird sich zeigen, wer aus einem guten Start tatsächlich eine gute Saison machen kann.`
+          `Dahinter bleiben ${rest[0].name} und ${rest[1].name} in Schlagdistanz. Gerade dort wird sich zeigen, wer aus einem guten Start tatsächlich eine gute Saison machen kann.`
+        );
+      } else if (rest.length === 1) {
+        parts.push(
+          `Dahinter bleibt ${rest[0].name} in Schlagdistanz. Dort wird sich zeigen, ob aus einem guten Start tatsächlich eine gute Saison wird.`
         );
       }
     } else {
@@ -455,7 +604,8 @@
       );
     }
 
-    if (recent && !style.consumesRecent) {
+    // Das letzte Ergebnis nur nennen, wenn dadurch niemand ein zweites Mal vorkommt.
+    if (recent && !style.consumesRecent && !mentioned().includes(recent.winner) && !mentioned().includes(recent.loser)) {
       parts.push(
         `Zuletzt setzte sich ${recent.winner} gegen ${recent.loser} mit ${recent.score} durch. Ein einzelnes Spiel entscheidet noch keine Saison – aber es kann durchaus entscheiden, wer die nächste Partie mit etwas mehr Ruhe angeht.`
       );
@@ -476,6 +626,27 @@
   // REKORD
   // ======================================================================
 
+  // Abschlusssätze: bewusst viele Varianten, damit nicht jeder Rekord-Beitrag
+  // gleich endet. pickFresh() vermeidet Wiederholungen direkt hintereinander.
+  const RECORD_CLOSERS_GENERIC = [
+    "Ein neuer Eintrag für die Altima-Bowl-Geschichtsbücher – und vermutlich Material für die nächste WhatsApp-Diskussion.",
+    "Notiert, gespeichert, nicht mehr zu ändern. Die Hall of Fame hat wieder etwas zu tun.",
+    "Das wird beim nächsten Treffen garantiert nicht unerwähnt bleiben.",
+    "Ob dieser Wert lange Bestand hat, zeigen die nächsten Spiele.",
+    "Die Konkurrenz hat es zur Kenntnis genommen – und wird es so schnell nicht vergessen.",
+    "Wer als Nächstes gegen diesen Namen spielt, weiß jetzt, worauf er sich einlässt.",
+    "Die Statistik hat gesprochen. Diskussionen sind trotzdem ausdrücklich erlaubt.",
+  ];
+  const RECORD_CLOSERS = {
+    allTimeMargin: ["Wer so verliert, braucht vermutlich ein paar Tage, bis er wieder über dieses Spiel redet."],
+    tournamentMargin: ["Der Maßstab für den Rest des Turniers steht – wer ihn überbieten will, muss schon einiges auffahren."],
+    blowout: ["Bei so einem Abstand bleibt dem Verlierer nur das Prinzip Hoffnung für die Revanche."],
+    upset: ["Papierform ist eben auch nur Papier."],
+    winStreak: ["Irgendwann reißt jede Serie. Die Frage ist nur, wer sie beendet."],
+    shootout: ["Verteidigung wird in diesem Spiel ausdrücklich überbewertet."],
+    allTimeHigh: ["Eine Zahl, an der sich künftig alle messen lassen müssen."],
+  };
+
   function buildRecordArticle(record) {
     const info =
       MB.Records.RECORD_TYPES[record.type] || {
@@ -483,7 +654,8 @@
         emoji: "🏈",
       };
 
-    const pool = RECORD_INTROS[record.type];
+    const combined = (record.alsoTypes || []).includes("allTimeHigh");
+    const pool = (combined && RECORD_INTROS[record.type + "High"]) || RECORD_INTROS[record.type];
 
     const vars = {
       ...record,
@@ -505,13 +677,15 @@
         ? `Der Blick auf die Ausgangslage macht den Sieg besonders bemerkenswert: ${record.player} lag in der Setzliste deutlich hinter ${record.opponent}. Auf dem Feld spielte das offenbar keine Rolle.`
         : null;
 
+    const closers = [...(RECORD_CLOSERS[record.type] || []), ...RECORD_CLOSERS_GENERIC];
+
     return {
       kind: "record",
-      title: `${info.emoji} ${info.label}`,
+      title: `${info.emoji} ${info.label}${combined ? " & Allzeit-Highscore" : ""}`,
       body: paragraphs([
         intro,
         detail ? fill(detail, vars) : null,
-        "Ein neuer Eintrag für die Altima-Bowl-Geschichtsbücher – und vermutlich Material für die nächste WhatsApp-Diskussion.",
+        pickFresh("recordCloser", closers, 4),
       ]),
     };
   }
@@ -681,7 +855,7 @@
 
     if (hasOrdinalMapping) {
       const mapping = candidate.isPlayer
-        ? `${candidate.player}s Spielverlauf wird der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`
+        ? `Der Spielverlauf von ${candidate.player} wird der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`
         : `Die betrachteten Turnier-Saisons werden der zeitlichen Reihenfolge nach den ${candidate.years.length} zuletzt verfügbaren Jahren von „${candidate.germanName}“ gegenübergestellt`;
       parts.push(
         `<strong>Datengrundlage.</strong> ${mapping} (älteste Beobachtung zu ältestem Jahr, jüngste zu jüngstem Jahr) — nicht notwendigerweise demselben Kalenderjahr. Quelle: ${candidate.germanSource}.`
@@ -775,9 +949,17 @@
   }
 
   // Teilt die aktuellen Spieler in die drei Porträt-Gruppen ein.
-  function computePortraitGroups(state, history) {
+  // portrayed: Spieler, die schon in einem früheren Porträt vorkamen, werden
+  // nicht noch einmal einsortiert (sonst taucht jemand erst bei den Contendern
+  // und später beim Rest des Feldes auf, weil sich die Tabelle verschoben hat).
+  function portrayedOf(published) {
+    return (published && published.players) || new Set();
+  }
+
+  function computePortraitGroups(state, history, published) {
     const players = state.players || [];
-    const names = players.map((p) => p.name).filter(Boolean);
+    const done = portrayedOf(published);
+    const names = players.map((p) => p.name).filter(Boolean).filter((n) => !done.has(n));
     const safeHistory = history || { seasons: [], matches: [], byPlayer: new Map() };
     const badges = MB.computeRingIntroBadges ? MB.computeRingIntroBadges(safeHistory, names) : new Map();
     const { ranks } = lastSeasonRanks(safeHistory);
@@ -803,7 +985,8 @@
     // es überhaupt einen Vorjahressieger gibt, der jetzt fehlt.
     const previousChampion = lastSeasonChampionName(safeHistory);
     let championAbsent = false;
-    if (!groups.champion.length && previousChampion) {
+    const championDone = !!(published && published.has && published.has("champion"));
+    if (!groups.champion.length && previousChampion && !championDone) {
       const challenger = pickHottestChallenger(names, badges, ranks, safeHistory);
       if (challenger) {
         groups.contender = groups.contender.filter((n) => n !== challenger);
@@ -953,7 +1136,7 @@
   // Liefert die nächste noch nicht veröffentlichte, nicht-leere Gruppe
   // (Reihenfolge: Titelverteidiger, Contender, Rest) oder null.
   function nextPortraitGroup(state, history, publishedGroups) {
-    const { groups } = computePortraitGroups(state, history);
+    const { groups } = computePortraitGroups(state, history, publishedGroups);
     const done = publishedGroups || new Set();
     return PORTRAIT_ORDER.find((g) => groups[g].length && !done.has(g)) || null;
   }
@@ -965,8 +1148,8 @@
     return !!group && countFinishedMatches(state) >= PORTRAIT_AT[group];
   }
 
-  function buildPortraitArticle(group, state, history) {
-    const { groups, badges, ranks, championAbsent, previousChampion } = computePortraitGroups(state, history);
+  function buildPortraitArticle(group, state, history, published) {
+    const { groups, badges, ranks, championAbsent, previousChampion } = computePortraitGroups(state, history, published);
     const names = groups[group] || [];
     if (!names.length) return null;
 
@@ -977,7 +1160,7 @@
     const openerPool = group === "contender" && !hasDefender && text.openersNoDefender ? text.openersNoDefender : text.openers;
     const parts = [pick(openerPool).replace(/\{prev\}/g, previousChampion || "Der Titelverteidiger")];
     if (group === "field" && rookies.length) {
-      parts.push(`Besonders im Blick: ${rookies.length === 1 ? "der Rookie" : "die Rookies"} ${rookies.join(", ")} – ${rookies.length === 1 ? "er ist" : "sie sind"} zum ersten Mal beim Altima Bowl dabei.`);
+      parts.push(`Besonders im Blick: ${rookies.length === 1 ? "der Rookie" : "die Rookies"} ${joinNames(rookies)} – ${rookies.length === 1 ? "er ist" : "sie sind"} zum ersten Mal beim Altima Bowl dabei.`);
     }
     names.forEach((name) => {
       const key = name.toLowerCase();
@@ -1061,30 +1244,75 @@
     if (highTotal) facts.push(`Punktreichstes Spiel: ${highTotal.a} gegen ${highTotal.b} mit zusammen ${highTotal.total} Punkten.`);
     parts.push(`<strong>Die Zahlen.</strong> ${facts.join(" ")}`);
 
-    const tb = MB.getPlayoffMatch(state, "tb");
-    const tbWinner = MB.winnerOf(tb), tbLoser = MB.loserOf(tb);
-    if (tb && tbWinner && tbLoser) {
-      parts.push(`<strong>Die Toilet Bowl.</strong> ${tbWinner.name} setzt sich gegen ${tbLoser.name} durch – und darf sich damit über die undankbarste Trophäe des Turniers freuen.`);
+    // Die Toilet Bowl bekommt einen eigenen Beitrag (buildToiletBowlArticle).
+    const champSong = (opts && opts.songUrl) || (state.songs && state.songs.champion) || null;
+    if (champSong) {
+      parts.push(`<strong>Der Soundtrack.</strong> Zum Titel von ${champion.name} gibt es den passenden Song – direkt hier zum Anhören.`);
     }
 
     const wrapComments = buildCommentParagraph(opts && opts.comments);
     if (wrapComments) parts.push(wrapComments);
     parts.push("Damit ist die Saison Geschichte. Alle Zahlen wandern in die Hall of Fame – und ab jetzt gilt wieder das Wichtigste beim Altima Bowl: Bis zur Revanche wird fleißig diskutiert.");
 
-    return {
+    const article = {
       kind: "wrapup",
       title: "🏆 Siegerehrung & Turnierrückblick",
       body: paragraphs(parts),
       data: { champion: champion.name, runnerUp: runnerUp.name },
     };
+    if (champSong) { article.media_url = champSong; article.media_type = "audio"; }
+    return article;
+  }
+
+  // ======================================================================
+  // TOILET-BOWL-ARTIKEL (erscheint zusammen mit dem Abschluss-Artikel nach dem
+  // letzten Spiel). Der Toilet-Bowl-SIEGER gewinnt das Spiel, landet aber ganz
+  // unten in der Endtabelle (und sichert sich den ersten Pick im nächsten
+  // Draft); der Verlierer klettert nach oben (siehe applyToiletBowlOverride).
+  // ======================================================================
+  function buildToiletBowlArticle(state, history, opts) {
+    const tb = MB.getPlayoffMatch(state, "tb");
+    const winner = tb ? MB.winnerOf(tb) : null;
+    const loser = tb ? MB.loserOf(tb) : null;
+    if (!tb || !winner || !loser) return null;
+
+    const ws = Math.max(tb.s1, tb.s2), ls = Math.min(tb.s1, tb.s2);
+    const song = (opts && opts.songUrl) || (state.songs && state.songs.toiletBowl) || null;
+    const parts = [
+      pick([
+        `Es gibt Siege, auf die man stolz ist. Und es gibt diesen: ${winner.name} gewinnt die Toilet Bowl gegen ${loser.name} mit ${ws}:${ls} – und landet damit ganz unten in der Endtabelle.`,
+        `Niemand wollte dieses Spiel gewinnen, einer musste es tun: ${winner.name} schlägt ${loser.name} mit ${ws}:${ls} und sichert sich damit die rote Laterne des Turniers.`,
+      ]),
+      `Die Regel ist gnadenlos: Wer die Toilet Bowl gewinnt, rutscht in der Gesamtwertung auf den letzten Platz. ${loser.name} klettert durch die Niederlage dagegen in der Tabelle nach oben.`,
+      `Immerhin gibt es einen Trost: ${winner.name} hat sich damit den allerersten Pick im Draft des nächsten Jahres gesichert.`,
+    ];
+    if (song) parts.push(`<strong>Der Soundtrack.</strong> Für die unangenehmste Trophäe der Saison gibt es auch einen eigenen Song – hier zum Anhören.`);
+    parts.push(pick([
+      "Damit ist auch die letzte Rechnung der Saison beglichen. Wer nächstes Jahr nicht hier landen will, weiß, was zu tun ist.",
+      "Die Toilet Bowl ist entschieden – und die Erkenntnis bleibt: Manchmal ist Verlieren die bessere Platzierung.",
+    ]));
+
+    const article = {
+      kind: "toiletbowl",
+      title: "🚽 Toilet Bowl: Die undankbarste Trophäe der Saison",
+      body: paragraphs(parts),
+      data: { winner: winner.name, loser: loser.name },
+    };
+    if (song) { article.media_url = song; article.media_type = "audio"; }
+    return article;
   }
 
   async function getPublishedPortraitGroups(tournamentId) {
     const articles = await fetchArticles(tournamentId, 200);
     const out = new Set();
+    const players = new Set();
     (articles || []).forEach((a) => {
-      if (a.kind === "portrait" && a.data && a.data.group) out.add(a.data.group);
+      if (a.kind === "portrait" && a.data && a.data.group) {
+        out.add(a.data.group);
+        (a.data.players || []).forEach((n) => players.add(n));
+      }
     });
+    out.players = players; // bereits porträtierte Spieler (jeder kommt nur einmal vor)
     return out;
   }
 
@@ -1095,6 +1323,11 @@
   let lastPushArticleError = null; // Diagnose-Hilfe für publishSpuriousToBlog() u.ä., siehe getLastPushArticleError()
 
   async function pushArticle(tournamentId, article) {
+    // Optional: KI schreibt den Text (nur für in den Einstellungen aktivierte
+    // Beitragsarten, mit Fallback auf den Baustein-Text; siehe llm-blog.js).
+    if (MB.LlmBlog && MB.LlmBlog.maybeRewrite) {
+      try { article = await MB.LlmBlog.maybeRewrite(article); } catch (e) { console.warn("KI-Rewrite übersprungen:", e); }
+    }
     const sb = MB.getSupabaseClient();
 
     if (!sb || !tournamentId) return null;
@@ -1327,17 +1560,41 @@
 
   global.MB = global.MB || {};
 
+  // Jeder automatische Beitrag bekommt zusätzlich ALLE verwertbaren Fakten
+  // (article.facts) und die Spielernamen (article._names) mitgegeben. Beides wird
+  // nicht gespeichert (pushArticle schreibt nur feste Felder), dient aber dem
+  // KI-Schreiber (llm-blog.js) und dem Testlauf. Die Fakten werden SOFORT beim
+  // Bauen ermittelt, weil sich der Turnierstand danach weiter ändert.
+  function withFacts(fn, ctxOf) {
+    return function () {
+      const a = fn.apply(this, arguments);
+      if (a && MB.LlmBlog && MB.LlmBlog.factsFor) {
+        try {
+          const ctx = ctxOf.apply(null, arguments) || {};
+          a.facts = MB.LlmBlog.factsFor(a, ctx);
+          a._names = ((ctx.state && ctx.state.players) || []).map((p) => p && p.name).filter(Boolean);
+        } catch (e) { /* Fakten sind optional */ }
+      }
+      return a;
+    };
+  }
+  const ctxState = (state, history) => ({ state, history });
+
   global.MB.Blog = {
-    buildKickoffArticle,
-    buildRetrospectiveArticle,
-    buildProgressArticle, buildCommentParagraph,
-    buildRecordArticle,
-    buildSongArticle,
-    buildFinalsArticle,
-    buildChampionArticle,
+    buildKickoffArticle: withFacts(buildKickoffArticle, (state, history) => ctxState(state, history)),
+    buildRetrospectiveArticle: withFacts(buildRetrospectiveArticle, (seasons) => ({ seasons })),
+    buildProgressArticle: withFacts(buildProgressArticle, (state, history, count) => ({ state, history, finishedCount: count })),
+    buildCommentParagraph,
+    buildRecordArticle: withFacts(buildRecordArticle, (record, c) => ({ record, state: c && c.state, history: c && c.history })),
+    buildSongArticle: withFacts(buildSongArticle, (milestone, url, c) => ({ milestone, state: c && c.state, history: c && c.history })),
+    buildFinalsArticle: withFacts(buildFinalsArticle, (record, c) => ({ record, state: c && c.state, history: c && c.history })),
+    buildChampionArticle: withFacts(buildChampionArticle, (record, c) => ({ record, state: c && c.state, history: c && c.history })),
     buildSpuriousArticle,
-    buildPortraitArticle,
-    buildWrapUpArticle,
+    buildPortraitArticle: withFacts(buildPortraitArticle, (group, state, history) => ctxState(state, history)),
+    buildWrapUpArticle: withFacts(buildWrapUpArticle, (state, history) => ctxState(state, history)),
+    buildToiletBowlArticle: withFacts(buildToiletBowlArticle, (state, history) => ctxState(state, history)),
+    buildPlayoffProgressArticle, computePlayoffStatus,
+    joinNames, tidy,
 
     PROGRESS_EVERY,
     PORTRAIT_ORDER,

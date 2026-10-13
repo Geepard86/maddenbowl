@@ -15,13 +15,92 @@
 (function (global) {
   "use strict";
 
-  const OPENERS_RESULT = [
-    "UND DAS WAR'S! Abpfiff im",
-    "SCHLUSSPFIFF! Feierabend im",
-    "AUS, VORBEI! Die Uhr steht bei Null im",
-    "FERTIG! Das Spiel ist durch im",
-    "SCHLUSS IN",
-  ];
+  // ======================================================================
+  // ABWECHSLUNG: kleine Gedächtnis-Logik gegen Wiederholungen
+  // ----------------------------------------------------------------------
+  // pickVaried() merkt sich pro Baustein-Gruppe (key), was zuletzt verwendet
+  // wurde, und zieht bevorzugt etwas anderes. Die Auswahl bleibt zufällig,
+  // aber dasselbe Intro/derselbe Übergang kommt nicht zweimal direkt
+  // hintereinander. Funktionen im Pool werden mit `args` aufgerufen und
+  // müssen einen String liefern.
+  // ======================================================================
+  const _recent = {};
+  function resetVariety() { Object.keys(_recent).forEach((k) => delete _recent[k]); }
+
+  function pickVaried(key, pool, memory, args) {
+    const items = (pool || []).map((x) => (typeof x === "function" ? x(args) : x)).filter((x) => x != null);
+    if (!items.length) return "";
+    const mem = Math.max(0, Math.min(memory == null ? 2 : memory, items.length - 1));
+    const hist = _recent[key] || (_recent[key] = []);
+    let fresh = items.filter((x) => !hist.includes(x));
+    if (!fresh.length) fresh = items;
+    const chosen = fresh[Math.floor(Math.random() * fresh.length)];
+    hist.push(chosen);
+    while (hist.length > Math.max(mem, 1)) hist.shift();
+    return chosen;
+  }
+
+  // Zuletzt verwendete Informationskategorien (Ergebnis- UND Vorschau-Ansagen
+  // teilen sich diese Liste). Ältere Einträge zählen weniger.
+  const _recentFactTypes = [];
+  function factRecencyPenalty(type) {
+    const i = _recentFactTypes.lastIndexOf(type);
+    if (i < 0) return 0;
+    const age = _recentFactTypes.length - 1 - i; // 0 = zuletzt benutzt
+    return age === 0 ? 7 : age === 1 ? 4 : age === 2 ? 2 : 0;
+  }
+  function rememberFactType(type) {
+    if (!type) return;
+    _recentFactTypes.push(type);
+    while (_recentFactTypes.length > 4) _recentFactTypes.shift();
+  }
+  // Grundgewicht je Kategorie: Siegesserien/Form sind fast immer verfügbar und
+  // würden sonst ständig gewinnen. Seltene Besonderheiten bleiben vorn.
+  const FACT_TYPE_BIAS = { form: -3, odds: 0, averagePoints: 0, directComparison: 0, rivalry: 2, revenge: 1, milestone: 3, playoffFact: 1, other: 1 };
+
+  // ======================================================================
+  // ERGEBNIS-TEXTE (Kommentator)
+  // ======================================================================
+  const RESULT_INTROS = {
+    general: [
+      "Das Spiel ist vorbei!",
+      "Abpfiff – die Partie ist entschieden!",
+      "Das war's!",
+      "Schluss, die Punkte sind vergeben!",
+      "Aus und vorbei!",
+      "Die Uhr steht bei null.",
+      "Schlusspfiff!",
+      "Das Spiel ist gelaufen!",
+    ],
+    // Nur verwendet, wenn ein Stadion bekannt ist ({s} = z.B. \"im Altima Field\").
+    stadium: [
+      (s) => `Das war's ${s}!`,
+      (s) => `Abpfiff ${s}!`,
+      (s) => `Feierabend ${s}!`,
+      (s) => `Schlusspfiff ${s}!`,
+    ],
+    close: [
+      "Was für ein Finish! Die Partie ist entschieden!",
+      "Bis zum Schluss war hier alles offen!",
+      "Ein enges Duell findet seinen Sieger!",
+      "Das war Spannung bis zur letzten Sekunde!",
+    ],
+    clear: [
+      "Das ist am Ende eine klare Sache!",
+      "Am Ende wird es deutlich!",
+      "Hier lässt der Sieger nichts mehr anbrennen!",
+      "Das war keine Frage des Sieges, nur der Höhe!",
+    ],
+  };
+  function pickResultIntro(margin, stadium, preposition, recordIsMargin) {
+    let pool = RESULT_INTROS.general.slice();
+    if (stadium) RESULT_INTROS.stadium.forEach((fn) => pool.push(fn(stadiumPhrase(stadium, preposition))));
+    // Bei Rekord-Klatschen sagt der Rekord-Satz die Deutlichkeit schon selbst.
+    const cat = margin <= 4 ? RESULT_INTROS.close : (margin >= 14 && !recordIsMargin) ? RESULT_INTROS.clear : null;
+    if (cat && Math.random() < 0.7) pool = cat;
+    return pickVaried("resultIntro", pool, 3);
+  }
+
   const WIN_PHRASES = [
     "{winner} setzt sich mit {winnerScore} zu {loserScore} gegen {loser} durch.",
     "{winner} gewinnt mit {winnerScore} zu {loserScore} gegen {loser}.",
@@ -47,6 +126,7 @@
     "Das war heute eine ziemlich klare Angelegenheit.",
     "Da war früh zu sehen, wohin die Reise geht.",
     "Am Ende wurde es deutlich — da kam nicht mehr viel zurück.",
+    "Das war ein echter Blowout.",
   ];
   // Nur der Kommentator übergibt an den Moderator (Anforderung 20) - Name
   // kommt dynamisch aus den konfigurierten Sprecher-Namen, nie hartcodiert.
@@ -57,15 +137,16 @@
     () => `Was kommt als Nächstes?`,
     (n) => `${n.moderator}, was ist die nächste Partie?`,
     () => `Wer ist als Nächstes dran?`,
+    (n) => `${n.moderator}, wie geht es weiter?`,
   ];
-  // Der Moderator sagt nur gelegentlich "Danke" (Anforderung 21) - drei von
-  // vier Varianten sind bewusst leer, damit die Ansage meistens direkt mit
-  // der nächsten Partie beginnt.
-  const HANDOFF_IN_PHRASES = [
-    () => "",
-    () => "",
-    () => "",
-    (n) => `Danke ${n.commentator}.`,
+  // Der Moderator übernimmt meist direkt, bedankt sich nur gelegentlich und
+  // dann nicht immer mit demselben Satz.
+  const HANDOFF_IN_THANKS = [
+    (n) => `Danke, ${n.commentator}.`,
+    (n) => `Danke dir, ${n.commentator}.`,
+    (n) => `Alles klar, ${n.commentator}.`,
+    (n) => `Besten Dank, ${n.commentator}.`,
+    (n) => `Okay, ${n.commentator}.`,
   ];
 
   // ======================================================================
@@ -207,59 +288,122 @@
   // ein Spieler sein Team gewählt hat. Bausteine: Team-Titelhistorie +
   // (falls Gruppengegner schon feststehen) eine Einschätzung des Spielplans.
   // ======================================================================
-  const TEAM_PICK_GOOD_CHOICE = ["Gute Wahl.", "Starke Ansage.", "Interessante Wahl.", "Na, das kann was werden."];
+  // Kurze Reaktion auf die Team-Wahl. Bewusst viele Varianten (und manchmal
+  // gar keine), damit nicht jede Wahl mit derselben Floskel kommentiert wird.
+  const TEAM_PICK_REACTIONS = [
+    "Gute Wahl.", "Interessante Wahl.", "Na, das kann was werden.", "Mutige Entscheidung.",
+    "Damit lässt sich arbeiten.", "Das passt.", "Solide Entscheidung.", "Da bin ich gespannt.",
+    "Starke Ansage.",
+  ];
 
+  // Volle Teamnamen (Städtename + Team) - die App speichert nur das Kürzel
+  // (HOU) bzw. den Teamnamen (Texans). Gesprochen wird immer der volle Name.
+  const TEAM_FULL_NAMES = {
+    ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills",
+    CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals", CLE: "Cleveland Browns",
+    DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers",
+    HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars", KC: "Kansas City Chiefs",
+    LV: "Las Vegas Raiders", LAC: "Los Angeles Chargers", LAR: "Los Angeles Rams", MIA: "Miami Dolphins",
+    MIN: "Minnesota Vikings", NE: "New England Patriots", NO: "New Orleans Saints", NYG: "New York Giants",
+    NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SF: "San Francisco 49ers",
+    SEA: "Seattle Seahawks", TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders",
+  };
+  function teamFullName(teamNameOrId) {
+    const raw = String(teamNameOrId || "").trim();
+    if (!raw) return "";
+    const byId = TEAM_FULL_NAMES[raw.toUpperCase()];
+    if (byId) return byId;
+    const lower = raw.toLowerCase();
+    const full = Object.values(TEAM_FULL_NAMES).find((n) => n.toLowerCase() === lower || n.toLowerCase().endsWith(" " + lower));
+    return full || raw;
+  }
+
+  function timesWordDE(count) { return count === 1 ? "einmal" : `${numberWordsDE(count)}mal`; }
+
+  // team = voller Teamname (immer Plural: die Houston Texans)
   const TEAM_TITLE_LINES = {
     none: [
-      (team) => `${team} wartet noch auf den ersten Titel in dieser Liga.`,
-      (team) => `Mit ${team} hat noch niemand den Ring geholt — vielleicht ändert sich das ja jetzt.`,
+      (t) => `Die ${t} warten noch auf den ersten Titel in dieser Liga.`,
+      (t) => `Mit den ${t} hat noch niemand den Ring geholt — vielleicht ändert sich das ja jetzt.`,
+      (t) => `Für die ${t} wäre es der erste Ring in der Geschichte dieser Liga.`,
     ],
+    // Der Titel wurde mit einem anderen Head Coach geholt.
     withOtherCoach: [
-      (team, count, lastWinner) => `${team} hat schon ${count === 1 ? "einmal" : numberWordsDE(count) + " Mal"} den Ring geholt, zuletzt aber mit einem anderen Head Coach${lastWinner ? " — " + lastWinner : ""}. Mal schauen, ob er sie auch zum Erfolg führen kann.`,
+      (t, count, lastWinner, n) => `Die ${t} haben schon ${timesWordDE(count)} den Ring geholt${lastWinner ? ", zuletzt mit " + lastWinner : ""}. Mal schauen, ob ${n} sie auch zum Erfolg führen kann.`,
+      (t, count, lastWinner, n) => `Titel-Tradition bei den ${t}: ${timesWordDE(count)} Champion${lastWinner ? ", zuletzt unter " + lastWinner : ""}. Jetzt versucht es ${n}.`,
+    ],
+    // Derselbe Spieler hat mit diesem Team schon gewonnen.
+    sameCoach: [
+      (t, count, n) => `Mit den ${t} hat ${n} schon ${timesWordDE(count)} den Ring geholt. Da geht bestimmt noch was.`,
+      (t, count, n) => `${n} kennt den Weg zum Titel mit den ${t} bereits — ${timesWordDE(count)} hat es schon geklappt.`,
     ],
   };
 
+  // Gegner-Beschreibungen für die Spielplan-Einschätzung. `kase`: "nom" für
+  // Aufzählungen nach einem Doppelpunkt ("...: Micha, der amtierende Champion
+  // Markus und Neuling Chris"), "akk" nach \"gegen\" ("gegen den amtierenden
+  // Champion Markus").
+  function describeOpponentForSchedule(o, kase) {
+    const n = speechName(o.name);
+    const akk = kase === "akk";
+    if (o.badge?.isDefendingChampion) return `${akk ? "den" : "der"} amtierende${akk ? "n" : ""} Champion ${n}`;
+    if (o.badge?.isRookie) return `Neuling ${n}`;
+    if (o.badge?.isToiletBowlLastSeason) return `${akk ? "den" : "der"} Vorjahres-Letzte${akk ? "n" : ""} ${n}`;
+    return n;
+  }
+  function joinDE(items) {
+    return items.length > 1 ? items.slice(0, -1).join(", ") + " und " + items[items.length - 1] : (items[0] || "");
+  }
+
   const SCHEDULE_HARD_LINES = [
-    (n) => `Und der Spielplan hat's gleich in sich: ${n}`,
-    (n) => `Harter Auftakt: ${n}`,
+    (n) => `Und der Spielplan hat's gleich in sich: ${n}.`,
+    (n) => `Harter Auftakt: ${n}.`,
+    (n) => `Da wartet ein dickes Brett in der Gruppenphase: ${n}.`,
   ];
   const SCHEDULE_EASY_LINES = [
-    (n) => `Dafür sieht die Gruppenphase machbar aus: ${n}`,
-    (n) => `Der Spielplan lässt sich erstmal ganz entspannt an: ${n}`,
+    (n) => `Dafür sieht die Gruppenphase machbar aus: ${n}.`,
+    (n) => `Der Spielplan lässt sich erstmal ganz entspannt an: ${n}.`,
+    (n) => `Das klingt nach einer angenehmen Gruppenphase: ${n}.`,
   ];
   const SCHEDULE_NEUTRAL_LINES = [
     (n) => `In der Gruppenphase geht's unter anderem gegen ${n}.`,
+    (n) => `Zum Auftakt warten schon ${n} auf ihn.`,
+    (n) => `Gegen ${n} muss er sich in der Gruppenphase beweisen.`,
   ];
 
   // opponentBadges: Array von { name, badge } für die schon feststehenden
   // Gruppengegner dieses Slots (badge = Eintrag aus computeRingIntroBadges).
-  function describeOpponentForSchedule(o) {
-    const n = speechName(o.name);
-    if (o.badge?.isDefendingChampion) return `den amtierenden Champion ${n}`;
-    if (o.badge?.isRookie) return `Neuling ${n}`;
-    if (o.badge?.isToiletBowlLastSeason) return `den Vorjahres-Letzten ${n}`;
-    return n;
-  }
-
+  // Der Spielplan wird erst kommentiert, wenn mindestens zwei Gegner
+  // feststehen, und auch dann nur gelegentlich.
   function buildScheduleFact(opponentBadges) {
-    if (!opponentBadges || !opponentBadges.length) return "";
-    const descs = opponentBadges.map(describeOpponentForSchedule);
-    const joined = descs.length > 1 ? descs.slice(0, -1).join(", ") + " und " + descs[descs.length - 1] : descs[0];
+    if (!opponentBadges || opponentBadges.length < 2) return "";
+    if (Math.random() > 0.55) return "";
     const toughCount = opponentBadges.filter((o) => o.badge?.isDefendingChampion || o.badge?.isSoleRecordChampion || o.badge?.titles > 0).length;
     const easyCount = opponentBadges.filter((o) => o.badge?.isRookie).length;
-    if (toughCount >= 2) return pick(SCHEDULE_HARD_LINES)(joined);
-    if (easyCount >= 2) return pick(SCHEDULE_EASY_LINES)(joined);
-    return pick(SCHEDULE_NEUTRAL_LINES)(joined);
+    const nom = joinDE(opponentBadges.map((o) => describeOpponentForSchedule(o, "nom")));
+    if (toughCount >= 2) return pickVaried("schedHard", SCHEDULE_HARD_LINES, 2, nom);
+    if (easyCount >= 2) return pickVaried("schedEasy", SCHEDULE_EASY_LINES, 2, nom);
+    // Neutral: Einzelne Gegner herausgreifen (max. 3), im Akkusativ
+    const akk = joinDE(opponentBadges.slice(0, 3).map((o) => describeOpponentForSchedule(o, "akk")));
+    return pickVaried("schedNeutral", SCHEDULE_NEUTRAL_LINES, 2, akk);
   }
 
   // teamTitleInfo: Eintrag aus MB.computeTeamTitleHistory(history).get(teamId) oder undefined
   function buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges }) {
     const n = speechName(name);
-    const parts = [pick(TEAM_PICK_GOOD_CHOICE)];
+    const team = teamFullName(teamName);
+    const parts = [];
+    if (Math.random() < 0.75) parts.push(pickVaried("teamReaction", TEAM_PICK_REACTIONS, 4));
     if (teamTitleInfo && teamTitleInfo.count > 0) {
-      parts.push(pick(TEAM_TITLE_LINES.withOtherCoach)(teamName, teamTitleInfo.count, speechName(teamTitleInfo.lastWinnerName)));
+      const lastWinner = speechName(teamTitleInfo.lastWinnerName || "");
+      const sameCoach = lastWinner && MB.normName(teamTitleInfo.lastWinnerName).toLowerCase() === MB.normName(name).toLowerCase();
+      if (sameCoach) {
+        parts.push(pick(TEAM_TITLE_LINES.sameCoach)(team, teamTitleInfo.count, n));
+      } else {
+        parts.push(pick(TEAM_TITLE_LINES.withOtherCoach)(team, teamTitleInfo.count, lastWinner, n));
+      }
     } else {
-      parts.push(pick(TEAM_TITLE_LINES.none)(teamName));
+      parts.push(pickVaried("teamTitleNone", TEAM_TITLE_LINES.none, 2, team));
     }
     const scheduleFact = buildScheduleFact(opponentBadges);
     if (scheduleFact) parts.push(scheduleFact);
@@ -412,7 +556,14 @@
     const available = candidates.filter((f) => !used.has(f.type));
     if (!available.length) return null;
 
-    const withJitter = available.map((f) => ({ f, key: (f.score || 5) + Math.random() * 6 }));
+    // Kategorien, die gerade erst genannt wurden, rutschen nach hinten
+    // (Siegesserien sind sonst fast immer vorn). Relevante Besonderheiten
+    // (Rivalität, Meilenstein, Revanche) behalten durch ihren hohen Score
+    // trotzdem Vorrang.
+    const withJitter = available.map((f) => ({
+      f,
+      key: (f.score || 5) + (FACT_TYPE_BIAS[f.type] || 0) - factRecencyPenalty(f.type) + Math.random() * 6,
+    }));
     withJitter.sort((a, b) => b.key - a.key);
     return withJitter[0].f;
   }
@@ -420,46 +571,71 @@
   // Spricht einen von MB.Records.detectRecords() erkannten Rekord natürlich
   // aus. Die Erkennung selbst bleibt zentral in records.js (Anforderung 29
   // sinngemäß: keine parallele Logik) - hier wird nur die Sprachformulierung
-  // gebaut.
+  // gebaut. rec.alsoTypes (z.B. [\"allTimeHigh\"]) = weitere Rekorde desselben
+  // Spiels, die records.js bereits zu EINEM Eintrag zusammengefasst hat.
   function describeRecordForSpeech(rec) {
     if (!rec) return null;
     const player = rec.player ? speechName(rec.player) : "";
     const opponent = rec.opponent ? speechName(rec.opponent) : "";
+    const also = new Set(rec.alsoTypes || []);
+    let text;
     switch (rec.type) {
       case "allTimeMargin":
-        return `Das ist die größte Klatsche der gesamten Altima-Bowl-Geschichte!`;
+        text = also.has("allTimeHigh")
+          ? `Das ist die größte Klatsche der Altima-Bowl-Geschichte und gleichzeitig ein neuer Allzeit-Highscore mit ${rec.winnerScore} Punkten!`
+          : pickVaried("recAllTimeMargin", [
+              "Das ist die größte Klatsche der gesamten Altima-Bowl-Geschichte!",
+              "So deutlich hat in der Altima-Bowl-Geschichte noch nie jemand gewonnen!",
+            ], 1);
+        break;
       case "tournamentMargin":
-        return `Das ist der bisher größte Blowout dieses Turniers!`;
+        text = also.has("allTimeHigh")
+          ? `Das ist der deutlichste Sieg dieses Turniers und mit ${rec.winnerScore} Punkten gleichzeitig ein neuer Allzeit-Highscore!`
+          : pickVaried("recTournamentMargin", [
+              "Das ist der bisher größte Blowout dieses Turniers!",
+              "Einen deutlicheren Sieg hat dieses Turnier noch nicht gesehen!",
+            ], 1);
+        break;
+      case "blowout":
+        text = pickVaried("recBlowout", BLOWOUT_PHRASES, 2);
+        break;
       case "allTimeHigh":
-        return `Und das ist gleichzeitig ein neuer Allzeit-Highscore mit ${rec.value} Punkten für ${player}!`;
+        text = `Und das ist gleichzeitig ein neuer Allzeit-Highscore mit ${rec.value} Punkten für ${player}!`;
+        break;
       case "winStreak":
-        return `${player} feiert damit den ${rec.value}. Sieg in Folge.`;
+        text = `${player} feiert damit den ${rec.value}. Sieg in Folge.`;
+        break;
       case "upset":
-        return `Das ist eine faustdicke Überraschung - ${player} war hier klarer Außenseiter gegen ${opponent}.`;
-      case "shutout":
-        return `${opponent} kam praktisch nicht vom Fleck.`;
+        text = `Das ist eine faustdicke Überraschung - ${player} war hier klarer Außenseiter gegen ${opponent}.`;
+        break;
       case "shootout":
-        return `Das ist die höchste Gesamtpunktzahl, die dieses Turnier bisher gesehen hat.`;
+        text = `Das ist die höchste Gesamtpunktzahl, die dieses Turnier bisher gesehen hat.`;
+        break;
       default:
         return null;
     }
+    return text;
   }
-  // Diese Rekord-Typen sagen bereits selbst "das war ein Blowout" - die
+  // Diese Rekord-Typen sagen bereits selbst \"das war ein Blowout\" - die
   // generische CLOSE/BLOWOUT-Farbkommentar-Zeile würde dann nur denselben
   // Punkt ein zweites Mal machen.
-  const MARGIN_RECORD_TYPES = new Set(["allTimeMargin", "tournamentMargin", "shutout"]);
-  // Wenn ein Spiel mehrere Rekorde gleichzeitig bricht (z.B. Highscore UND
-  // größte Klatsche in einem), wird nur EINER angesagt (sonst zu viel) -
-  // Blowout-Rekorde zuerst, weil das i.d.R. die spektakulärere Aussage ist.
-  const RECORD_SPEECH_PRIORITY = ["allTimeMargin", "tournamentMargin", "allTimeHigh", "shutout", "upset", "shootout", "winStreak"];
+  const MARGIN_RECORD_TYPES = new Set(["allTimeMargin", "tournamentMargin", "blowout"]);
+  // Wenn ein Spiel mehrere Rekorde gleichzeitig bricht, wird nur EINER
+  // angesagt (sonst zu viel). Die Zusammenfassung (Highscore + Klatsche in
+  // einem Satz) passiert schon in records.js.
+  const RECORD_SPEECH_PRIORITY = ["allTimeMargin", "tournamentMargin", "allTimeHigh", "blowout", "upset", "shootout", "winStreak"];
 
   // Kommentator: berichtet AUSSCHLIESSLICH über das gerade abgeschlossene
-  // Spiel (Anforderung 6). Ergebnis-Impact (Tabelle/Titel, zentral aus
-  // shared.js) hat Vorrang; ohne Impact ist der Direktvergleich der einzige
-  // erlaubte Rückfall-Fakt (Anforderung 12) - niemals allgemeine
-  // Preview-Fakten des kommenden Spiels. Gibt zusätzlich zurück, welcher(r)
-  // Fakt-Typ verbraucht wurde, damit der Moderator ihn nicht doppelt nennt.
-  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId, songMilestone, songGenerated }) {
+  // Spiel (Anforderung 6). Gibt zusätzlich zurück, welcher(r) Fakt-Typ
+  // verbraucht wurde, damit der Moderator ihn nicht doppelt nennt.
+  //
+  // Informationsauswahl (Zusatzinfo nach dem Ergebnissatz):
+  //  * Ausscheiden und Tabellenüberholung sind echte News und kommen immer.
+  //  * Sonst werden Impact (Serie, Titelchancen) und Duell-Fakten
+  //    (Direktvergleich, Punkteschnitt) gemeinsam gewichtet; Kategorien, die
+  //    gerade erst vorkamen, rutschen nach hinten (siehe factRecencyPenalty).
+  //  * Ein Rekord-Satz ersetzt schwächere Serien-Infos desselben Spiels.
+  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, prevSeeds, matchKind, matchId, songMilestone, songGenerated }) {
     const winnerRaw = homeScore > awayScore ? homeName : awayName;
     const loserRaw = homeScore > awayScore ? awayName : homeName;
     const winner = speechName(winnerRaw), loser = speechName(loserRaw);
@@ -468,12 +644,6 @@
     const margin = winnerScore - loserScore;
     const usedFactTypes = new Set();
     const names = getSpeakerNames();
-
-    let line = `${pick(OPENERS_RESULT)} ${stadium || "Stadion"}! `;
-    // Ergebnis UND Sieger/Verlierer in EINEM Satz (nicht mehr getrennt als
-    // "Endstand: ..." + "X schlägt Y" - das klang doppelt gemoppelt). Mix aus
-    // Sieger- und Verlierer-Perspektive für mehr Abwechslung.
-    line += fmt(pick([...WIN_PHRASES, ...LOSE_PHRASES]), { winner, loser, winnerScore, loserScore }) + " ";
 
     // Neuer Rekord? (größte Klatsche, Highscore, Siegesserie, Überraschung, ...)
     // - erkannt zentral in records.js, hier nur ausgesprochen.
@@ -489,44 +659,48 @@
       }
     } catch (e) {}
 
+    let line = `${pickResultIntro(margin, stadium, stadiumPreposition, !!recordType && MARGIN_RECORD_TYPES.has(recordType))} `;
+    // Ergebnis UND Sieger/Verlierer in EINEM Satz. Mix aus Sieger- und
+    // Verlierer-Perspektive für mehr Abwechslung.
+    line += fmt(pickVaried("resultPhrase", [...WIN_PHRASES, ...LOSE_PHRASES], 4), { winner, loser, winnerScore, loserScore }) + " ";
+
     // Nicht JEDES enge/deutliche Spiel bekommt zusätzlich noch eine
-    // Farbkommentar-Zeile - sonst klingt jede Ansage gleich lang/gleich
-    // aufgebaut. Manchmal reicht der reine Ergebnissatz. Ein Rekord, der
-    // bereits "das war ein Blowout" aussagt, ersetzt die generische Zeile,
-    // statt denselben Punkt doppelt zu machen.
+    // Farbkommentar-Zeile. Ein Rekord, der bereits \"das war ein Blowout\"
+    // aussagt, ersetzt die generische Zeile.
     if (recordType && MARGIN_RECORD_TYPES.has(recordType)) {
       // generische Zeile bewusst übersprungen
-    } else if (margin <= 3 && Math.random() < 0.7) line += pick(CLOSE_GAME_PHRASES) + " ";
-    else if (margin >= 21 && Math.random() < 0.7) line += pick(BLOWOUT_PHRASES) + " ";
+    } else if (margin <= 3 && Math.random() < 0.7) line += pickVaried("closePhrase", CLOSE_GAME_PHRASES, 2) + " ";
+    else if (margin >= 21 && Math.random() < 0.7) line += pickVaried("blowoutPhrase", BLOWOUT_PHRASES, 2) + " ";
 
     if (recordText) line += recordText + " ";
 
-    let impactUsed = false;
+    // ---- Zusatzinfo ----
+    let extra = null;
     try {
       const impacts = MB.getAnnouncerResultImpacts(history, state, winnerRaw, loserRaw, prevSeeds, { matchKind, matchId }) || [];
-      if (impacts.length) {
-        const top = impacts[0];
-        // Ausscheiden/Tabellensprung sind echte News und werden immer
-        // genannt; Titelchancen sind reine Kür und dürfen auch mal wegfallen
-        // (siehe auch die 50%-Hürde dafür schon in shared.js).
-        const important = top.type === "eliminationImpact" || top.type === "tableImpact";
-        if (important || Math.random() < 0.65) {
-          line += top.text + " ";
-          usedFactTypes.add(top.type);
-          impactUsed = true;
+      const forced = impacts.find((i) => i.type === "eliminationImpact" || i.type === "tableImpact");
+      if (forced) {
+        extra = forced;
+      } else if (Math.random() < 0.65) {
+        const cands = impacts.map((i) => ({ type: i.type, text: i.text, score: i.type === "titleImpact" ? 6 : 9 }));
+        try {
+          const typed = MB.pickFlavourFactsTyped(history, state, homeName, awayName) || [];
+          typed.filter((f) => f.type === "directComparison" || f.type === "averagePoints" || (f.type === "playoffFact" && matchKind === "playoff"))
+            .forEach((f) => cands.push({ type: f.type, text: naturalizeFact(f.text), score: f.score || 6 }));
+        } catch (e) {}
+        // Eine Siegesserie im Rekord-Satz nicht noch einmal als Impact nennen.
+        const usable = cands.filter((c) => !(recordType === "winStreak" && c.type === "perfectRecord"));
+        if (usable.length) {
+          usable.forEach((c) => { c.key = (c.score || 5) + (FACT_TYPE_BIAS[c.type] || 0) - factRecencyPenalty(c.type) + Math.random() * 5; });
+          usable.sort((a, b) => b.key - a.key);
+          extra = usable[0];
         }
       }
     } catch (e) {}
-
-    if (!impactUsed && Math.random() < 0.65) {
-      try {
-        const typed = MB.pickFlavourFactsTyped(history, state, homeName, awayName) || [];
-        const directCompare = typed.find((f) => f.type === "directComparison");
-        if (directCompare) {
-          line += naturalizeFact(directCompare.text) + " ";
-          usedFactTypes.add("directComparison");
-        }
-      } catch (e) {}
+    if (extra) {
+      line += extra.text + " ";
+      usedFactTypes.add(extra.type);
+      rememberFactType(extra.type);
     }
 
     // Song-Meilenstein, der GENAU JETZT (im selben Score-Commit) entschieden
@@ -541,9 +715,9 @@
       }
     }
 
-    if (songMilestone !== "champion") line += pick(HANDOFF_OUT_PHRASES)(names);
+    if (songMilestone !== "champion") line += pickVaried("handoffOut", HANDOFF_OUT_PHRASES, 3, names);
 
-    return { line: line.trim(), usedFactTypes };
+    return { line: prepareText(line), usedFactTypes };
   }
 
   // Moderator: berichtet AUSSCHLIESSLICH über die kommende Partie
@@ -551,19 +725,24 @@
   // nicht vom Kommentator verwendet wurde (Anforderungen 9, 15, 16). Übergibt
   // nie zurück an den Kommentator (Anforderung 20) und endet ohne generische
   // Schlussfloskel (Anforderung 22).
-  // Mehrere Varianten für den Einstieg in die Vorschau, statt immer exakt
-  // demselben Satzbau - "{away}"/"{home}" halten die UI-Konvention ein
-  // (erster Name = Auswärts, zweiter = Heim).
+  // \"{away}\"/\"{home}\" halten die UI-Konvention ein (erster Name = Auswärts,
+  // zweiter = Heim).
   const UPCOMING_LEAD_INS = [
+    "Als Nächstes steht dieses Duell an: {away} bei {home}",
+    "Weiter geht es mit {away} bei {home}",
+    "Jetzt richtet sich der Blick auf {away} bei {home}",
+    "Als Nächstes sind {away} und {home} an der Reihe",
+    "Das nächste Duell bestreiten {away} und {home}",
+    "Im nächsten Spiel treffen {away} und {home} aufeinander",
+    "Und weiter geht's mit {away} bei {home}",
+    "Jetzt kommt es zum Duell zwischen {away} und {home}",
+    "Die nächste Partie steht bereits an: {away} bei {home}",
     "Als Nächstes spielt {away} bei {home}",
-    "Weiter geht's mit {away} bei {home}",
-    "Die nächste Partie: {away} bei {home}",
     "Dann kommt {away} bei {home}",
-    "Als Nächstes duellieren sich {away} und {home}",
   ];
   // Sonderfälle: Toilet Bowl und Finale sind kein normales Spiel und
   // verdienen keine 08/15-Ansage. `phase` kommt 1:1 aus MB.getUpcomingMatches()
-  // (state.playoffMatches[i].phase, z.B. "Toilet Bowl"/"Altima Bowl").
+  // (state.playoffMatches[i].phase, z.B. \"Toilet Bowl\"/\"Altima Bowl\").
   const SPECIAL_PHASE_LEAD_INS = {
     "Toilet Bowl": [
       "Es geht um die rote Laterne: als Nächstes die Toilet Bowl zwischen {away} und {home}",
@@ -577,6 +756,32 @@
   // Gelegentlicher kleiner Konnektor vor dem Fakt, statt immer nahtlos
   // anzuschließen - rein für Abwechslung, meistens bleibt es aber leer.
   const FACT_CONNECTORS = ["", "", "", "Dazu: ", "Außerdem: "];
+
+  // Anpfiff-/Stadion-Sätze: kurze, getrennte Sätze statt \"..., Anpfiff 18 Uhr, im Stadion\".
+  // {t} = \"18 Uhr\", {sp} = \"im Altima Field\".
+  const KICKOFF_TIME_ONLY = [
+    "Anpfiff ist um {t}.",
+    "Los geht's um {t}.",
+    "Gespielt wird ab {t}.",
+  ];
+  const KICKOFF_TIME_AND_STADIUM = [
+    "Anpfiff ist um {t} {sp}.",
+    "Los geht's um {t} {sp}.",
+    "Gespielt wird {sp}. Anpfiff ist um {t}.",
+    "Das Spiel steigt um {t} {sp}.",
+  ];
+  const KICKOFF_STADIUM_ONLY = [
+    "Gespielt wird {sp}.",
+    "Das Spiel findet {sp} statt.",
+  ];
+  function buildKickoffSentence(time, stadium, stadiumPreposition) {
+    const t = time ? formatTimeForSpeech(time) : "";
+    const sp = stadium ? stadiumPhrase(stadium, stadiumPreposition) : "";
+    if (t && sp) return fmt(pickVaried("kickoffBoth", KICKOFF_TIME_AND_STADIUM, 2), { t, sp });
+    if (t) return fmt(pickVaried("kickoffTime", KICKOFF_TIME_ONLY, 2), { t });
+    if (sp) return fmt(pickVaried("kickoffStadium", KICKOFF_STADIUM_ONLY, 1), { sp });
+    return "";
+  }
 
   // Teaser-Zeilen für einen Song-Meilenstein, der GENAU JETZT (im selben
   // Score-Commit, vor dieser Vorschau) entschieden wurde - nur wenn der Song
@@ -594,23 +799,25 @@
     const names = getSpeakerNames();
     const used = usedFactTypes || new Set();
 
-    const handoffIn = pick(HANDOFF_IN_PHRASES)(names);
+    // Meistens direkt loslegen; gelegentlich ein Dank, jeweils in anderer Form.
+    const handoffIn = Math.random() < 0.5 ? pickVaried("handoffIn", HANDOFF_IN_THANKS, 2, names) : "";
     let line = handoffIn ? `${handoffIn} ` : "";
 
     if (songMilestone && songGenerated && SONG_TEASER_UPCOMING[songMilestone]) {
       line += SONG_TEASER_UPCOMING[songMilestone] + " ";
     }
 
-    const leadIns = (phase && SPECIAL_PHASE_LEAD_INS[phase]) || UPCOMING_LEAD_INS;
-    line += fmt(pick(leadIns), { away, home });
-    if (time) line += `, Anpfiff ${formatTimeForSpeech(time)}`;
-    if (stadium) line += `, ${stadiumPhrase(stadium, stadiumPreposition)}`;
+    const special = phase && SPECIAL_PHASE_LEAD_INS[phase];
+    line += fmt(special ? pickVaried("upcomingSpecial" + phase, special, 1) : pickVaried("upcomingLead", UPCOMING_LEAD_INS, 4), { away, home });
     line += ". ";
+    const kickoff = buildKickoffSentence(time, stadium, stadiumPreposition);
+    if (kickoff) line += kickoff + " ";
 
     const fact = pickUpcomingFact(history, state, homeName, awayName, used);
     if (fact) {
       line += pick(FACT_CONNECTORS) + naturalizeFact(fact.text) + " ";
       used.add(fact.type);
+      rememberFactType(fact.type);
 
       // Selten einen zweiten (anders typisierten) Fakt nachschieben, wenn
       // noch einer übrig ist - klingt dann etwas kompletter, ohne dass es
@@ -620,11 +827,12 @@
         if (second) {
           line += "Und: " + naturalizeFact(second.text) + " ";
           used.add(second.type);
+          rememberFactType(second.type);
         }
       }
     }
 
-    return line.trim();
+    return prepareText(line);
   }
 
   // ---- Textbereinigung für saubere Aussprache ----
@@ -679,22 +887,86 @@
       : text.replace(/\n+/g, ' <break time="0.7s" /> ');
   }
 
+  // ======================================================================
+  // ABSCHLIESSENDE TEXT-VALIDIERUNG
+  // ----------------------------------------------------------------------
+  // Jeder fertige Sprechtext läuft durch prepareText(): interne Spielernamen
+  // werden in die gesprochene Form gesetzt, Satzzeichen bereinigt und
+  // Dezimalzahlen ausgeschrieben. lintText() prüft zusätzlich auf Fehler, die
+  // sich nicht automatisch reparieren lassen (z.B. falsche Namens-Genitive,
+  // \"undefined\", doppelte Sätze) und wird vom Testlauf (replay.js)
+  // genutzt, um Auffälligkeiten im Transkript zu markieren.
+  // ======================================================================
+  function tidyText(text) {
+    let t = String(text == null ? "" : text);
+    // Interne Kurznamen -> gesprochene Form (zentral, wirkt auf JEDEN Baustein)
+    t = t.replace(/\bTobi\s+F\b\.?/g, "Tobi Eff").replace(/\bTobi\s+W\b\.?/g, "Tobi Weh");
+    // Teamname für TTS
+    t = t.replace(/\b49ers\b/g, "Forty-Niners");
+    // Leerzeichen vor Satzzeichen: "20 zu 15 ." -> "20 zu 15.", "den 5 . Sieg" -> "den 5. Sieg"
+    t = t.replace(/\s+([.,:;!?])/g, "$1");
+    // Doppelte Satzzeichen (Auslassungspunkte "..." bleiben erhalten)
+    t = t.replace(/(?<![.])\.\.(?![.])/g, ".");
+    t = t.replace(/,{2,}/g, ",").replace(/!{2,}/g, "!").replace(/\?{2,}/g, "?");
+    t = t.replace(/!\./g, "!").replace(/\?\./g, "?").replace(/:\./g, ".");
+    // Leerzeichen
+    t = t.replace(/[ \t]{2,}/g, " ");
+    return t.trim();
+  }
+
+  // Dezimalzahlen für deutsche TTS (Anforderungen 23/24/25): "1,39" ->
+  // "eins Komma drei neun", "42.0" -> "zweiundvierzig". NUR im Sprachpfad,
+  // nicht in shared.js/one(), damit die sichtbaren Insight-Texte auf
+  // index.html/admin.html/music.js unverändert bleiben.
+  function spellDecimals(text) {
+    return String(text == null ? "" : text).replace(/(\d+)[.,](\d+)/g, (_, intPart, fracPart) => {
+      if (/^0+$/.test(fracPart)) return numberWordsDE(parseInt(intPart, 10));
+      return `${numberWordsDE(parseInt(intPart, 10))} Komma ${digitsWordsDE(fracPart)}`;
+    });
+  }
+
+  // Fertiger, validierter Text (Anzeige/Transkript UND Basis für die Audio-Ausgabe).
+  function prepareText(text) {
+    return tidyText(spellDecimals(text));
+  }
+
+  // Nur für die Audio-Ausgabe: BUGFIX "17." (Zahl direkt gefolgt von Punkt) wird
+  // von deutschen TTS-Stimmen als Ordinalzahl gelesen ("siebzehnter" statt
+  // "siebzehn"). Wir trennen den Punkt per Leerzeichen ab. Echte Ordinalzahlen
+  // ("den 5. Sieg") bleiben unangetastet, damit sie richtig gesprochen werden.
+  const ORDINAL_FOLLOWERS = /^(Sieg|Niederlage|Spiel|Titel|Platz|Saison|Mal|Duell|Pick|Ring|Bowl)\b/;
   function sanitizeForSpeech(text) {
-    return text
-      // Dezimalzahlen für deutsche TTS (Anforderungen 23/24/25) - NUR hier im
-      // Sprachpfad, nicht in shared.js/one(), damit die sichtbaren
-      // Insight-Texte auf admin.html/index.html/music.js unverändert bleiben.
-      // "42.0"/"42,0" -> "zweiundvierzig" (keine unnötige Nachkommastelle).
-      // Nachkommastellen werden EINZELN gesprochen ("1,39" -> "eins Komma
-      // drei neun"), nicht als zusammengesetzte Zahl ("neununddreißig") -
-      // das ist die gewünschte/übliche Sprechweise für Quoten & Co.
-      .replace(/(\d+)[.,](\d+)/g, (_, intPart, fracPart) => {
-        if (/^0+$/.test(fracPart)) return numberWordsDE(parseInt(intPart, 10));
-        return `${numberWordsDE(parseInt(intPart, 10))} Komma ${digitsWordsDE(fracPart)}`;
+    return prepareText(text)
+      .replace(/(\d)\.(?=\s|$)(\s*)/g, (m, d, ws, off, str) => {
+        const rest = str.slice(off + m.length);
+        return ORDINAL_FOLLOWERS.test(rest) ? m : `${d} .${ws}`;
       })
-      .replace(/(\d)\.(\s|$)/g, "$1 .$2")   // "17." -> "17 ." (Ordinalzahl-Fix)
       .replace(/\s{2,}/g, " ")
       .trim();
+  }
+
+  // Liefert eine Liste lesbarer Auffälligkeiten (leer = sauber). names: optional
+  // die Spielernamen des Turniers (für die Genitiv-Prüfung).
+  function lintText(text, { names } = {}) {
+    const t = String(text == null ? "" : text);
+    const issues = [];
+    if (/\b(undefined|NaN)\b/.test(t)) issues.push("enthält undefined/NaN");
+    if (/[{}]/.test(t)) issues.push("unersetzter Platzhalter {…}");
+    if (/\s[.,:;!?]/.test(t)) issues.push("Leerzeichen vor Satzzeichen");
+    if (/(?<!\.)\.\.(?!\.)/.test(t) || /[!?]\./.test(t) || /,,/.test(t)) issues.push("doppelte Satzzeichen");
+    if (/\bTobi [FW]\b/.test(t)) issues.push("interner Kurzname (Tobi F./W.) im Text");
+    if (/\b\d+ \./.test(t)) issues.push("Zahl mit losem Punkt");
+    if (/\bAnpfiff \d/.test(t)) issues.push("Zeitangabe ohne Präposition (\"Anpfiff 18 Uhr\")");
+    if (/\b[A-Z]{2,3}\b hat noch niemand/.test(t)) issues.push("Teamkürzel statt Teamname");
+    (names || []).filter(Boolean).forEach((n) => {
+      const clean = speechName(n).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`\\b${clean}s\\b`).test(t)) issues.push(`falscher Genitiv bei "${speechName(n)}"`);
+    });
+    // Identischer Satz zweimal im selben Text
+    const sentences = t.split(/(?<=[.!?])\s+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 12);
+    const seen = new Set();
+    for (const sen of sentences) { if (seen.has(sen)) { issues.push("Satz kommt doppelt vor"); break; } seen.add(sen); }
+    return issues;
   }
 
   // "20:00" -> "20 Uhr" / "20:15" -> "20 Uhr 15" (Anforderung 23-nah): die
@@ -870,7 +1142,7 @@
     // (Anforderung 20: nur der Kommentator übergibt) und liefert zurück,
     // welche(r) Fakt-Typ(en) dabei verbraucht wurden, damit der Moderator
     // nicht denselben Typ nochmal nennt (Anforderungen 3, 15, 16).
-    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, prevSeeds, matchKind, matchId, songMilestone, songGenerated });
+    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, prevSeeds, matchKind, matchId, songMilestone, songGenerated });
     const nextMatch = (upcoming || [])[0] || null;
 
     const buildPreviewLine = () => buildUpcomingLine({
@@ -906,7 +1178,52 @@
   // ======================================================================
   // Texte der Turnier-/Draft-Eröffnung als [{role, text}] — gemeinsam genutzt von der
   // echten Ansage und vom Testlauf (Transkript), damit beide nie auseinanderlaufen.
-  function getTournamentStartSegments({ athleteNames, context } = {}) {
+  // Nach dem Draft: nur noch ein kurzer Übergang, dann kündigt der Moderator
+  // direkt die ersten beiden Partien an (kein langer Begrüßungstext mehr).
+  const AFTER_DRAFT_CUES = [
+    (n) => `Der Draft ist beendet, die Spiele mögen beginnen. Was steht als Erstes an, ${n.moderator}?`,
+    (n) => `Der Draft ist durch, jetzt wird gespielt. ${n.moderator}, womit geht es los?`,
+    (n) => `Alle Teams sind vergeben, die Controller sind bereit. ${n.moderator}, wer eröffnet den Abend?`,
+  ];
+  const FIRST_GAME_LEADS = [
+    "Den Anfang machen {away} und {home}.",
+    "Als Erstes treffen {away} und {home} aufeinander.",
+    "Los geht's mit {away} bei {home}.",
+    "Die Eröffnungspartie bestreiten {away} und {home}.",
+  ];
+  const SECOND_GAME_LEADS = [
+    "Danach folgt {away} bei {home}.",
+    "Direkt im Anschluss spielen {away} und {home}.",
+    "Und gleich danach: {away} bei {home}.",
+  ];
+  const PARALLEL_GAME_LEADS = [
+    "Parallel dazu spielen {away} und {home}.",
+    "Gleichzeitig treffen {away} und {home} aufeinander.",
+    "Am zweiten Stadion geht es zeitgleich mit {away} bei {home} los.",
+  ];
+
+  // matches: [{ homeName, awayName, time, stadium, stadiumPreposition }] (max. die ersten zwei)
+  function buildFirstGamesLine(matches) {
+    const list = (matches || []).filter(Boolean).slice(0, 2);
+    if (!list.length) return "";
+    const m1 = list[0];
+    const s1 = speechNames(m1.homeName, m1.awayName);
+    let line = fmt(pickVaried("firstGame", FIRST_GAME_LEADS, 2), { away: s1.away, home: s1.home }) + " ";
+    const k1 = buildKickoffSentence(m1.time, m1.stadium, m1.stadiumPreposition);
+    if (k1) line += k1 + " ";
+    if (list[1]) {
+      const m2 = list[1];
+      const s2 = speechNames(m2.homeName, m2.awayName);
+      const parallel = m1.time && m2.time && m1.time === m2.time;
+      line += fmt(pickVaried(parallel ? "parallelGame" : "secondGame", parallel ? PARALLEL_GAME_LEADS : SECOND_GAME_LEADS, 2), { away: s2.away, home: s2.home }) + " ";
+      if (!parallel && m2.time) line += buildKickoffSentence(m2.time, null, null) + " ";
+    }
+    return prepareText(line);
+  }
+
+  // context "draft": Eröffnung der Draft Night. Sonst (nach dem Draft): Übergang
+  // + Ansage der ersten beiden Partien (`upcoming`, z.B. aus MB.getUpcomingMatches).
+  function getTournamentStartSegments({ athleteNames, context, upcoming } = {}) {
     const names = getSpeakerNames();
     // Draft-Night-Intro: Kommentator und Moderation übergeben sich den Satz
     // ("... neben mir sitzt…" / "…Mona!"), daher bewusst keine Namensliste.
@@ -917,21 +1234,18 @@
         { role: "commentator", text: "Allen Athletinnen und Athleten, viel Erfolg am Controller. Und nun: Lasset den Draft beginnen!" },
       ];
     }
-    const segments = [
-      { role: "commentator", text: `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!` },
-      { role: "moderator", text: `${names.moderator} begleitet euch durch den Abend.` },
-    ];
-    const athletes = (athleteNames || []).filter(Boolean).map(speechName);
-    if (athletes.length) segments.push({ role: "commentator", text: `Allen Athletinnen und Athleten, ${athletes.join(", ")}, viel Erfolg am Controller!` });
+    const segments = [{ role: "commentator", text: prepareText(pickVaried("afterDraft", AFTER_DRAFT_CUES, 2, names)) }];
+    const games = buildFirstGamesLine(upcoming);
+    if (games) segments.push({ role: "moderator", text: games });
     return segments;
   }
 
-  async function _announceTournamentStartNow({ athleteNames, context } = {}) {
+  async function _announceTournamentStartNow({ athleteNames, context, upcoming } = {}) {
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
     const resultVoice = useElevenLabs ? settings.voiceIdResult : null;
     const previewVoice = useElevenLabs ? settings.voiceIdPreview : null;
-    await speakSequence(getTournamentStartSegments({ athleteNames, context }).map((seg) => ({
+    await speakSequence(getTournamentStartSegments({ athleteNames, context, upcoming }).map((seg) => ({
       text: seg.text, role: seg.role, voiceId: seg.role === "moderator" ? previewVoice : resultVoice,
     })));
   }
@@ -1029,7 +1343,7 @@
   function buildDryRunTranscript() {
     const lines = [];
     const names = getSpeakerNames();
-    const say = (role, text) => lines.push(`[${role === "commentator" ? names.commentator : names.moderator}] ${sanitizeForSpeech(text)}`);
+    const say = (role, text) => lines.push(`[${role === "commentator" ? names.commentator : names.moderator}] ${prepareText(text)}`);
     const heading = (n, title) => { lines.push(""); lines.push("=".repeat(70)); lines.push(`${n}. ${title}`); lines.push("=".repeat(70)); };
     const note = (text) => lines.push(`   (${text})`);
 
@@ -1039,12 +1353,14 @@
     lines.push("Hinweis: Zahlen stehen hier schon in der gesprochenen Form (z.B. Quoten als 'eins Komma ...').");
     lines.push("Records/Impacts hängen stark von den erfundenen Platzhalter-Daten ab und variieren bei jedem Lauf (u.a. durch Zufallsauswahl der Formulierungen).");
 
-    // 1) Turnierstart -----------------------------------------------------
-    heading(1, "TURNIERSTART");
-    const athletes = ["Alex", "Tim", "Marco", "Jonas", "Kevin", "Nico"];
-    say("commentator", `${names.commentator} hier am Mikrofon. Willkommen zum Turnier!`);
-    say("moderator", `${names.moderator} begleitet euch durch den Abend.`);
-    say("commentator", `Allen Athletinnen und Athleten, ${athletes.map(speechName).join(", ")}, viel Erfolg am Controller!`);
+    // 1) Turnierstart (nach dem Draft) -------------------------------------
+    heading(1, "TURNIERSTART NACH DEM DRAFT");
+    getTournamentStartSegments({
+      upcoming: [
+        { homeName: "Alex", awayName: "Tim", time: "18:00", stadium: "Altima Field", stadiumPreposition: "im" },
+        { homeName: "Marco", awayName: "Jonas", time: "18:00", stadium: "Energiequelle", stadiumPreposition: "in der" },
+      ],
+    }).forEach((seg) => say(seg.role, seg.text));
 
     // 2) Normales, enges Gruppenspiel --------------------------------------
     heading(2, "GRUPPENSPIEL — KNAPPES ERGEBNIS");
@@ -1159,7 +1475,7 @@
     // 13) Ring-Ansager: Draft-Vorstellung + Team-Pick-Kommentar --------------
     heading(13, "RING-ANSAGER: DRAFT-VORSTELLUNG + TEAM-PICK-KOMMENTAR");
     {
-      const say2 = (role, text) => lines.push(`[${role === "announcer" ? names.announcer : (role === "commentator" ? names.commentator : names.moderator)}] ${sanitizeForSpeech(text)}`);
+      const say2 = (role, text) => lines.push(`[${role === "announcer" ? names.announcer : (role === "commentator" ? names.commentator : names.moderator)}] ${prepareText(text)}`);
       note("Ein Baustein pro Vorstellung, Auswahl kommt aus MB.computeRingIntroBadges() — hier mit erfundenen Badges demonstriert.");
       say2("announcer", buildRingIntroLine({ name: "Tim", isDefendingChampion: true, titles: 2 }, { isFirstPick: false }));
       say2("announcer", buildRingIntroLine({ name: "Alex", isSoleRecordChampion: true, titles: 3 }, {}));
@@ -1214,11 +1530,11 @@
   global.MB = global.MB || {};
   global.MB.Announcer = {
     announce, announceSong, announceTournamentStart, buildResultLine, buildUpcomingLine,
-    sanitizeForSpeech,
+    sanitizeForSpeech, prepareText, tidyText, lintText, resetVariety, teamFullName,
     getTtsSettings, setTtsSettings, fetchElevenLabsVoices, speakElevenLabs, speakSmart,
     speakSequence, fetchElevenLabsAudioUrl, playAudioUrl, speechName, speechNames,
     getSpeakerNames, setSpeakerNames, classifyFact, naturalizeFact, stadiumPhrase, pickUpcomingFact,
-    buildDryRunTranscript, getTournamentStartSegments, getSongAnnounceSegments,
+    buildDryRunTranscript, getTournamentStartSegments, buildFirstGamesLine, getSongAnnounceSegments,
     buildRingIntroLine, announceRingIntro, buildTeamPickLine, announceTeamPick,
     setNicknames, getNickname,
     onSpeak,

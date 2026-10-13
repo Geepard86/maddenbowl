@@ -25,7 +25,6 @@
     tournamentMargin: { label: "Klatsche des Turniers", emoji: "🥊" },
     winStreak: { label: "Siegesserie", emoji: "🏆" },
     upset: { label: "Überraschung", emoji: "😱" },
-    shutout: { label: "Abgeschossen", emoji: "🛑" },
     shootout: { label: "Shootout", emoji: "🎯" },
     blowout: { label: "Blowout", emoji: "🔥" },
     finals: { label: "Finaleinzug", emoji: "🎬" },
@@ -133,12 +132,10 @@
       records.push({ type: "upset", player: winnerName, opponent: loserName, winnerScore, loserScore });
     }
 
-    // Abgeschossen: Verlierer kam kaum vom Fleck — UND der Sieger hat
-    // tatsächlich etwas aufgelegt (sonst wäre auch ein zäher 2:1 ein
-    // "Abschuss", was es offensichtlich nicht ist).
-    if (loserScore <= 3 && winnerScore >= 14) {
-      records.push({ type: "shutout", player: winnerName, opponent: loserName, winnerScore, loserScore });
-    }
+    // "Abgeschossen" (Verlierer ≤ 3 Punkte) wird nicht mehr als eigener Rekord
+    // erkannt: Bei einem deutlichen Sieg ist das ohnehin ein Blowout (siehe
+    // unten, ab 21 Punkten Abstand) — zwei Begriffe für dieselbe Sache waren
+    // nur verwirrend. Die Kategorie samt Meme-Vorlagen ist im Blowout aufgegangen.
 
     // Shootout: neue Höchstmarke bei der Gesamtpunktzahl in diesem Turnier.
     const total = winnerScore + loserScore;
@@ -148,10 +145,10 @@
     }
 
     // Blowout: deutlicher Sieg (>= 21 Punkte Abstand), der noch KEIN
-    // Klatschen-/Abschuss-Rekord ist — sonst gäbe es zwei Memes für dieselbe
+    // Klatschen-Rekord ist — sonst gäbe es zwei Memes für dieselbe
     // Sache. Nutzt die Story-Vorlagen "blowout" (siehe generateImgflipMeme).
     // Knappe Spiele lösen bewusst NICHT automatisch aus.
-    const marginRecordFired = records.some((r) => r.type === "allTimeMargin" || r.type === "tournamentMargin" || r.type === "shutout");
+    const marginRecordFired = records.some((r) => r.type === "allTimeMargin" || r.type === "tournamentMargin");
     if (margin >= 21 && !marginRecordFired) {
       records.push({
         type: "blowout", storyKey: "blowout", player: winnerName, opponent: loserName,
@@ -159,7 +156,31 @@
       });
     }
 
-    return records;
+    return resolveRecordOverlaps(records, margin);
+  }
+
+  // Ein Spiel soll nicht mehrere Rekord-Einträge für dasselbe Ereignis auslösen
+  // (z.B. 78:32 = Allzeit-Highscore + Allzeit-Klatsche + Shootout = 3 Beiträge
+  // und 3 Memes). Regeln:
+  //  * Klatschen-Rekord (Allzeit/Turnier) schlägt Blowout: nur der Rekord bleibt.
+  //  * Ein klar gewonnenes Spiel (Abstand >= 21) ist kein klassischer Shootout:
+  //    der Shootout entfällt, sobald es einen Klatschen-Rekord oder Blowout gibt.
+  //  * Allzeit-Highscore + Klatsche wird zu EINEM Eintrag: die Klatsche ist der
+  //    Haupteintrag, der Highscore hängt als `alsoTypes` daran (Blog-Artikel,
+  //    Meme und Ansage nennen beides in einem Atemzug).
+  //  * Siegesserie und Überraschung erzählen eine eigene Geschichte und bleiben.
+  function resolveRecordOverlaps(records, margin) {
+    let out = records.slice();
+    const has = (t) => out.some((r) => r.type === t);
+    if (has("allTimeMargin") || has("tournamentMargin")) out = out.filter((r) => r.type !== "blowout");
+    if (margin >= 21 && (has("allTimeMargin") || has("tournamentMargin") || has("blowout"))) out = out.filter((r) => r.type !== "shootout");
+    const primary = out.find((r) => r.type === "allTimeMargin") || out.find((r) => r.type === "tournamentMargin");
+    if (primary && has("allTimeHigh")) {
+      primary.alsoTypes = ["allTimeHigh"];
+      primary.highScore = (out.find((r) => r.type === "allTimeHigh") || {}).value;
+      out = out.filter((r) => r.type !== "allTimeHigh");
+    }
+    return out;
   }
 
   // Große Turnier-Meilensteine (Finaleinzug, neuer Champion) — separat von
@@ -205,8 +226,6 @@
         return { top: "SIEGESSERIE", main: `${record.value}x IN FOLGE`, bottom: `${record.player} ist nicht zu stoppen` };
       case "upset":
         return { top: "ÜBERRASCHUNG DES TAGES", main: `${record.winnerScore}:${record.loserScore}`, bottom: `${record.player} schlägt ${record.opponent}` };
-      case "shutout":
-        return { top: "ABGESCHOSSEN", main: `${record.winnerScore}:${record.loserScore}`, bottom: `${record.opponent} kam nicht vom Fleck` };
       case "shootout":
         return { top: "SHOOTOUT", main: `${record.winnerScore}:${record.loserScore}`, bottom: `${record.player} vs ${record.opponent}` };
       case "finals":
@@ -393,11 +412,6 @@
       { id: 102156234, name: "Mocking Spongebob", caption: (r) => ({ top: `${r.opponent} BEFORE THE GAME: "iM wInNiNg tHiS eAsY"`, bottom: `${r.winnerScore}-${r.loserScore} FOR ${r.player}` }) },
       { id: 123999232, name: "The Scroll Of Truth", caption: (r) => ({ top: `${r.opponent} WASN'T EVEN THAT GOOD`, bottom: `AS THE ${r.winnerScore}-${r.loserScore} LOSS TO ${r.player} SHOWS` }) },
       { id: 93514481, name: "Steve Harvey Laughing Serious", caption: (r) => ({ top: `${r.opponent} BEFORE KICKOFF`, bottom: `${r.opponent} AFTER LOSING ${r.winnerScore}-${r.loserScore} TO ${r.player}` }) },
-    ],
-    shutout: [
-      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.opponent} AT ${r.loserScore} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL" }) },
-      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: `${r.opponent} AFTER THE ${r.winnerScore}-${r.loserScore}`, bottom: "TOTALLY FINE" }) },
-      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.opponent, bottom: `ONLY MANAGES ${r.loserScore} POINTS AGAINST ${r.player}` }) },
     ],
     shootout: [
       { id: 61544, name: "Success Kid", caption: (r) => ({ top: "SHOOTOUT", bottom: `${r.winnerScore}-${r.loserScore} - ${r.player} VS ${r.opponent}` }) },
@@ -642,11 +656,15 @@
     ],
     blowout: [
       { id: 203723093, name: "Patrick Mahomes on Ground", caption: (r) => ({ top: r.loser, bottom: `AFTER THE ${r.score}` }) },
-      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => ({ top: r.loser, bottom: `AFTER THE ${r.score}` }) },
+      { id: 27813981, name: "Hide the Pain Harold", caption: (r) => (Math.random() < 0.5 ? { top: r.loser, bottom: `AFTER THE ${r.score}` } : { top: `${r.loser} AFTER THE ${r.score}`, bottom: "TOTALLY FINE" }) },
       { id: 19833195, name: "NFL Donkey Punch", caption: (r) => ({ top: r.loser, bottom: `AFTER THE ${r.score}` }) },
       { id: 61712394, name: "Taking Out the Trash", caption: (r) => ({ top: r.winner, bottom: `TAKING OUT THE TRASH: ${r.loser} (${r.score})` }) },
       { id: 208650053, name: "NFL Tackle", caption: (r) => ({ top: `${r.loser}'S OFFENSE`, bottom: `STOPPED COLD ALL GAME (${r.score})` }) },
       { id: 554081129, name: "NFL Jaguars Out Of Reach", caption: (r) => ({ top: r.loser, bottom: `AT ${r.score}, THIS ONE IS OUT OF REACH` }) },
+      // Früher eigene Kategorie "Abgeschossen" (Verlierer kaum Punkte), jetzt Teil des Blowouts.
+      // Punkte des Verlierers kommen aus winnerScore/loserScore (Rekord) bzw. aus dem Spielstand (Story-Meme).
+      { id: 55311130, name: "This Is Fine", caption: (r) => ({ top: `${r.loser} AT ${blowoutLoserPoints(r)} POINTS`, bottom: "IT'S FINE, TOTALLY IN CONTROL" }) },
+      { id: 61585, name: "Bad Luck Brian", caption: (r) => ({ top: r.loser, bottom: `ONLY MANAGES ${blowoutLoserPoints(r)} POINTS AGAINST ${r.winner}` }) },
     ],
     hype: [
       { id: 61532, name: "Most Interesting Man In The World", caption: (r) => ({ top: "I DON'T ALWAYS TALK TRASH", bottom: `BUT WHEN I DO, I'M ${String(r.winner || "").toUpperCase()}` }) },
@@ -673,6 +691,13 @@
     ],
 
   };
+
+  // Punkte des Verlierers für Blowout-Captions (Rekord: loserScore, Story-Meme: aus dem Spielstand).
+  function blowoutLoserPoints(r) {
+    if (r.loserScore != null) return r.loserScore;
+    if (r.homeScore != null && r.awayScore != null) return Math.min(r.homeScore, r.awayScore);
+    return String(r.score || "").split("-").pop();
+  }
 
   function storyScoreStr(record) {
     const w = record.winnerScore ?? Math.max(record.homeScore ?? 0, record.awayScore ?? 0);
@@ -774,7 +799,6 @@
     tournamentMargin: { player: "Tobi F.", opponent: "Marco", winnerScore: 35, loserScore: 10 },
     winStreak: { player: "Tobi F.", value: 5 },
     upset: { player: "Jonas", opponent: "Tobi F.", winnerScore: 24, loserScore: 21 },
-    shutout: { player: "Tobi F.", opponent: "Marco", winnerScore: 28, loserScore: 0 },
     shootout: { player: "Tobi F.", opponent: "Marco", winnerScore: 45, loserScore: 42 },
     finals: { p1: "Tobi F.", p2: "Marco" },
     champion: { player: "Tobi F.", opponent: "Marco", winnerScore: 31, loserScore: 24 },
@@ -820,12 +844,10 @@
         when: "Der Sieger hat jetzt ≥ 3 Siege in Folge im Turnier und damit mehr als jeder andere Spieler aktuell.", publish: PUBLISH_RECORD },
       { id: "upset", group: "auto", emoji: "😱", label: "Überraschung", source: { pool: "upset" },
         when: "Der Sieger steht in der Gruppen-Setzliste mindestens 3 Plätze schlechter als der Verlierer.", publish: PUBLISH_RECORD },
-      { id: "shutout", group: "auto", emoji: "🛑", label: "Abgeschossen", source: { pool: "shutout" },
-        when: "Der Verlierer macht höchstens 3 Punkte und der Sieger mindestens 14.", publish: PUBLISH_RECORD },
       { id: "shootout", group: "auto", emoji: "🎯", label: "Shootout", source: { pool: "shootout" },
-        when: "Beide Teams zusammen ≥ 70 Punkte und damit mindestens so viel wie das bisher punktreichste Spiel des Turniers.", publish: PUBLISH_RECORD },
+        when: "Beide Teams zusammen ≥ 70 Punkte und damit mindestens so viel wie das bisher punktreichste Spiel des Turniers. Nur bei knappem/mittlerem Ausgang: Bei einem klaren Sieg (Abstand ≥ 21) entfällt der Shootout zugunsten von Klatsche/Blowout.", publish: PUBLISH_RECORD },
       { id: "blowout", group: "auto", emoji: "🔥", label: "Blowout", source: { story: "blowout" },
-        when: "Der Sieger gewinnt mit mindestens 21 Punkten Abstand, ohne dass schon Allzeit-Klatsche, Turnier-Klatsche oder Abgeschossen ausgelöst hat. Knappe Spiele lösen bewusst nicht automatisch aus.", publish: PUBLISH_RECORD },
+        when: "Der Sieger gewinnt mit mindestens 21 Punkten Abstand, ohne dass schon Allzeit-Klatsche oder Turnier-Klatsche ausgelöst hat. Knappe Spiele lösen bewusst nicht automatisch aus.", publish: PUBLISH_RECORD },
       { id: "finals", group: "auto", emoji: "🎬", label: "Finaleinzug", source: { pool: "finals" },
         when: "Einmalig pro Turnier, sobald beide Finalisten feststehen.", publish: PUBLISH_MILESTONE },
       { id: "champion", group: "auto", emoji: "👑", label: "Neuer Champion", source: { pool: "champion" },

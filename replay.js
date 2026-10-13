@@ -38,15 +38,41 @@
     const stats = { announcements: 0, articles: 0, matches: 0 };
 
     const roleName = (role) => (role === "announcer" ? names.announcer : role === "moderator" ? names.moderator : names.commentator);
-    const say = (role, text) => { out.push(`[${roleName(role)}] ${A.sanitizeForSpeech(text)}`); stats.announcements++; };
+    const playerList = work0Names();
+    const say = (role, text) => {
+      const clean = A.prepareText(text);
+      out.push(`[${roleName(role)}] ${clean}`);
+      const issues = A.lintText(clean, { names: playerList });
+      if (issues.length) { out.push(`   ⚠ Text-Check: ${issues.join("; ")}`); stats.warnings = (stats.warnings || 0) + 1; }
+      stats.announcements++;
+    };
     const heading = (title) => { out.push(""); out.push("=".repeat(72)); out.push(title); out.push("=".repeat(72)); };
     const note = (text) => out.push(`   (${text})`);
+    const articlesList = [];
+    // Wer im Song auftritt (gleiche Logik wie admin.html getSongStageInfo): daraus
+    // entsteht die Mikrofon-Ansage ("Am Mikrofon: …").
+    const songPerformers = (ms, st) => {
+      try {
+        if (ms === "regularSeason") return [{ name: "MC Altima", host: true }];
+        if (ms === "firstElimination") { const lb1 = MB.getPlayoffMatch(st, "lb1"), lb2 = MB.getPlayoffMatch(st, "lb2"); const em = MB.loserOf(lb1) ? lb1 : lb2; const w = MB.winnerOf(em); return w ? [{ name: w.name }] : []; }
+        if (ms === "toiletBowl") { const w = MB.winnerOf(MB.getPlayoffMatch(st, "tb")); return w ? [{ name: w.name }] : []; }
+        if (ms === "finals") { const gf = MB.getPlayoffMatch(st, "gf"); return [gf && gf.p1, gf && gf.p2].filter((x) => x && x.name).map((x) => ({ name: x.name })); }
+        if (ms === "champion") { const w = MB.winnerOf(MB.getPlayoffMatch(st, "gf")); return w ? [{ name: w.name }] : []; }
+      } catch (e) { /* ohne Performer */ }
+      return [];
+    };
     const article = (a, when) => {
       if (!a) return;
       stats.articles++;
+      articlesList.push({ kind: a.kind, title: a.title, body: a.body, facts: a.facts, _names: a._names, media_url: a.media_url, data: a.data, when });
       blog.push("", "=".repeat(72), `${a.title || "(ohne Titel)"}`, `   Art: ${a.kind || "?"}  ·  erschienen: ${when}`, "=".repeat(72), strip(a.body));
+      if (a.media_url) blog.push(`   [Medium eingebettet: ${a.media_type || "?"}]`);
+      const issues = A.lintText(strip(a.body), { names: playerList });
+      if (issues.length) blog.push(`   ⚠ Text-Check: ${issues.join("; ")}`);
     };
 
+    function work0Names() { return (srcState.players || []).map((p) => p.name); }
+    A.resetVariety();
     const final = cloneState(srcState);
     const work = cloneState(srcState);
     // alle Ergebnisse zurücksetzen, die Originalwerte merken wir uns
@@ -112,11 +138,14 @@
         say("announcer", A.buildRingIntroLine(Object.assign({ name }, badge), { isFirstPick: i === 0, isLastPick: i === draftNames.length - 1 }));
         const p = work.players.find((x) => x.name === name);
         if (p && p.team) {
-          const teamMeta = MB.nflTeams.find((t) => t.n === p.team);
+          const teamMeta = MB.nflTeams.find((t) => t.id === p.team) || MB.nflTeams.find((t) => t.n === p.team);
           const teamId = teamMeta ? teamMeta.id : null;
           const sched = (MB.schedules || {})[work.players.length];
           const oppNames = [];
           if (sched) sched.forEach((round) => round.forEach((m) => { if (m[0] === p.id || m[1] === p.id) { const o = work.players[m[0] === p.id ? m[1] : m[0]]; if (o) oppNames.push(o.name); } }));
+          // Live stehen nur die Gegner fest, die schon gepickt haben (frühere Draft-Position).
+          const knownOpp = oppNames.filter((o) => draftNames.indexOf(o) >= 0 && draftNames.indexOf(o) < i);
+          oppNames.length = 0; knownOpp.forEach((o) => oppNames.push(o));
           const oppBadges = MB.computeRingIntroBadges(history, oppNames);
           const teamTitleInfo = teamId != null ? (titleHistory.get(teamId) || titleHistory.get(String(teamId)) || titleHistory.get(Number(teamId))) : null;
           const line = A.buildTeamPickLine({ name, teamName: teamMeta ? teamMeta.n : p.team, teamTitleInfo, opponentBadges: oppNames.map((n) => ({ name: n, badge: oppBadges.get(n.trim().toLowerCase()) })) });
@@ -126,9 +155,13 @@
     } catch (e) { note(`Draft-Teil abgebrochen: ${e.message}`); console.warn("Replay Draft:", e); }
 
     // ---------- Turnierstart ----------
-    heading("2. TURNIERSTART");
-    A.getTournamentStartSegments({ athleteNames: playerNames }).forEach((s) => say(s.role, s.text));
-    try { article(B.buildKickoffArticle(work), "zum Turnierstart"); } catch (e) { console.warn("Replay Kickoff:", e); }
+    heading("2. TURNIERSTART NACH DEM DRAFT");
+    let firstTwo = [];
+    try {
+      firstTwo = (MB.getUpcomingMatches(work, { limit: 2 }) || []).map((u) => ({ ...u, stadiumPreposition: u.stadium === work.config.s2 ? (work.config.s2Prep || "im") : (work.config.s1Prep || "im") }));
+    } catch (e) { note(`Erste Partien nicht berechenbar: ${e.message}`); }
+    A.getTournamentStartSegments({ upcoming: firstTwo }).forEach((s) => say(s.role, s.text));
+    try { article(B.buildKickoffArticle(work, history), "zum Turnierstart"); } catch (e) { console.warn("Replay Kickoff:", e); }
 
     // ---------- Spiele in zeitlicher Reihenfolge ----------
     const events = [];
@@ -147,6 +180,7 @@
     const flags = {};
     let progressSoFar = 0, portraitsDone = false;
     const publishedPortraits = new Set();
+    publishedPortraits.players = new Set();
     let prevMiles = new Set(Mu && Mu.detectMilestones ? Mu.detectMilestones(work) : []);
     const MS_LABEL = (Mu && Mu.MILESTONE_META) ? Mu.MILESTONE_META : {};
     let n = 0;
@@ -186,7 +220,7 @@
       out.push(`--- Spiel ${n}: ${homeName} ${orig.s1} : ${orig.s2} ${awayName}  (${phase}${ev.type === "playoff" ? " · " + m.id : ""}, ${stadium}) ---`);
       try {
         const r = A.buildResultLine({
-          state: work, history, homeName, awayName, homeScore: orig.s1, awayScore: orig.s2, stadium, prevSeeds,
+          state: work, history, homeName, awayName, homeScore: orig.s1, awayScore: orig.s2, stadium, stadiumPreposition: stadiumPrepFor(work, stadium), prevSeeds,
           matchKind: ev.type, matchId: ev.type === "playoff" ? m.id : null, songMilestone, songGenerated: !!songMilestone,
         });
         say("commentator", r.line);
@@ -206,22 +240,26 @@
         const label = (MS_LABEL[ms] && MS_LABEL[ms].label) || ms;
         out.push(`   [SONG-MOMENT: ${label}]`);
         try {
-          const performers = ms === "regularSeason" ? [{ name: "MC Altima", host: true }] : [];
+          const performers = songPerformers(ms, work);
           A.getSongAnnounceSegments(ms, performers).forEach((s) => say(s.role, s.text));
           note("Song wird hier abgespielt (Musikvideo auf der Song-Bühne)");
-          article(B.buildSongArticle(ms, "https://example.invalid/song.mp3"), `nach Spiel ${n} (${label})`);
+          article(B.buildSongArticle(ms, "https://example.invalid/song.mp3", { state: work, history }), `nach Spiel ${n} (${label})`);
         } catch (e) { console.warn("Replay Song:", e); }
       });
 
       // ---- Blog: Rekorde, Meilenstein-Rekorde, Power Ranking, Porträts, Abschluss ----
       try {
         (R.detectRecords(work, history, { homeName, awayName, homeScore: orig.s1, awayScore: orig.s2 }) || []).forEach((rec) => {
-          article(B.buildRecordArticle(rec), `nach Spiel ${n}`);
+          article(B.buildRecordArticle(rec, { state: work, history }), `nach Spiel ${n}`);
         });
         (R.detectMilestoneRecords(work, flags) || []).forEach((rec) => {
           flags[rec.type] = true;
-          article(rec.type === "finals" ? B.buildFinalsArticle(rec) : B.buildChampionArticle(rec), `nach Spiel ${n}`);
-          if (rec.type === "champion") article(B.buildWrapUpArticle(work, history), `nach Spiel ${n} (Abschluss)`);
+          article(rec.type === "finals" ? B.buildFinalsArticle(rec, { state: work, history }) : B.buildChampionArticle(rec, { state: work, history }), `nach Spiel ${n}`);
+          if (rec.type === "champion") {
+            const fakeSongs = { champion: "https://example.invalid/song.mp3", toiletBowl: "https://example.invalid/song.mp3" };
+            article(B.buildWrapUpArticle(work, history, { songUrl: fakeSongs.champion }), `nach Spiel ${n} (Abschluss)`);
+            article(B.buildToiletBowlArticle(work, history, { songUrl: fakeSongs.toiletBowl }), `nach Spiel ${n} (Toilet Bowl)`);
+          }
         });
         if (B.isProgressArticleDue(work, progressSoFar)) {
           progressSoFar++;
@@ -229,7 +267,11 @@
         }
         if (!portraitsDone && B.isPortraitDue(work, publishedPortraits, history)) {
           const group = B.nextPortraitGroup(work, history, publishedPortraits);
-          if (group) { const a = B.buildPortraitArticle(group, work, history); if (a) { article(a, `nach Spiel ${n} (Porträt)`); } publishedPortraits.add(group); }
+          if (group) {
+            const a = B.buildPortraitArticle(group, work, history, publishedPortraits);
+            if (a) { article(a, `nach Spiel ${n} (Porträt)`); (a.data && a.data.players || []).forEach((nm) => publishedPortraits.players.add(nm)); }
+            publishedPortraits.add(group);
+          }
           else portraitsDone = true;
         }
       } catch (e) { console.warn("Replay Blog:", e); blog.push(`(Blog-Teil bei Spiel ${n} abgebrochen: ${e.message})`); }
@@ -238,7 +280,7 @@
     out.push("");
     out.push(`— Ende. ${stats.announcements} Sprechzeilen für ${stats.matches} Spiele. —`);
     blog.push("", `— Ende. ${stats.articles} Beiträge für ${stats.matches} Spiele. —`);
-    return { announcer: out.join("\n"), blog: blog.join("\n"), stats };
+    return { announcer: out.join("\n"), blog: blog.join("\n"), stats, articles: articlesList };
   }
 
   global.MB.Replay = { run, cloneState };
