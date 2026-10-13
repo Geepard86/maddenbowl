@@ -35,7 +35,9 @@
   .title-name { width: 110px; font-size: 0.9em; }
   .title-bar-bg { flex: 1; background: #0e1622; border-radius: 6px; overflow: hidden; height: 14px; }
   .title-bar-fill { background: var(--v2-gold); height: 100%; }
-  .title-pct { width: 50px; text-align: right; font-size: 0.85em; }
+  /* Chance oben, darunter Trendpfeil + Trendprozente IMMER gemeinsam in einer Zeile (nie getrennt umbrechen). */
+  .title-pct { width: 74px; flex: 0 0 74px; text-align: right; font-size: 0.85em; line-height: 1.25; }
+  .title-pct .trend { display: block; white-space: nowrap; font-weight: 800; font-size: 0.8em; }
   .btn-secondary { background: transparent; border: 1px solid var(--v2-border); color: var(--v2-silver); border-radius: 6px; padding: 4px 10px; font-size: 0.7em; cursor: pointer; }
 
   /* Kompakte, klar getrennte Spielzeilen (Regular Season + Playoffs):
@@ -134,7 +136,7 @@
       <div class="title-row">
         <span class="title-name">${MB.escHtml(x.name)}</span>
         <div class="title-bar-bg"><div class="title-bar-fill" style="width:${(x.pct / max * 100).toFixed(0)}%"></div></div>
-        <span class="title-pct">${x.pct.toFixed(1)}% <span style="color:${col(x.t.arrow)}; font-weight:800; font-size:0.8em;" title="Veränderung seit dem letzten Ergebnis">${x.t.arrow} ${x.t.diff >= 0 ? '+' : ''}${x.t.diff.toFixed(1)}%</span></span>
+        <span class="title-pct">${x.pct.toFixed(1)}%<span class="trend" style="color:${col(x.t.arrow)};" title="Veränderung seit dem letzten Ergebnis">${x.t.arrow}&nbsp;${x.t.diff >= 0 ? '+' : ''}${x.t.diff.toFixed(1)}%</span></span>
       </div>`).join('');
   }
 

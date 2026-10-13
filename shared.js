@@ -254,7 +254,7 @@
       };
       const color = (arrow) => (arrow === "↗" ? "var(--accent, #3ddc84)" : arrow === "↘" ? "var(--nfl-red, #d50a0a)" : "#aaa");
       const fmtDelta = (d) => `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`;
-      const part = (name, label) => { const t = trendOf(name); const tail = trendFn ? ` <span style="color:${color(t.arrow)}; font-weight:800;">${t.arrow} ${fmtDelta(t.diff)}</span>` : ""; return `<b>${label}</b> ${t.now.toFixed(1)}%${tail}`; };
+      const part = (name, label) => { const t = trendOf(name); const tail = trendFn ? ` <span style="color:${color(t.arrow)}; font-weight:800; white-space:nowrap;">${t.arrow}&nbsp;${fmtDelta(t.diff)}</span>` : ""; return `<b>${label}</b> ${t.now.toFixed(1)}%${tail}`; };
       badges.push(`🏆 Titelchance: ${part(H, eH)} &nbsp;|&nbsp; ${part(A, eA)}`);
     }
     const badgeStyle = "display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border:1px solid rgba(255,255,255,0.10); background:rgba(0,0,0,0.22); border-radius:999px; font-size:0.72em; line-height:1.2; white-space:nowrap;";

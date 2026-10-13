@@ -25,6 +25,9 @@
   <link rel="stylesheet" href="draft-stage.css">
   <link rel="stylesheet" href="song-stage.css">
   <style>
+    /* Die Admin-Bereiche (Turnier-Setup / Spielplan & Ergebnisse / Einstellungen) liegen im
+       Burger-Menü; die Tab-Leiste bleibt nur im DOM, weil setAdminTab() sie mitschaltet. */
+    #adminTabbar { display: none !important; }
     /* Speichern-Box für Score-Eingabe: Ergebnis wird erst bei Klick auf den
        Button (oder Enter) committed, nicht mehr live bei jedem onchange.
        Verhindert Fokus-Sprünge beim Tabben + doppelte/überlappende
@@ -59,6 +62,7 @@
   <script>
     MB.UI.mountHeader({
       active: '',
+      adminMenu: true, // eigenes Admin-Burger-Menü, Titelleiste -> admin.html
       showAdminLogin: true,
       // Admin-Status wird als const beim Laden ausgewertet (siehe isAdmin
       // weiter unten) -> nach Login/Logout einfach neu laden, statt jede
@@ -2918,6 +2922,7 @@ function renderRanking() {
     function setAdminTab(tab) {
       activeAdminTab = tab;
       renderAdminTabs();
+      window.scrollTo(0, 0);
     }
 
     function renderAdminTabs() {
@@ -2934,6 +2939,7 @@ function renderRanking() {
       ['setup', 'schedule', 'settings'].forEach(t => {
         document.getElementById('adminTabBtn-' + t).classList.toggle('active', t === tab);
       });
+      MB.UI.syncAdminNav({ tab, setupAvailable });
     }
 
     function renderAll() {

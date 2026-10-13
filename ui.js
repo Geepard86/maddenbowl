@@ -148,7 +148,25 @@
     withAchievements((A) => A.setPage(active));
     _showAdminLogin = !!(opts && opts.showAdminLogin);
     _onAdminChange = (opts && opts.onAdminChange) || null;
-    const navHtml = NAV_ITEMS.map(item => `
+    // Admin-Variante (admin.html): eigenes, schlankes Menü statt der Spieler-Navigation.
+    // Titelleiste führt zurück auf admin.html, die Admin-Bereiche liegen im Burger-Menü.
+    const adminMenu = !!(opts && opts.adminMenu);
+    const adminNavLink = (key, icon, label, hidden) => `
+      <a class="v2-nav-link" id="mbAdminNav-${key}" href="#" style="${hidden ? "display:none;" : ""}" onclick="MB.UI.adminNavSelect('${key}'); return false;">
+        ${icon} ${label}
+      </a>`;
+    const emoji = (e) => `<span style="display:inline-block; width:20px; text-align:center;">${e}</span>`;
+    const adminNavHtml = [
+      adminNavLink("setup", emoji("🏈"), "Turnier-Setup", true),
+      adminNavLink("schedule", `<img src="assets/icons/calendar.svg" alt="">`, "Spielplan &amp; Ergebnisse"),
+      adminNavLink("settings", emoji("⚙️"), "Einstellungen"),
+      `<a class="v2-nav-link" href="blog.html"><img src="assets/icons/blog.svg" alt=""> Blog</a>`,
+    ].join("");
+    const adminSecondaryHtml = `
+        <a class="v2-nav-link" href="index.html" target="_blank" rel="noopener">
+          <img src="assets/icons/home.svg" alt=""> Spieler-Dashboard
+        </a>`;
+    const navHtml = adminMenu ? adminNavHtml : NAV_ITEMS.map(item => `
       <a class="v2-nav-link ${item.key === active ? "active" : ""}" href="${item.href}">
         <img src="${item.icon}" alt=""> ${item.label}
       </a>`).join("");
@@ -166,7 +184,7 @@
 
     const headerHtml = `
       <header class="v2-header">
-        <a class="v2-logo" href="index.html">
+        <a class="v2-logo" href="${adminMenu ? "admin.html" : "index.html"}">
           <img src="assets/icons/crown.svg" alt="">
           <span class="v2-logo-text">Altima Bowl VI</span>
         </a>
@@ -183,8 +201,8 @@
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
         <div class="v2-nav-divider"></div>
-        <button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
-        <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>
+        ${adminMenu ? adminSecondaryHtml : `<button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
+        <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>`}
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
       <div class="v2-modal-overlay" id="mbLoginModal" onclick="if(event.target===this) MB.UI.closeLogin()">
@@ -196,6 +214,23 @@
 
     document.body.insertAdjacentHTML("afterbegin", headerHtml);
     renderAuthArea();
+  }
+
+  // Admin-Menü: Klick auf einen Bereich schaltet den Admin-Tab um (setAdminTab in
+  // admin.html) und schließt das Menü. syncAdminNav() markiert den aktiven Bereich
+  // und blendet "Turnier-Setup" nur ein, solange es verfügbar ist.
+  function adminNavSelect(tab) {
+    if (typeof global.setAdminTab === "function") global.setAdminTab(tab);
+    closeNav();
+  }
+  function syncAdminNav(info) {
+    const { tab, setupAvailable } = info || {};
+    const setup = document.getElementById("mbAdminNav-setup");
+    if (setup) setup.style.display = setupAvailable ? "" : "none";
+    ["setup", "schedule", "settings"].forEach((t) => {
+      const el = document.getElementById("mbAdminNav-" + t);
+      if (el) el.classList.toggle("active", t === tab);
+    });
   }
 
   function toggleNav() {
@@ -456,7 +491,7 @@
   global.MB = global.MB || {};
   global.MB.UI = {
     NAV_ITEMS, mountHeader, setState, currentPlayer, isAdminUnlocked, withAchievements,
-    toggleNav, closeNav, toggleUserMenu,
+    toggleNav, closeNav, toggleUserMenu, adminNavSelect, syncAdminNav,
     openRules, closeInfo, installApp, isStandalone,
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,
     openLogin, closeLogin, doLogin, doLogout,
