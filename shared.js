@@ -642,6 +642,43 @@
   }
 
   // ======================================================================
+  // TEAM-LOGOS: Fallback-Kette
+  // -------------------------------------------------------------------------
+  // Alle Seiten laden die Logos von static.www.nfl.com. Schlägt das für ein
+  // Team fehl (z. B. andere Kürzel wie LA statt LAR, geänderte URL), probieren
+  // wir automatisch weitere Quellen und zeigen zuletzt das Kürzel als Schild,
+  // statt ein leeres/kaputtes Bild. Greift für JEDES <img> mit NFL-Logo-URL,
+  // ohne dass die einzelnen Seiten angepasst werden müssen.
+  // ======================================================================
+  const LOGO_NFL_RE = /static\.www\.nfl\.com\/t_q-best\/league\/api\/clubs\/logos\/([A-Za-z0-9]+)\.png/;
+  const LOGO_NFL_ALT = { LAR: "LA", WAS: "WSH", JAX: "JAC" };
+  const LOGO_ESPN = { WAS: "wsh", LAR: "lar", JAX: "jax", LV: "lv" };
+  function logoCandidates(id) {
+    const out = [];
+    if (LOGO_NFL_ALT[id]) out.push(`https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${LOGO_NFL_ALT[id]}.png`);
+    out.push(`https://a.espncdn.com/i/teamlogos/nfl/500/${LOGO_ESPN[id] || String(id).toLowerCase()}.png`);
+    return out;
+  }
+  function logoBadgeDataUri(id) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="3" y="3" width="58" height="58" rx="12" fill="#1a2946" stroke="#c99700" stroke-width="3"/><text x="32" y="39" font-family="Arial Black,Arial,sans-serif" font-size="${String(id).length > 2 ? 19 : 24}" font-weight="900" text-anchor="middle" fill="#ffffff">${String(id).replace(/[^A-Za-z0-9]/g, "")}</text></svg>`;
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+  if (typeof document !== "undefined") {
+    document.addEventListener("error", (ev) => {
+      const img = ev.target;
+      if (!img || img.tagName !== "IMG") return;
+      const m = (img.getAttribute("src") || "").match(LOGO_NFL_RE);
+      if (!m && img.dataset.logoId == null) return;
+      const id = img.dataset.logoId || m[1];
+      const step = parseInt(img.dataset.logoStep || "0", 10);
+      const cands = logoCandidates(id);
+      img.dataset.logoId = id;
+      if (step < cands.length) { img.dataset.logoStep = String(step + 1); img.src = cands[step]; }
+      else if (step === cands.length) { img.dataset.logoStep = String(step + 1); img.src = logoBadgeDataUri(id); }
+    }, true);
+  }
+
+  // ======================================================================
   // ZEIT-ENGINE  (Bugfix #2 + #3)
   // ======================================================================
   // Liefert Minuten-Offsets ab groupEndTime je Match-ID — bye-aware.
@@ -1743,13 +1780,117 @@
     return out;
   }
 
+
+  // ======================================================================
+  // MADDEN-KADER (Team-OVR + Spieler + IR) — Import aus seasons.html,
+  // Anzeige im Draft. Daten liegen in `madden_rosters` (Supabase), der Abruf
+  // der Fremdseiten läuft über die Edge Function `madden-fetch`.
+  // ======================================================================
+  const _rosterCache = new Map(); // "year|TEAM" -> Zeile | null
+
+  function normPlayerName(s) {
+    return String(s || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[’'`´.]/g, "")
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\b(jr|sr|ii|iii|iv)\b/g, " ")
+      .replace(/\s+/g, " ").trim();
+  }
+
+  async function invokeMaddenFetch(payload) {
+    const sb = getSupabaseClient();
+    if (!sb || !sb.functions) throw new Error("Supabase-Client nicht verfügbar");
+    const { data, error } = await sb.functions.invoke("madden-fetch", { body: payload });
+    if (error) {
+      let detail = error.message || String(error);
+      try { if (error.context && error.context.json) { const j = await error.context.json(); if (j && j.error) detail += " — " + j.error; } } catch (e) {}
+      throw new Error(detail);
+    }
+    if (!data || data.ok === false) throw new Error((data && data.error) || "Leere Antwort der Edge Function");
+    return data;
+  }
+  const fetchMaddenTeam = (teamId) => invokeMaddenFetch({ team: teamId });
+  const fetchIrList = () => invokeMaddenFetch({ ir: true });
+
+  // Markiert IR-Spieler in den Kadern. rostersByTeam: { BAL: {players:[...]} , ... }
+  // Rückgabe: { unmatchedByTeam: { BAL: [{n,p,t,body}] }, matched, total }
+  function applyIrToRosters(rostersByTeam, irList) {
+    const idx = new Map(); // normName -> [{team, player}]
+    Object.entries(rostersByTeam).forEach(([team, r]) => {
+      (r.players || []).forEach((p) => {
+        p.ir = false; delete p.irNote; delete p.irTeam;
+        const k = normPlayerName(p.n);
+        if (!idx.has(k)) idx.set(k, []);
+        idx.get(k).push({ team, player: p });
+      });
+    });
+    const unmatchedByTeam = {};
+    let matched = 0;
+    (irList || []).forEach((ir) => {
+      const hits = idx.get(normPlayerName(ir.n)) || [];
+      let hit = hits.find((h) => h.team === ir.t);                 // 1) gleiches Team
+      if (!hit && hits.length === 1) hit = hits[0];                 // 2) eindeutig in anderem Kader (Trade)
+      if (hit) {
+        hit.player.ir = true;
+        if (ir.body) hit.player.irNote = ir.body;
+        if (hit.team !== ir.t) hit.player.irTeam = ir.t;
+        matched++;
+      } else {
+        (unmatchedByTeam[ir.t] = unmatchedByTeam[ir.t] || []).push({ n: ir.n, p: ir.p || "", body: ir.body || "" });
+      }
+    });
+    return { unmatchedByTeam, matched, total: (irList || []).length };
+  }
+
+  async function saveRosters(year, rows) {
+    const sb = getSupabaseClient();
+    if (!sb) throw new Error("Supabase-Client nicht verfügbar");
+    const payload = rows.map((r) => ({
+      year: Number(year), team: r.team, madden_version: r.madden || null, team_ovr: r.teamOvr ?? null,
+      players: r.players || [], ir_unmatched: r.irUnmatched || [], fetched_at: new Date().toISOString(),
+    }));
+    if (!payload.length) return;
+    const { error } = await sb.from("madden_rosters").upsert(payload, { onConflict: "year,team" });
+    if (error) throw error;
+    payload.forEach((r) => _rosterCache.delete(r.year + "|" + r.team));
+  }
+
+  // Lädt den Kader EINES Teams (gecacht). null, wenn nicht vorhanden / Tabelle fehlt.
+  async function loadRoster(year, teamId) {
+    const key = Number(year) + "|" + teamId;
+    if (_rosterCache.has(key)) return _rosterCache.get(key);
+    const sb = getSupabaseClient();
+    if (!sb) return null;
+    try {
+      const { data, error } = await sb.from("madden_rosters").select("*").eq("year", Number(year)).eq("team", teamId).maybeSingle();
+      if (error) throw error;
+      _rosterCache.set(key, data || null);
+      return data || null;
+    } catch (e) {
+      console.warn("Kader laden fehlgeschlagen:", e);
+      return null; // nicht cachen -> nächster Klick versucht es erneut
+    }
+  }
+
+  async function countRosters(year) {
+    const sb = getSupabaseClient();
+    if (!sb) return 0;
+    try {
+      const { count } = await sb.from("madden_rosters").select("team", { count: "exact", head: true }).eq("year", Number(year));
+      return count || 0;
+    } catch (e) { return 0; }
+  }
+
+  const Rosters = { normPlayerName, fetchMaddenTeam, fetchIrList, applyIrToRosters, saveRosters, loadRoster, countRosters };
+
   // ======================================================================
   // EXPORT
   // ======================================================================
   global.MB = {
     nflTeams, maddenRatings, schedules, playoffLabels, PLAYOFF_STRUCTURE,
     getSupabaseClient, getCurrentTournamentId, fetchCloudState, pushCloudState, archiveCurrentTournament, discardCurrentTournament,
-    loadTeamRatings, getTeamRatingsSync, saveTeamRatings,
+    loadTeamRatings, getTeamRatingsSync, saveTeamRatings, Rosters,
     getAppConfig, setAppConfig,
     computeRingIntroBadges, computeTeamTitleHistory,
     loadHistorySeasons, loadAndBuildHistory, buildHistoryIndex, fetchLastCompletedTournament,

@@ -279,8 +279,11 @@
 .ds-scene-ring .ds-char[data-role="announcer"] { width: 70%; left: 15%; bottom: -14%; }
 .ds-pip .ds-scene-ring .ds-char[data-role="announcer"] { width: 52%; left: 24%; bottom: -16%; }
 .ds-pip .ds-tag { font-size: 15px; padding: 3px 10px; }
-.ds-tile { height: 122px; }
-.ds-tile img { width: 56px; height: 56px; }
+/* Team-Kacheln: genug Höhe für Logo + Name + OVR (vorher 122px -> Logo/OVR wurden abgeschnitten) */
+.ds-tile { height: 144px; padding: 8px 4px; gap: 3px; }
+.ds-tile img { width: 52px; height: 52px; flex: 0 0 auto; }
+.ds-tile .tn { font-size: 17px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-tile .ovr { font-size: 18px; flex: 0 0 auto; }
 
 /* --- ruhigere Figuren: Nahaufnahmen (v.a. Ring-Ansager) kaum noch wippen --- */
 .ds-scene-close .ds-char.talking svg { animation: dsNodSoft 1.15s ease-in-out infinite; }
@@ -359,3 +362,34 @@
 .ds-scene-boothclose .ds-desk::after { left: auto; right: 4%; transform: none; bottom: 22%; font-size: 30px; }
 
 .ds-nick { font: 900 54px/1.1 Impact, 'Arial Black', sans-serif; color: #fff; text-transform: uppercase; letter-spacing: 6px; text-shadow: 4px 4px 0 #d50a0a; margin-top: 18px; max-width: 100%; overflow-wrap: anywhere; }
+
+
+/* =========================================================================
+   KADER-ANSICHT (Overlay über der Team-Auswahl)
+   ========================================================================= */
+.ds-tile .ds-info { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(255,210,63,.18); border: 2px solid #c99700;
+  color: #ffd23f; font: 900 17px/24px 'Segoe UI'; text-align: center; z-index: 3; cursor: pointer; }
+.ds-tile .ds-info:hover { background: #c99700; color: #000; }
+.ds-roster { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: rgba(8,14,28,.97); border: 4px solid #c99700; border-radius: 10px; padding: 14px 18px; box-sizing: border-box; text-align: left; animation: dsIn .25s ease-out; }
+.rs-head { display: flex; align-items: center; gap: 16px; flex: 0 0 auto; border-bottom: 3px solid #d50a0a; padding-bottom: 10px; margin-bottom: 8px; }
+.rs-head img { width: 74px; height: 74px; object-fit: contain; }
+.rs-title { flex: 1; min-width: 0; }
+.rs-name { font: 900 46px/1 Impact, 'Arial Black', sans-serif; text-transform: uppercase; color: #fff; letter-spacing: 2px; }
+.rs-sub { font: 600 19px/1.3 'Segoe UI'; color: #9fb0c8; margin-top: 4px; }
+.rs-ovr { text-align: center; background: #c99700; color: #000; border-radius: 8px; padding: 6px 18px; }
+.rs-ovr b { display: block; font: 900 44px/1 Impact, sans-serif; } .rs-ovr small { font: 800 15px/1 'Segoe UI'; letter-spacing: 2px; }
+.rs-close { width: 50px; height: 50px; border-radius: 8px; border: 2px solid #5b6b85; background: rgba(255,255,255,.08); color: #fff; font-size: 26px; cursor: pointer; }
+.rs-close:hover { background: #d50a0a; border-color: #d50a0a; }
+.rs-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; grid-auto-flow: column; grid-template-columns: repeat(3, 1fr); column-gap: 14px; align-content: start; }
+.rs-row { display: flex; align-items: center; gap: 7px; height: 29px; box-sizing: border-box; border-bottom: 1px solid rgba(255,255,255,.07); font: 600 17px/1 'Segoe UI'; color: #e8eef7; }
+.rs-row .o { width: 34px; text-align: center; font: 900 18px/1 'Segoe UI'; padding: 3px 0; border-radius: 4px; background: #33415f; flex: 0 0 auto; }
+.rs-row .o.m { background: #2f8f5b; color: #fff; } .rs-row .o.h { background: #c99700; color: #000; }
+.rs-row .p { width: 44px; color: #9fb0c8; font-size: 14px; font-weight: 800; flex: 0 0 auto; }
+.rs-row .n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-row.ir { opacity: .72; } .rs-row.ir .n { text-decoration: line-through; text-decoration-color: rgba(255,59,59,.8); }
+.b { display: inline-block; font: 900 12px/1 'Segoe UI'; letter-spacing: 1px; padding: 3px 6px; border-radius: 4px; flex: 0 0 auto; }
+.b.xf { background: #ffd23f; color: #000; } .b.ss { background: #1e50c8; color: #fff; } .b.irt { background: #d50a0a; color: #fff; }
+.rs-foot { flex: 0 0 auto; padding-top: 8px; font: 600 15px/1.35 'Segoe UI'; color: #9fb0c8; }
+.rs-um { margin-top: 6px; color: #fbbf24; }
+.rs-empty { padding: 60px 20px; text-align: center; font: 700 26px/1.4 'Segoe UI'; color: #cfd8e6; grid-column: 1 / -1; }
+.rs-empty small { font-size: 18px; color: #9fb0c8; }

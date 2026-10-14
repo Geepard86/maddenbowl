@@ -33,6 +33,12 @@
   .team-cell label { font-size: 0.8em; width: 40px; }
   .team-cell input { width: 50px; }
   .hint { font-size: 0.8em; opacity: 0.65; margin: 6px 0; }
+  .team-cell.fetched { outline: 1px solid #c99700; }
+  .team-cell.fetched.changed input { background: rgba(201,151,0,.25); }
+  .import-box { background: #111a28; border: 1px solid #2a3a5c; border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+  .import-box .imp-log { font-size: 0.82em; line-height: 1.5; margin-top: 6px; }
+  .import-box .imp-ok { color: #4ade80; } .import-box .imp-warn { color: #fbbf24; } .import-box .imp-err { color: #f87171; }
+  .import-box details { margin-top: 6px; } .import-box summary { cursor: pointer; }
   .not-admin { padding: 40px; text-align: center; opacity: 0.7; }
 </style>
 </head>
@@ -693,6 +699,14 @@ Altima Bowl 2027 – wir sind dabei.`,
         <button class="small secondary" onclick="loadRatingsGrid()">Laden</button>
         <button class="small secondary" onclick="copyFromPreviousYear()">Von Vorjahr kopieren</button>
       </div>
+      <div class="import-box">
+        <div class="row-line">
+          <button class="small" id="btnMaddenImport" onclick="runMaddenImport()">⬇ Von Madden Ratings abrufen</button>
+          <span class="hint" id="maddenRosterInfo" style="margin:0;"></span>
+        </div>
+        <div class="hint">Holt Team-OVR und Kader aller 32 Teams (maddenratings.com) plus die aktuelle NFL-IR-Liste — dauert ca. 1–2 Minuten. Die OVR-Werte landen unten im Raster und lassen sich vor dem Speichern noch ändern; die Kader (für die Ansicht im Draft) werden sofort gespeichert.</div>
+        <div class="imp-log" id="maddenImportLog"></div>
+      </div>
       <div class="team-grid" id="teamGrid"></div>
       <button onclick="saveRatingsGrid()">Speichern</button>
     `;
@@ -716,6 +730,105 @@ Altima Bowl 2027 – wir sind dabei.`,
         <input type="number" min="40" max="99" id="rating-${t.id}" value="${ratings[t.id] ?? 85}">
       </div>
     `).join('');
+    refreshRosterInfo();
+  }
+
+  async function refreshRosterInfo() {
+    const el = document.getElementById('maddenRosterInfo');
+    if (!el) return;
+    const year = document.getElementById('ratingsYear').value;
+    const n = await MB.Rosters.countRosters(year);
+    el.textContent = n ? `Gespeicherte Kader für ${year}: ${n}/32` : `Für ${year} sind noch keine Kader gespeichert.`;
+  }
+
+  // =========================================================
+  // MADDEN-IMPORT (Team-OVR + Kader + IR)
+  // =========================================================
+  let _lastImport = null;
+  const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  async function runMaddenImport(onlyTeams) {
+    const btn = document.getElementById('btnMaddenImport');
+    const log = document.getElementById('maddenImportLog');
+    const esc = MB.escHtml;
+    const ids = onlyTeams || MB.nflTeams.map(t => t.id);
+    const results = (onlyTeams && _lastImport) ? _lastImport.results : {};
+    const failed = [];
+    btn.disabled = true;
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        log.innerHTML = `Team ${i + 1}/${ids.length}: ${esc(ids[i])} …`;
+        try {
+          const r = await MB.Rosters.fetchMaddenTeam(ids[i]);
+          if (!r.players || !r.players.length) throw new Error('keine Spieler erkannt');
+          results[ids[i]] = r;
+          // Erste Antwort: passt die Madden-Version der Seite zum gewählten Jahr?
+          if (i === 0 && r.madden) {
+            const yEl = document.getElementById('ratingsYear');
+            if (Number(yEl.value) !== 2000 + r.madden &&
+                confirm(`maddenratings.com zeigt aktuell Madden ${r.madden}. Als Jahr ${2000 + r.madden} speichern?\n(OK = ${2000 + r.madden}, Abbrechen = bei ${yEl.value} bleiben)`)) {
+              yEl.value = 2000 + r.madden;
+              await loadRatingsGrid();
+            }
+          }
+        } catch (e) { failed.push({ id: ids[i], msg: e.message || String(e) }); }
+        await _sleep(350); // höflich zur Fremdseite
+      }
+
+      // NFL-IR-Liste holen und den Kadern zuordnen
+      log.innerHTML = 'Hole NFL-IR-Liste …';
+      let irInfo = null, irError = '';
+      try { irInfo = await MB.Rosters.fetchIrList(); } catch (e) { irError = e.message || String(e); }
+      let irRes = null;
+      if (irInfo) {
+        irRes = MB.Rosters.applyIrToRosters(results, irInfo.ir);
+        Object.keys(results).forEach(t => { results[t].irUnmatched = irRes.unmatchedByTeam[t] || []; });
+      }
+
+      // Kader speichern (Fehler -> Hinweis auf SQL-Migration)
+      const year = document.getElementById('ratingsYear').value;
+      let saveMsg = '';
+      try {
+        await MB.Rosters.saveRosters(year, Object.entries(results).map(([team, r]) => ({
+          team, madden: r.madden, teamOvr: r.teamOvr, players: r.players, irUnmatched: r.irUnmatched || [],
+        })));
+        saveMsg = `<div class="imp-ok">✔ ${Object.keys(results).length} Kader für ${esc(year)} gespeichert.</div>`;
+      } catch (e) {
+        saveMsg = `<div class="imp-err">✘ Kader speichern fehlgeschlagen: ${esc(e.message || String(e))}<br>Falls die Tabelle fehlt: <code>supabase-migration-madden-rosters.sql</code> im Supabase SQL-Editor ausführen.</div>`;
+      }
+
+      // Team-OVR ins Raster übernehmen (nicht gespeichert!)
+      let changed = 0;
+      Object.entries(results).forEach(([team, r]) => {
+        const inp = document.getElementById(`rating-${team}`);
+        if (!inp || r.teamOvr == null) return;
+        const before = parseInt(inp.value);
+        inp.value = r.teamOvr;
+        inp.title = `Madden-Seite: ${r.teamOvr}`;
+        inp.parentElement.classList.add('fetched');
+        if (before !== r.teamOvr) { inp.parentElement.classList.add('changed'); changed++; }
+      });
+
+      _lastImport = { year, results, failed };
+      const warns = Object.entries(results).filter(([, r]) => r.warnings && r.warnings.length)
+        .map(([t, r]) => `${t}: ${r.warnings.slice(0, 3).join('; ')}`);
+      const unm = irRes ? Object.entries(irRes.unmatchedByTeam) : [];
+      const players = Object.values(results).reduce((n, r) => n + r.players.length, 0);
+
+      log.innerHTML = `
+        <div class="${failed.length ? 'imp-warn' : 'imp-ok'}">${Object.keys(results).length}/32 Teams abgerufen · ${players} Spieler · ${changed} OVR-Werte weichen vom bisherigen Raster ab (markiert).</div>
+        ${saveMsg}
+        <div class="imp-warn">➜ OVR-Werte prüfen/ändern und unten auf <b>Speichern</b> klicken, damit sie für Quoten und Draft gelten.</div>
+        ${irInfo ? `<div>IR-Liste: ${irRes.total} Spieler, davon ${irRes.matched} zugeordnet, <b class="${irRes.total - irRes.matched ? 'imp-warn' : 'imp-ok'}">${irRes.total - irRes.matched} nicht zuordenbar</b>.${irRes.total === 0 ? ' <span class="imp-err">Keine IR-Spieler gefunden — Statusfelder der Quelle: ' + esc(JSON.stringify(irInfo.statusCounts)) + '</span>' : ''}</div>` : `<div class="imp-err">IR-Liste nicht abrufbar: ${esc(irError)}</div>`}
+        ${unm.length ? `<details><summary>Nicht zuordenbare IR-Spieler (stehen auf der echten IR, aber nicht im Madden-Kader)</summary>${unm.map(([t, a]) => `<div><b>${esc(t)}</b>: ${a.map(x => esc(x.n) + (x.p ? ' (' + esc(x.p) + ')' : '')).join(', ')}</div>`).join('')}</details>` : ''}
+        ${warns.length ? `<details><summary class="imp-warn">Hinweise zum Parsen (${warns.length})</summary>${warns.map(w => `<div>${esc(w)}</div>`).join('')}</details>` : ''}
+        ${failed.length ? `<div class="imp-err">Fehlgeschlagen: ${failed.map(f => esc(f.id) + ' (' + esc(f.msg) + ')').join(', ')}</div><button class="small secondary" onclick="runMaddenImport(${esc(JSON.stringify(failed.map(f => f.id))).replace(/"/g, '&quot;')})">Nur fehlgeschlagene erneut abrufen</button>` : ''}`;
+      refreshRosterInfo();
+    } catch (e) {
+      log.innerHTML = `<div class="imp-err">Abruf abgebrochen: ${esc(e.message || String(e))}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   async function copyFromPreviousYear() {

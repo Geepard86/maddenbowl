@@ -11,7 +11,8 @@
    erzeugt. Sprecherwechsel kommen per MB.Announcer.onSpeak(...).
 
    API (window.MB.DraftStage):
-     init({ getData, onSelect, onConfirm, onFinish })
+     init({ getData, onSelect, onConfirm, onFinish, getRoster })
+       getRoster(teamId) -> Promise<Zeile aus madden_rosters | null>  (optional, Kader-Ansicht per Klick auf das ⓘ der Team-Kachel)
      open() / close() / isOpen()
      phase(mode)       -> gleiche mode-Objekte wie renderDraftShowStage()
      setStrip(items)   -> [{i,name,status,teamId}]
@@ -24,7 +25,7 @@
   const LOGO = (id) => `https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${id}.png`;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  let opts = { getData: () => ({}), onSelect() {}, onConfirm() {}, onFinish() {} };
+  let opts = { getData: () => ({}), onSelect() {}, onConfirm() {}, onFinish() {}, getRoster: null };
   let root = null, el = {}, built = false;
   let phaseName = "", curCam = "booth", lastRole = "commentator";
   let selectedTeam = null, prevOpp = new Set(), speakUnsub = null, captionTimer = null, clockTimer = null;
@@ -253,7 +254,8 @@
       const cls = t.status === "ex" ? "ex" : t.status === "taken" ? "tk" : "";
       const dis = t.status !== "free" ? "disabled" : "";
       const badge = t.status === "taken" ? `<span class="ovr">${esc(t.takenBy || "vergeben")}</span>` : t.status === "ex" ? `<span class="ovr">raus</span>` : `<span class="ovr ${ovrCls}">OVR ${t.rating || "–"}</span>`;
-      return `<button type="button" class="ds-tile ${cls}${selectedTeam === t.id ? " sel" : ""}" data-team="${t.id}" ${dis}><img src="${LOGO(t.id)}" alt=""><span class="tn">${esc(t.n)}</span>${badge}</button>`;
+      const info = (opts.getRoster && t.status === "free") ? `<span class="ds-info" data-info="${t.id}" title="Kader anzeigen">ⓘ</span>` : "";
+      return `<button type="button" class="ds-tile ${cls}${selectedTeam === t.id ? " sel" : ""}" data-team="${t.id}" ${dis}>${info}<img src="${LOGO(t.id)}" alt=""><span class="tn">${esc(t.n)}</span>${badge}</button>`;
     }).join("");
     put(`<div class="ds-pick-head"><span class="who">${esc(d.drawnName || "")}</span><span class="slot">SLOT P${(d.focusSlot ?? 0) + 1}</span></div>
       <div class="ds-grid">${tiles}</div>
@@ -266,7 +268,58 @@
         opts.onSelect(selectedTeam);
       };
     });
+    el.center.querySelectorAll(".ds-info").forEach((i) => {
+      i.onclick = (ev) => { ev.stopPropagation(); ev.preventDefault(); openRoster(i.dataset.info); };
+    });
     el.center.querySelector("#dsConfirm").onclick = () => { if (selectedTeam) opts.onConfirm(); };
+  }
+
+  // ---------------------------------------------------------------- Kader-Ansicht
+  function closeRoster() {
+    const r = el.center && el.center.querySelector(".ds-roster");
+    if (r) r.remove();
+    document.removeEventListener("keydown", rosterKey, true);
+  }
+  function rosterKey(e) { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRoster(); } }
+
+  async function openRoster(teamId) {
+    if (!opts.getRoster || !el.center) return;
+    closeRoster();
+    const d = opts.getData() || {};
+    const t = (d.teams || []).find((x) => x.id === teamId) || { id: teamId, n: teamId, rating: 0 };
+    const box = document.createElement("div");
+    box.className = "ds-roster";
+    box.innerHTML = `<div class="rs-head"><img src="${LOGO(teamId)}" alt=""><div class="rs-title"><div class="rs-name">${esc(t.n)}</div><div class="rs-sub" id="rsSub">Kader wird geladen …</div></div>
+      <div class="rs-ovr"><b>${t.rating || "–"}</b><small>OVR</small></div><button type="button" class="rs-close" title="Schließen (Esc)">✕</button></div>
+      <div class="rs-body" id="rsBody"></div><div class="rs-foot" id="rsFoot"></div>`;
+    box.addEventListener("click", (e) => { if (e.target === box) closeRoster(); });
+    box.querySelector(".rs-close").onclick = closeRoster;
+    el.center.appendChild(box);
+    document.addEventListener("keydown", rosterKey, true);
+
+    let row = null;
+    try { row = await opts.getRoster(teamId); } catch (e) { row = null; }
+    if (!box.isConnected) return; // inzwischen geschlossen / Phase gewechselt
+    const body = box.querySelector("#rsBody"), sub = box.querySelector("#rsSub"), foot = box.querySelector("#rsFoot");
+    const players = (row && row.players) || [];
+    if (!players.length) {
+      sub.textContent = "Kein Kader gespeichert";
+      body.innerHTML = `<div class="rs-empty">Für dieses Team liegt noch kein Kader vor.<br><small>In „Seasons“ → Team-Werte → „Von Madden Ratings abrufen“ ausführen.</small></div>`;
+      return;
+    }
+    const sorted = players.slice().sort((a, b) => (b.ovr - a.ovr) || String(a.n).localeCompare(String(b.n)));
+    const irCount = sorted.filter((p) => p.ir).length;
+    const when = row.fetched_at ? new Date(row.fetched_at).toLocaleDateString("de-DE") : "";
+    const diff = (row.team_ovr != null && t.rating && row.team_ovr !== t.rating) ? ` · Madden-Seite: ${row.team_ovr}` : "";
+    sub.textContent = `${players.length} Spieler${row.madden_version ? " · Madden " + row.madden_version : ""}${when ? " · Stand " + when : ""}${irCount ? " · " + irCount + " auf IR" : ""}${diff}`;
+    body.style.gridTemplateRows = `repeat(${Math.ceil(sorted.length / 3)}, 29px)`;
+    body.innerHTML = sorted.map((p) => {
+      const tip = [p.arch, p.num != null ? "#" + p.num : "", p.ir ? "IR" + (p.irNote ? " (" + p.irNote + ")" : "") + (p.irTeam ? " · laut NFL bei " + p.irTeam : "") : ""].filter(Boolean).join(" · ");
+      return `<div class="rs-row${p.ir ? " ir" : ""}" title="${esc(tip)}"><span class="o${p.ovr >= 90 ? " h" : p.ovr >= 80 ? " m" : ""}">${p.ovr}</span><span class="p">${esc(p.pos)}</span><span class="n">${esc(p.n)}</span>${p.badge ? `<span class="b ${p.badge === "XF" ? "xf" : "ss"}">${p.badge}</span>` : ""}${p.ir ? `<span class="b irt">IR</span>` : ""}</div>`;
+    }).join("");
+    const um = row.ir_unmatched || [];
+    foot.innerHTML = `<span class="lg"><b class="b xf">XF</b> X-Factor &nbsp; <b class="b ss">SS</b> Superstar &nbsp; <b class="b irt">IR</b> laut NFL auf Injured Reserve</span>` +
+      (um.length ? `<div class="rs-um">⚠ Auf der NFL-IR, aber nicht im Madden-Kader zuordenbar: ${um.map((x) => esc(x.n) + (x.p ? " (" + esc(x.p) + ")" : "")).join(", ")}</div>` : "");
   }
 
   function phase(mode) {

@@ -277,7 +277,8 @@
           </div>
           <div class="config-item">
             <label>Madden Version:</label>
-            <select id="maddenYear" onchange="renderPlayerInputs()">
+            <select id="maddenYear" onchange="onMaddenYearChange()">
+              <option value="2027" selected>Madden 27</option>
               <option value="2026">Madden 26</option>
             </select>
           </div>
@@ -433,7 +434,14 @@
 
 
     const nflTeams = MB.nflTeams;
-    const maddenRatings = MB.maddenRatings;
+    const maddenRatings = MB.maddenRatings; // nur noch Fallback — maßgeblich sind die (editierbaren) Werte aus Supabase:
+    // Draft, Team-Streichen und Team-Wahl lesen über ratingsFor(year) den Cache aus MB.loadTeamRatings (Tabelle team_ratings).
+    const ratingsFor = (year) => MB.getTeamRatingsSync(String(year)) || {};
+    async function onMaddenYearChange() {
+      try { await MB.loadTeamRatings(document.getElementById('maddenYear').value); } catch (e) { /* Fallback greift */ }
+      renderPlayerInputs();
+      if (typeof renderTeamExclCard === 'function') renderTeamExclCard();
+    }
     const schedules = MB.schedules;
     const playoffLabels = MB.playoffLabels;
 
@@ -795,7 +803,7 @@ function isFinished(match) { return MB.isFinished(match); }
       draftAnnounceState = { announcedTeamSlots: new Set(), teamPickSpeakerToggle: 0 };
 
       const year = document.getElementById('maddenYear').value;
-      const ratings = maddenRatings[year] || {};
+      const ratings = ratingsFor(year);
       const sortedTeams = nflTeams.filter(t => !excludedTeams.has(t.id)).map(t => ({ ...t, rating: ratings[t.id] || 0 }))
                                   .sort((a, b) => b.rating - a.rating);
 
@@ -899,7 +907,7 @@ function isFinished(match) { return MB.isFinished(match); }
     function renderTeamExclCard() {
       const el = document.getElementById('teamExclCard');
       if (!el) return;
-      const ratings = maddenRatings[document.getElementById('maddenYear')?.value || '2026'] || {};
+      const ratings = ratingsFor(document.getElementById('maddenYear')?.value || '2026');
       const sorted = nflTeams.map(t => ({ ...t, rating: ratings[t.id] || 0 })).sort((a, b) => b.rating - a.rating);
       el.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:6px;">${sorted.map(t => {
         const ex = excludedTeams.has(t.id);
@@ -1167,7 +1175,7 @@ function isFinished(match) { return MB.isFinished(match); }
 
     function renderTeamPickerHtml(name, slot) {
       const year = document.getElementById('maddenYear').value;
-      const ratings = maddenRatings[year] || {};
+      const ratings = ratingsFor(year);
       const count = parseInt(document.getElementById('playerCount').value);
       const takenIds = new Set();
       for (let i = 0; i < count; i++) {
@@ -1262,7 +1270,7 @@ function isFinished(match) { return MB.isFinished(match); }
     function getDraftStageData() {
       const count = parseInt(document.getElementById('playerCount').value);
       const year = document.getElementById('maddenYear').value;
-      const ratings = maddenRatings[year] || {};
+      const ratings = ratingsFor(year);
       const slots = [];
       const takenBy = {};
       for (let i = 0; i < count; i++) {
@@ -1303,6 +1311,7 @@ function isFinished(match) { return MB.isFinished(match); }
         onSelect: (id) => { showPickedTeamId = id; },
         onConfirm: () => confirmShowTeamPick(),
         onFinish: () => finishDraftShow(),
+        getRoster: (teamId) => MB.Rosters.loadRoster(document.getElementById('maddenYear').value, teamId),
       });
       document.addEventListener('ds-closed', () => {
         const b = document.getElementById('dsReopenBtn');
@@ -3025,6 +3034,7 @@ function renderRanking() {
         }
         excludedTeams = new Set(Array.isArray(state.config?.excludedTeams) ? state.config.excludedTeams : []);
         setupNicknames = (state.config && typeof state.config.nicknames === 'object' && state.config.nicknames) || {};
+        try { await MB.loadTeamRatings(document.getElementById('maddenYear').value); } catch (e) { /* Fallback greift */ }
         updateModeInfo();
         renderShowOrderCard();
         renderTeamExclCard();
