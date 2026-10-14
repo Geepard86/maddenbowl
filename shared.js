@@ -1812,6 +1812,7 @@
   }
   const fetchMaddenTeam = (teamId) => invokeMaddenFetch({ team: teamId });
   const fetchIrList = () => invokeMaddenFetch({ ir: true });
+  const parseMaddenHtml = (teamId, html) => invokeMaddenFetch({ team: teamId, html });
 
   // Markiert IR-Spieler in den Kadern. rostersByTeam: { BAL: {players:[...]} , ... }
   // Rückgabe: { unmatchedByTeam: { BAL: [{n,p,t,body}] }, matched, total }
@@ -1873,6 +1874,19 @@
     }
   }
 
+  // Alle gespeicherten Kader eines Jahres auf einmal laden (füllt den Cache) -> { BAL: Zeile, ... }
+  async function loadRostersForYear(year) {
+    const sb = getSupabaseClient();
+    if (!sb) return {};
+    try {
+      const { data, error } = await sb.from("madden_rosters").select("*").eq("year", Number(year));
+      if (error) throw error;
+      const out = {};
+      (data || []).forEach((r) => { out[r.team] = r; _rosterCache.set(Number(year) + "|" + r.team, r); });
+      return out;
+    } catch (e) { console.warn("Kader laden fehlgeschlagen:", e); return {}; }
+  }
+
   async function countRosters(year) {
     const sb = getSupabaseClient();
     if (!sb) return 0;
@@ -1882,7 +1896,7 @@
     } catch (e) { return 0; }
   }
 
-  const Rosters = { normPlayerName, fetchMaddenTeam, fetchIrList, applyIrToRosters, saveRosters, loadRoster, countRosters };
+  const Rosters = { normPlayerName, fetchMaddenTeam, fetchIrList, parseMaddenHtml, applyIrToRosters, saveRosters, loadRoster, loadRostersForYear, countRosters };
 
   // ======================================================================
   // EXPORT
