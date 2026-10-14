@@ -1786,6 +1786,88 @@
   // Anzeige im Draft. Daten liegen in `madden_rosters` (Supabase), der Abruf
   // der Fremdseiten läuft über die Edge Function `madden-fetch`.
   // ======================================================================
+  const TEAM_SLUGS_MR = {ARI:'arizona-cardinals',ATL:'atlanta-falcons',BAL:'baltimore-ravens',BUF:'buffalo-bills',CAR:'carolina-panthers',CHI:'chicago-bears',CIN:'cincinnati-bengals',CLE:'cleveland-browns',DAL:'dallas-cowboys',DEN:'denver-broncos',DET:'detroit-lions',GB:'green-bay-packers',HOU:'houston-texans',IND:'indianapolis-colts',JAX:'jacksonville-jaguars',KC:'kansas-city-chiefs',LV:'las-vegas-raiders',LAC:'los-angeles-chargers',LAR:'los-angeles-rams',MIA:'miami-dolphins',MIN:'minnesota-vikings',NE:'new-england-patriots',NO:'new-orleans-saints',NYG:'new-york-giants',NYJ:'new-york-jets',PHI:'philadelphia-eagles',PIT:'pittsburgh-steelers',SF:'san-francisco-49ers',SEA:'seattle-seahawks',TB:'tampa-bay-buccaneers',TEN:'tennessee-titans',WAS:'washington-commanders'};
+
+  // ---------------------------------------------------------------------------
+  // Browser-seitiger Parser für eine maddenratings.com-Teamseite (DOM-basiert).
+  // WICHTIG: bewusst komplett eigenständig (keine Verweise nach außen), weil der
+  // Funktionstext per toString() in das Sammel-Skript für die Browser-Konsole kopiert wird.
+  // ---------------------------------------------------------------------------
+  function parseTeamHtmlDom(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const clean = (t) => String(t || "").replace(/\s+/g, " ").trim();
+    // Text mit Leerzeichen zwischen den Elementen (textContent klebt "90" und die Änderungszahl "1" sonst zu "901" zusammen)
+    const spaced = (n) => n.nodeType === 3 ? n.nodeValue : Array.prototype.map.call(n.childNodes, spaced).join(" ");
+    const warnings = [];
+    const mv = (clean(doc.title).match(/Madden\s*(?:NFL\s*)?(\d{2})\b/i) || [])[1];
+    const bodyText = clean(doc.body ? spaced(doc.body) : "");
+    const mo = bodyText.match(/Team Overall Rating of\s*(\d{2})\b/i) || bodyText.match(/\b(\d{2})\s*OVR\b/);
+    const teamOvr = mo ? parseInt(mo[1], 10) : null;
+    if (teamOvr == null) warnings.push("Team-OVR nicht gefunden");
+
+    const players = [];
+    const seen = new Map();
+    doc.querySelectorAll("tr").forEach((tr) => {
+      const lists = Array.from(tr.querySelectorAll('a[href*="/lists/"]')).map((a) => clean(a.textContent)).filter(Boolean);
+      if (!lists.length) return;
+      let name = "", slug = "";
+      for (const a of tr.querySelectorAll("a[href]")) {
+        const href = a.getAttribute("href") || "";
+        const m = href.match(/maddenratings\.com\/([a-z0-9-]+)\/?$/i) || href.match(/^\/([a-z0-9-]+)\/?$/i);
+        if (!m || ["teams", "lists", "updates", "about", "contact"].includes(m[1])) continue;
+        const t = clean(a.textContent);
+        if (t) { name = t; slug = m[1]; break; }
+      }
+      if (!name) { const img = tr.querySelector("img"); name = img ? clean(img.getAttribute("title") || img.getAttribute("alt")) : ""; }
+      if (!name) return;
+      const tds = Array.from(tr.children).filter((c) => /^t[dh]$/i.test(c.tagName));
+      const pIdx = tds.findIndex((td) => td.querySelector('a[href*="/lists/"]'));
+      let ovr = null;
+      if (pIdx >= 0 && tds[pIdx + 1]) { const m = clean(spaced(tds[pIdx + 1])).match(/\b(\d{2,3})\b/); if (m) ovr = parseInt(m[1], 10); }
+      if (ovr == null || ovr < 30 || ovr > 99) { warnings.push("OVR fehlt/unplausibel: " + name); return; }
+      const num = (clean(spaced(pIdx >= 0 ? tds[pIdx] : tr)).match(/#\s*(\d{1,2})\b/) || [])[1];
+      const badge = tr.querySelector('img[title="X-Factor"],img[alt="X-Factor"]') ? "XF" : (tr.querySelector('img[title="Superstar"],img[alt="Superstar"]') ? "SS" : "");
+      const pos = lists[0], arch = lists[1] || "";
+      const key = name.toLowerCase();
+      const prev = seen.get(key);
+      if (prev) { if (pos && prev.pos.split("/").indexOf(pos) < 0) prev.pos += "/" + pos; return; }
+      const p = { n: name, pos: pos, arch: arch, ovr: ovr, badge: badge, num: num ? parseInt(num, 10) : null, slug: slug };
+      seen.set(key, p);
+      players.push(p);
+    });
+    if (players.length < 40) warnings.push("Nur " + players.length + " Spieler erkannt — Seitenaufbau evtl. geändert");
+    return { ok: true, madden: mv ? parseInt(mv, 10) : null, teamOvr: teamOvr, players: players, warnings: warnings };
+  }
+
+  // Skript für die Browser-Konsole: läuft auf einem maddenratings.com-Tab (gleiche Origin -> kein CORS,
+  // normaler Browser des Nutzers), ruft alle 32 Teamseiten nacheinander ab, wertet sie lokal aus und
+  // kopiert das Gesamtergebnis als JSON in die Zwischenablage.
+  function buildCollectorScript() {
+    const teams = {};
+    nflTeams.forEach((t) => { teams[t.id] = TEAM_SLUGS_MR[t.id]; });
+    return "(" + (async function (TEAMS, parse) {
+      const out = {}, fails = [];
+      const ids = Object.keys(TEAMS);
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        try {
+          const r = await fetch("/teams/" + TEAMS[id], { credentials: "same-origin" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const d = parse(await r.text());
+          if (!d.players.length) throw new Error("keine Spieler erkannt");
+          d.team = id;
+          out[id] = d;
+          console.log("✔ " + (i + 1) + "/" + ids.length + " " + id + ": " + d.players.length + " Spieler, OVR " + d.teamOvr);
+        } catch (e) { fails.push(id); console.warn("✘ " + id + ": " + e.message); }
+        await new Promise((res) => setTimeout(res, 1500 + Math.random() * 1500));
+      }
+      const json = JSON.stringify({ source: "browser", teams: out });
+      try { copy(json); console.log("FERTIG – Ergebnis ist in der Zwischenablage. Fehlgeschlagen: " + (fails.join(", ") || "keine")); }
+      catch (e) { console.log("FERTIG – copy() nicht verfügbar. Ergebnis steht in window.__maddenResult"); }
+      window.__maddenResult = json;
+    }).toString() + ")(" + JSON.stringify(teams) + ", " + parseTeamHtmlDom.toString() + ");";
+  }
+
   const _rosterCache = new Map(); // "year|TEAM" -> Zeile | null
 
   function normPlayerName(s) {
@@ -1896,7 +1978,7 @@
     } catch (e) { return 0; }
   }
 
-  const Rosters = { normPlayerName, fetchMaddenTeam, fetchIrList, parseMaddenHtml, applyIrToRosters, saveRosters, loadRoster, loadRostersForYear, countRosters };
+  const Rosters = { parseTeamHtmlDom, buildCollectorScript, normPlayerName, fetchMaddenTeam, fetchIrList, parseMaddenHtml, applyIrToRosters, saveRosters, loadRoster, loadRostersForYear, countRosters };
 
   // ======================================================================
   // EXPORT

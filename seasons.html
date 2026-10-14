@@ -729,6 +729,17 @@ Altima Bowl 2027 – wir sind dabei.`,
           <span class="hint" id="maddenRosterInfo" style="margin:0;"></span>
         </div>
         <div class="hint">Holt Team-OVR und Kader aller 32 Teams (maddenratings.com) plus die aktuelle NFL-IR-Liste — dauert ca. 1–2 Minuten. Die OVR-Werte landen unten im Raster und lassen sich vor dem Speichern noch ändern; die Kader (für die Ansicht im Draft) werden sofort gespeichert.</div>
+        <details class="paste-box" style="margin-top:8px;">
+          <summary>Wenn der Abruf blockiert wird (HTTP 403): über den eigenen Browser sammeln</summary>
+          <div class="hint">maddenratings.com sperrt teils Server-Anfragen, im normalen Browser funktioniert die Seite aber. Dieses Skript läuft in deinem Browser auf der Seite selbst, holt alle 32 Teams nacheinander (ca. 2 Minuten) und legt das Ergebnis in die Zwischenablage:</div>
+          <ol class="hint" style="margin:4px 0 6px 18px; padding:0;">
+            <li><button class="small secondary" onclick="copyCollectorScript()">Skript kopieren</button></li>
+            <li><a href="https://www.maddenratings.com/teams/arizona-cardinals" target="_blank" rel="noopener" style="color:#ffd23f;">maddenratings.com</a> in einem neuen Tab öffnen → <b>F12</b> → Reiter „Konsole“ → Skript einfügen → Enter. (Chrome/Firefox verlangen vorher einmalig, <code>allow pasting</code> einzutippen.)</li>
+            <li>Warten, bis „FERTIG“ in der Konsole steht, dann hier einfügen:</li>
+          </ol>
+          <textarea id="collectorResult" placeholder="Ergebnis aus der Zwischenablage hier einfügen …"></textarea>
+          <div class="row-line"><button class="small" onclick="importCollectorResult()">Ergebnis übernehmen</button></div>
+        </details>
         <div class="imp-log" id="maddenImportLog"></div>
       </div>
       <div class="team-grid" id="teamGrid"></div>
@@ -921,12 +932,54 @@ Altima Bowl 2027 – wir sind dabei.`,
     const html = document.getElementById('pasteHtml').value;
     if (!html || html.length < 1000) { alert('Bitte den kompletten Seitenquelltext einfügen.'); return; }
     try {
-      const r = await MB.Rosters.parseMaddenHtml(team, html);
+      const r = MB.Rosters.parseTeamHtmlDom(html); // lokal im Browser, braucht keine Edge Function
       if (!r.players || !r.players.length) throw new Error('keine Spieler erkannt — stimmt die Seite (Team)?');
       _lastImport.results[team] = r;
       _lastImport.failed = _lastImport.failed.filter(f => f.id !== team);
       await finalizeImport();
     } catch (e) { alert('Auswerten fehlgeschlagen: ' + (e.message || e)); }
+  }
+
+  async function copyCollectorScript() {
+    const script = MB.Rosters.buildCollectorScript();
+    try { await navigator.clipboard.writeText(script); alert('Skript kopiert. Jetzt auf maddenratings.com in die Konsole (F12) einfügen.'); }
+    catch (e) { prompt('Automatisches Kopieren nicht möglich — bitte manuell kopieren (Strg+C):', script); }
+  }
+
+  async function importCollectorResult() {
+    const log = document.getElementById('maddenImportLog');
+    const raw = document.getElementById('collectorResult').value.trim();
+    if (!raw) { alert('Bitte zuerst das Ergebnis aus der Zwischenablage einfügen.'); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch (e) { alert('Das ist kein gültiges Ergebnis (JSON). Bitte genau das kopieren, was das Skript in die Zwischenablage gelegt hat.'); return; }
+    const teams = data && data.teams;
+    if (!teams || typeof teams !== 'object') { alert('Ergebnis hat nicht das erwartete Format.'); return; }
+    const ids = MB.nflTeams.map(t => t.id).filter(id => teams[id] && Array.isArray(teams[id].players) && teams[id].players.length);
+    if (!ids.length) { alert('Im Ergebnis sind keine Teams mit Spielern enthalten.'); return; }
+
+    const btnImp = document.getElementById('btnMaddenImport');
+    btnImp.disabled = true;
+    try {
+      const first = teams[ids[0]];
+      const yEl = document.getElementById('ratingsYear');
+      if (first.madden && Number(yEl.value) !== 2000 + first.madden &&
+          confirm(`Die Daten stammen aus Madden ${first.madden}. Als Jahr ${2000 + first.madden} speichern?\n(OK = ${2000 + first.madden}, Abbrechen = bei ${yEl.value} bleiben)`)) {
+        yEl.value = 2000 + first.madden;
+        await loadRatingsGrid();
+      }
+      const prev = _lastImport || { results: {}, failed: [], irInfo: null, irError: '', aborted: false };
+      ids.forEach(id => { prev.results[id] = { team: id, madden: teams[id].madden, teamOvr: teams[id].teamOvr, players: teams[id].players, warnings: teams[id].warnings || [] }; });
+      prev.failed = MB.nflTeams.map(t => t.id).filter(id => !prev.results[id]).map(id => ({ id, msg: 'im Browser-Ergebnis nicht enthalten' }));
+      prev.aborted = false;
+      if (!prev.irInfo) {
+        log.innerHTML = 'Hole NFL-IR-Liste …';
+        try { prev.irInfo = await MB.Rosters.fetchIrList(); prev.irError = ''; } catch (e) { prev.irError = e.message || String(e); }
+      }
+      _lastImport = prev;
+      await finalizeImport();
+    } catch (e) {
+      log.innerHTML = `<div class="imp-err">Übernehmen fehlgeschlagen: ${MB.escHtml(e.message || String(e))}</div>`;
+    } finally { btnImp.disabled = false; }
   }
 
   // =========================================================
