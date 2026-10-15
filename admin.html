@@ -2694,8 +2694,11 @@ if (tb && tb.s1 === null && tb.s2 === null) {
 
       allMatches.forEach(m => m.displayTime = getMatchTime(m));
 
-      const liveMatches = allMatches.slice(0, 2);
-      const upcomingMatches = allMatches.slice(2, 4);
+      // Blöcke beibehalten: On the Field = offene Spiele des aktuellen Blocks, Upcoming = der
+      // komplette nächste Block (rückt erst nach, wenn beide Spiele des aktuellen Blocks fertig sind).
+      const blockIds = MB.getLiveAndUpcomingMatchIds(state);
+      const liveMatches = allMatches.filter(m => blockIds.live.includes(m.matchId));
+      const upcomingMatches = allMatches.filter(m => blockIds.upcoming.includes(m.matchId));
 
       const formatMiniCard = (m, labelClass, labelText) => {
         const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;

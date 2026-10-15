@@ -405,11 +405,13 @@
   function renderBody() {
     let inner = '';
     // Abweichung vom Zeitplan (Verzug/Vorsprung) gut sichtbar über Regular Season und Playoffs
-    const scheduleBadge = MB.renderScheduleStatusBadge(state, { style: 'margin-bottom:10px;' });
+    const scheduleBadge = MB.renderScheduleStatusBadge(state, { style: 'margin:4px 0 12px;' });
     if (activeTab === 'tabelle') inner = `<div class="v2-card"><div class="v2-card-title">📊 Tabelle</div>${renderStandings()}</div>`;
-    else if (activeTab === 'spielplan') inner = scheduleBadge + `<div class="v2-card"><div class="v2-card-title">📅 Regular Season</div>${renderGroupSchedule()}</div>`;
-    else if (activeTab === 'playoff') inner = scheduleBadge + `<div class="v2-card"><div class="v2-card-title">🏆 Playoff Picture <button class="btn-secondary" style="margin-left:auto;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></div>${renderBracket()}</div>`;
+    else if (activeTab === 'spielplan') inner = `<div class="v2-card"><div class="v2-card-title">📅 Regular Season</div>${renderGroupSchedule()}</div>`;
+    else if (activeTab === 'playoff') inner = `<div class="v2-card"><div class="v2-card-title">🏆 Playoff Picture <button class="btn-secondary" style="margin-left:auto;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></div>${renderBracket()}</div>`;
     else if (activeTab === 'titel') inner = `<div class="v2-card"><div class="v2-card-title">🎯 Titelchancen</div>${renderTitleOdds()}</div>`;
+    // Zeitplan-Badge ganz unten (nur Regular Season und Playoffs)
+    if (activeTab === 'spielplan' || activeTab === 'playoff') inner += scheduleBadge;
     document.getElementById('mbTabContent').innerHTML = inner;
   }
 

@@ -772,7 +772,7 @@
       all.push({
         kind: "group", matchId,
         homeName: p1.name, awayName: p2.name, homeTeam: p1.team, awayTeam: p2.team,
-        time: liveTime ? liveTime.time : getGroupMatchTime(state, m), stadium, phase: "Regular Season",
+        time: liveTime ? liveTime.time : getGroupMatchTime(state, m), _abs: liveTime ? liveTime.abs : 0, stadium, phase: "Regular Season",
       });
     });
 
@@ -785,11 +785,13 @@
       all.push({
         kind: "playoff", matchId,
         homeName: m.p1.name, awayName: m.p2.name, homeTeam: m.p1.team, awayTeam: m.p2.team,
-        time: liveTime ? liveTime.time : (computePlayoffTimes(state).byId[m.id] || computePlayoffTimes(state).groupEndTime), stadium, phase: m.phase,
+        time: liveTime ? liveTime.time : (computePlayoffTimes(state).byId[m.id] || computePlayoffTimes(state).groupEndTime), _abs: liveTime ? liveTime.abs : 0, stadium, phase: m.phase,
       });
     });
 
-    all.sort((a, b) => (a.time > b.time ? 1 : a.time < b.time ? -1 : 0));
+    // Nach ABSOLUTER Zeit sortieren (Textvergleich würde "9:05" nach "18:30" und Zeiten nach Mitternacht falsch einsortieren)
+    all.sort((a, b) => (a._abs || 0) - (b._abs || 0));
+    all.forEach((x) => { delete x._abs; });
     return all.slice(0, limit);
   }
 
@@ -837,70 +839,78 @@
 
   // NEU (Verschiebungs-Modell): Statt Spieldauern aneinanderzureihen wird die
   // gemessene ABWEICHUNG vom Plan (Verzug/Vorsprung) auf ALLE Folgespiele
-  // addiert — bis zum Finale, inklusive der Playoff-Spiele, deren Teilnehmer
-  // noch nicht feststehen. So bleiben Pausen und gleichzeitige Spiele aus dem
-  // ursprünglichen Plan erhalten.
-  //   Abweichung = (Ergebnis-Zeitstempel + Puffer) - Planzeit des nächsten Spiels
-  // Parallel geplante Spiele (gleiche Planzeit) bilden einen Block: der nächste Block
-  // startet erst, wenn beide fertig sind, und beide Felder bekommen dieselbe
-  // Verschiebung — sie bleiben also immer parallel.
+  // addiert — bis zum Finale (Altima Bowl), inklusive der Playoff-Spiele, deren
+  // Teilnehmer noch nicht feststehen. So bleiben Pausen und gleichzeitige Spiele
+  // aus dem ursprünglichen Plan erhalten.
+  //   Kickoff nächster Block = AUFGERUNDET auf volle 5 Min.(spätestes Ergebnis + Puffer)
+  //   Abweichung            = dieser Kickoff - Planzeit des Blocks
+  // Block = alle Spiele mit derselben Planzeit (die zwei parallelen Spiele eines
+  // Slots). Der nächste Block startet erst, wenn BEIDE fertig sind; schon nach dem
+  // ERSTEN Ergebnis gilt eine vorläufige Untergrenze (siehe unten).
+  // Alle Zeiten werden intern als ABSOLUTE Minuten seit 0:00 des Starttags geführt,
+  // damit ein Plan über Mitternacht (Finale nach 0 Uhr) korrekt sortiert und gerechnet wird.
   function computeLiveKickoffSchedule(state) {
-    const times = computePlayoffTimes(state);
     const buffer = getKickoffBuffer(state);
+    const dG = (state.config.durG || 0) + (state.config.durB || 0);
+    const startMin = timeStrToMinutes(state.config.start);
+    const groupEndAbs = startMin + (state.slots ? state.slots.length : 0) * dG;
+    const offsets = computePlayoffOffsets(state);
+    const ceil5 = (x) => Math.ceil(x / 5) * 5;
 
     // Einheitliche Sequenz aus Gruppen- + ALLEN Playoff-Spielen (auch solche, deren
     // Spieler noch offen sind). Nur Freilose haben keinen echten Termin.
     const seq = [];
     (state.matches || []).forEach((m, idx) => {
-      const slot = (state.slots || []).find((s) => s.includes(m));
+      const slotIdx = (state.slots || []).findIndex((sl) => sl.includes(m));
+      const slot = slotIdx >= 0 ? state.slots[slotIdx] : null;
       const field = (slot && slot.indexOf(m) === 1) ? 2 : 1;
-      seq.push({ matchId: `g-${idx}`, field, match: m, isPlayoff: false, plannedTime: getGroupMatchTime(state, m) });
+      seq.push({ matchId: `g-${idx}`, field, match: m, isPlayoff: false, plannedAbs: startMin + Math.max(slotIdx, 0) * dG });
     });
     (state.playoffMatches || []).forEach((m, idx) => {
       if (m.p2 && m.p2.id === -1) return; // Freilos
       const field = (idx % 2 === 0) ? 1 : 2;
-      seq.push({ matchId: `p-${m.id}`, field, match: m, isPlayoff: true, plannedTime: times.byId[m.id] || times.groupEndTime });
+      seq.push({ matchId: `p-${m.id}`, field, match: m, isPlayoff: true, plannedAbs: groupEndAbs + (offsets.byId[m.id] || 0) });
     });
-    seq.forEach((e, i) => { e._order = i; });
-    seq.sort((a, b) => timeStrToMinutes(a.plannedTime) - timeStrToMinutes(b.plannedTime) || a._order - b._order);
+    seq.forEach((e, i) => { e._order = i; e.plannedTime = minutesToTimeStr(e.plannedAbs); });
+    seq.sort((a, b) => a.plannedAbs - b.plannedAbs || a._order - b._order);
 
+    // Ergebnis-Zeitstempel als absolute Minuten (Tag 0 = Tag des ersten eingetragenen Ergebnisses)
+    const dayStart = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const stamps = seq.map((e) => (e.match.finishedAt ? new Date(e.match.finishedAt) : null)).filter((d) => d && !Number.isNaN(d.getTime()));
+    const baseDay = stamps.length ? Math.min(...stamps.map(dayStart)) : 0;
     const finMinutes = (m) => {
       if (!m.finishedAt) return null;
       const d = new Date(m.finishedAt);
-      return Number.isNaN(d.getTime()) ? null : d.getHours() * 60 + d.getMinutes();
+      if (Number.isNaN(d.getTime())) return null;
+      return Math.round((dayStart(d) - baseDay) / 86400000) * 1440 + d.getHours() * 60 + d.getMinutes();
     };
 
-    // 1) Abweichung aus dem zuletzt VOLLSTÄNDIG abgeschlossenen Block.
-    // Ein Block = alle Spiele mit derselben Planzeit (also die zwei parallelen Spiele
-    // eines Slots). Der nächste Block kann erst starten, wenn BEIDE Spiele fertig
-    // sind: Start = späteres Ergebnis + Puffer. Dieselbe Abweichung gilt danach für
-    // alle Spiele (beide Felder) -> parallel geplante Spiele bleiben parallel.
+    // Blöcke bilden (gleiche Planzeit = parallel)
     const blocks = [];
     seq.forEach((e) => {
       const last = blocks[blocks.length - 1];
-      if (last && last.plannedTime === e.plannedTime) last.entries.push(e);
-      else blocks.push({ plannedTime: e.plannedTime, entries: [e] });
+      if (last && last.plannedAbs === e.plannedAbs) last.entries.push(e);
+      else blocks.push({ plannedAbs: e.plannedAbs, plannedTime: e.plannedTime, entries: [e] });
     });
+
     // Zwei Stufen:
-    //  * exakt: der vorherige Block ist komplett fertig -> Start = späteres Ergebnis + Puffer.
+    //  * exakt: der vorherige Block ist komplett fertig -> Start = aufgerundet(späteres Ergebnis + Puffer).
     //  * vorläufig: im vorherigen Block ist erst EIN Spiel fertig -> der nächste Block kann
     //    frühestens dann starten (Untergrenze). Wird nur genutzt, wenn es später ist als
-    //    die bisherige Verschiebung; sobald das zweite Ergebnis da ist, wird exakt gerechnet
-    //    (und die Zeit ggf. nochmal korrigiert).
+    //    die bisherige Verschiebung; nach dem zweiten Ergebnis wird exakt gerechnet.
     let current = { minutes: 0, isReal: false, provisional: false };
     let latest = { minutes: 0, isReal: false, provisional: false, finishedAt: 0 };
     let pending = null;     // spätestes Ergebnis des zuletzt komplett fertigen Blocks
     let partial = null;     // spätestes Ergebnis eines angefangenen Blocks
     blocks.forEach((b) => {
-      const planned = timeStrToMinutes(b.plannedTime);
       const hasOpen = b.entries.some((e) => !isFinished(e.match));
       if (hasOpen && pending) {
-        const minutes = pending.fin + buffer - planned;
+        const minutes = ceil5(pending.fin + buffer) - b.plannedAbs;
         current = { minutes, isReal: true, provisional: false };
         if (pending.at >= latest.finishedAt) latest = { ...current, finishedAt: pending.at };
         pending = null; partial = null;
       } else if (hasOpen && partial) {
-        const minutes = partial.fin + buffer - planned;
+        const minutes = ceil5(partial.fin + buffer) - b.plannedAbs;
         if (minutes > current.minutes) {
           current = { minutes, isReal: true, provisional: true };
           if (partial.at >= latest.finishedAt) latest = { ...current, finishedAt: partial.at };
@@ -916,36 +926,48 @@
       else if (hasOpen && latestFin) { partial = latestFin; }
     });
 
-    // 2) Zeiten je Spiel
+    // Zeiten je Spiel
     const byMatchId = new Map();
     const lastFinByField = { 1: null, 2: null };
     seq.forEach((e) => {
-      const planned = timeStrToMinutes(e.plannedTime);
       if (isFinished(e.match)) {
         const prev = lastFinByField[e.field];
         const fin = finMinutes(e.match);
         // grober Näherungswert für den tatsächlichen Kickoff vergangener Spiele
-        const approx = prev !== null ? prev + buffer : planned;
-        byMatchId.set(e.matchId, { time: minutesToTimeStr(approx), isReal: false, plannedTime: e.plannedTime });
+        const approx = prev !== null ? prev + buffer : e.plannedAbs;
+        byMatchId.set(e.matchId, { time: minutesToTimeStr(approx), abs: approx, isReal: false, plannedTime: e.plannedTime, plannedAbs: e.plannedAbs, diffMinutes: 0 });
         if (fin !== null) lastFinByField[e.field] = fin;
         return;
       }
       const d = e._delay || { minutes: 0, isReal: false };
-      byMatchId.set(e.matchId, { time: minutesToTimeStr(planned + d.minutes), isReal: d.isReal, provisional: !!d.provisional, plannedTime: e.plannedTime });
+      const abs = d.isReal ? ceil5(e.plannedAbs + d.minutes) : e.plannedAbs;
+      byMatchId.set(e.matchId, { time: minutesToTimeStr(abs), abs, isReal: d.isReal, provisional: !!d.provisional, plannedTime: e.plannedTime, plannedAbs: e.plannedAbs, diffMinutes: abs - e.plannedAbs });
     });
 
     const drift = {
       1: current, 2: current, // beide Felder laufen parallel -> immer dieselbe Abweichung
       overall: { minutes: latest.minutes, isReal: latest.isReal, provisional: !!latest.provisional },
     };
-    return { byMatchId, drift };
+    return { byMatchId, drift, blocks };
+  }
+
+  // "On the Field" = die noch offenen Spiele des aktuellen Blocks, "Upcoming" = der
+  // KOMPLETTE nächste Block. Ist erst ein Spiel eines Blocks fertig, bleibt nur das
+  // andere On the Field; erst wenn auch das zweite eingetragen ist, rückt der
+  // Upcoming-Block komplett nach und der nächste Block wird Upcoming.
+  // Playoff-Spiele zählen erst, wenn beide Teilnehmer feststehen (kein Freilos).
+  function getLiveAndUpcomingMatchIds(state) {
+    const sched = computeLiveKickoffSchedule(state);
+    const real = (e) => !isFinished(e.match) && (!e.isPlayoff || (e.match.p1 && e.match.p2 && e.match.p1.id !== -1 && e.match.p2.id !== -1));
+    const open = sched.blocks.map((b) => b.entries.filter(real).map((e) => e.matchId)).filter((a) => a.length);
+    return { live: open[0] || [], upcoming: open[1] || [] };
   }
 
   // Detailtext für Spiel-Infos (Klick auf ein Spiel): tatsächlicher Kickoff, geplante Zeit und
   // Vorsprung/Verzug. entry = byMatchId.get(...), match = state-Match (für finishedAt).
   function describeKickoff(entry, match) {
     if (!entry) return "";
-    const diff = timeStrToMinutes(entry.time) - timeStrToMinutes(entry.plannedTime);
+    const diff = entry.diffMinutes != null ? entry.diffMinutes : timeStrToMinutes(entry.time) - timeStrToMinutes(entry.plannedTime);
     const fin = match && match.finishedAt ? new Date(match.finishedAt) : null;
     const played = match && match.s1 != null && match.s2 != null;
     if (played) {
@@ -989,8 +1011,6 @@
     const gf = live.byMatchId.get("p-gf");
     if (gf && gf.plannedTime && gf.time !== gf.plannedTime) {
       detail = `Alle Zeiten sind bereits angepasst – Finale voraussichtlich um ${gf.time} Uhr (geplant ${gf.plannedTime} Uhr)`;
-    } else if (gf && gf.plannedTime && kind !== "none") {
-      detail = `Alle Zeiten sind bereits angepasst – Finale weiter um ${gf.time} Uhr`;
     }
     return { kind, minutes: m, provisional: !!o.provisional, text, detail };
   }
@@ -2076,7 +2096,7 @@
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     escHtml, sha256Hex, renderMatchMeta, cloneStateDeep, recomputeStandings, computeTitleOddsTrend, makeTitleTrendFn,
-    computeLiveKickoffSchedule, formatScheduleDriftText, getScheduleStatus, renderScheduleStatusBadge, describeKickoff, getKickoffBuffer, isFinishedAtPersistenceMissing,
+    computeLiveKickoffSchedule, getLiveAndUpcomingMatchIds, formatScheduleDriftText, getScheduleStatus, renderScheduleStatusBadge, describeKickoff, getKickoffBuffer, isFinishedAtPersistenceMissing,
     getCurrentMatchesNormalized, computeMatchupStats, getPlayerFacts, pickFlavourFacts,
     pickFlavourFactsTyped, getAnnouncerResultImpacts, computeBiggestRivalry, computeCurrentStreakInfo,
     computeEloMap, moneylineFromProb, decimalOdds, computeOddsForMatch, computeTitleOdds, getLiveSeeds,

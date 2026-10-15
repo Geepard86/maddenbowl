@@ -125,7 +125,7 @@
     return allMatches.map(m => {
       const p1 = m.t === 'g' ? state.players[m.p1] : m.p1;
       const p2 = m.t === 'g' ? state.players[m.p2] : m.p2;
-      return { p1, p2, stadium: m.stadium, time: getMatchTime(m), phase: m.phase || (m.t === 'p' ? 'Playoffs' : 'Gruppenphase') };
+      return { p1, p2, stadium: m.stadium, matchId: m.matchId, time: getMatchTime(m), phase: m.phase || (m.t === 'p' ? 'Playoffs' : 'Gruppenphase') };
     }).filter(m => m.p1 && m.p2);
   }
 
@@ -141,8 +141,11 @@
     let matches = [];
     try { matches = buildScheduleMatches(); } catch (e) { console.warn('Spielplan-Daten nicht verfügbar:', e); }
 
-    const live = matches.slice(0, 2).map(m => ({ ...m, _live: true }));
-    const next = matches.slice(2, 4).map(m => ({ ...m, _live: false }));
+    // Blöcke beibehalten (siehe MB.getLiveAndUpcomingMatchIds): erst wenn beide Spiele des
+    // aktuellen Blocks eingetragen sind, rückt der nächste Block nach.
+    const blockIds = MB.getLiveAndUpcomingMatchIds(state);
+    const live = matches.filter(m => blockIds.live.includes(m.matchId)).map(m => ({ ...m, _live: true }));
+    const next = matches.filter(m => blockIds.upcoming.includes(m.matchId)).map(m => ({ ...m, _live: false }));
     scheduleMatches = [...live, ...next];
 
     const rowsHtml = scheduleMatches.length
