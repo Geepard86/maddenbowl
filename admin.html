@@ -749,6 +749,14 @@ function isFinished(match) { return MB.isFinished(match); }
     }
 
     function addMinutes(time, mins) { return MB.addMinutes(time, mins); }
+    // Live-Kickoff-Zeit (verschiebt sich mit Verzug/Vorsprung bis zum Finale), sonst Planzeit.
+    function liveKickoff(matchId, fallback) {
+      try { const e = MB.computeLiveKickoffSchedule(state).byMatchId.get(matchId); return e ? e.time : fallback; } catch (e) { return fallback; }
+    }
+    // "18:35 Uhr" bzw. "18:35 Uhr (geplant 18:20)", wenn die Zeit vom Plan abweicht.
+    function timeWithPlan(live, planned) {
+      return live && planned && live !== planned ? `${live} Uhr <small style="opacity:.55; font-weight:400;">(geplant ${planned})</small>` : `${live || planned} Uhr`;
+    }
 
 
     async function resetTournament() {
@@ -1847,8 +1855,13 @@ const ringsHtml = rings > 0
       let currentTime = state.config.start;
       let matchCounter = 0;
 
+      const liveGroup = MB.computeLiveKickoffSchedule(state);
       document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
-        let html = `<div class="time-slot"><div class="slot-header"><span>${currentTime} Uhr</span></div>`;
+        // Slot-Zeit: Live-Zeit des ersten noch offenen Spiels dieses Slots, sonst Planzeit
+        const slotStart = matchCounter;
+        const openTimes = slot.map((m, k) => (isFinished(m) ? null : (liveGroup.byMatchId.get(`g-${slotStart + k}`) || {}).time)).filter(Boolean).sort();
+        const slotTime = openTimes.length ? openTimes[0] : currentTime;
+        let html = `<div class="time-slot"><div class="slot-header"><span>${timeWithPlan(slotTime, currentTime)}</span></div>`;
 
         slot.forEach((m, mIdx) => {
           const p1 = state.players[m.p1]; // home
@@ -2409,7 +2422,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
         if (!match) return "";
         const bye = isByeMatch(match);
         const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !isFinished(match);
-        const time = addMinutes(groupEndTime, match.offset);
+        const time = liveKickoff('p-' + match.id, addMinutes(groupEndTime, match.offset));
         const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
 
         const hasScore = match.s1 !== null && match.s2 !== null;
@@ -2439,7 +2452,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
       let wcSummaryHtml = `<div class="wildcard-summary">`;
       [m[0], m[1], m[2], m[3]].forEach((match, i) => {
         if (match.p1) {
-          const time = addMinutes(groupEndTime, match.offset);
+          const time = liveKickoff('p-' + match.id, addMinutes(groupEndTime, match.offset));
           const stadium = (i % 2 === 0) ? state.config.s1 : state.config.s2;
           const hasScore = match.s1 !== null && match.s2 !== null;
           const w1 = hasScore && match.s1 > match.s2;
@@ -2546,8 +2559,10 @@ if (tb && tb.s1 === null && tb.s2 === null) {
   document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
     .sort((a, b) => parseInt(a) - parseInt(b))
     .map(offset => {
-      const time = addMinutes(groupEndTime, parseInt(offset));
+      const plannedSlotTime = addMinutes(groupEndTime, parseInt(offset));
       const matchesInSlot = playoffGroups[offset];
+      const liveSlotTimes = matchesInSlot.filter(({ match }) => !isFinished(match) && !isByeMatch(match)).map(({ match }) => liveKickoff('p-' + match.id, plannedSlotTime)).sort();
+      const time = liveSlotTimes.length ? liveSlotTimes[0] : plannedSlotTime;
       const roundName =
         matchesInSlot[0].match.session ||
         matchesInSlot[0].match.phase ||
@@ -2556,7 +2571,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
       let html = `
         <div class="time-slot">
           <div class="slot-header">
-            <span>${time} Uhr | ${roundName}</span>
+            <span>${timeWithPlan(time, plannedSlotTime)} | ${roundName}</span>
           </div>`;
 
       matchesInSlot.forEach(({ match, index }) => {
@@ -2700,7 +2715,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
       const driftText = MB.formatScheduleDriftText(liveSchedule.drift, { 1: state.config.s1, 2: state.config.s2 });
 
       document.getElementById('nextGamesList').innerHTML = `
-        ${driftText ? `<div style="font-size:0.72em; opacity:0.65; margin-bottom:8px; text-align:right;">⏱ ${driftText}</div>` : ''}
+        <div style="text-align:right; margin-bottom:8px;">${MB.renderScheduleStatusBadge(state)}</div>
         <div class="next-grid-container">
           <div>
             <small style="color:var(--nfl-red); font-weight:bold; letter-spacing:1px; text-transform: uppercase; display: block; margin-bottom: 8px;">
