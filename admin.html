@@ -3982,12 +3982,34 @@ function renderRanking() {
       }
     }
 
+    // Unbeachtetes Popup: nach 30 s werden erkannte Rekord-Memes automatisch fürs
+    // nächste Power Ranking vorgemerkt (jede Berührung des Popups stoppt das).
+    let memePopupTimer = null, memePopupTouched = false;
     function openMemePopup() {
-      document.getElementById('memePopupModal').classList.remove('hidden');
+      const modal = document.getElementById('memePopupModal');
+      modal.classList.remove('hidden');
       renderMemePopupContent(activePopupEntries);
+      memePopupTouched = false;
+      if (!modal.dataset.touchHook) {
+        modal.dataset.touchHook = '1';
+        ['pointerdown', 'keydown'].forEach(ev => modal.addEventListener(ev, () => { memePopupTouched = true; clearTimeout(memePopupTimer); }, true));
+      }
+      clearTimeout(memePopupTimer);
+      memePopupTimer = setTimeout(autoQueuePopupMemes, 30000);
+    }
+    function autoQueuePopupMemes(waited) {
+      if (memePopupTouched || document.getElementById('memePopupModal').classList.contains('hidden')) return;
+      const open = activePopupEntries.filter(e => !e.isSpurious && e.record && e.record.type !== 'finals' && e.record.type !== 'champion' && !e.published && !e.queued && !e.error);
+      // Memes, die noch generiert werden: bis zu 30 s länger warten
+      if (open.some(e => e.loading) && (waited || 0) < 15) { memePopupTimer = setTimeout(() => autoQueuePopupMemes((waited || 0) + 1), 2000); return; }
+      let n = 0;
+      open.forEach(e => { const i = sessionRecords.indexOf(e); if (i >= 0 && e.imageUrl) { queueRecordMeme(i); n++; } });
+      if (open.every(e => e.queued || !e.imageUrl) && !activePopupEntries.some(e => e.isSpurious && !e.published)) closeMemePopup();
+      if (n) console.info(`${n} Meme(s) automatisch fürs nächste Power Ranking vorgemerkt (Popup 30 s unbeachtet).`);
     }
 
     function closeMemePopup() {
+      clearTimeout(memePopupTimer);
       document.getElementById('memePopupModal').classList.add('hidden');
       activePopupEntries = [];
     }
@@ -4028,7 +4050,6 @@ function renderRanking() {
                  style="width:100%; max-width:260px; aspect-ratio:1; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
             <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
               ${memePublishButtonHtml(entry, globalIndex)}
-              <button style="width:auto;" onclick="shareMeme(${globalIndex})">📱 Teilen</button>
               <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${globalIndex})">🔁 Anderes Motiv</button>
               <button class="btn-secondary" style="width:auto;" onclick="dismissEntry(${globalIndex})">🙈 Verwerfen</button>
             </div>`;
@@ -4078,8 +4099,8 @@ function renderRanking() {
                style="width:100%; max-width:340px; border-radius:8px; overflow:hidden; background:#000; margin:0 auto;"></div>
           <div style="display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;">
             ${entry.published
-              ? `<button style="width:auto;" disabled>✅ Im Blog</button>`
-              : `<button style="width:auto;" onclick="publishSpuriousToBlog(${globalIndex})">📰 Im Blog veröffentlichen</button>
+              ? `<button class="btn-secondary" style="width:auto;" disabled>✅ Im Blog</button>`
+              : `<button class="btn-secondary" style="width:auto;" onclick="publishSpuriousToBlog(${globalIndex})">📰 Im Blog veröffentlichen</button>
                  <button class="btn-secondary" style="width:auto;" onclick="dismissSpurious(${globalIndex})">🙈 Verwerfen</button>`}
           </div>`;
       }
@@ -4106,6 +4127,7 @@ function renderRanking() {
         const used = new Set(JSON.parse(localStorage.getItem('mb_cm_used') || '[]'));
         const fresh = (await MB.Comments.fetchRecent({ sinceIso: since, limit: 200 })).filter(c => !used.has(c.id));
         const h = MB.Comments.pickHighlights(fresh, 2);
+        if (MB.Comments.attachArticleTitles) await MB.Comments.attachArticleTitles(h.picks);
         return { comments: h, commit: () => {
           h.picks.forEach(p => used.add(p.id));
           localStorage.setItem('mb_cm_used', JSON.stringify([...used].slice(-300)));
@@ -4162,10 +4184,14 @@ function renderRanking() {
             const candidates = await MB.Spurious.findAllOverallCandidates(state, used, { limit: 1 });
             const candidate = candidates && candidates[0];
             if (candidate) {
+              // Eigener kleiner Abschnitt mit Text (nicht nur ein Bild): Story-Baustein der
+              // Statistik, sonst neutrale Beschreibung — plus der obligatorische Disclaimer.
               const headline = MB.Spurious.buildSpuriousHeadline ? MB.Spurious.buildSpuriousHeadline(candidate) : null;
-              const teaser = headline
-                ? `📊 Die Zahl zum Zwischenstand: ${headline.title}${headline.subtitle ? ' – ' + headline.subtitle : ''} Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`
-                : `📊 Die Zahl zum Zwischenstand: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“ (r = ${candidate.r.toFixed(2)}). Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`;
+              const story = MB.Spurious.buildSpuriousStory ? MB.Spurious.buildSpuriousStory(candidate) : null;
+              const storyText = story && story.body ? String(story.body).replace(/<[^>]+>/g, '').trim() : '';
+              const teaser = `📊 Statistik-Ecke${headline ? ' – ' + headline.title : ''}: ` +
+                (storyText || `${candidate.mbLabel} und „${candidate.germanName}“ laufen über die Jahre verdächtig im Gleichschritt.`) +
+                ` Korrelationskoeffizient: ${candidate.r.toFixed(2)}. Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`;
               const canvas = MB.Spurious.renderChartCanvas(candidate);
               images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
               article.body += '\n\n' + teaser + mark(images.length - 1);
@@ -4292,20 +4318,20 @@ function renderRanking() {
       if (entry.record.type === 'finals' || entry.record.type === 'champion') {
         const name = entry.record.type === 'finals' ? 'Finale' : 'Champion';
         return entry.published
-          ? `<button style="width:auto;" disabled>✅ Im Beitrag „${name}“</button>`
-          : `<button style="width:auto;" disabled title="Der Beitrag erscheint, sobald das Meme fertig ist">⏳ Kommt in den Beitrag „${name}“</button>`;
+          ? `<button class="btn-secondary" style="width:auto;" disabled>✅ Im Beitrag „${name}“</button>`
+          : `<button class="btn-secondary" style="width:auto;" disabled title="Der Beitrag erscheint, sobald das Meme fertig ist">⏳ Kommt in den Beitrag „${name}“</button>`;
       }
       if (entry.published) {
-        return `<button style="width:auto;" disabled>✅ Als eigener Beitrag im Blog</button>`;
+        return `<button class="btn-secondary" style="width:auto;" disabled>✅ Als eigener Beitrag im Blog</button>`;
       }
       if (entry.queued) {
-        return `<button style="width:auto;" disabled>✅ Fürs nächste Power Ranking vorgemerkt</button>`;
+        return `<button class="btn-secondary" style="width:auto;" disabled>✅ Fürs nächste Power Ranking vorgemerkt</button>`;
       }
       // Wahl: eigener Beitrag ODER im nächsten Power Ranking (nur mit Meme-Bild).
       const queueBtn = entry.imageUrl
         ? `<button class="btn-secondary" style="width:auto;" onclick="queueRecordMeme(${i})">📊 Ins nächste Power Ranking</button>`
         : '';
-      return `<button style="width:auto;" onclick="publishRecordToBlog(${i})">📰 Eigener Beitrag</button>${queueBtn}`;
+      return `<button class="btn-secondary" style="width:auto;" onclick="publishRecordToBlog(${i})">📰 Eigener Beitrag</button>${queueBtn}`;
     }
 
     // Wird über den 📰-Button im Popup (oder in der Rekord-Momente-Karte)
@@ -4463,7 +4489,6 @@ function renderRanking() {
               <div style="flex:1; min-width:180px;">
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                   <button class="btn-secondary" style="width:auto;" onclick="rerenderMeme(${i})">🔁 Anderes Motiv</button>
-                  <button style="width:auto;" onclick="shareMeme(${i})">📱 Teilen</button>
                   ${memePublishButtonHtml(entry, i)}
                 </div>
               </div>

@@ -40,6 +40,11 @@
   .title-pct .trend { display: block; white-space: nowrap; font-weight: 800; font-size: 0.8em; }
   .btn-secondary { background: transparent; border: 1px solid var(--v2-border); color: var(--v2-silver); border-radius: 6px; padding: 4px 10px; font-size: 0.7em; cursor: pointer; }
 
+  .sp-day-head { font-weight: 800; font-size: 0.85em; letter-spacing: .5px; color: var(--v2-gold); margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--v2-border); }
+  .sp-day-head:first-child { margin-top: 2px; }
+  .sp-day-badge { font-size: 0.78em; padding: 1px 8px; border-radius: 8px; margin-left: 8px; font-weight: 700; }
+  .sp-day-badge.done { background: #263449; color: #cfd8e6; opacity: .85; }
+  .sp-day-badge.active { background: var(--v2-gold); color: #241c00; }
   /* Kompakte, klar getrennte Spielzeilen (Regular Season + Playoffs):
      nur Uhrzeit/Ergebnis, Spieler+Team, Spielfeld — Details per Klick. */
   .mb-match-row {
@@ -208,7 +213,25 @@
     // statische Planzeit falls (sollte nicht vorkommen) kein Live-Eintrag da ist.
     const live = MB.computeLiveKickoffSchedule(state);
     groupDetailRows = [];
+    // Spieltage wie im Wettbüro (MB.Tipp.getSpieltage): je 4 Spiele in Spielreihenfolge
+    const dayOf = new Map();
+    try {
+      (MB.Tipp.getSpieltage(state) || []).forEach(st => st.matches.forEach(mi => { if (mi.matchId.startsWith('g-')) dayOf.set(mi.matchId, st); }));
+    } catch (e) { /* ohne Spieltage */ }
+    let lastDay = null;
     return state.matches.map((m, idx) => {
+      const st = dayOf.get(`g-${idx}`);
+      let head = '';
+      if (st && st !== lastDay) {
+        lastDay = st;
+        const done = st.matches.every(x => x.finished), active = !done && ![...dayOf.values()].some(o => o.index < st.index && !o.matches.every(x => x.finished));
+        head = `<div class="sp-day-head">Spieltag ${st.index}${done ? '<span class="sp-day-badge done">abgeschlossen</span>' : active ? '<span class="sp-day-badge active">aktuell</span>' : ''}</div>`;
+      }
+      return head + renderGroupRow(m, idx, live);
+    }).join('');
+  }
+  function renderGroupRow(m, idx, live) {
+    {
       const p1 = state.players[m.p1], p2 = state.players[m.p2];
       if (!p1 || !p2) return '';
       const played = m.s1 != null && m.s2 != null;
@@ -227,7 +250,7 @@
         played, timeLabel, score: played ? `${m.s1}:${m.s2}` : null, stadium,
         onClick: `openGroupMatchDetail(${detailIdx})`,
       });
-    }).join('');
+    }
   }
 
   function renderBracket() {

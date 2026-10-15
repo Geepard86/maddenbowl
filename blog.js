@@ -245,7 +245,7 @@
 
     shootout: [
       "Defensive Abende sehen anders aus. {player} und {opponent} kommen zusammen auf {total} Punkte – so viele wie in keinem anderen Spiel dieses Turniers.",
-      "Wenn beide Offensiven einmal beschlossen haben, Feierabend zu machen, sieht das so aus: {player} gegen {opponent}, {winnerScore}:{loserScore}. Ein echtes Punktefeuerwerk.",
+      "Wenn beide Defenses einmal beschlossen haben, Feierabend zu machen, sieht das so aus: {player} gegen {opponent}, {winnerScore}:{loserScore}. Ein echtes Punktefeuerwerk.",
     ],
   };
 
@@ -427,7 +427,13 @@
     ];
     const head = heads[Math.floor(Math.random() * heads.length)];
     if (!picks.length) return `${head} Die Stimmung ist rege – schreibt gern weiter.`;
-    const quotes = picks.map((p, i) => `${i === 0 ? "" : "Und "}${esc(p.player_name)} ${i === 0 ? "meinte unter einem der Beiträge" : "legte nach"}: „${esc(p.body)}“`);
+    // Chronologisch; mit Bezug, worunter kommentiert wurde
+    const where = (p) => p.article_title ? `unter „${esc(p.article_title)}“` : "unter einem der Beiträge";
+    const quotes = picks.map((p, i) => {
+      if (i === 0) return `${esc(p.player_name)} schrieb ${where(p)}: „${esc(p.body)}“`;
+      const same = p.article_id != null && String(p.article_id) === String(picks[0].article_id);
+      return `${same ? "Darauf legte" : "Und"} ${esc(p.player_name)} ${same ? "nach" : "meinte " + where(p)}: „${esc(p.body)}“`;
+    });
     return `${head} ${quotes.join(" ")} – weiter so, die Spalte darf gern noch voller werden.`;
   }
 
@@ -615,10 +621,13 @@
     if (commentPara) parts.push(commentPara);
     parts.push(style.closer);
 
+    // Tabellen-Snapshot: blog.html zeichnet ihn am Platzhalter [[tabelle]]
+    const table = sorted.filter((p) => p.name).map((p, i) => ({ rank: i + 1, name: p.name, w: p.wins || 0, l: Math.max(0, (p.played || 0) - (p.wins || 0)), diff: p.diff || 0 }));
     return {
       kind: "progress",
       title: style.title(finishedCount),
-      body: paragraphs(parts),
+      body: paragraphs(parts) + (table.length ? "\n\n[[tabelle]]" : ""),
+      data: table.length ? { standings: table } : undefined,
     };
   }
 
@@ -1044,7 +1053,7 @@
       const seasonsPlayed = badge.seasonsPlayed || 0;
       let line = `Er ist bereits ${seasonsPlayed} ${seasonsPlayed === 1 ? "Saison" : "Saisons"} dabei`;
       if (stats.played) {
-        line += `, Gesamtbilanz ${stats.wins}:${stats.losses}`;
+        line += `, Gesamtbilanz ${stats.wins}-${stats.losses} (Siege-Niederlagen)`;
         if (stats.ppg != null) line += ` bei durchschnittlich ${fmtDecimal(stats.ppg)} Punkten pro Spiel`;
       }
       sentences.push(line + ".");
@@ -1088,7 +1097,7 @@
         "Jeder Titelverteidiger startet mit einem Vorsprung – und mit dem unangenehmen Gefühl, dass alle anderen ein bisschen mehr wollen als er.",
       ],
       closers: [
-        "Ob das für eine Titelverteidigung reicht, zeigen die nächsten Wochen. Verteidigen ist bekanntlich schwerer als Angreifen.",
+        "Ob das für eine Titelverteidigung reicht, zeigen die nächsten Stunden. Verteidigen ist bekanntlich schwerer als Angreifen.",
         "Die Krone sitzt – die Frage ist nur, wie lange.",
       ],
     },

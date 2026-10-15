@@ -21,6 +21,31 @@
 <link rel="stylesheet" href="styles.css" />
 <style>
   .v2 .v2-wrap { padding-bottom: 14px; }
+  /* Team-Übersicht (vor Turnierstart) */
+  .tm-slider { display:flex; gap:8px; overflow-x:auto; scroll-snap-type:x mandatory; padding:4px 2px 10px; scrollbar-width:thin; }
+  .tm-logo { flex:0 0 auto; scroll-snap-align:start; width:74px; padding:6px 4px 5px; border-radius:10px; border:1px solid var(--v2-border); background:rgba(255,255,255,.03); cursor:pointer; text-align:center; color:inherit; position:relative; }
+  .tm-logo img { width:46px; height:46px; object-fit:contain; display:block; margin:0 auto 3px; }
+  .tm-logo .tm-n { font-size:.66em; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tm-logo .tm-o { font-size:.62em; color:var(--v2-silver); }
+  .tm-logo.active { border-color:var(--v2-gold); background:rgba(201,151,0,.14); }
+  .tm-logo.seen::after { content:'✓'; position:absolute; top:3px; right:5px; font-size:.62em; color:var(--v2-gold); }
+  .tm-nav { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .tm-nav button { width:auto; margin:0; padding:4px 10px; border-radius:8px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
+  .tm-head { display:flex; align-items:center; gap:12px; margin:6px 0 8px; }
+  .tm-head img { width:56px; height:56px; object-fit:contain; }
+  .tm-head .t { font-weight:900; font-size:1.05em; }
+  .tm-head .s { font-size:.72em; color:var(--v2-silver); }
+  .tm-roster { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:3px 14px; max-height:340px; overflow-y:auto; font-size:.8em; }
+  .tm-p { display:flex; align-items:center; gap:7px; padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
+  .tm-p .o { min-width:26px; text-align:center; font-weight:900; border-radius:5px; padding:1px 3px; background:#263449; }
+  .tm-p .o.h { background:var(--v2-gold); color:#111; } .tm-p .o.m { background:#3b5a86; }
+  .tm-p .pp { min-width:30px; color:var(--v2-silver); font-size:.9em; }
+  .tm-p .nn { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tm-p .bb { font-size:.72em; font-weight:900; padding:1px 4px; border-radius:3px; }
+  .tm-p .bb.xf { background:#ffd23f; color:#000; } .tm-p .bb.ss { background:#1e50c8; color:#fff; } .tm-p .bb.ir { background:#d50a0a; color:#fff; }
+  .tm-p.ir .nn { opacity:.55; text-decoration:line-through; }
+  .v2-blog-wide .bw-item { display:block; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); color:inherit; text-decoration:none; }
+  .v2-blog-wide .bw-item:first-of-type { border-top:none; }
   .v2-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; margin-bottom: 10px; }
   .v2-row-2col:last-child { margin-bottom: 0; }
   .v2-row-2col .v2-card { min-width: 0; margin-bottom: 0; }
@@ -230,7 +255,7 @@
   }
 
   function excerpt(text, n) {
-    const clean = (text || '').replace(/\[\[bild:\d+\]\]/g, ' ').replace(/\s+/g, ' ').trim();
+    const clean = (text || '').replace(/\[\[(bild:\d+|tabelle)\]\]/g, ' ').replace(/\s+/g, ' ').trim();
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
   }
 
@@ -280,7 +305,7 @@
       return { stage: (m.stage || 'group'), homePlayer, awayPlayer,
                homeScore: (hs === null ? null : Number(hs)), awayScore: (as === null ? null : Number(as)) };
     });
-    const st = standings.map(x => ({ rank: Number(x.rank), name: hofNormName(x.name) }))
+    const st = standings.map(x => ({ rank: Number(x.rank), name: hofNormName(x.name), points: Number(x.points ?? 0) }))
       .filter(x => x.name && Number.isFinite(x.rank));
     return { season, players, standings: st, matches: nm };
   }
@@ -288,7 +313,7 @@
   function hofEnsureAgg(map, name) {
     const n = hofNormName(name);
     if (!n) return null;
-    if (!map.has(n)) map.set(n, { name: n, games: 0, wins: 0, championships: 0, pf: 0, pa: 0 });
+    if (!map.has(n)) map.set(n, { name: n, games: 0, wins: 0, championships: 0, pf: 0, pa: 0, points: 0 });
     return map.get(n);
   }
 
@@ -304,7 +329,7 @@
       B.pf += m.awayScore; B.pa += m.homeScore;
       if (m.homeScore > m.awayScore) A.wins++; else B.wins++;
     });
-    s.standings.forEach(x => { if (x.rank === 1) hofEnsureAgg(map, x.name).championships++; });
+    s.standings.forEach(x => { const a = hofEnsureAgg(map, x.name); a.points += (x.points || 0); if (x.rank === 1) a.championships++; });
     return map;
   }
 
@@ -325,10 +350,15 @@
       hofSeasonPlayerStats(s).forEach(p => {
         const a = hofEnsureAgg(all, p.name);
         a.games += p.games; a.wins += p.wins; a.championships += p.championships;
-        a.pf += p.pf; a.pa += p.pa;
+        a.pf += p.pf; a.pa += p.pa; a.points += p.points;
       });
     });
     const table = [...all.values()];
+    // Ewige Tabelle: exakt dieselbe Sortierung wie in hall_of_fame.html
+    allTimeTable = [...table].sort((A, B) =>
+      (B.championships - A.championships) || (B.points - A.points) ||
+      ((B.games ? B.wins / B.games : 0) - (A.games ? A.wins / A.games : 0)) ||
+      ((B.pf - B.pa) - (A.pf - A.pa)) || (B.pf - A.pf) || A.name.localeCompare(B.name, 'de'));
     if (!table.length) return [];
 
     const pickMax = (arr, valFn) => arr.length ? arr.reduce((a, b) => valFn(b) > valFn(a) ? b : a) : null;
@@ -385,6 +415,7 @@
   }
 
   let allTimeRecords = [];
+  let allTimeTable = [];
   let hofTab = 'alltime';
 
   function setHofTab(tab) {
@@ -407,15 +438,18 @@
     }
     if (randomizeTab) hofTab = Math.random() < 0.5 ? 'alltime' : 'records';
 
-    const top3 = [...history.ringsByPlayer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     const medals = ['🥇', '🥈', '🥉'];
-    const tableHtml = top3.map(([name, rings], i) => `
+    const row = (p, rank, icon) => `
       <div class="v2-lb-row">
-        <span class="v2-lb-rank">${medals[i] || i + 1}</span><span class="v2-lb-name">${name}</span><span class="v2-lb-pts">${rings} 🏆</span>
-      </div>`).join('');
+        <span class="v2-lb-rank">${icon}</span><span class="v2-lb-name">${p.name}</span><span class="v2-lb-pts">${p.championships ? p.championships + ' 🏆 · ' : ''}${p.points} P</span>
+      </div>`;
+    const top3 = allTimeTable.slice(0, 3);
+    const last = allTimeTable.length > 3 ? allTimeTable[allTimeTable.length - 1] : null;
+    const tableHtml = top3.map((p, i) => row(p, i + 1, medals[i])).join('') +
+      (last ? `${allTimeTable.length > 4 ? '<div class="v2-lb-row" style="justify-content:center; opacity:.5; padding:0;">⋯</div>' : ''}${row(last, allTimeTable.length, '💩')}` : '');
 
     const recordsHtml = allTimeRecords.length
-      ? pickRandomRecords(allTimeRecords, 3).map(r => `
+      ? pickRandomRecords(allTimeRecords, 4).map(r => `
           <div class="v2-lb-row">
             <span class="v2-lb-rank">${r.icon}</span>
             <span class="v2-lb-name" style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.name}</span>
@@ -443,11 +477,77 @@
       </div>`;
   }
 
+  // ---------------------------------------------------------------
+  // VOR TURNIERSTART: Team-Übersicht (Slider über alle Logos + Kader),
+  // Blog mit Saisonrückblicken über die volle Breite, Hall of Fame + Shop.
+  // ---------------------------------------------------------------
+  let tmTeam = null, tmRosters = null, tmYear = null;
+  const tmSeen = new Set(JSON.parse(localStorage.getItem('mb_teams_seen') || '[]'));
+  const tmEsc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function tmTeams() {
+    const ratings = MB.getTeamRatingsSync(tmYear) || {};
+    return MB.nflTeams.map(t => ({ ...t, ovr: Number(ratings[t.id]) || (tmRosters && tmRosters[t.id] && tmRosters[t.id].team_ovr) || null }))
+      .sort((a, b) => (b.ovr || 0) - (a.ovr || 0) || a.n.localeCompare(b.n));
+  }
+  function selectTeam(id, scroll) {
+    tmTeam = id;
+    tmSeen.add(id); localStorage.setItem('mb_teams_seen', JSON.stringify([...tmSeen]));
+    MB.UI.withAchievements(A => A.track('team_view', { team: id, total: MB.nflTeams.length }));
+    const box = document.getElementById('tmBox'); if (box) box.outerHTML = renderTeamCard();
+    if (scroll) { const el = document.querySelector(`.tm-logo[data-team="${id}"]`); if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }
+  }
+  function stepTeam(d) {
+    const list = tmTeams(); const i = Math.max(0, list.findIndex(t => t.id === tmTeam));
+    selectTeam(list[(i + d + list.length) % list.length].id, true);
+  }
+  function renderTeamCard() {
+    const list = tmTeams();
+    if (!tmTeam) tmTeam = list[0] && list[0].id;
+    const t = list.find(x => x.id === tmTeam) || list[0];
+    const row = tmRosters && tmRosters[t.id];
+    const players = ((row && row.players) || []).slice().sort((a, b) => (b.ovr - a.ovr) || String(a.n).localeCompare(String(b.n)));
+    const logos = list.map(x => `<button class="tm-logo ${x.id === t.id ? 'active' : ''} ${tmSeen.has(x.id) ? 'seen' : ''}" data-team="${x.id}" onclick="selectTeam('${x.id}')">
+        <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${x.id}.png" alt="" loading="lazy"><div class="tm-n">${tmEsc(x.n)}</div><div class="tm-o">${x.ovr ? 'OVR ' + x.ovr : '–'}</div></button>`).join('');
+    const roster = players.length
+      ? `<div class="tm-roster">${players.map(p => `<div class="tm-p ${p.ir ? 'ir' : ''}"><span class="o ${p.ovr >= 90 ? 'h' : p.ovr >= 80 ? 'm' : ''}">${p.ovr}</span><span class="pp">${tmEsc(p.pos)}</span><span class="nn">${tmEsc(p.n)}</span>${p.badge ? `<span class="bb ${p.badge === 'XF' ? 'xf' : 'ss'}">${p.badge}</span>` : ''}${p.ir ? '<span class="bb ir">IR</span>' : ''}</div>`).join('')}</div>`
+      : `<div class="v2-empty">Für dieses Team ist noch kein Kader hinterlegt.</div>`;
+    const irCount = players.filter(p => p.ir).length;
+    return `<div class="v2-card" id="tmBox">
+        <div class="v2-card-title">🏈 Teams &amp; Kader ${tmYear ? `<span style="font-weight:600; opacity:.6; font-size:.8em;">Madden ${tmEsc(row && row.madden_version || tmYear)}</span>` : ''}</div>
+        <div class="tm-nav"><button onclick="stepTeam(-1)" aria-label="Vorheriges Team">‹</button><span style="font-size:.72em; color:var(--v2-silver); flex:1;">Nach Team-OVR sortiert · ${tmSeen.size}/${MB.nflTeams.length} angeschaut</span><button onclick="stepTeam(1)" aria-label="Nächstes Team">›</button></div>
+        <div class="tm-slider">${logos}</div>
+        <div class="tm-head"><img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt=""><div><div class="t">${tmEsc(t.n)}${t.ovr ? ` · OVR ${t.ovr}` : ''}</div><div class="s">${players.length ? `${players.length} Spieler${irCount ? ' · ' + irCount + ' auf IR' : ''}` : ''}</div></div></div>
+        ${roster}
+      </div>`;
+  }
+  function renderBlogWideCard() {
+    const retro = articles.filter(a => a.kind === 'retrospective');
+    const list = (retro.length ? retro : articles).slice(0, 4);
+    if (!list.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
+    return `<div class="v2-card v2-blog-wide"><div class="v2-card-title">${linkedTitle(retro.length ? '📚 Saisonrückblicke' : '📰 Blog', 'blog.html')}</div>
+      ${list.map(a => `<a class="bw-item" href="blog.html?post=${encodeURIComponent(a.id)}">
+        <div style="font-weight:800; font-size:0.88em;">${a.title || ''}</div>
+        <div style="font-size:0.8em; opacity:.8; margin-top:3px;">${excerpt(a.body, 180)}</div>
+        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:3px;">${formatArticleDate(a.created_at)}</div></a>`).join('')}</div>`;
+  }
+
   async function render(opts = {}) {
     const randomizeHofTab = opts.randomizeHofTab !== false;
     const app = document.getElementById('app');
     if (!state.players || !state.players.length) {
-      app.innerHTML = `<div class="v2-card"><div class="v2-empty">Es läuft aktuell kein Turnier.</div></div>` + renderMerchCard();
+      if (!tmRosters) {
+        tmYear = (state.config && state.config.year) || String(new Date().getFullYear());
+        try { tmRosters = await MB.Rosters.loadRostersForYear(tmYear); } catch (e) { tmRosters = {}; }
+        if (!Object.keys(tmRosters).length) { try { tmYear = String(Number(tmYear) - 1); tmRosters = await MB.Rosters.loadRostersForYear(tmYear); } catch (e) { tmRosters = {}; } }
+        try { await MB.loadTeamRatings(tmYear); } catch (e) { /* optional */ }
+      }
+      app.innerHTML = `
+        ${renderTeamCard()}
+        ${renderBlogWideCard()}
+        <div class="v2-row-2col">
+          ${renderHallOfFameCard(randomizeHofTab)}
+          ${renderMerchCard()}
+        </div>`;
       return;
     }
     app.innerHTML = `
@@ -478,16 +578,19 @@
     } catch (e) { console.warn('All-Time-Rekorde laden fehlgeschlagen:', e); }
     try { await MB.loadTeamRatings(state.config?.year || '2026'); } catch (e) {}
     try {
-      articles = await MB.Blog.fetchAllArticles(10);
+      articles = await MB.Blog.fetchAllArticles(40);
     } catch (e) { console.warn('Artikel laden fehlgeschlagen:', e); }
 
     await render();
 
     setInterval(async () => {
       try {
+        const hadPlayers = !!(state.players && state.players.length);
         state = await MB.fetchCloudState();
         MB.UI.setState(state);
-        articles = await MB.Blog.fetchAllArticles(10);
+        articles = await MB.Blog.fetchAllArticles(40);
+        // Ohne laufendes Turnier nicht ständig neu zeichnen (Team-Slider würde zurückspringen)
+        if (!hadPlayers && !(state.players && state.players.length)) return;
         await render();
       } catch (e) { console.warn('Auto-Refresh fehlgeschlagen:', e); }
     }, 15000);

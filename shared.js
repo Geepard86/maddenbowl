@@ -537,67 +537,74 @@
   // ======================================================================
   // ZIEHREIHENFOLGE (Draft-Auslosungsreihenfolge)
   // -------------------------------------------------------------------
-  // Berechnet aus der letzten abgeschlossenen Saison, in welcher Reihenfolge
-  // die Spieler bei der nächsten Auslosung an der Reihe sind:
-  //   1. ToiletBowl-Sieger der Vorsaison (= Vorjahres-Letzter, siehe
-  //      applyToiletBowlOverride) zieht zuerst.
-  //   2. Neulinge (keine Vorjahresdaten) direkt danach, untereinander zufällig.
-  //   3. Übrige Rückkehrer aufsteigend nach Vorjahres-Punkten (schlechter
-  //      zuerst).
-  //   4. Der Titelverteidiger (Vorjahres-Platz 1) zieht als Letztes.
-  // Ohne Historie (z.B. allererstes Turnier) ist die Reihenfolge komplett
-  // zufällig. Gibt eine Liste [{name, reason}] in Ziehreihenfolge zurück —
-  // die Namen entsprechen exakt den übergebenen `names`.
+  //   1. Toilet-Bowl-Sieger der Vorsaison (= Vorjahres-Letzter), falls dabei.
+  //   2. Rookies (zum ersten Mal dabei), untereinander zufällig.
+  //   3. Sophomores, die letztes Jahr NICHT dabei waren (2. Teilnahme),
+  //      untereinander nach Ewiger Tabelle — schlechterer Platz zuerst.
+  //   4. Letztjährige Teilnehmer vom letzten Platz bis zum Titelverteidiger.
+  //   5. Alle anderen (mind. 3. Teilnahme, letztes Jahr nicht dabei),
+  //      untereinander nach Ewiger Tabelle — schlechterer Platz zuerst.
+  // Ewige Tabelle = gleiche Sortierung wie hall_of_fame.html (Titel, Punkte,
+  // Siegquote, Differenz, Punkte erzielt). Rückgabe: [{name, reason}].
   // ======================================================================
+  function computeAllTimeRanking(history) {
+    const agg = new Map();
+    const get = (n) => { const k = normName(n); if (!k) return null; if (!agg.has(k)) agg.set(k, { name: k, championships: 0, points: 0, games: 0, wins: 0, pf: 0, pa: 0, seasons: 0 }); return agg.get(k); };
+    ((history && history.seasons) || []).forEach((t) => {
+      (Array.isArray(t.standings) ? t.standings : []).forEach((x) => {
+        const a = get(x.name); if (!a) return;
+        a.seasons++; a.points += Number(x.points) || 0;
+        if (Number(x.rank) === 1) a.championships++;
+      });
+    });
+    ((history && history.matches) || []).forEach((m) => {
+      if (m.homeScore == null || m.awayScore == null) return;
+      const A = get(m.homePlayer), B = get(m.awayPlayer); if (!A || !B) return;
+      A.games++; B.games++; A.pf += m.homeScore; A.pa += m.awayScore; B.pf += m.awayScore; B.pa += m.homeScore;
+      if (m.homeScore > m.awayScore) A.wins++; else if (m.awayScore > m.homeScore) B.wins++;
+    });
+    const table = [...agg.values()].sort((A, B) =>
+      (B.championships - A.championships) || (B.points - A.points) ||
+      ((B.games ? B.wins / B.games : 0) - (A.games ? A.wins / A.games : 0)) ||
+      ((B.pf - B.pa) - (A.pf - A.pa)) || (B.pf - A.pf) || A.name.localeCompare(B.name, "de"));
+    const rank = new Map(table.map((x, i) => [x.name.toLowerCase(), i + 1]));
+    return { table, rank };
+  }
+
   function computeDraftOrder(history, names) {
     const cleanNames = (names || []).map((n) => normName(n)).filter(Boolean);
     const seasons = [...((history && history.seasons) || [])].sort((a, b) => (b.season || 0) - (a.season || 0));
     const lastSeason = seasons[0] || null;
-    const standings = (lastSeason && Array.isArray(lastSeason.standings)) ? lastSeason.standings : [];
-    const byName = new Map(standings.map((s) => [normName(s.name).toLowerCase(), s]));
-    const maxRank = standings.length;
+    const lastStandings = (lastSeason && Array.isArray(lastSeason.standings)) ? lastSeason.standings : [];
+    const lastByName = new Map(lastStandings.map((s) => [normName(s.name).toLowerCase(), s]));
+    const maxRank = lastStandings.reduce((m, s) => Math.max(m, Number(s.rank) || 0), 0);
+    const { rank: atRank } = computeAllTimeRanking(history);
+    // Teilnahmen VOR diesem Turnier (Saisons, in deren Tabelle der Name steht)
+    const appearances = (n) => seasons.filter((t) => (t.standings || []).some((s) => normName(s.name).toLowerCase() === n.toLowerCase())).length;
+    const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const worseAllTimeFirst = (a, b) => (atRank.get(b.toLowerCase()) || 0) - (atRank.get(a.toLowerCase()) || 0);
 
-    const shuffle = (arr) => {
-      const a = [...arr];
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a;
-    };
+    if (!lastSeason) return shuffle(cleanNames).map((name) => ({ name, reason: "Neuling / keine Vorjahresdaten" }));
 
-    const returning = [];
-    const newcomers = [];
-    cleanNames.forEach((name) => {
-      const s = byName.get(name.toLowerCase());
-      if (s) returning.push({ name, rank: Number(s.rank) || maxRank, points: Number(s.points) || 0 });
-      else newcomers.push({ name });
-    });
-
-    returning.sort((a, b) => b.rank - a.rank); // schlechtester Platz zuerst
-    const shuffledNewcomers = shuffle(newcomers);
     const order = [];
+    const used = new Set();
+    const add = (name, reason) => { if (!used.has(name)) { used.add(name); order.push({ name, reason }); } };
 
-    if (returning.length) {
-      const [worst, ...restReturning] = returning;
-      order.push({
-        name: worst.name,
-        reason: (worst.rank === maxRank && maxRank > 0)
-          ? `ToiletBowl-Sieger ${lastSeason.season} (Platz ${worst.rank})`
-          : `Vorjahresplatz ${worst.rank} (${worst.points} P)`,
-      });
-      shuffledNewcomers.forEach((n) => order.push({ name: n.name, reason: "Neuling" }));
-      restReturning.forEach((r, i) => {
-        const isChamp = i === restReturning.length - 1 && r.rank === 1;
-        order.push({
-          name: r.name,
-          reason: isChamp ? `Titelverteidiger ${lastSeason.season} (${r.points} P)` : `Vorjahresplatz ${r.rank} (${r.points} P)`,
-        });
-      });
-    } else {
-      shuffledNewcomers.forEach((n) => order.push({ name: n.name, reason: "Neuling / keine Vorjahresdaten" }));
-    }
-
+    // 1) Toilet-Bowl-Sieger (Vorjahres-Letzter)
+    const tb = cleanNames.find((n) => { const s = lastByName.get(n.toLowerCase()); return s && Number(s.rank) === maxRank && maxRank > 0; });
+    if (tb) add(tb, `Toilet-Bowl-Sieger ${lastSeason.season}`);
+    // 2) Rookies
+    shuffle(cleanNames.filter((n) => !used.has(n) && appearances(n) === 0)).forEach((n) => add(n, "Rookie (erstes Turnier)"));
+    // 3) Sophomores ohne Vorjahr
+    cleanNames.filter((n) => !used.has(n) && appearances(n) === 1 && !lastByName.has(n.toLowerCase()))
+      .sort(worseAllTimeFirst).forEach((n) => add(n, `Sophomore, Comeback (Ewige Tabelle Platz ${atRank.get(n.toLowerCase()) || "–"})`));
+    // 4) Vorjahres-Teilnehmer: letzter Platz -> Titelverteidiger
+    cleanNames.filter((n) => !used.has(n) && lastByName.has(n.toLowerCase()))
+      .sort((a, b) => (Number(lastByName.get(b.toLowerCase()).rank) || 0) - (Number(lastByName.get(a.toLowerCase()).rank) || 0))
+      .forEach((n) => { const r = Number(lastByName.get(n.toLowerCase()).rank); add(n, r === 1 ? `Titelverteidiger ${lastSeason.season}` : `Vorjahresplatz ${r}`); });
+    // 5) Rückkehrer mit mind. 2 früheren Teilnahmen
+    cleanNames.filter((n) => !used.has(n)).sort(worseAllTimeFirst)
+      .forEach((n) => add(n, `Rückkehrer, ${appearances(n)} Teilnahmen (Ewige Tabelle Platz ${atRank.get(n.toLowerCase()) || "–"})`));
     return order;
   }
 
@@ -923,7 +930,8 @@
       const fins = done.map((e) => ({ fin: finMinutes(e.match), at: Date.parse(e.match.finishedAt) || 0 }));
       const latestFin = fins.length ? fins.reduce((a, c) => (c.at >= a.at ? c : a), fins[0]) : null;
       if (!hasOpen && latestFin) { pending = latestFin; partial = null; }
-      else if (hasOpen && latestFin) { partial = latestFin; }
+      // Erst neu rechnen, wenn der Block KOMPLETT ist (auch das zweite Spiel eingetragen):
+      // ein einzelnes Ergebnis verschiebt die Kickoff-Zeiten nicht mehr vorläufig.
     });
 
     // Zeiten je Spiel
@@ -1947,7 +1955,9 @@
   function buildCollectorScript() {
     const teams = {};
     nflTeams.forEach((t) => { teams[t.id] = TEAM_SLUGS_MR[t.id]; });
-    return "(" + (async function (TEAMS, parse) {
+    // Top-Level-await: copy() ist eine Konsolen-Funktion und nach einem await
+    // innerhalb einer Funktion nicht mehr verfügbar -> erst auf oberster Ebene kopieren.
+    return "await (" + (async function (TEAMS, parse) {
       const out = {}, fails = [];
       const ids = Object.keys(TEAMS);
       for (let i = 0; i < ids.length; i++) {
@@ -1964,10 +1974,11 @@
         await new Promise((res) => setTimeout(res, 1500 + Math.random() * 1500));
       }
       const json = JSON.stringify({ source: "browser", teams: out });
-      try { copy(json); console.log("FERTIG – Ergebnis ist in der Zwischenablage. Fehlgeschlagen: " + (fails.join(", ") || "keine")); }
-      catch (e) { console.log("FERTIG – copy() nicht verfügbar. Ergebnis steht in window.__maddenResult"); }
       window.__maddenResult = json;
-    }).toString() + ")(" + JSON.stringify(teams) + ", " + parseTeamHtmlDom.toString() + ");";
+      window.__maddenFails = fails;
+    }).toString() + ")(" + JSON.stringify(teams) + ", " + parseTeamHtmlDom.toString() + ");\n" +
+      "try { copy(window.__maddenResult); console.log('FERTIG – Ergebnis ist in der Zwischenablage. Fehlgeschlagen: ' + (window.__maddenFails.join(', ') || 'keine')); }\n" +
+      "catch (e) { console.log('FERTIG – bitte noch  copy(window.__maddenResult)  in die Konsole tippen + Enter, dann ist das Ergebnis in der Zwischenablage.'); }";
   }
 
   const _rosterCache = new Map(); // "year|TEAM" -> Zeile | null
@@ -2092,7 +2103,7 @@
     getAppConfig, setAppConfig,
     computeRingIntroBadges, computeTeamTitleHistory,
     loadHistorySeasons, loadAndBuildHistory, buildHistoryIndex, fetchLastCompletedTournament,
-    normName, pairKey, computeDraftOrder, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
+    normName, pairKey, computeDraftOrder, computeAllTimeRanking, addMinutes, isByeMatch, isFinished, isGroupPhaseComplete,
     getPlayoffMatch, winnerOf, loserOf, getLogoHtml,
     computePlayoffTimes, computePlayoffOffsets, syncPlayoffOffsets, getGroupMatchTime, getUpcomingMatches,
     escHtml, sha256Hex, renderMatchMeta, cloneStateDeep, recomputeStandings, computeTitleOddsTrend, makeTitleTrendFn,

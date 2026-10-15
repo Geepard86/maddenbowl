@@ -84,6 +84,7 @@
     { id: "u_first_tip", emoji: "🚀", title: "Pionier", desc: "Hat den allerersten Tipp der Geschichte abgegeben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_self_tip", emoji: "📣", title: "Größter Fan", desc: "Hat als Erster auf sich selbst getippt.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_comment", emoji: "🎙️", title: "Erste Stimme", desc: "Hat den allerersten Blog-Kommentar geschrieben.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_all_teams", emoji: "🔭", title: "Chefscout", desc: "Hat sich als Erster alle 32 Teams samt Kader angeschaut.", rarity: "unique", term: "unique", unique: true },
   ];
   const BY_ID = new Map(DEFS.map((d) => [d.id, d]));
   const PAGE_KEYS = ["dashboard", "spielplan", "wettbuero", "blog", "hall_of_fame", "shop"];
@@ -175,9 +176,31 @@
     const v = { at: new Date().toISOString(), seen: false, meta: meta || null };
     unlocked.set(id, v); await persistUnlock(player, id, v);
     queue.push(id); scheduleShow();
+    if (def.unique) postUniqueArticle(def, player);
     const regular = DEFS.filter((d) => !d.unique && d.id !== "cards_all");
     if (id !== "cards_all" && !def.unique && regular.every((d) => unlocked.has(d.id))) await unlock("cards_all");
     return true;
+  }
+  // Neu ergatterte Unique-Karte -> eigener Blog-Beitrag (nur der Gewinner der
+  // Karte schreibt ihn, claimUnique stellt sicher, dass das genau einmal passiert).
+  async function postUniqueArticle(def, name) {
+    try {
+      const c = sb(); if (!c) return;
+      let tid = MB.getCurrentTournamentId ? MB.getCurrentTournamentId() : null;
+      if (!tid && MB.fetchLastCompletedTournament) { try { const lt = await MB.fetchLastCompletedTournament(); tid = lt && (lt.tournamentId || lt.id); } catch (e) { /* ohne */ } }
+      if (!tid) return;
+      const intros = [
+        `Es gibt sie genau ein einziges Mal – und ab sofort gehört sie ${name}.`,
+        `Sammelkarten-Alarm: Eine der einzigartigen 1/1-Karten hat einen Besitzer gefunden.`,
+        `Wer zuerst kommt, sammelt zuerst: ${name} hat sich eine Unique-Karte gesichert.`,
+      ];
+      const body = `${intros[Math.floor(Math.random() * intros.length)]}\n\n<strong>${def.emoji} ${escapeHtml(def.title)}</strong> – ${escapeHtml(def.desc.replace(/^Hat /, name + " hat ").replace(/^Als /, name + " war als "))}\n\nDie Karte ist damit vergeben und taucht bei allen anderen in der Hall of Fame als „Vergeben an ${escapeHtml(name)}“ auf. Wer noch eine der übrigen Unique-Karten ergattern will, sollte sich beeilen.`;
+      const article = { kind: "achievement", title: `🃏 Unique-Karte vergeben: ${def.title}`, body, data: { achievement: def.id, player: name } };
+      // Falls die DB die neue Beitragsart (noch) nicht kennt: als "manual" speichern
+      const ins = (kind) => c.from("blog_articles").insert({ tournament_id: tid, kind, title: article.title, body: article.body, data: article.data });
+      const r = await ins(article.kind);
+      if (r.error) { const r2 = await ins("manual"); if (r2.error) console.warn("Unique-Beitrag:", r2.error.message); }
+    } catch (e) { console.warn("Unique-Beitrag konnte nicht erstellt werden:", e); }
   }
   async function markSeen(id) { const v = unlocked.get(id); if (!v || v.seen || !player) return; v.seen = true; await persistUnlock(player, id, v); }
 
@@ -213,6 +236,8 @@
     } else if (event === "blog_mentions") {
       const n = bump("mentions", data.count || 0);
       if (n >= 1) unlock("mention_1"); if (n >= 10) unlock("mention_10"); if (n >= 25) unlock("mention_25");
+    } else if (event === "team_view" && data.team) {
+      if (addSet("teamsViewed", String(data.team)) >= (data.total || 32)) unlock("u_all_teams");
     } else if (event === "blog_share" && data.id != null) {
       if (addSet("shares", String(data.id)) >= 10) unlock("share_10");
     }
@@ -286,7 +311,7 @@
       .ach-card.locked { filter: grayscale(1) brightness(.6); box-shadow: 0 0 0 3px #3a4256, 0 6px 18px rgba(0,0,0,.4); }
       .ach-card.locked .ach-foil, .ach-card.locked .ach-glitter, .ach-card.locked .ach-glitter2, .ach-card.locked::before { display: none; }
       .ach-card.locked .ach-art::before { content: '?'; font: 900 90px/1 Impact, sans-serif; color: #3a4256; }
-      .ach-card.taken { filter: grayscale(.85) brightness(.7); }
+      .ach-card.taken { filter: grayscale(.85) brightness(.7); } .ach-card.foreign { filter: saturate(.75); }
       .ach-overlay { position: fixed; inset: 0; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(4,7,16,.84); backdrop-filter: blur(6px); animation: achFade .3s ease-out; cursor: pointer; }
       @keyframes achFade { from { opacity: 0; } }
       .ach-overlay .ach-new { font: 900 22px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 6px; color: #ffd23f; text-shadow: 0 0 20px rgba(255,210,63,.7); animation: achPulse 1s ease-in-out infinite alternate; }
@@ -318,7 +343,7 @@
       foot = st.holder ? `<span>${locked ? "Vergeben an" : "Gehört"}: ${escapeHtml(st.holder)}</span><span>1/1</span>` : `<span>${locked ? "Noch frei — sei der Erste!" : "Altima Bowl Cards"}</span><span>1/1</span>`;
     } else foot = `<span>Altima Bowl Cards</span><span>${st.at && !st.demo ? new Date(st.at).toLocaleDateString("de-DE") : "Serie 1"}</span>`;
     const fx = !locked && ["epic", "legendary", "unique"].includes(def.rarity) ? `<div class="ach-foil"></div><div class="ach-glitter"></div>${def.rarity !== "epic" ? '<div class="ach-glitter2"></div>' : ""}` : "";
-    return `<div class="ach-card ${def.rarity} ${locked ? "locked" : ""} ${locked && st.holder ? "taken" : ""}" data-id="${def.id}">${fx}${def.unique && !locked ? '<div class="ach-ribbon">UNIQUE 1/1</div>' : ""}
+    return `<div class="ach-card ${def.rarity} ${locked ? "locked" : ""} ${locked && st.holder ? "taken" : ""} ${st.foreign ? "foreign" : ""}" data-id="${def.id}">${fx}${def.unique && !locked ? '<div class="ach-ribbon">UNIQUE 1/1</div>' : ""}
       <div class="ach-top"><span>${r.label}</span><span>#${idx}</span></div>
       <div class="ach-art">${locked ? "" : def.emoji}</div>
       <div class="ach-title" style="${titleStyle(def, hidden)}">${hidden ? "???" : escapeHtml(def.title)}</div>
@@ -375,9 +400,28 @@
         const list = DEFS.filter((d) => d.term === term); if (!list.length) return "";
         return `<div class="ach-section">${TERMS[term]}</div><div class="ach-gallery">${list.map((d) => {
           const f = firsts.get(d.id); const mine = unlocked.get(d.id);
-          return cardHtml(d, mine ? { ...mine, holder: d.unique ? player : null } : { holder: d.unique && f ? f.player : null });
+          if (mine) return cardHtml(d, { ...mine, holder: d.unique ? player : null });
+          // Unique-Karten anderer Spieler aufgedeckt zeigen (mit Besitzer)
+          if (d.unique && f) return cardHtml(d, { at: f.at || new Date().toISOString(), holder: f.player, foreign: true });
+          return cardHtml(d, {});
         }).join("")}</div>`;
       }).join("");
+    attachTilt(el);
+  }
+
+  // Öffentliche Übersicht aller Unique-Karten mit Besitzer (Hall of Fame, ohne Login)
+  async function renderUniqueBoard(el) {
+    if (!el) return; injectStyle();
+    el.innerHTML = `<div class="ach-gal-head">Lade Unique-Karten …</div>`;
+    const c = sb(); const fm = new Map();
+    if (c) {
+      const { data, error } = await c.from("achievement_firsts").select("*");
+      if (!error) (data || []).forEach((r) => fm.set(r.achievement_id, { player: r.player_name, at: r.claimed_at }));
+    }
+    const list = DEFS.filter((d) => d.unique);
+    const taken = list.filter((d) => fm.has(d.id)).length;
+    el.innerHTML = `<div class="ach-gal-head"><b>${taken}</b> von <b>${list.length}</b> Unique-Karten vergeben — jede gibt es nur ein einziges Mal.</div>` +
+      `<div class="ach-gallery">${list.map((d) => { const f = fm.get(d.id); return cardHtml(d, f ? { at: f.at || new Date().toISOString(), holder: f.player } : {}); }).join("")}</div>`;
     attachTilt(el);
   }
 
@@ -427,5 +471,5 @@
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderCatalog, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

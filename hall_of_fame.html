@@ -81,7 +81,10 @@
     .hint{font-size:12px;opacity:.75;line-height:1.35;}
     .footer{opacity:.65;font-size:12px;text-align:center;margin:18px 0 6px;}
     a{color:#fff;text-decoration:underline;}
-  </style>
+    .hof-maintabs { display:flex; gap:8px; flex-wrap:wrap; margin: 0 0 12px; }
+  .hof-mt { width:auto; margin:0; padding:9px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.04); color:#cfd8e6; font-weight:800; cursor:pointer; }
+  .hof-mt.active { background:var(--v2-gold, #c99700); border-color:var(--v2-gold, #c99700); color:#111; }
+</style>
 </head>
 <body>
   <script>
@@ -96,22 +99,49 @@
 
     // "Meine Karten": Sammelkarten des eingeloggten Spielers (Achievements)
     function renderMyCards() {
-      const box = document.getElementById('myCardsCard');
-      if (!box) return;
-      const me = MB.UI.currentUser();
-      box.style.display = me ? '' : 'none';
-      if (!me) return;
-      MB.UI.withAchievements(function (A) { A.renderGallery(document.getElementById('myCardsGallery')); });
+      const gal = document.getElementById('myCardsGallery');
+      if (!gal) return;
+      // renderGallery zeigt ohne Login selbst den Hinweis zum Einloggen
+      MB.UI.withAchievements(function (A) { A.renderGallery(gal); });
     }
+    // Reiter: Saisons/Ewige Tabelle · Meine Karten · Unique-Karten
+    let hofMainTab = (location.hash || '').slice(1) || 'history';
+    function setMainTab(t) {
+      if (!['history', 'cards', 'unique'].includes(t)) t = 'history';
+      hofMainTab = t;
+      document.querySelectorAll('.hof-mt').forEach(b => b.classList.toggle('active', b.dataset.mt === t));
+      ['history', 'cards', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
+      history.replaceState && history.replaceState(null, '', '#' + t);
+      if (t === 'cards') renderMyCards();
+      if (t === 'unique') MB.UI.withAchievements(function (A) { A.renderUniqueBoard && A.renderUniqueBoard(document.getElementById('uniqueBoard')); });
+    }
+    document.addEventListener('DOMContentLoaded', () => setMainTab(hofMainTab));
   </script>
 
   <div class="container">
-    <div class="card" id="myCardsCard" style="margin-bottom:12px; display:none;">
-      <h2>🃏 Meine Karten</h2>
-      <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Deine Sammelkarten — freigeschaltet durch Tippen, Stöbern und Mitmachen, unabhängig von deinen Turnierergebnissen. Neue Karten tauchen automatisch als Popup auf.</div>
-      <div id="myCardsGallery"></div>
+    <div class="hof-maintabs">
+      <button class="hof-mt active" data-mt="history" onclick="setMainTab('history')">📊 Saisons &amp; Ewige Tabelle</button>
+      <button class="hof-mt" data-mt="cards" onclick="setMainTab('cards')">🃏 Meine Karten</button>
+      <button class="hof-mt" data-mt="unique" onclick="setMainTab('unique')">💎 Unique-Karten</button>
     </div>
 
+    <div id="hofPane-cards" class="hidden">
+      <div class="card" id="myCardsCard" style="margin-bottom:12px;">
+        <h2>🃏 Meine Karten</h2>
+        <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Deine Sammelkarten — freigeschaltet durch Tippen, Stöbern und Mitmachen, unabhängig von deinen Turnierergebnissen. Neue Karten tauchen automatisch als Popup auf. Unique-Karten anderer Spieler siehst du aufgedeckt mit Besitzer.</div>
+        <div id="myCardsGallery"></div>
+      </div>
+    </div>
+
+    <div id="hofPane-unique" class="hidden">
+      <div class="card" style="margin-bottom:12px;">
+        <h2>💎 Unique-Karten</h2>
+        <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Jede dieser Karten gibt es genau einmal — wer sie zuerst verdient, behält sie für immer.</div>
+        <div id="uniqueBoard"></div>
+      </div>
+    </div>
+
+    <div id="hofPane-history">
     <div class="card" style="margin-bottom:12px;">
       <h2>Navigation</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -169,6 +199,8 @@
       <h2>Alle Spiele der Saison</h2>
       <div id="matchesWrap"></div>
     </div>
+
+    </div><!-- /hofPane-history -->
 
     <div class="footer">
       Hall of Fame liest lokale JSON-Dateien. Wenn etwas “leer” wirkt: prüfen ob die Datei existiert und per HTTP gehostet wird.

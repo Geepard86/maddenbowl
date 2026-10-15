@@ -1045,7 +1045,29 @@
       deduped.push(c);
     });
 
-    return deduped.slice(0, limit);
+    if (opts.strongestFirst) return deduped.slice(0, limit);
+    // Zufällige Auswahl aus den starken Treffern (statt immer der stärkste — sonst
+    // kommt ständig dieselbe Statistik, z.B. Stahlproduktion). Gewichtung nach |r|,
+    // kürzlich gezeigte Statistiken (localStorage) werden stark abgewertet.
+    let recent = [];
+    try { recent = JSON.parse(localStorage.getItem("mb_spurious_recent") || "[]"); } catch (e) { recent = []; }
+    const strong = deduped.filter((c) => Math.abs(c.r) >= 0.8);
+    const pool = (strong.length >= Math.max(limit, 4) ? strong : deduped).slice(0, 25);
+    const picked = [];
+    const usedStats = new Set();
+    while (picked.length < limit && pool.length) {
+      const w = pool.map((c) => Math.pow(Math.abs(c.r), 4) * (recent.includes(c.germanStatId) ? 0.08 : 1) * (usedStats.has(c.germanStatId) ? 0.05 : 1));
+      const total = w.reduce((a, b) => a + b, 0);
+      let x = Math.random() * total, k = 0;
+      while (k < w.length - 1 && (x -= w[k]) > 0) k++;
+      const c = pool.splice(k, 1)[0];
+      picked.push(c); usedStats.add(c.germanStatId);
+    }
+    try {
+      const next = [...picked.map((c) => c.germanStatId), ...recent.filter((id) => !usedStats.has(id))].slice(0, 12);
+      localStorage.setItem("mb_spurious_recent", JSON.stringify(next));
+    } catch (e) { /* egal */ }
+    return picked;
   }
 
   // ======================================================================

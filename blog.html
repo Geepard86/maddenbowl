@@ -21,6 +21,10 @@
 <style>
   .v2-article { display:block; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; align-items:flex-start; }
   .v2-article img.thumb { width:88px; height:66px; object-fit:cover; border-radius:8px; flex-shrink:0; background:#0007; }
+  .v2-article-table { width:100%; max-width:420px; border-collapse:collapse; font-size:0.82em; margin:6px 0 10px; }
+  .v2-article-table th { text-align:left; color:var(--v2-silver); font-weight:700; padding:3px 6px; border-bottom:1px solid var(--v2-border); }
+  .v2-article-table td { padding:3px 6px; border-bottom:1px solid rgba(255,255,255,.06); }
+  .v2-article-table tr:nth-child(2) td { color:var(--v2-gold); font-weight:700; }
   .v2-article-head { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
   .v2-article-headtext { min-width:0; flex:1; }
   .v2-article-body { min-width:0; }
@@ -96,6 +100,7 @@
     retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_WhoIs.png' },
     spurious:     { label: 'Analyse',         color: '#A855F7', image: 'assets/images/Blog_SpuriousCorrelations.png' },
     manual:       { label: 'Community',       color: '#94A3B8', image: 'assets/images/Blog_WhoIs.png' },
+    achievement:  { label: 'Sammelkarte',     color: '#ff7ad9', image: 'assets/images/Blog_WhoIs.png' },
   };
   function catMeta(kind) { return CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: 'assets/images/Blog_WhoIs.png' }; }
 
@@ -155,7 +160,7 @@
   const SHARE_BASE_URL = "https://altima-bowl.geepard86.workers.dev";
 
   function excerpt(text, n) {
-    const clean = (text || '').replace(/\[\[bild:\d+\]\]/g, ' ').replace(/\s+/g, ' ').trim();
+    const clean = (text || '').replace(/\[\[(bild:\d+|tabelle)\]\]/g, ' ').replace(/\s+/g, ' ').trim();
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
   }
   function formatDate(dateStr) {
@@ -244,6 +249,13 @@
     window.open(`https://wa.me/?text=${waText}`, '_blank');
   }
 
+  // Tabellen-Snapshot (Power Ranking) am Platzhalter [[tabelle]]
+  function standingsTableHtml(rows) {
+    if (!Array.isArray(rows) || !rows.length) return '';
+    return `<table class="v2-article-table"><tr><th>#</th><th>Spieler</th><th>S-N</th><th>Diff</th></tr>${rows.map(r =>
+      `<tr><td>${r.rank}</td><td>${r.name}</td><td>${r.w}-${r.l}</td><td>${r.diff > 0 ? '+' : ''}${r.diff}</td></tr>`).join('')}</table>`;
+  }
+
   function renderArticle(a) {
     const meta = catMeta(a.kind);
     const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
@@ -259,15 +271,16 @@
         <button onclick="removeArticle('${a.id}')">🗑️ Löschen</button>
       </div>` : '';
     const fullBody = (a.body || '');
-    const isLong = fullBody.replace(/\[\[bild:\d+\]\]/g, '').replace(/\s+/g, ' ').trim().length > 140;
+    const isLong = fullBody.replace(/\[\[(bild:\d+|tabelle)\]\]/g, '').replace(/\s+/g, ' ').trim().length > 140;
     const isExpanded = expandedIds.has(String(a.id));
     // Bilder (Memes, Korrelations-Charts) stehen dort, wo der Text sie per [[bild:N]]
     // erwähnt; nicht platzierte Bilder als Fallback ganz unten. Eingeklappt: Auszug + erstes Bild.
     let bodyHtml;
     if (isExpanded || !isLong) {
       const used = new Set();
-      const parts = fullBody.split(/(\[\[bild:\d+\]\])/);
+      const parts = fullBody.split(/(\[\[bild:\d+\]\]|\[\[tabelle\]\])/);
       bodyHtml = parts.map(part => {
+        if (part === '[[tabelle]]') return standingsTableHtml(a.data && a.data.standings);
         const m = part.match(/^\[\[bild:(\d+)\]\]$/);
         if (m) { const i = Number(m[1]); if (!imageUrls[i] || used.has(i)) return ''; used.add(i); return imgTag(imageUrls[i]); }
         const t = part.replace(/^\s*\n+|\n+\s*$/g, '');

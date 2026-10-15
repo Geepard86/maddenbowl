@@ -68,6 +68,8 @@
     "REGELN",
     "- Verwende AUSSCHLIESSLICH die gelieferten Fakten. Erfinde keine Zahlen, Ergebnisse, Spielzüge, Zitate, Verletzungen oder Vorgeschichten.",
     "  Zahlen (Ergebnisse, Bilanzen, Prozente, Jahre, Titel) nur so nennen, wie sie in den Fakten stehen.",
+    "  Spielergebnisse schreibst du mit Doppelpunkt (24:17), Bilanzen IMMER mit Bindestrich (3-1 = Siege-Niederlagen) — nie umgekehrt.",
+    "  Rechne nichts aus (keine Summen, Differenzen, Schnitte), was nicht schon in den Fakten steht.",
     "- Spielernamen und Teamnamen exakt wie angegeben. Jeder Spieler wird pro Text möglichst nur einmal als Hauptfigur eingeführt, dann gern mit Pronomen.",
     "- Der AUSGANGSTEXT zeigt, welche Aussagen der Beitrag mindestens enthalten soll. Übernimm seine wichtigen Inhalte und Pointen, formuliere aber frei und lebendiger.",
     "- Nichts erklären, was der Witz ist. Kein \"Fazit:\", keine Meta-Kommentare zum Schreiben, keine Anrede an den Leser außer, wenn es passt.",
@@ -225,7 +227,7 @@
   function playerLine(p, seeds) {
     const lost = (p.played || 0) - (p.wins || 0);
     const seed = seeds && seeds.get && seeds.get(p.name);
-    return `${seed ? "Seed " + seed + ": " : ""}${p.name}${p.team ? " (" + teamFull(p.team) + ")" : ""} – ${plural(p.wins || 0, "Sieg", "Siege")}, ${plural(lost, "Niederlage", "Niederlagen")}, Punktedifferenz ${(p.diff || 0) > 0 ? "+" : ""}${p.diff || 0}${p.pointsFor != null ? ", " + p.pointsFor + " erzielte Punkte" : ""}`;
+    return `${seed ? "Seed " + seed + ": " : ""}${p.name}${p.team ? " (" + teamFull(p.team) + ")" : ""} – Bilanz ${p.wins || 0}-${lost} (${plural(p.wins || 0, "Sieg", "Siege")}, ${plural(lost, "Niederlage", "Niederlagen")}), Punktedifferenz ${(p.diff || 0) > 0 ? "+" : ""}${p.diff || 0}${p.pointsFor != null ? ", " + p.pointsFor + " erzielte Punkte" : ""}`;
   }
 
   function badgeText(b) {
@@ -326,7 +328,13 @@
         const group = d.group;
         const ps = (d.players || []);
         L.push(`PORTRÄT-GRUPPE: ${group || "?"} – Spieler: ${ps.join(", ")}`);
-        if (state) L.push("", ...tournamentFacts(state, history));
+        // Vergangenheit der Porträtierten (Titel, Saisons, Vorjahresplatz)
+        const badges = safe(() => MB.computeRingIntroBadges(history, ps), new Map());
+        ps.forEach((n) => { const t = badgeText(badges.get(String(n).trim().toLowerCase())); if (t) L.push(`  ${n}: ${t}`); });
+        if (group === "champion") {
+          // Erscheint ganz früh im Turnier: KEIN Turnierverlauf, nur die Vorgeschichte
+          L.push("", "WICHTIG: Das Turnier hat gerade erst begonnen. Gehe NICHT auf Ergebnisse, Tabellenstand oder den bisherigen Turnierverlauf ein – nur auf die Vorgeschichte und die Rolle als Gejagter.");
+        } else if (state) L.push("", ...tournamentFacts(state, history));
       } else if (kind === "wrapup" || kind === "toiletbowl") {
         if (d.champion) L.push(`Champion: ${d.champion}, Vizemeister: ${d.runnerUp}`);
         if (d.winner) L.push(`Toilet-Bowl-Sieger (landet in der Endtabelle ganz unten, erhält den ersten Draft-Pick im nächsten Jahr): ${d.winner}; Verlierer (klettert in der Tabelle nach oben): ${d.loser}`);
@@ -362,12 +370,12 @@
   }
 
   // Bild-Platzhalter [[bild:N]] (blog.html setzt dort Meme/Chart ein)
-  const MARK_RE = /\[\[bild:\d+\]\]/g;
+  const MARK_RE = /\[\[(?:bild:\d+|tabelle)\]\]/g;
   function markersOf(body) { return [...new Set(String(body || "").match(MARK_RE) || [])]; }
   function markerHint(article) {
     const m = markersOf(article.body);
     if (!m.length) return "";
-    return `\nBILDER: Im Ausgangstext stehen Platzhalter (${m.join(", ")}) für Bilder (Memes bzw. Diagramme). Übernimm JEDEN Platzhalter unverändert als eigene Zeile an die Stelle deines Textes, an der das jeweilige Bild thematisch passt (direkt nach dem Absatz, der es erwähnt).`;
+    return `\nBILDER: Im Ausgangstext stehen Platzhalter (${m.join(", ")}) für Bilder (Memes bzw. Diagramme) bzw. die Tabelle ([[tabelle]]). Übernimm JEDEN Platzhalter unverändert als eigene Zeile an die Stelle deines Textes, an der das jeweilige Bild thematisch passt (direkt nach dem Absatz, der es erwähnt).`;
   }
   // Fehlende Platzhalter ans Ende hängen, doppelte entfernen
   function keepMarkers(newBody, article) {
@@ -436,7 +444,10 @@
     const isKnown = (n) => new RegExp("(^|[^\\d])" + n.replace(/[.,]/g, "[.,]") + "([^\\d]|$)").test(known);
     const nums = body.match(/\d+(?:[.,]\d+)?/g) || [];
     const bad = [...new Set(nums.filter((n) => !isKnown(n) && !(Number(n.replace(",", ".")) <= 12 && !/[.,]/.test(n))))];
-    const badScores = (body.match(/\b\d{1,3}\s*:\s*\d{1,3}\b/g) || []).filter((sc) => !new RegExp(sc.replace(/\s*:\s*/, "\\s*:\\s*")).test(known));
+    // Ergebnis "a:b" gilt als bekannt, wenn es (auch umgedreht, "b:a") oder als
+    // Bilanz "a-b" in den Fakten steht — Modelle schreiben Bilanzen gern mit Doppelpunkt.
+    const knownPair = (a, b) => [`${a}\\s*[:\\-–]\\s*${b}`, `${b}\\s*[:\\-–]\\s*${a}`].some((re) => new RegExp("(^|[^\\d])" + re + "([^\\d]|$)").test(known));
+    const badScores = (body.match(/\b\d{1,3}\s*:\s*\d{1,3}\b/g) || []).filter((sc) => { const [a, b] = sc.split(/\s*:\s*/); return !knownPair(a, b); });
     if (badScores.length) problems.push("erfundenes Ergebnis: " + [...new Set(badScores)].slice(0, 3).join(", "));
     else if (bad.length >= 2) problems.push("Zahlen nicht in den Fakten: " + bad.slice(0, 5).join(", "));
     // Spielernamen: mindestens ein bekannter Name muss vorkommen, wenn der Ausgangstext Namen hatte.
@@ -472,10 +483,27 @@
     return { raw, model: (json && json.model) || model, usage: json && json.usage };
   }
 
+  // Zweiter, „sicherer“ Durchgang nach einem Verwerfen: nur den Baustein-Text
+  // stilistisch überarbeiten, ohne neue Fakten — das Modell muss nichts erfinden.
+  function buildPolishMessages(article, ctx, settings) {
+    const base = buildMessages(article, ctx, settings);
+    const user = [
+      "Hier ist ein fertiger Blog-Beitrag. Überarbeite ihn sprachlich: natürlicher, lebendiger, mit etwas mehr Witz.",
+      "Du darfst Satzbau, Übergänge und Reihenfolge der Absätze variieren.",
+      "STRENG: Übernimm alle Namen, Zahlen, Ergebnisse und Bilanzen exakt so, wie sie dastehen. Füge KEINE neuen Zahlen, Ergebnisse oder Fakten hinzu und lass keine weg.",
+      "Format wie gewohnt: erste Zeile „TITEL: …“, dann der Text.",
+      markerHint(article),
+      "",
+      `TITEL: ${stripHtml(article.title)}`,
+      stripHtml(article.body),
+    ].join("\n");
+    return { messages: [base.messages[0], { role: "user", content: user }], facts: base.facts };
+  }
+
   // Einzelaufruf mit Timeout: liefert Text + Prüfergebnis, wirft bei API-Fehlern.
-  async function generate({ key, model, article, ctx, temperature, maxTokens, signal, timeoutSec, settings }) {
+  async function generate({ key, model, article, ctx, temperature, maxTokens, signal, timeoutSec, settings, polish }) {
     if (!key) throw new Error("Kein OpenRouter-API-Key angegeben.");
-    const { messages, facts } = buildMessages(article, ctx, settings);
+    const { messages, facts } = polish ? buildPolishMessages(article, ctx, settings) : buildMessages(article, ctx, settings);
     const ctrl = !signal && typeof AbortController !== "undefined" ? new AbortController() : null;
     const timer = ctrl ? setTimeout(() => ctrl.abort(), (timeoutSec || 120) * 1000) : null;
     try {
@@ -505,7 +533,18 @@
           const a = { model: out.model, seconds: (Date.now() - t0) / 1000, problems: out.problems, usage: out.usage };
           attempts.push(a); if (onAttempt) onAttempt(a, out);
           if (!out.problems.length) return { out, attempts, chain };
-          break; // inhaltlich verworfen -> nächstes Modell, keine Wiederholung
+          // Inhaltlich verworfen -> zweiter Durchgang mit demselben Modell: Baustein-Text nur überarbeiten
+          const t1 = Date.now();
+          try {
+            const pol = await generate({ key, model, article, ctx, temperature: Math.min(s.temperature, 0.7), timeoutSec: s.timeoutSec, settings: s, polish: true });
+            const b = { model: pol.model + " (Überarbeitung)", seconds: (Date.now() - t1) / 1000, problems: pol.problems, usage: pol.usage };
+            attempts.push(b); if (onAttempt) onAttempt(b, pol);
+            if (!pol.problems.length) return { out: pol, attempts, chain };
+          } catch (e2) {
+            const b = { model: model + " (Überarbeitung)", seconds: (Date.now() - t1) / 1000, error: e2.message, status: e2.status };
+            attempts.push(b); if (onAttempt) onAttempt(b, null);
+          }
+          break; // auch die Überarbeitung verworfen -> nächstes Modell
         } catch (e) {
           const a = { model, seconds: (Date.now() - t0) / 1000, error: e.message, status: e.status };
           attempts.push(a); if (onAttempt) onAttempt(a, null);
@@ -553,6 +592,6 @@
     getSettings, loadSettings, saveSettings, defaultSettings,
     getKey, setKey, getLog, clearLog,
     fetchModels, pickAutoModels, resolveModels, costCents, fmtCost, scoreModel, EST_IN_TOKENS, EST_OUT_TOKENS,
-    factsFor, buildMessages, generate, generateWithFallback, maybeRewrite, validate, cleanOutput,
+    factsFor, buildMessages, buildPolishMessages, generate, generateWithFallback, maybeRewrite, validate, cleanOutput,
   };
 })(window);

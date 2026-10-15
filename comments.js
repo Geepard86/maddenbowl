@@ -85,9 +85,23 @@
     });
     const byPlayer = new Map();
     ok.forEach((c) => { const prev = byPlayer.get(c.player_name); if (!prev || c.body.length > prev.body.length) byPlayer.set(c.player_name, c); });
-    const picks = [...byPlayer.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, max || 2);
+    // die neuesten auswählen, dann chronologisch sortieren (für „… legte nach“)
+    const picks = [...byPlayer.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, max || 2)
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     return { total: (comments || []).length, picks };
   }
 
-  global.MB.Comments = { fetchForArticles, add, remove, countByPlayer, fetchRecent, sanitizeBody, pickHighlights, isTableMissing: () => tableMissing, MAX_LEN };
+  // Titel der Beiträge, unter denen die Kommentare stehen (für den Kontext im Power Ranking)
+  async function attachArticleTitles(picks) {
+    const c = sb(); if (!c || !picks || !picks.length) return picks;
+    const ids = [...new Set(picks.map((p) => String(p.article_id)))];
+    try {
+      const { data } = await c.from("blog_articles").select("id,title,kind").in("id", ids);
+      const map = new Map((data || []).map((r) => [String(r.id), r]));
+      picks.forEach((p) => { const a = map.get(String(p.article_id)); if (a) { p.article_title = String(a.title || "").replace(/<[^>]+>/g, "").trim(); p.article_kind = a.kind; } });
+    } catch (e) { /* ohne Titel */ }
+    return picks;
+  }
+
+  global.MB.Comments = { attachArticleTitles, fetchForArticles, add, remove, countByPlayer, fetchRecent, sanitizeBody, pickHighlights, isTableMissing: () => tableMissing, MAX_LEN };
 })(window);

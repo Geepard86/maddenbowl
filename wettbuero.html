@@ -581,7 +581,9 @@
       ? `<div class="hint">Sperrt voraussichtlich, sobald ${preview.player}s erstes Spiel läuft (ca. ab ${preview.anchorDate.getHours().toString().padStart(2,'0')}:${preview.anchorDate.getMinutes().toString().padStart(2,'0')} Uhr).</div>`
       : `<div class="hint">Offen, bis jeder Spieler mindestens ein Spiel hatte.</div>`;
 
-    const opt = (selectedName) => names.map(n => `<option value="${n}" ${n === selectedName ? 'selected' : ''}>${n}</option>`).join('');
+    // Kein vorausgewählter Spieler: leere Option „— wählen —“, solange noch nicht getippt
+    const opt = (selectedName) => `<option value="" ${selectedName ? '' : 'selected'} disabled>— Spieler wählen —</option>` +
+      names.map(n => `<option value="${n}" ${n === selectedName ? 'selected' : ''}>${n}</option>`).join('');
     return `
       ${previewHtml}
       <label>🏆 Turniersieger (5 Punkte)</label>
@@ -599,13 +601,13 @@
     const champion = document.getElementById('seasonChampion').value;
     const runnerUp = document.getElementById('seasonRunnerUp').value;
     const toiletBowl = document.getElementById('seasonToiletBowl').value;
+    if (!champion && !runnerUp && !toiletBowl) { alert('Bitte mindestens einen Tipp auswählen.'); return; }
+    if (champion && runnerUp && champion === runnerUp) { alert('Turniersieger und Zweiter können nicht derselbe Spieler sein.'); return; }
     try {
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'champion', champion);
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'runnerUp', runnerUp);
-      await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'toiletBowlWinner', toiletBowl);
-      cache.myPicksByKey.set('season:champion', champion);
-      cache.myPicksByKey.set('season:runnerUp', runnerUp);
-      cache.myPicksByKey.set('season:toiletBowlWinner', toiletBowl);
+      // nur gewählte Felder speichern
+      if (champion) { await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'champion', champion); cache.myPicksByKey.set('season:champion', champion); }
+      if (runnerUp) { await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'runnerUp', runnerUp); cache.myPicksByKey.set('season:runnerUp', runnerUp); }
+      if (toiletBowl) { await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'season', 'toiletBowlWinner', toiletBowl); cache.myPicksByKey.set('season:toiletBowlWinner', toiletBowl); }
       renderDashboardHtml(document.getElementById('app'));
     } catch (e) { alert('Fehler: ' + e.message); }
   }
