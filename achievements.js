@@ -119,6 +119,11 @@
     if (loadedFor === name) return;
     if (loading) return loading;
     loading = (async () => {
+      // Admin-Reset: lokale Kopien, die älter als der Reset sind, verwerfen
+      // (sonst würden sie beim nächsten Laden wieder in die Datenbank geschrieben).
+      const resetAt = await getResetAt();
+      const ek = `mb_ach_epoch_${name}`;
+      try { if (resetAt && (localStorage.getItem(ek) || "") < resetAt) { localStorage.removeItem(ukey(name)); localStorage.removeItem(pkey(name)); localStorage.setItem(ek, resetAt); } } catch (e) { /* egal */ }
       unlocked = new Map(); queue = []; progress = lsGet(pkey(name), {});
       const loc = lsGet(ukey(name), {}); Object.keys(loc).forEach((k) => unlocked.set(k, loc[k]));
       const c = sb();
@@ -138,6 +143,28 @@
       unlocked.forEach((v, id) => { if (!v.seen && BY_ID.has(id)) queue.push(id); });
     })().finally(() => { loading = null; });
     return loading;
+  }
+  let _resetAt;
+  async function getResetAt() {
+    if (_resetAt !== undefined) return _resetAt;
+    try { _resetAt = (global.MB.getAppConfig ? await global.MB.getAppConfig("achievements_reset_at") : null) || null; } catch (e) { _resetAt = null; }
+    return _resetAt;
+  }
+  // Admin: ALLE Karten aller Spieler zurücksetzen (inkl. Unique-Karten und Fortschritt).
+  async function resetAll() {
+    const c = sb(); if (!c) throw new Error("Keine Datenbankverbindung.");
+    const out = {};
+    for (const [table, col] of [["player_achievements", "player_name"], ["player_progress", "player_name"], ["achievement_firsts", "achievement_id"]]) {
+      const { error, count } = await c.from(table).delete({ count: "exact" }).neq(col, "");
+      if (error && !missing(error)) throw new Error(`${table}: ${error.message}`);
+      out[table] = error ? 0 : (count || 0);
+    }
+    const now = new Date().toISOString();
+    if (global.MB.setAppConfig) await global.MB.setAppConfig("achievements_reset_at", now);
+    _resetAt = now;
+    try { Object.keys(localStorage).filter((k) => /^mb_(achievements_|ach_progress_|ach_epoch_|teams_seen)/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
+    unlocked = new Map(); progress = {}; firsts = new Map(); queue = []; loadedFor = null;
+    return out;
   }
   async function persistUnlock(name, id, v) {
     lsSet(ukey(name), Object.fromEntries(unlocked));
@@ -471,5 +498,5 @@
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

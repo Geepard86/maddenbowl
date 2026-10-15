@@ -349,7 +349,7 @@
     return {
       duration, text: line,
       play: async () => {
-        _emitSpeak({ type: "start", role: "announcer", text: line });
+        _emitSpeak({ type: "start", role: "announcer", text: ringDisplay(line, badge) });
         await playAudioUrl(url);
         _emitSpeak({ type: "end", role: "announcer" });
       },
@@ -361,7 +361,15 @@
     const line = buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId: settings.modelId });
     if (!line) return;
     const voiceId = settings.provider === "elevenlabs" ? (settings.voiceIdAnnouncer || settings.voiceIdResult) : null;
-    await speakSequence([{ text: line, voiceId, role: "announcer" }]);
+    await speakSequence([{ text: line, voiceId, role: "announcer", display: ringDisplay(line, badge) }]);
+  }
+
+  // Untertitel: gedehnten Namen ("Tiiiiim") wieder normal anzeigen — gesprochen wird gedehnt.
+  function ringDisplay(line, badge) {
+    if (!badge) return line;
+    const n = ringName(badge.name);
+    const stretched = stretchName(n);
+    return stretched !== n ? String(line).split(stretched).join(n) : line;
   }
 
   // ======================================================================
@@ -1202,7 +1210,7 @@
         if (url) {
           if (!gateWaited && opts && opts.gate) { gateWaited = true; try { await opts.gate; } catch (e) {} }
           const role = seg.role || _roleForVoice(seg.voiceId, settings);
-          _emitSpeak({ type: "start", role, text: seg.text });
+          _emitSpeak({ type: "start", role, text: seg.display || seg.text });
           await playAudioUrl(url);
           _emitSpeak({ type: "end", role });
         }

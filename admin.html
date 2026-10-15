@@ -1746,15 +1746,21 @@ document.querySelectorAll('.draft-row').forEach(row => {
       return a;
     }
 
-    function createRandomTournament() {
+    async function createRandomTournament() {
       const count = parseInt(document.getElementById('playerCount').value);
-      if (!confirm(`Zufalls-Turnier mit ${count} Testspielern erstellen?\nNamen, Teams und Reihenfolge werden komplett zufällig vergeben — nur für Testzwecke.`)) return;
+      // Echte Spieler aus der Historie (damit Porträts, Rekorde, Ansagen etc. realistisch
+      // getestet werden können); nur wenn zu wenige bekannt sind, mit Testnamen auffüllen.
+      let real = [];
+      try { if (!history || !history.players || !history.players.size) history = await MB.loadAndBuildHistory(); } catch (e) { /* ohne Historie */ }
+      try { real = Array.from((history && history.players) || []).map(String).filter(Boolean); } catch (e) { real = []; }
+      if (!confirm(`Zufalls-Turnier mit ${count} Spielern erstellen?\n${real.length ? `Spieler werden zufällig aus ${real.length} echten Teilnehmern der Historie gezogen` : 'Keine Historie gefunden – es werden Testnamen verwendet'}; Teams und Reihenfolge komplett zufällig — nur für Testzwecke.`)) return;
 
       // Draft-Board für die gewählte Spieleranzahl aufbauen (liefert die
       // pName{i}/pTeam{i}-Inputs, die startTournament() danach ausliest).
       initSetupInputs(count);
 
-      const names = shuffleArray(RANDOM_TEST_NAMES).slice(0, count);
+      const names = shuffleArray(real).slice(0, count);
+      shuffleArray(RANDOM_TEST_NAMES).forEach(n => { if (names.length < count && !names.includes(n)) names.push(n); });
       while (names.length < count) names.push(`Testspieler ${names.length + 1}`);
       const teamIds = shuffleArray(nflTeams.map(t => t.id)).slice(0, count);
 
@@ -4416,6 +4422,7 @@ function renderRanking() {
               <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
               <button style="margin-top:8px;" onclick="testImgflip()">Testen</button>
               <button class="btn-secondary" style="margin-top:8px;" onclick="openAchievementTest()">🃏 Sammelkarten testen (alle Karten ansehen)</button>
+              <button class="btn-secondary" style="margin-top:8px; background:var(--nfl-red);" onclick="resetAllAchievements()">♻️ Alle Sammelkarten aller Spieler zurücksetzen</button>
           <button class="btn-secondary" style="margin-top:8px;" onclick="openMemeTest()">🧪 Memes testen (${MB.Records.getMemeTriggers().length} Auslöser, ${MB.Records.buildTestMemeJobs().length} Vorlagen)</button>
               <div id="imgflipTestResult" style="margin-top:8px;"></div>
             </div>`;
@@ -4558,6 +4565,16 @@ function renderRanking() {
     function openAchievementTest() {
       document.getElementById('achTestModal').classList.remove('hidden');
       MB.UI.withAchievements(function (A) { A.renderCatalog(document.getElementById('achTestBody')); });
+    }
+    async function resetAllAchievements() {
+      if (!confirm('Wirklich ALLE Sammelkarten aller Spieler zurücksetzen?\n\nGelöscht werden freigeschaltete Karten, Fortschritt (Zähler) und alle vergebenen Unique-Karten — für alle Spieler, unwiderruflich. Blog-Beiträge bleiben bestehen.')) return;
+      if (prompt('Zur Bestätigung bitte RESET eintippen:') !== 'RESET') return;
+      MB.UI.withAchievements(async function (A) {
+        try {
+          const r = await A.resetAll();
+          alert(`Zurückgesetzt: ${r.player_achievements} Karten, ${r.player_progress} Fortschritts-Einträge, ${r.achievement_firsts} Unique-Karten.\nLokale Kopien in anderen Browsern werden beim nächsten Seitenaufruf automatisch verworfen.`);
+        } catch (e) { alert('Zurücksetzen fehlgeschlagen: ' + e.message); }
+      });
     }
     function closeAchievementTest() { document.getElementById('achTestModal')?.classList.add('hidden'); }
 
