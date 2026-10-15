@@ -749,6 +749,7 @@ function isFinished(match) { return MB.isFinished(match); }
     }
 
     function addMinutes(time, mins) { return MB.addMinutes(time, mins); }
+    function timeToMin(t) { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); }
     // Live-Kickoff-Zeit (verschiebt sich mit Verzug/Vorsprung bis zum Finale), sonst Planzeit.
     function liveKickoff(matchId, fallback) {
       try { const e = MB.computeLiveKickoffSchedule(state).byMatchId.get(matchId); return e ? e.time : fallback; } catch (e) { return fallback; }
@@ -1859,7 +1860,7 @@ const ringsHtml = rings > 0
       document.getElementById('groupMatches').innerHTML = state.slots.map((slot, i) => {
         // Slot-Zeit: Live-Zeit des ersten noch offenen Spiels dieses Slots, sonst Planzeit
         const slotStart = matchCounter;
-        const openTimes = slot.map((m, k) => (isFinished(m) ? null : (liveGroup.byMatchId.get(`g-${slotStart + k}`) || {}).time)).filter(Boolean).sort();
+        const openTimes = slot.map((m, k) => (isFinished(m) ? null : (liveGroup.byMatchId.get(`g-${slotStart + k}`) || {}).time)).filter(Boolean).sort((a, b) => timeToMin(a) - timeToMin(b));
         const slotTime = openTimes.length ? openTimes[0] : currentTime;
         let html = `<div class="time-slot"><div class="slot-header"><span>${timeWithPlan(slotTime, currentTime)}</span></div>`;
 
@@ -2422,7 +2423,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
         if (!match) return "";
         const bye = isByeMatch(match);
         const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !isFinished(match);
-        const time = liveKickoff('p-' + match.id, addMinutes(groupEndTime, match.offset));
+        const time = liveKickoff('p-' + match.id, MB.computePlayoffTimes(state).byId[match.id] || groupEndTime);
         const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
 
         const hasScore = match.s1 !== null && match.s2 !== null;
@@ -2452,7 +2453,7 @@ if (tb && tb.s1 === null && tb.s2 === null) {
       let wcSummaryHtml = `<div class="wildcard-summary">`;
       [m[0], m[1], m[2], m[3]].forEach((match, i) => {
         if (match.p1) {
-          const time = liveKickoff('p-' + match.id, addMinutes(groupEndTime, match.offset));
+          const time = liveKickoff('p-' + match.id, MB.computePlayoffTimes(state).byId[match.id] || groupEndTime);
           const stadium = (i % 2 === 0) ? state.config.s1 : state.config.s2;
           const hasScore = match.s1 !== null && match.s2 !== null;
           const w1 = hasScore && match.s1 > match.s2;
@@ -2547,26 +2548,34 @@ if (tb && tb.s1 === null && tb.s2 === null) {
   // isByeMatch: globaler Wrapper (siehe oben) wird verwendet — keine lokale
   // Schatten-Kopie mehr nötig.
 
-  const playoffGroups = state.playoffMatches.reduce((groups, match, i) => {
-    const offset = match.offset || 0;
-    if (!groups[offset]) groups[offset] = [];
-    groups[offset].push({ match, index: i });
-    return groups;
-  }, {});
+  // Gruppierung nach Playoff-Session (Wildcard, Elim. R1, Upper Semi, ...) — dieselbe
+  // Quelle wie Playoff-Picture und Spieler-Spielplan (MB.computePlayoffTimes().bySession,
+  // bye-bereinigt). match.offset wird NICHT mehr genutzt: der Wert ist nach dem Laden aus
+  // der DB 0 und führte dazu, dass fast alle Spiele in einem Block landeten.
+  const timesInfo = MB.computePlayoffTimes(state);
+  const groupEndTime = timesInfo.groupEndTime;
+  const usedIds = new Set();
+  const sessionGroups = timesInfo.bySession.map(sess => ({
+    name: sess.session,
+    planned: sess.start,
+    items: sess.ids.map(id => {
+      const idx = state.playoffMatches.findIndex(x => x.id === id);
+      if (idx < 0) return null;
+      usedIds.add(id);
+      return { match: state.playoffMatches[idx], index: idx };
+    }).filter(Boolean),
+  })).filter(g => g.items.length);
+  // Sicherheitsnetz: Spiele, die in keiner Session vorkommen, nicht verschlucken
+  const leftovers = state.playoffMatches.map((match, index) => ({ match, index })).filter(({ match }) => !usedIds.has(match.id));
+  if (leftovers.length) sessionGroups.push({ name: 'Playoff-Phase', planned: timesInfo.groupEndTime, items: leftovers });
 
-  const groupEndTime = MB.computePlayoffTimes(state).groupEndTime;
-
-  document.getElementById('playoffSections').innerHTML = Object.keys(playoffGroups)
-    .sort((a, b) => parseInt(a) - parseInt(b))
-    .map(offset => {
-      const plannedSlotTime = addMinutes(groupEndTime, parseInt(offset));
-      const matchesInSlot = playoffGroups[offset];
-      const liveSlotTimes = matchesInSlot.filter(({ match }) => !isFinished(match) && !isByeMatch(match)).map(({ match }) => liveKickoff('p-' + match.id, plannedSlotTime)).sort();
+  document.getElementById('playoffSections').innerHTML = sessionGroups
+    .map(group => {
+      const plannedSlotTime = group.planned;
+      const matchesInSlot = group.items;
+      const liveSlotTimes = matchesInSlot.filter(({ match }) => !isFinished(match) && !isByeMatch(match)).map(({ match }) => liveKickoff('p-' + match.id, plannedSlotTime)).sort((a, b) => timeToMin(a) - timeToMin(b));
       const time = liveSlotTimes.length ? liveSlotTimes[0] : plannedSlotTime;
-      const roundName =
-        matchesInSlot[0].match.session ||
-        matchesInSlot[0].match.phase ||
-        "Playoff-Phase";
+      const roundName = group.name || matchesInSlot[0].match.session || matchesInSlot[0].match.phase || "Playoff-Phase";
 
       let html = `
         <div class="time-slot">

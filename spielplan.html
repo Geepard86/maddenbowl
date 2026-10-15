@@ -274,7 +274,8 @@
   function buildPlayoffPictureHtml() {
     const m = state.playoffMatches;
     if (!m || !m.length) return '<div class="empty">Playoffs noch nicht gestartet.</div>';
-    const groupEndTime = MB.computePlayoffTimes(state).groupEndTime;
+    const playoffTimes = MB.computePlayoffTimes(state);
+    const groupEndTime = playoffTimes.groupEndTime;
     const liveSchedule = MB.computeLiveKickoffSchedule(state);
     const seedByName = MB.getGroupSeedsFinal(state);
     const playoffLabels = MB.playoffLabels;
@@ -295,7 +296,7 @@
       const bye = MB.isByeMatch(match);
       const active = !bye && match.p1 && match.p2 && match.p2.id !== -1 && !MB.isFinished(match);
       const liveEntry = liveSchedule.byMatchId.get(`p-${match.id}`);
-      const time = liveEntry ? liveEntry.time : MB.addMinutes(groupEndTime, match.offset);
+      const time = liveEntry ? liveEntry.time : (playoffTimes.byId[match.id] || groupEndTime);
       const stadium = (idx % 2 === 0) ? state.config.s1 : state.config.s2;
       const hasScore = match.s1 !== null && match.s2 !== null;
       const w1 = hasScore && match.s1 > match.s2, w2 = hasScore && match.s2 > match.s1;
@@ -403,9 +404,11 @@
 
   function renderBody() {
     let inner = '';
+    // Abweichung vom Zeitplan (Verzug/Vorsprung) gut sichtbar über Regular Season und Playoffs
+    const scheduleBadge = MB.renderScheduleStatusBadge(state, { style: 'margin-bottom:10px;' });
     if (activeTab === 'tabelle') inner = `<div class="v2-card"><div class="v2-card-title">📊 Tabelle</div>${renderStandings()}</div>`;
-    else if (activeTab === 'spielplan') inner = `<div class="v2-card"><div class="v2-card-title">📅 Regular Season</div>${renderGroupSchedule()}</div>`;
-    else if (activeTab === 'playoff') inner = `<div class="v2-card"><div class="v2-card-title">🏆 Playoff Picture <button class="btn-secondary" style="margin-left:auto;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></div>${renderBracket()}</div>`;
+    else if (activeTab === 'spielplan') inner = scheduleBadge + `<div class="v2-card"><div class="v2-card-title">📅 Regular Season</div>${renderGroupSchedule()}</div>`;
+    else if (activeTab === 'playoff') inner = scheduleBadge + `<div class="v2-card"><div class="v2-card-title">🏆 Playoff Picture <button class="btn-secondary" style="margin-left:auto;" onclick="showPlayoffPictureModal()">🖼️ Echtes Bild</button></div>${renderBracket()}</div>`;
     else if (activeTab === 'titel') inner = `<div class="v2-card"><div class="v2-card-title">🎯 Titelchancen</div>${renderTitleOdds()}</div>`;
     document.getElementById('mbTabContent').innerHTML = inner;
   }
