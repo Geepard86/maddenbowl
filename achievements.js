@@ -420,7 +420,7 @@
   function onLogout() { setPlayer(null); }
   async function init(state) {
     stateRef = state || stateRef;
-    const name = global.MB.UI && global.MB.UI.currentPlayer ? global.MB.UI.currentPlayer() : null;
+    const name = global.MB.UI && global.MB.UI.currentUser ? global.MB.UI.currentUser() : null;
     if (name !== player) { pageTracked = false; await setPlayer(name); }
     if (player && stateRef) evaluateTipps(stateRef);
   }

@@ -270,9 +270,90 @@
     const prefix = isFirstPick ? RING_INTRO_FIRST_PICK_PREFIX : (isLastPick ? RING_INTRO_LAST_PICK_PREFIX : pick(RING_INTRO_PREFIXES));
     const announcement = ringAnnouncementFor(badge);
     if (isV3Model(modelId)) {
-      return `[dramatic tone][slows down] ${prefix}\n[building excitement] ${announcement}\n[excited][shouts] ${n}!`;
+      // Box-Ansager: Einleitung getragen, Ankündigung steigernd, dann der Name
+      // lang gezogen ("Maaaarkuuuuus!") — mehrere Varianten, damit nicht jeder gleich klingt.
+      const shout = stretchName(n);
+      const big = isFirstPick || isLastPick || badge.isDefendingChampion || badge.isSoleRecordChampion;
+      const V3 = [
+        () => `[booming voice][slow] ${prefix}\n[building intensity] ${announcement}\n[long pause][shouting at full volume] ${shout}!`,
+        () => `[deep, theatrical voice] ${prefix}\n[dramatic pause][rising] ${announcement}\n[pause][roaring, stretching every syllable] ${shout}!`,
+        () => `[announcer voice][slows down] ${prefix}\n[intense whisper] ${announcement}\n[sudden explosion of energy][shouting] ${shout}!`,
+      ];
+      if (big) V3.push(() => `[booming voice] Meine Damen und Herren!\n[slow, theatrical] ${prefix}\n[building to a climax] ${announcement}\n[long pause][roaring at full volume, holding the name] ${shout}!`);
+      return pick(V3)();
     }
     return `${prefix}\n${announcement}\n${n}!`;
+  }
+
+  // Name wie ein Box-Ansager ziehen: Vokal der ersten Silbe etwas, letzter Vokal stark
+  // gedehnt ("Markus" -> "Maarkuuuuus", "Tim" -> "Tiiiiim"). Spitzname bleibt normal,
+  // nur der eigentliche Name (letztes Wort) wird gedehnt.
+  function stretchName(full) {
+    const parts = String(full || "").trim().split(/\s+/);
+    const last = parts.pop() || "";
+    const vowels = [...last.matchAll(/[aeiouäöüyAEIOUÄÖÜ]+/g)];
+    let out = last;
+    if (vowels.length === 1) {
+      const v = vowels[0]; out = last.slice(0, v.index) + v[0] + v[0].slice(-1).toLowerCase().repeat(5) + last.slice(v.index + v[0].length);
+    } else if (vowels.length >= 2) {
+      const a = vowels[0], z = vowels[vowels.length - 1];
+      out = last.slice(0, a.index) + a[0] + a[0].slice(-1).toLowerCase().repeat(2) + last.slice(a.index + a[0].length, z.index) + z[0] + z[0].slice(-1).toLowerCase().repeat(5) + last.slice(z.index + z[0].length);
+    }
+    return [...parts, out].join(" ");
+  }
+
+  // Eleven v3: Zeilen OHNE eigene Tags bekommen dezente Emotions-Tags passend zum Inhalt
+  // (Ausrufe -> [excited], Fragen -> [curious], Toilet Bowl -> [chuckles], Rekorde -> [impressed]).
+  function v3Decorate(text) {
+    const t = String(text || "");
+    if (!t || /\[[a-z][^\]]*\]/i.test(t)) return t;
+    let used = 0;
+    return t.replace(/[^.!?\n]+[.!?]*/g, (sent) => {
+      if (used >= 2 || !sent.trim()) return sent;
+      let tag = "";
+      if (/toilet|klo|schüssel/i.test(sent)) tag = "[chuckles]";
+      else if (/rekord|highscore|allzeit/i.test(sent)) tag = "[impressed]";
+      else if (/!\s*$/.test(sent)) tag = "[excited]";
+      else if (/\?\s*$/.test(sent)) tag = "[curious]";
+      if (!tag) return sent;
+      used++;
+      return sent.replace(/^(\s*)/, `$1${tag} `);
+    });
+  }
+
+  // Ring-Ansage VORAB generieren und die exakte Audiodauer ermitteln — damit
+  // die Draft-Bühne den Einlauf des Spielers auf die Ansage abstimmen kann.
+  // Liefert null, wenn ElevenLabs nicht aktiv ist bzw. die Generierung scheitert.
+  // Rückgabe: { duration (s), text, play() -> Promise (spielt + Sprech-Events) }
+  async function prepareRingIntro(name, badge, isFirstPick, isLastPick) {
+    const settings = getTtsSettings();
+    const voiceId = settings.provider === "elevenlabs" ? (settings.voiceIdAnnouncer || settings.voiceIdResult) : null;
+    if (!settings.apiKey || !voiceId) return null;
+    const line = buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId: settings.modelId });
+    if (!line) return null;
+    let url;
+    try { url = await fetchElevenLabsAudioUrl(line, { apiKey: settings.apiKey, voiceId, modelId: settings.modelId }); }
+    catch (e) { console.warn("Ring-Ansage konnte nicht vorab generiert werden:", e); return null; }
+    const duration = await new Promise((resolve) => {
+      const a = new Audio(); let done = false;
+      const fin = (v) => { if (!done) { done = true; resolve(v); } };
+      a.preload = "metadata";
+      a.onloadedmetadata = () => {
+        if (isFinite(a.duration) && a.duration > 0) fin(a.duration);
+        else { a.currentTime = 1e7; a.ontimeupdate = () => { a.ontimeupdate = null; fin(isFinite(a.duration) ? a.duration : 0); }; }
+      };
+      a.onerror = () => fin(0);
+      setTimeout(() => fin(0), 4000);
+      a.src = url;
+    });
+    return {
+      duration, text: line,
+      play: async () => {
+        _emitSpeak({ type: "start", role: "announcer", text: line });
+        await playAudioUrl(url);
+        _emitSpeak({ type: "end", role: "announcer" });
+      },
+    };
   }
 
   async function announceRingIntro(name, badge, isFirstPick, isLastPick) {
@@ -1021,9 +1102,9 @@
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json", "Accept": "audio/mpeg" },
       body: JSON.stringify({
-        text: formatPacingForModel(sanitizeForSpeech(text), modelId),
+        text: formatPacingForModel(isV3Model(modelId) ? v3Decorate(sanitizeForSpeech(text)) : sanitizeForSpeech(text), modelId),
         model_id: modelId || "eleven_multilingual_v2",
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        voice_settings: { stability: (isV3Model(modelId) && /\[(booming|roaring|shouting|deep, theatrical|announcer)/i.test(text)) ? 0.0 : 0.5, similarity_boost: 0.75 },
       }),
     });
     if (!res.ok) {
@@ -1538,5 +1619,6 @@
     buildRingIntroLine, announceRingIntro, buildTeamPickLine, announceTeamPick,
     setNicknames, getNickname,
     onSpeak,
+    prepareRingIntro,
   };
 })(window);

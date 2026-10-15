@@ -1589,7 +1589,8 @@
     buildSongArticle: withFacts(buildSongArticle, (milestone, url, c) => ({ milestone, state: c && c.state, history: c && c.history })),
     buildFinalsArticle: withFacts(buildFinalsArticle, (record, c) => ({ record, state: c && c.state, history: c && c.history })),
     buildChampionArticle: withFacts(buildChampionArticle, (record, c) => ({ record, state: c && c.state, history: c && c.history })),
-    buildSpuriousArticle,
+    // Kandidat mitgeben (nicht gespeichert) — braucht der KI-Schreiber für Werte/Jahre/r
+    buildSpuriousArticle: function (candidate) { const a = buildSpuriousArticle(candidate); if (a) a._candidate = candidate; return a; },
     buildPortraitArticle: withFacts(buildPortraitArticle, (group, state, history) => ctxState(state, history)),
     buildWrapUpArticle: withFacts(buildWrapUpArticle, (state, history) => ctxState(state, history)),
     buildToiletBowlArticle: withFacts(buildToiletBowlArticle, (state, history) => ctxState(state, history)),

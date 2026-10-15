@@ -118,7 +118,7 @@
           <button class="btn-secondary" style="width:auto; padding:4px 10px;" onclick="closeResultActionChooser()">✕</button>
         </div>
         <div id="resultActionSummary" class="hint" style="margin-bottom:12px;"></div>
-        <button id="resultActionMemeBtn" onclick="chooseResultAction('meme')">🎭 Meme (mit Kontext-Auswahl)</button>
+        <button id="resultActionMemeBtn" class="btn-secondary" onclick="chooseResultAction('meme')">🎭 Meme (mit Kontext-Auswahl)</button>
         <button class="btn-secondary" style="margin-top:8px;" onclick="chooseResultAction('spurious')">📊 Spurious Correlation</button>
         <div id="resultActionNote" class="hint" style="font-size:0.75em; opacity:0.7; margin-top:8px;"></div>
       </div>
@@ -192,8 +192,13 @@
           <button class="btn-secondary" onclick="window.print()">PDF Export</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportHistoryJson()">📦 Export JSON (History)</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportAllSeasonsJson(this)">🗄️ Gesamtexport (alle Saisons)</button>
-          <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="window.open('seasons.html?Altima','_blank')">🗂️ Saisons verwalten</button>
+          <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="location.href='seasons.html'">🗂️ Saisons verwalten</button>
           <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🔑 Konten &amp; Passwörter</h2>
+          <div id="accountsPanel"><button class="btn-secondary" style="width:auto;" onclick="renderAccountsPanel()">Konten laden</button></div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -526,9 +531,15 @@
     if (v) taken.add(v);
   }
 
-  // Namen aus History, aber ohne die bereits vergebenen
+  // schon in die Draft-Reihenfolge (Schritt 1) eingetragene Namen
+  if (typeof showOrderList !== 'undefined' && Array.isArray(showOrderList)) {
+    showOrderList.forEach(e => { if (e && e.name) taken.add(e.name.trim()); });
+  }
+  const takenLc = new Set(Array.from(taken).map(n => n.toLowerCase()));
+
+  // Namen aus History, aber ohne die bereits vergebenen (Groß/Klein egal)
   const names = Array.from(history.players)
-    .filter(n => !taken.has(n))
+    .filter(n => !takenLc.has(String(n).trim().toLowerCase()))
     .sort((a,b) => a.localeCompare(b, "de"));
 
   dl.innerHTML = names.map(n => `<option value="${n}"></option>`).join("");
@@ -959,6 +970,8 @@ function isFinished(match) { return MB.isFinished(match); }
                  onkeydown="if(event.key==='Enter'){event.preventDefault();addShowOrderEntry();}">
           <button type="button" class="btn-secondary" style="width:auto; margin:0;" onclick="addShowOrderEntry()">+ Hinzufügen</button>
         </div>`;
+      // Vorschlagsliste neu aufbauen: Eingetragene fliegen raus, Entfernte kommen zurück
+      buildPlayerDatalist();
     }
 
     function addShowOrderEntry() {
@@ -1127,19 +1140,39 @@ function isFinished(match) { return MB.isFinished(match); }
       const name = showOrderList[draftShowIndex].name;
       renderDraftOrderStrip();
 
-      // 1) "Jetzt auf der Bühne:" erst allein, Name folgt einen Beat später
-      renderDraftShowStage({ callingLabelOnly: true });
-      await sleep(900);
-      renderDraftShowStage({ calling: name });
-
       const isFirstPick = draftShowIndex === 0;
       const isLastPick = draftShowIndex === showOrderList.length - 1;
       const badge = MB.computeRingIntroBadges(history, [name]).get(name.trim().toLowerCase());
-      try {
-        // Slot wird erst gezogen, wenn die Ansage KOMPLETT zu Ende gesprochen ist.
-        await withMinDelay(MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick), 1800);
-      } catch (e) { console.warn('Ring-Ansage fehlgeschlagen:', e); }
-      await sleep(700); // kurze Atempause, dann erst die Ziehung
+
+      // 1) Einlauf des Head Coaches — nur wenn die Ring-Ansage per ElevenLabs
+      // vorab generiert wurde und ihre Dauer feststeht (Sequenz ist darauf getimt).
+      // Ersetzt dann "Jetzt auf der Bühne:"; sonst der bisherige Ablauf.
+      let prep = null;
+      if (MB.DraftStage && MB.DraftStage.isOpen() && MB.DraftStage.walkIn && MB.Announcer.prepareRingIntro) {
+        try { prep = await MB.Announcer.prepareRingIntro(name, badge, isFirstPick, isLastPick); } catch (e) { prep = null; }
+      }
+      if (prep && prep.duration > 0) {
+        stageCallingName = name;
+        let nick = ''; try { nick = MB.Announcer.getNickname(name) || ''; } catch (e) { /* optional */ }
+        const walk = MB.DraftStage.walkIn({
+          name, nickname: nick, facts: badgeChips(name),
+          titles: (badge && badge.titles) || 0, toilet: !!(badge && badge.isToiletBowlLastSeason), rookie: !!(badge && badge.isRookie),
+          pickIndex: draftShowIndex, total: showOrderList.length, duration: prep.duration,
+        });
+        try { await Promise.all([prep.play(), walk]); } catch (e) { console.warn('Einlauf/Ring-Ansage:', e); }
+        await sleep(300);
+      } else {
+        if (MB.DraftStage && MB.DraftStage.isOpen()) console.info('Draft-Einlauf übersprungen: Ring-Ansage nicht per ElevenLabs verfügbar (Dauer unbekannt).');
+        // "Jetzt auf der Bühne:" erst allein, Name folgt einen Beat später
+        renderDraftShowStage({ callingLabelOnly: true });
+        await sleep(900);
+        renderDraftShowStage({ calling: name });
+        try {
+          // Slot wird erst gezogen, wenn die Ansage KOMPLETT zu Ende gesprochen ist.
+          await withMinDelay(MB.Announcer.announceRingIntro(name, badge, isFirstPick, isLastPick), 1800);
+        } catch (e) { console.warn('Ring-Ansage fehlgeschlagen:', e); }
+        await sleep(700); // kurze Atempause, dann erst die Ziehung
+      }
 
       // 2) Slot-Ziehen sichtbar in der Bühne selbst (nicht nur im
       // versteckten Fallback-Board) — Datenlogik bleibt dieselbe.
@@ -2953,7 +2986,7 @@ function renderRanking() {
     // Einstellungen) gerade sichtbar ist. Solange nicht manuell umgeschaltet
     // wurde (setAdminTab), richtet sich das nach state.currentView, damit
     // beim Turnierstart automatisch auf den Spielplan gesprungen wird.
-    let activeAdminTab = null;
+    let activeAdminTab = (['setup','schedule','settings'].includes((location.hash || '').slice(1)) ? location.hash.slice(1) : null) || (null);
 
     function setAdminTab(tab) {
       activeAdminTab = tab;
@@ -3113,7 +3146,8 @@ function renderRanking() {
     // API-Key sieht/ändert — das ist KEIN Schutz gegen jemanden mit
     // Zugriff auf die Browser-Devtools/localStorage auf diesem Gerät.
     // =========================================================
-    let ttsUnlocked = false;
+    // Kein eigenes Passwort mehr: admin.html ist ohnehin nur nach Admin-Login nutzbar.
+    let ttsUnlocked = true;
 
     function sha256Hex(s) { return MB.sha256Hex(s); }
 
@@ -3136,10 +3170,9 @@ function renderRanking() {
     }
 
     function resetTtsPassword() {
-      if (!confirm('Passwort UND gespeicherte ElevenLabs-Einstellungen auf diesem Gerät löschen? (API-Key muss danach neu eingegeben werden)')) return;
+      if (!confirm('Gespeicherte ElevenLabs-Einstellungen auf diesem Gerät löschen? (API-Key muss danach neu eingegeben werden)')) return;
       localStorage.removeItem('mb_tts_pw_hash');
       localStorage.removeItem('mb_tts_settings');
-      ttsUnlocked = false;
       renderTtsSettingsPanel();
       renderSongMomentsPanel();
       renderMemeSettingsPanel();
@@ -3911,6 +3944,9 @@ function renderRanking() {
         const canvas = entry.canvasPreview || MB.Spurious.renderChartCanvas(entry.candidate);
         article.media_url = await MB.Records.uploadMemeToStorage(canvas, tournamentId, 'spurious');
         article.media_type = 'image';
+        // Chart nach dem ersten Absatz (dort, wo die Korrelation vorgestellt wird)
+        const paras = String(article.body || '').split(/\n{2,}/);
+        article.body = paras.length > 1 ? [paras[0], '[[bild:0]]', ...paras.slice(1)].join('\n\n') : article.body + '\n\n[[bild:0]]';
       } catch (e) {
         console.warn('Spurious-Chart-Upload fehlgeschlagen, Artikel wird ohne Bild gepostet:', e);
       }
@@ -4087,8 +4123,10 @@ function renderRanking() {
         // Vorgemerkte Rekord-/Story-Memes ("Ins nächste Power Ranking") kommen zuerst.
         const queued = getQueuedMemes(tid);
         const images = queued.map((q) => q.url);
+        // [[bild:N]] markiert, wo im Text das N-te Bild erscheint (blog.html platziert es dort)
+        const mark = (i) => `\n\n[[bild:${i}]]`;
         if (queued.length) {
-          article.body += '\n\n🎭 Aus den letzten Spielen: ' + queued.map((q) => q.label).join(', ') + '.';
+          article.body += '\n\n🎭 Aus den letzten Spielen: ' + queued.map((q) => q.label).join(', ') + '.' + queued.map((_, i) => mark(i)).join('');
         }
 
         // "Dem Boyz": nur wenn ein Cowboys-Spieler mitspielt und schon verloren
@@ -4098,6 +4136,7 @@ function renderRanking() {
           const dem = MB.Records.buildDemBoyzData(state);
           if (dem) {
             images.push(await MB.Records.uploadMemeToStorage(MB.Records.renderDemBoyzCanvas(dem), tid, 'demboyz'));
+            article.body += mark(images.length - 1);
             demBoyzUsed = true;
           }
         } catch (e) { console.warn('Dem-Boyz-Grafik fehlgeschlagen:', e); }
@@ -4111,6 +4150,7 @@ function renderRanking() {
               try {
                 const result = await MB.Records.generateImgflipMeme(record, { ...MB.Records.getImgflipSettings(), templateId: pool[n].id });
                 images.push(result.url);
+                article.body += mark(images.length - 1);
               } catch (e) { console.warn('Saison-Meme fehlgeschlagen:', e); }
             }
           }
@@ -4126,9 +4166,9 @@ function renderRanking() {
               const teaser = headline
                 ? `📊 Die Zahl zum Zwischenstand: ${headline.title}${headline.subtitle ? ' – ' + headline.subtitle : ''} Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`
                 : `📊 Die Zahl zum Zwischenstand: ${candidate.mbLabel} korreliert mit „${candidate.germanName}“ (r = ${candidate.r.toFixed(2)}). Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`;
-              article.body += '\n\n' + teaser;
               const canvas = MB.Spurious.renderChartCanvas(candidate);
               images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
+              article.body += '\n\n' + teaser + mark(images.length - 1);
               article.data = { ...(article.data || {}), pairKey: candidate.pairKey };
             }
           }
@@ -4693,9 +4733,9 @@ function renderRanking() {
 
           <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">Modell</label>
           <select id="elModel" style="width:100%;">
-            <option value="eleven_multilingual_v2" ${(!settings.modelId || settings.modelId === 'eleven_multilingual_v2') ? 'selected' : ''}>Multilingual v2 (empfohlen — beste Qualität, für unseren Fall schnell genug)</option>
+            <option value="eleven_multilingual_v2" ${(!settings.modelId || settings.modelId === 'eleven_multilingual_v2') ? 'selected' : ''}>Multilingual v2 (ohne Emotions-Tags)</option>
             <option value="eleven_flash_v2_5" ${settings.modelId === 'eleven_flash_v2_5' ? 'selected' : ''}>Flash v2.5 (schneller & günstiger, etwas weniger ausdrucksstark)</option>
-            <option value="eleven_v3" ${settings.modelId === 'eleven_v3' ? 'selected' : ''}>Eleven v3 (experimentell, sehr ausdrucksstark, weniger stabil)</option>
+            <option value="eleven_v3" ${settings.modelId === 'eleven_v3' ? 'selected' : ''}>Eleven v3 (empfohlen — Emotions-Tags, Box-Ansager mit gezogenem Namen)</option>
           </select>
 
           <div style="margin-top:10px;">
@@ -4729,7 +4769,7 @@ function renderRanking() {
 
         <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
           <button onclick="saveTtsSettings()">Speichern</button>
-          <button class="btn-secondary" onclick="resetTtsPassword()">Passwort zurücksetzen</button>
+          <button class="btn-secondary" onclick="resetTtsPassword()">Lokale ElevenLabs-Daten löschen</button>
         </div>
         <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:8px;">
           Gilt nur für dieses Gerät/diesen Browser — wird nicht mit Supabase synchronisiert.
@@ -4761,72 +4801,54 @@ function renderRanking() {
           <div id="replayStatus" class="hint" style="font-size:0.8em; opacity:0.75; margin-top:6px;"></div>
         </div>
 
-        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304333;">
-          <div style="font-weight:bold; margin-bottom:4px;">🧪 Blog-Text-Test mit OpenRouter (Free-Modelle)</div>
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304333;" id="llmPanel">
+          <div style="font-weight:bold; margin-bottom:4px;">🤖 KI-Texte für den Blog (OpenRouter)</div>
           <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:8px;">
-            Nimmt die Schein-Korrelationen (Tyler-Vigen-Stil) aus dem letzten abgeschlossenen Turnier samt dem Text, den das System heute erzeugt,
-            und lässt Free-Modelle daraus einen ausführlicheren Beitrag schreiben (Ton wie tylervigen.com, Gründe deutlich ausführlicher).
-            Nur ein Test — es wird nichts veröffentlicht. Der Key bleibt in diesem Browser (localStorage). Free-Modelle: max. 20 Anfragen/Minute,
-            die Liste ändert sich oft — deshalb wird sie live von OpenRouter geladen und nach Eignung für deutschen Fließtext vorsortiert.
+            Haken = diese Beitragsart schreibt beim Veröffentlichen die KI (sonst Bausteine). Die KI bekommt alle Fakten plus den Baustein-Text;
+            ist ihr Text unbrauchbar (erfundenes Ergebnis, mehrere unbekannte Zahlen, falsche Länge …), probiert sie das Fallback-Modell und
+            zuletzt erscheint der Baustein-Text. Einstellungen &amp; Prompts liegen in Supabase (gelten auf jedem Gerät),
+            <b>der API-Key nur in diesem Browser</b> — veröffentlicht wird also nur KI-Text, wenn die Ergebnisse in einem Browser mit Key eingetragen werden.
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
-            <input type="password" id="orKey" placeholder="OpenRouter API-Key (sk-or-…)" style="max-width:280px;" onchange="saveOrKey()">
-            <button class="btn-secondary" style="width:auto;" onclick="loadOrModels()">📋 Free-Modelle laden</button>
-            <label style="font-size:0.85em;">Beiträge:
-              <select id="orCount" style="width:auto; display:inline-block;"><option>1</option><option selected>2</option><option>3</option><option>5</option></select></label>
-            <button class="btn-secondary" style="width:auto;" onclick="runOrBlogTest()">▶ Test starten</button>
-            <button class="btn-secondary" style="width:auto;" onclick="downloadOrResults()">⬇️ Ergebnisse (.txt)</button>
+            <input type="password" id="llmKey" placeholder="OpenRouter API-Key (sk-or-…)" style="max-width:280px;" onchange="MB.LlmBlog.setKey(this.value)">
+            <label style="font-size:0.85em;">Timeout (s): <input type="number" id="llmTimeout" min="30" max="600" step="10" style="width:80px; display:inline-block;"></label>
+            <label style="font-size:0.85em;">Kreativität: <input type="number" id="llmTemp" min="0" max="1.5" step="0.1" style="width:70px; display:inline-block;"></label>
+            <button class="btn-secondary" style="width:auto;" onclick="loadLlmModels(true)">🔄 Modellliste neu laden</button>
           </div>
-          <div id="orModels" style="font-size:0.85em; margin-bottom:6px;"></div>
-          <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Stil-Prompt (System) anzeigen</summary><pre id="orSystemPrompt" style="white-space:pre-wrap; font-size:0.75em; opacity:0.85;"></pre></details>
-          <div id="orStatus" class="hint" style="font-size:0.8em; opacity:0.8; margin-bottom:6px;"></div>
-          <div id="orResults"></div>
-        </div>
-
-        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #22304333;">
-          <div style="font-weight:bold; margin-bottom:4px;">🤖 KI-Texte für den Blog (alle Beitragsarten, Stil 11FREUNDE)</div>
-          <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:8px;">
-            Hier legst du fest, <b>welche Beitragsarten</b> beim Veröffentlichen von einer KI statt aus den festen Bausteinen geschrieben werden und
-            <b>mit welchem Modell</b>. Standard: alles aus (Bausteine). Die KI bekommt alle verwertbaren Fakten (Tabelle, Bilanzen, Historie, Playoff-Status,
-            Duell-Fakten, Rekord-Daten) plus den Baustein-Text als Ausgangstext. Enthält ihr Text Zahlen, die nicht in den Fakten stehen, oder ist er
-            unbrauchbar, wird er verworfen und der Baustein-Text veröffentlicht. Der Key ist derselbe wie im OpenRouter-Test oben (liegt nur in diesem Browser).
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
-            <input type="password" id="llmKey" placeholder="OpenRouter API-Key (sk-or-…)" style="max-width:280px;" onchange="saveLlmKey()">
-            <label style="font-size:0.85em;">Standard-Modell:
-              <input type="text" id="llmDefaultModel" list="llmModelList" placeholder="z.B. openrouter/free" style="width:260px; display:inline-block;"></label>
-            <datalist id="llmModelList"></datalist>
-            <button class="btn-secondary" style="width:auto;" onclick="loadLlmModels()">📋 Free-Modelle laden</button>
-            <label style="font-size:0.85em;">Kreativität:
-              <input type="number" id="llmTemp" min="0" max="1.5" step="0.1" style="width:70px; display:inline-block;"></label>
+          <div style="background:rgba(0,0,0,.18); border-radius:8px; padding:10px; margin-bottom:8px; font-size:0.88em;">
+            <label style="margin-right:14px;"><input type="radio" name="llmMode" value="auto" onchange="drawLlmModelBox()"> <b>Automatisch</b> (geeignetstes + zweitgeeignetstes als Fallback)</label>
+            <label><input type="radio" name="llmMode" value="manual" onchange="drawLlmModelBox()"> <b>Manuell</b></label>
+            <div id="llmModelBox" style="margin-top:8px;"></div>
           </div>
           <div id="llmKindTable" style="font-size:0.88em; margin-bottom:8px;"></div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-            <button class="btn-secondary" style="width:auto;" onclick="saveLlmSettings()">💾 Einstellungen speichern</button>
+            <button style="width:auto;" onclick="saveLlmSettings()">💾 Speichern (Supabase)</button>
             <span id="llmSaveStatus" class="hint" style="font-size:0.8em; opacity:0.8;"></span>
           </div>
-          <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Stil-Prompt (System) anzeigen</summary><pre id="llmSystemPrompt" style="white-space:pre-wrap; font-size:0.75em; opacity:0.85;"></pre></details>
 
-          <div style="font-weight:bold; margin:10px 0 4px;">Test: Beiträge des letzten Turniers von der KI schreiben lassen</div>
+          <div style="font-weight:bold; margin:12px 0 4px;">🧪 Test mit dem letzten Turnier</div>
           <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:6px;">
-            Spielt das letzte abgeschlossene Turnier nach (wie der Blog-Testlauf), nimmt je Beitragsart die gewählte Anzahl Beiträge und lässt das Modell sie neu schreiben –
-            daneben siehst du den Baustein-Text, die mitgegebenen Fakten und ob die Prüfung den KI-Text durchgelassen hätte. Es wird nichts veröffentlicht.
+            Läuft exakt wie produktiv (gleiche Modellkette, Prompts aus dem Formular — auch ungespeicherte), veröffentlicht aber nichts.
+            Free-Modelle: 20 Anfragen/Minute und 50/Tag (1.000/Tag, sobald einmal ≥ 10 $ Guthaben gekauft wurde) — ein großer Test frisst das Tageslimit schnell.
           </div>
           <div id="llmTestKinds" style="font-size:0.85em; margin-bottom:6px;"></div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
             <label style="font-size:0.85em;">Beiträge je Art:
-              <select id="llmPerKind" style="width:auto; display:inline-block;"><option>1</option><option selected>2</option><option>3</option></select></label>
+              <select id="llmPerKind" style="width:auto; display:inline-block;"><option selected>1</option><option>2</option><option>3</option></select></label>
             <label style="font-size:0.85em;">Vergleichsmodell (optional):
-              <input type="text" id="llmCompareModel" list="llmModelList" placeholder="zweites Modell" style="width:220px; display:inline-block;"></label>
+              <select id="llmCompareModel" style="width:260px; display:inline-block;"></select></label>
             <button class="btn-secondary" style="width:auto;" onclick="runLlmBlogTest()">▶ Test starten</button>
             <button class="btn-secondary" style="width:auto;" onclick="downloadLlmBlogResults()">⬇️ Ergebnisse (.txt)</button>
           </div>
           <div id="llmStatus" class="hint" style="font-size:0.8em; opacity:0.8; margin-bottom:6px;"></div>
           <div id="llmResults"></div>
+
+          <div style="font-weight:bold; margin:14px 0 4px;">📋 KI-Protokoll (produktive Beiträge, dieser Browser)</div>
+          <div id="llmLog" style="font-size:0.82em;"></div>
+          <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="MB.LlmBlog.clearLog(); drawLlmLog();">Protokoll leeren</button>
         </div>
       `;
-      try { initOrPanel(); } catch (e) { /* optional */ }
-      try { initLlmBlogPanel(); } catch (e) { /* optional */ }
+      try { initLlmBlogPanel().catch(e => console.warn("KI-Panel:", e)); } catch (e) { /* optional */ }
     }
 
     // Reines Text-Testprotokoll aller Ansage-Varianten (siehe
@@ -4863,141 +4885,132 @@ function renderRanking() {
       } catch (e) { console.error(e); say('Testlauf fehlgeschlagen: ' + e.message); }
     }
 
-    // ---------- OpenRouter-Blogtest ----------
-    let orModels = [], orResults = [], orRunning = false;
+    // ---------- KI-Texte für den Blog (alle Beitragsarten inkl. Spurious) ----------
+    let llmModels = [], llmResults = [], llmRunning = false, llmForm = null;
     const orEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    function initOrPanel() {
-      const k = document.getElementById('orKey'); if (k && !k.value) k.value = localStorage.getItem('mb_openrouter_key') || '';
-      const sp = document.getElementById('orSystemPrompt'); if (sp && !sp.textContent) sp.textContent = MB.LlmTest.SYSTEM_PROMPT;
+    function llmModelOption(m, sel) {
+      return `<option value="${orEsc(m.id)}" ${sel === m.id ? 'selected' : ''}>${m.free ? '🆓' : '💶'} ${orEsc(m.id)} · ${MB.LlmBlog.fmtCost(m.cents)} · Eignung ${Math.round(m.score)}</option>`;
     }
-    window.addEventListener('load', () => { try { initOrPanel(); } catch (e) { /* Panel optional */ } });
-    function saveOrKey() { localStorage.setItem('mb_openrouter_key', document.getElementById('orKey').value.trim()); }
-    async function loadOrModels() {
-      const st = document.getElementById('orStatus'); initOrPanel();
-      st.textContent = 'Lade die aktuelle Liste kostenloser Modelle von OpenRouter …';
-      try {
-        orModels = await MB.LlmTest.fetchFreeModels();
-        const top = orModels.slice(0, 12);
-        document.getElementById('orModels').innerHTML = (top.length ? top.map((m, i) =>
-          `<label style="display:block; margin:2px 0;"><input type="checkbox" class="orModelChk" value="${orEsc(m.id)}" ${i < 3 ? 'checked' : ''}> ${i < 3 ? '⭐ ' : ''}${orEsc(m.id)} <span style="opacity:.6;">· ${Math.round(m.context / 1000)}k Kontext · Eignung ${Math.round(m.score)}</span></label>`).join('')
-          : 'Keine kostenlosen Textmodelle gefunden.') +
-          `<label style="display:block; margin:6px 0 2px;"><input type="checkbox" class="orModelChk" value="openrouter/free"> openrouter/free <span style="opacity:.6;">· Auto-Router, wählt selbst ein Free-Modell (Ergebnis schwankt)</span></label>`;
-        st.textContent = `${orModels.length} kostenlose Textmodelle gefunden. Die ⭐ sind meine Vorauswahl (große, mehrsprachige Instruct-Modelle); beliebig an-/abhaken.`;
-      } catch (e) { st.textContent = 'Fehler: ' + e.message; }
+    function llmModelSelect(id, value, opts) {
+      opts = opts || {};
+      const onlyFree = document.getElementById('llmOnlyFree') ? document.getElementById('llmOnlyFree').checked : false;
+      const list = llmModels.filter(m => !onlyFree || m.free || m.id === value);
+      const known = list.some(m => m.id === value);
+      return `<select id="${id}" class="${opts.cls || ''}" data-kind="${opts.kind || ''}" style="width:${opts.width || '420px'}; max-width:100%; display:inline-block;">
+        ${opts.empty ? `<option value="">${opts.empty}</option>` : ''}
+        <option value="openrouter/free" ${value === 'openrouter/free' ? 'selected' : ''}>🆓 openrouter/free · Auto-Router (Ergebnis schwankt)</option>
+        ${value && !known && value !== 'openrouter/free' ? `<option value="${orEsc(value)}" selected>${orEsc(value)} (gespeichert)</option>` : ''}
+        ${list.map(m => llmModelOption(m, value)).join('')}
+      </select>`;
     }
-    async function runOrBlogTest() {
-      if (orRunning) return;
-      initOrPanel(); saveOrKey();
-      const key = document.getElementById('orKey').value.trim();
-      const st = document.getElementById('orStatus'), box = document.getElementById('orResults');
-      if (!key) { st.textContent = 'Bitte zuerst den OpenRouter-API-Key eintragen (openrouter.ai/keys, kostenlos).'; return; }
-      let chosen = [...document.querySelectorAll('.orModelChk:checked')].map(c => c.value);
-      if (!chosen.length) { await loadOrModels(); chosen = [...document.querySelectorAll('.orModelChk:checked')].map(c => c.value); }
-      if (!chosen.length) { st.textContent = 'Kein Modell ausgewählt.'; return; }
-      orRunning = true; orResults = []; box.innerHTML = '';
-      try {
-        st.textContent = 'Lade das letzte abgeschlossene Turnier …';
-        const lt = await loadLastTournament();
-        if (!lt || !lt.state) throw new Error('Kein abgeschlossenes Turnier gefunden' + (lastTournamentError ? ': ' + lastTournamentError : ''));
-        const n = parseInt(document.getElementById('orCount').value, 10) || 2;
-        st.textContent = 'Suche Schein-Korrelationen …';
-        const candidates = await MB.Spurious.findAllOverallCandidates(lt.state, new Set(), { limit: n });
-        if (!candidates.length) throw new Error('Keine Kandidaten über der Schwelle gefunden (zu wenig Historie?).');
-        let done = 0; const total = candidates.length * chosen.length;
-        for (const cand of candidates) {
-          const built = MB.LlmTest.buildMessages(cand);
-          const card = document.createElement('div');
-          card.style.cssText = 'border:1px solid #2a3a55; border-radius:8px; padding:12px; margin:10px 0; background:rgba(0,0,0,.18);';
-          card.innerHTML = `<div style="font-weight:bold; margin-bottom:6px;">${orEsc(built.currentText.title || (cand.mbLabel + ' vs. ' + cand.germanName))} <span style="opacity:.6; font-weight:normal;">· r = ${cand.r.toFixed(2)}</span></div>
-            <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Prompt (User) anzeigen</summary><pre style="white-space:pre-wrap; font-size:0.75em; opacity:.85;">${orEsc(built.messages[1].content)}</pre></details>
-            <div style="font-size:0.8em; opacity:.7; margin-bottom:2px;">Aktueller Text (Baustein)</div>
-            <div style="padding:8px; background:rgba(255,255,255,.05); border-radius:6px; white-space:pre-wrap; font-size:0.9em;">${orEsc(built.currentText.body)}</div>
-            <div class="orOut"></div>`;
-          box.appendChild(card);
-          const out = card.querySelector('.orOut');
-          const rec = { title: built.currentText.title, r: cand.r, current: built.currentText.body, prompt: built.messages[1].content, outputs: [] };
-          orResults.push(rec);
-          for (const model of chosen) {
-            st.textContent = `Schreibe Beitrag ${done + 1}/${total} mit ${model} …`;
-            const t0 = Date.now(); let html, entry;
-            try {
-              const res = await MB.LlmTest.generate({ key, model, candidate: cand });
-              const words = res.body.split(/\s+/).filter(Boolean).length;
-              entry = { model: res.model, title: res.title, body: res.body, seconds: (Date.now() - t0) / 1000 };
-              html = `<div style="margin-top:10px;"><div style="font-size:0.8em; color:var(--v2-gold);">${orEsc(res.model)} · ${words} Wörter · ${entry.seconds.toFixed(0)} s</div>
-                <div style="font-weight:bold; margin:2px 0;">${orEsc(res.title || '(kein Titel erkannt)')}</div>
-                <div style="white-space:pre-wrap; font-size:0.92em; padding:8px; background:rgba(201,151,0,.08); border-radius:6px;">${orEsc(res.body)}</div></div>`;
-            } catch (e) {
-              entry = { model, error: e.message };
-              html = `<div style="margin-top:10px; font-size:0.85em; color:#ff8a8a;">${orEsc(model)}: ${orEsc(e.message)}</div>`;
-            }
-            rec.outputs.push(entry); out.insertAdjacentHTML('beforeend', html);
-            done++;
-            if (done < total) await new Promise(r => setTimeout(r, 3500)); // Free-Limit: 20 Anfragen/Minute
-          }
-        }
-        st.textContent = `Fertig: ${candidates.length} Beitrag/Beiträge × ${chosen.length} Modell(e). Über „Ergebnisse (.txt)“ speicherst du alles.`;
-      } catch (e) { st.textContent = 'Fehler: ' + e.message; console.error(e); }
-      orRunning = false;
-    }
-    function downloadOrResults() {
-      if (!orResults.length) { alert('Noch keine Ergebnisse — erst den Test starten.'); return; }
-      const out = ['ALTIMA BOWL — BLOG-TEXT-TEST (OpenRouter)', `Erzeugt am ${new Date().toLocaleString('de-DE')}`, '', 'SYSTEM-PROMPT:', MB.LlmTest.SYSTEM_PROMPT];
-      orResults.forEach((rec, i) => {
-        out.push('', '='.repeat(72), `BEITRAG ${i + 1}: ${rec.title}  (r = ${rec.r.toFixed(2)})`, '='.repeat(72), '', 'USER-PROMPT:', rec.prompt, '', '--- AKTUELLER TEXT (Baustein) ---', rec.current);
-        rec.outputs.forEach(o => out.push('', o.error ? `--- ${o.model}: FEHLER: ${o.error}` : `--- ${o.model} (${o.seconds.toFixed(0)} s) ---`, ...(o.error ? [] : [`TITEL: ${o.title}`, '', o.body])));
-      });
-      saveTextFile(out.join('\n'), `blog-llm-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
-    }
-
-    // ---------- KI-Texte für den Blog (alle Beitragsarten) ----------
-    let llmModelsLoaded = [], llmResults = [], llmRunning = false;
-    function initLlmBlogPanel() {
-      if (!document.getElementById('llmKindTable') || !MB.LlmBlog) return;
-      const k = document.getElementById('llmKey'); if (k && !k.value) k.value = localStorage.getItem('mb_openrouter_key') || '';
+    // Formularzustand -> Settings-Objekt (wird auch für den Test benutzt)
+    function readLlmForm() {
       const s = MB.LlmBlog.getSettings();
-      document.getElementById('llmDefaultModel').value = s.defaultModel || '';
-      document.getElementById('llmTemp').value = s.temperature;
-      document.getElementById('llmSystemPrompt').textContent = MB.LlmBlog.SYSTEM_PROMPT;
-      document.getElementById('llmKindTable').innerHTML =
-        `<table style="border-collapse:collapse; width:100%;"><tr style="opacity:.7; text-align:left;"><th>KI schreibt produktiv</th><th>Beitragsart</th><th>Modell (leer = Standard)</th></tr>` +
-        Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) =>
-          `<tr><td style="padding:3px 6px;"><input type="checkbox" class="llmKindOn" data-kind="${kind}" ${s.kinds[kind].enabled ? 'checked' : ''}></td>` +
-          `<td style="padding:3px 6px;">${orEsc(meta.label)}</td>` +
-          `<td style="padding:3px 6px;"><input type="text" class="llmKindModel" data-kind="${kind}" list="llmModelList" value="${orEsc(s.kinds[kind].model || '')}" placeholder="Standard" style="width:260px;"></td></tr>`).join('') + `</table>`;
-      document.getElementById('llmTestKinds').innerHTML = 'Beitragsarten im Test: ' + Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) =>
-        `<label style="margin-right:10px; white-space:nowrap;"><input type="checkbox" class="llmTestKind" value="${kind}" checked> ${orEsc(meta.label)}</label>`).join('');
-    }
-    window.addEventListener('load', () => { try { initLlmBlogPanel(); } catch (e) { /* Panel optional */ } });
-    function saveLlmKey() { localStorage.setItem('mb_openrouter_key', document.getElementById('llmKey').value.trim()); }
-    function saveLlmSettings() {
-      const s = MB.LlmBlog.getSettings();
-      s.defaultModel = document.getElementById('llmDefaultModel').value.trim() || 'openrouter/free';
+      const mode = document.querySelector('input[name="llmMode"]:checked');
+      s.modelMode = mode ? mode.value : 'auto';
       s.temperature = parseFloat(document.getElementById('llmTemp').value) || 0.8;
+      s.timeoutSec = parseInt(document.getElementById('llmTimeout').value, 10) || 120;
+      const g = (id) => document.getElementById(id);
+      if (g('llmAllowPaid')) s.allowPaid = g('llmAllowPaid').checked; else s.allowPaid = llmForm.allowPaid;
+      if (g('llmMaxCent')) s.maxCentPerArticle = parseFloat(g('llmMaxCent').value) || 0; else s.maxCentPerArticle = llmForm.maxCentPerArticle;
+      if (g('llmPrimary')) s.primaryModel = g('llmPrimary').value; else s.primaryModel = llmForm.primaryModel;
+      if (g('llmFallback')) s.fallbackModel = g('llmFallback').value; else s.fallbackModel = llmForm.fallbackModel;
       document.querySelectorAll('.llmKindOn').forEach(c => { s.kinds[c.dataset.kind].enabled = c.checked; });
-      document.querySelectorAll('.llmKindModel').forEach(c => { s.kinds[c.dataset.kind].model = c.value.trim(); });
-      MB.LlmBlog.saveSettings(s); saveLlmKey();
-      const on = Object.entries(s.kinds).filter(([, v]) => v.enabled).map(([k]) => MB.LlmBlog.KINDS[k].label);
-      document.getElementById('llmSaveStatus').textContent = on.length ? `Gespeichert. KI schreibt künftig: ${on.join(', ')}.` : 'Gespeichert. Alle Beiträge kommen weiter aus den Bausteinen.';
+      document.querySelectorAll('.llmKindModel').forEach(c => { s.kinds[c.dataset.kind].model = c.value; });
+      s.prompts = { ...(s.prompts || {}) };
+      document.querySelectorAll('.llmPrompt').forEach(t => { s.prompts[t.dataset.kind] = t.value; });
+      llmForm = s;
+      return s;
     }
-    async function loadLlmModels() {
-      const st = document.getElementById('llmStatus'); st.textContent = 'Lade Free-Modelle von OpenRouter …';
+    async function initLlmBlogPanel() {
+      if (!document.getElementById('llmKindTable') || !MB.LlmBlog) return;
+      const k = document.getElementById('llmKey'); if (k && !k.value) k.value = MB.LlmBlog.getKey();
+      const s = await MB.LlmBlog.loadSettings(true);
+      llmForm = s;
+      document.getElementById('llmTemp').value = s.temperature;
+      document.getElementById('llmTimeout').value = s.timeoutSec;
+      document.querySelectorAll('input[name="llmMode"]').forEach(r => { r.checked = r.value === s.modelMode; });
+      try { llmModels = await MB.LlmBlog.fetchModels(); } catch (e) { document.getElementById('llmStatus').textContent = 'Modellliste nicht ladbar: ' + e.message; }
+      drawLlmModelBox(); drawLlmKindTable(); drawLlmLog();
+      document.getElementById('llmTestKinds').innerHTML = 'Beitragsarten im Test: ' + Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) =>
+        `<label style="margin-right:10px; white-space:nowrap;"><input type="checkbox" class="llmTestKind" value="${kind}" ${(s.kinds[kind].enabled || !Object.values(s.kinds).some(k => k.enabled)) ? 'checked' : ''}> ${orEsc(meta.label)}</label>`).join('');
+      document.getElementById('llmCompareModel').outerHTML = llmModelSelect('llmCompareModel', '', { empty: '— keins —', width: '260px' });
+    }
+    window.addEventListener('mb-llm-log', () => { try { drawLlmLog(); } catch (e) { /* Panel nicht offen */ } });
+    async function loadLlmModels(force) {
+      const st = document.getElementById('llmStatus'); st.textContent = 'Lade Modellliste von OpenRouter …';
       try {
-        llmModelsLoaded = await MB.LlmTest.fetchFreeModels();
-        document.getElementById('llmModelList').innerHTML = ['openrouter/free', ...llmModelsLoaded.map(m => m.id)].map(id => `<option value="${orEsc(id)}">`).join('');
-        st.textContent = `${llmModelsLoaded.length} Free-Modelle geladen (Vorschläge in den Modell-Feldern, dort kann auch jede andere OpenRouter-Modell-ID stehen).`;
+        readLlmForm();
+        llmModels = await MB.LlmBlog.fetchModels(force);
+        st.textContent = `${llmModels.length} Textmodelle geladen (${llmModels.filter(m => m.free).length} kostenlos). Kosten = grobe Schätzung je Beitrag (~${MB.LlmBlog.EST_IN_TOKENS} Token rein, ~${MB.LlmBlog.EST_OUT_TOKENS} raus), in US-Cent.`;
+        drawLlmModelBox(); drawLlmKindTable();
       } catch (e) { st.textContent = 'Fehler: ' + e.message; }
+    }
+    function drawLlmModelBox() {
+      const box = document.getElementById('llmModelBox'); if (!box) return;
+      const s = llmForm ? readLlmForm() : MB.LlmBlog.getSettings();
+      if (s.modelMode === 'manual') {
+        box.innerHTML = `<label style="display:block; margin:4px 0;"><input type="checkbox" id="llmOnlyFree" ${document.getElementById('llmOnlyFree')?.checked ? 'checked' : ''} onchange="drawLlmModelBox()"> nur kostenlose Modelle anzeigen</label>
+          <div style="margin:4px 0;">Primär: ${llmModelSelect('llmPrimary', s.primaryModel)}</div>
+          <div style="margin:4px 0;">Fallback: ${llmModelSelect('llmFallback', s.fallbackModel, { empty: '— kein Fallback —' })}</div>
+          <div class="hint" style="font-size:0.85em; opacity:.7;">🆓 kostenlos · 💶 Bezahlmodell (braucht Guthaben bei OpenRouter). Sortiert nach Eignung für deutschen Fließtext.</div>`;
+      } else {
+        const chain = MB.LlmBlog.pickAutoModels(llmModels, s);
+        const info = (id) => { const m = llmModels.find(x => x.id === id); return m ? `${orEsc(id)} <span style="opacity:.6;">(${MB.LlmBlog.fmtCost(m.cents)})</span>` : orEsc(id); };
+        box.innerHTML = `<label><input type="checkbox" id="llmAllowPaid" ${s.allowPaid ? 'checked' : ''} onchange="drawLlmModelBox()"> auch Bezahlmodelle zulassen, bis geschätzt
+            <input type="number" id="llmMaxCent" min="0" step="0.5" value="${s.maxCentPerArticle}" style="width:70px; display:inline-block;" onchange="drawLlmModelBox()"> ct pro Beitrag</label>
+          <div style="margin-top:6px;">Aktuell gewählt: <b>${info(chain[0])}</b> → Fallback: ${info(chain[1] || '—')}</div>
+          <div class="hint" style="font-size:0.85em; opacity:.7;">Wird bei jedem Beitrag neu aus der (6 h gecachten) Modellliste bestimmt — fällt ein Free-Modell weg, rückt das nächste nach.</div>`;
+      }
+    }
+    function drawLlmKindTable() {
+      const s = llmForm || MB.LlmBlog.getSettings();
+      document.getElementById('llmKindTable').innerHTML =
+        `<table style="border-collapse:collapse; width:100%;"><tr style="opacity:.7; text-align:left;"><th>Prod</th><th>Beitragsart</th><th>Modell</th><th>Prompt</th></tr>` +
+        Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) => {
+          const custom = !!(s.prompts && s.prompts[kind] && s.prompts[kind].trim() !== MB.LlmBlog.defaultPrompt(kind).trim());
+          return `<tr style="border-top:1px solid #22304355;"><td style="padding:4px 6px;"><input type="checkbox" class="llmKindOn" data-kind="${kind}" ${s.kinds[kind].enabled ? 'checked' : ''}></td>` +
+            `<td style="padding:4px 6px;">${orEsc(meta.label)}</td>` +
+            `<td style="padding:4px 6px;">${llmModelSelect('llmKM_' + kind, s.kinds[kind].model || '', { cls: 'llmKindModel', kind, empty: '— wie oben —', width: '240px' })}</td>` +
+            `<td style="padding:4px 6px;"><button class="btn-secondary" style="width:auto; margin:0; padding:3px 10px;" onclick="toggleLlmPrompt('${kind}')">✏️ ${custom ? 'angepasst' : 'Standard'}</button></td></tr>` +
+            `<tr id="llmPromptRow_${kind}" style="display:none;"><td colspan="4" style="padding:4px 6px 10px;">
+              <textarea class="llmPrompt" data-kind="${kind}" rows="14" style="width:100%; font-size:0.8em; font-family:monospace;">${orEsc(MB.LlmBlog.getPrompt(kind, s))}</textarea>
+              <button class="btn-secondary" style="width:auto; margin-top:4px;" onclick="resetLlmPrompt('${kind}')">↺ Standard-Prompt wiederherstellen</button>
+              <span class="hint" style="font-size:0.8em; opacity:.7;"> Format-Vorgabe „TITEL: …“ in der ersten Zeile bitte drinlassen.</span></td></tr>`;
+        }).join('') + `</table>`;
+    }
+    function toggleLlmPrompt(kind) { const r = document.getElementById('llmPromptRow_' + kind); r.style.display = r.style.display === 'none' ? '' : 'none'; }
+    function resetLlmPrompt(kind) { const t = document.querySelector(`.llmPrompt[data-kind="${kind}"]`); if (t) t.value = MB.LlmBlog.defaultPrompt(kind); }
+    async function saveLlmSettings() {
+      const st = document.getElementById('llmSaveStatus');
+      MB.LlmBlog.setKey(document.getElementById('llmKey').value);
+      try {
+        const s = await MB.LlmBlog.saveSettings(readLlmForm());
+        llmForm = s; drawLlmKindTable();
+        const on = Object.entries(s.kinds).filter(([, v]) => v.enabled).map(([k]) => MB.LlmBlog.KINDS[k].label);
+        st.textContent = (on.length ? `Gespeichert. KI schreibt: ${on.join(', ')}.` : 'Gespeichert. Alle Beiträge kommen aus den Bausteinen.') + (on.length && !MB.LlmBlog.getKey() ? ' ⚠️ In diesem Browser fehlt noch der API-Key!' : '');
+      } catch (e) { st.textContent = 'Speichern fehlgeschlagen: ' + e.message; }
+    }
+    function drawLlmLog() {
+      const el = document.getElementById('llmLog'); if (!el) return;
+      const log = MB.LlmBlog.getLog();
+      if (!log.length) { el.innerHTML = '<div class="hint" style="opacity:.6;">Noch keine produktiven KI-Versuche in diesem Browser.</div>'; return; }
+      const col = { 'KI': '#7fdc9b', 'Baustein': '#fbbf24', 'Fehler': '#ff8a8a', 'kein Key': '#ff8a8a' };
+      el.innerHTML = log.slice(0, 30).map(e => `<div style="padding:5px 0; border-top:1px solid #22304355;">
+        <span style="opacity:.6;">${new Date(e.at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+        <b style="color:${col[e.status] || '#fff'};">${orEsc(e.status)}</b> · ${orEsc(e.label || e.kind)} · ${orEsc(e.title || '')}${e.model ? ` · <span style="color:var(--v2-gold);">${orEsc(e.model)}</span>` : ''}
+        ${e.detail ? `<div style="opacity:.7; font-size:.92em; margin-top:2px;">${orEsc(e.detail)}</div>` : ''}</div>`).join('');
     }
     async function runLlmBlogTest() {
       if (llmRunning) return;
-      initLlmBlogPanel(); saveLlmKey();
-      const key = document.getElementById('llmKey').value.trim();
+      MB.LlmBlog.setKey(document.getElementById('llmKey').value);
       const st = document.getElementById('llmStatus'), box = document.getElementById('llmResults');
-      if (!key) { st.textContent = 'Bitte zuerst den OpenRouter-API-Key eintragen.'; return; }
-      const models = [document.getElementById('llmDefaultModel').value.trim() || 'openrouter/free'];
-      const cmp = document.getElementById('llmCompareModel').value.trim(); if (cmp && !models.includes(cmp)) models.push(cmp);
+      if (!MB.LlmBlog.getKey()) { st.textContent = 'Bitte zuerst den OpenRouter-API-Key eintragen (openrouter.ai/keys).'; return; }
+      const settings = readLlmForm();
+      const cmp = document.getElementById('llmCompareModel').value;
       const kinds = new Set([...document.querySelectorAll('.llmTestKind:checked')].map(c => c.value));
-      const perKind = parseInt(document.getElementById('llmPerKind').value, 10) || 2;
+      const perKind = parseInt(document.getElementById('llmPerKind').value, 10) || 1;
+      if (!kinds.size) { st.textContent = 'Keine Beitragsart für den Test ausgewählt.'; return; }
       llmRunning = true; llmResults = []; box.innerHTML = '';
       try {
         st.textContent = 'Lade das letzte abgeschlossene Turnier …';
@@ -5006,62 +5019,102 @@ function renderRanking() {
         st.textContent = `Spiele Turnier ${lt.year} nach …`;
         await new Promise(r => setTimeout(r, 30));
         const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
-        // je Art gleichmäßig über das Turnier verteilt auswählen
         const picked = [];
-        Object.keys(MB.LlmBlog.KINDS).filter(k => kinds.has(k)).forEach(kind => {
+        Object.keys(MB.LlmBlog.KINDS).filter(k => kinds.has(k) && k !== 'spurious').forEach(kind => {
           const list = res.articles.filter(x => x.kind === kind);
           if (!list.length) return;
           const n = Math.min(perKind, list.length);
           for (let i = 0; i < n; i++) picked.push(list[Math.floor((i + 0.5) * list.length / n)]);
         });
+        if (kinds.has('spurious')) {
+          st.textContent = 'Suche Schein-Korrelationen …';
+          const cands = await MB.Spurious.findAllOverallCandidates(lt.state, new Set(), { limit: perKind });
+          cands.forEach(c => { const a = MB.Blog.buildSpuriousArticle(c); if (a) { a.when = `r = ${c.r.toFixed(2)}`; picked.push(a); } });
+        }
         if (!picked.length) throw new Error('Keine Beiträge der gewählten Arten im Testlauf gefunden.');
-        const total = picked.length * models.length; let done = 0;
+        let done = 0;
         for (const art of picked) {
           const label = MB.LlmBlog.KINDS[art.kind].label;
-          const base = MB.LlmBlog.buildMessages(art, null);
+          const base = MB.LlmBlog.buildMessages(art, null, settings);
+          const plain = String(art.body).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
           const card = document.createElement('div');
           card.style.cssText = 'border:1px solid #2a3a55; border-radius:8px; padding:12px; margin:10px 0; background:rgba(0,0,0,.18);';
-          card.innerHTML = `<div style="font-weight:bold; margin-bottom:4px;">${orEsc(label)}: ${orEsc(art.title)} <span style="opacity:.6; font-weight:normal;">· ${orEsc(art.when || '')}</span></div>
-            <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Mitgegebene Fakten + Prompt anzeigen</summary><pre style="white-space:pre-wrap; font-size:0.75em; opacity:.85;">${orEsc(base.messages[1].content)}</pre></details>
-            <div style="font-size:0.8em; opacity:.7; margin-bottom:2px;">Baustein-Text (so wäre er ohne KI erschienen)</div>
-            <div style="padding:8px; background:rgba(255,255,255,.05); border-radius:6px; white-space:pre-wrap; font-size:0.9em;">${orEsc(String(art.body).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''))}</div>
+          card.innerHTML = `<div style="font-weight:bold; margin-bottom:4px;">${orEsc(label)}: ${orEsc(String(art.title).replace(/<[^>]+>/g, ''))} <span style="opacity:.6; font-weight:normal;">· ${orEsc(art.when || '')}</span></div>
+            <details style="margin-bottom:6px;"><summary style="cursor:pointer; font-size:0.85em;">Prompt (System + Fakten) anzeigen</summary><pre style="white-space:pre-wrap; font-size:0.75em; opacity:.85;">${orEsc(base.messages[0].content + '\n\n——————\n\n' + base.messages[1].content)}</pre></details>
+            <div style="font-size:0.8em; opacity:.7; margin-bottom:2px;">Baustein-Text</div>
+            <div style="padding:8px; background:rgba(255,255,255,.05); border-radius:6px; white-space:pre-wrap; font-size:0.9em;">${orEsc(plain)}</div>
             <div class="llmOut"></div>`;
           box.appendChild(card);
           const out = card.querySelector('.llmOut');
-          const rec = { label, title: art.title, when: art.when, prompt: base.messages[1].content, current: String(art.body).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ''), outputs: [] };
+          const rec = { label, title: art.title, when: art.when, prompt: base.messages[1].content, system: base.messages[0].content, current: plain, outputs: [] };
           llmResults.push(rec);
-          for (const model of models) {
-            st.textContent = `Schreibe Beitrag ${done + 1}/${total} (${label}) mit ${model} …`;
-            const t0 = Date.now(); let html, entry;
-            try {
-              const r = await MB.LlmBlog.generate({ key, model, article: art, ctx: null, temperature: MB.LlmBlog.getSettings().temperature });
-              const words = r.body.split(/\s+/).filter(Boolean).length;
-              entry = { model: r.model, title: r.title, body: r.body, problems: r.problems, seconds: (Date.now() - t0) / 1000 };
-              const verdict = r.problems.length ? `<span style="color:#ff8a8a;">⚠ würde verworfen: ${orEsc(r.problems.join('; '))}</span>` : '<span style="color:#7fdc9b;">✓ Prüfung bestanden</span>';
-              html = `<div style="margin-top:10px;"><div style="font-size:0.8em; color:var(--v2-gold);">${orEsc(r.model)} · ${words} Wörter · ${entry.seconds.toFixed(0)} s · ${verdict}</div>
-                <div style="font-weight:bold; margin:2px 0;">${orEsc(r.title || '(kein Titel erkannt)')}</div>
-                <div style="white-space:pre-wrap; font-size:0.92em; padding:8px; background:rgba(201,151,0,.08); border-radius:6px;">${orEsc(r.body)}</div></div>`;
-            } catch (e) {
-              entry = { model, error: e.message };
-              html = `<div style="margin-top:10px; font-size:0.85em; color:#ff8a8a;">${orEsc(model)}: ${orEsc(e.message)}</div>`;
-            }
-            rec.outputs.push(entry); out.insertAdjacentHTML('beforeend', html);
-            done++;
-            if (done < total) await new Promise(r => setTimeout(r, 3500)); // Free-Limit: 20 Anfragen/Minute
+          const show = (a, r) => {
+            const verdict = a.error ? `<span style="color:#ff8a8a;">✗ ${orEsc(a.error)}</span>`
+              : a.problems.length ? `<span style="color:#ff8a8a;">⚠ würde verworfen: ${orEsc(a.problems.join('; '))}</span>` : '<span style="color:#7fdc9b;">✓ Prüfung bestanden</span>';
+            const m = llmModels.find(x => x.id === a.model);
+            out.insertAdjacentHTML('beforeend', `<div style="margin-top:10px;"><div style="font-size:0.8em; color:var(--v2-gold);">${orEsc(a.model)} · ${a.seconds.toFixed(0)} s${m ? ' · ' + MB.LlmBlog.fmtCost(m.cents) : ''}${r ? ' · ' + r.body.split(/\s+/).filter(Boolean).length + ' Wörter' : ''} · ${verdict}</div>
+              ${r ? `<div style="font-weight:bold; margin:2px 0;">${orEsc(r.title || '(kein Titel erkannt)')}</div><div style="white-space:pre-wrap; font-size:0.92em; padding:8px; background:rgba(201,151,0,.08); border-radius:6px;">${orEsc(r.body)}</div>` : ''}</div>`);
+            rec.outputs.push({ model: a.model, seconds: a.seconds, error: a.error, problems: a.problems, title: r && r.title, body: r && r.body });
+          };
+          st.textContent = `Beitrag ${done + 1}/${picked.length} (${label}) — Modellkette läuft …`;
+          const { out: final } = await MB.LlmBlog.generateWithFallback({ article: art, ctx: null, settings, onAttempt: show });
+          if (!final) out.insertAdjacentHTML('beforeend', `<div style="margin-top:8px; font-size:.85em; color:#fbbf24;">→ Produktiv wäre hier der Baustein-Text erschienen.</div>`);
+          if (cmp) {
+            await new Promise(r => setTimeout(r, 3500));
+            const t0 = Date.now();
+            try { const r = await MB.LlmBlog.generate({ key: MB.LlmBlog.getKey(), model: cmp, article: art, ctx: null, temperature: settings.temperature, timeoutSec: settings.timeoutSec, settings }); show({ model: r.model + ' (Vergleich)', seconds: (Date.now() - t0) / 1000, problems: r.problems }, r); }
+            catch (e) { show({ model: cmp + ' (Vergleich)', seconds: (Date.now() - t0) / 1000, error: e.message }, null); }
           }
+          done++;
+          if (done < picked.length) await new Promise(r => setTimeout(r, 3500)); // Free-Limit: 20 Anfragen/Minute
         }
-        st.textContent = `Fertig: ${picked.length} Beiträge × ${models.length} Modell(e).`;
+        st.textContent = `Fertig: ${picked.length} Beiträge getestet.`;
       } catch (e) { st.textContent = 'Fehler: ' + e.message; console.error(e); }
       llmRunning = false;
     }
     function downloadLlmBlogResults() {
       if (!llmResults.length) { alert('Noch keine Ergebnisse — erst den Test starten.'); return; }
-      const out = ['ALTIMA BOWL — KI-BLOG-TEST (alle Beitragsarten)', `Erzeugt am ${new Date().toLocaleString('de-DE')}`, '', 'SYSTEM-PROMPT:', MB.LlmBlog.SYSTEM_PROMPT];
+      const out = ['ALTIMA BOWL — KI-BLOG-TEST', `Erzeugt am ${new Date().toLocaleString('de-DE')}`];
       llmResults.forEach((rec, i) => {
-        out.push('', '='.repeat(72), `BEITRAG ${i + 1} · ${rec.label}: ${rec.title} (${rec.when || ''})`, '='.repeat(72), '', 'USER-PROMPT (inkl. Fakten):', rec.prompt, '', '--- BAUSTEIN-TEXT ---', rec.current);
+        out.push('', '='.repeat(72), `BEITRAG ${i + 1} · ${rec.label}: ${String(rec.title).replace(/<[^>]+>/g, '')} (${rec.when || ''})`, '='.repeat(72), '', 'SYSTEM-PROMPT:', rec.system, '', 'USER-PROMPT (inkl. Fakten):', rec.prompt, '', '--- BAUSTEIN-TEXT ---', rec.current);
         rec.outputs.forEach(o => out.push('', o.error ? `--- ${o.model}: FEHLER: ${o.error}` : `--- ${o.model} (${o.seconds.toFixed(0)} s)${o.problems && o.problems.length ? ' — WÜRDE VERWORFEN: ' + o.problems.join('; ') : ' — Prüfung bestanden'} ---`, ...(o.error ? [] : [`TITEL: ${o.title}`, '', o.body])));
       });
       saveTextFile(out.join('\n'), `blog-ki-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
+    }
+
+    // ---------- Konten (Spieler-PINs) & Admin-Passwort ----------
+    async function renderAccountsPanel() {
+      const el = document.getElementById('accountsPanel'); if (!el) return;
+      el.innerHTML = 'Lade …';
+      const acc = await MB.UI.loadAccounts();
+      const rows = {};
+      Object.values(acc).forEach(a => { rows[a.name.toLowerCase()] = { name: a.name, hasPin: !!a.pinHash, reset: !!a.resetAt && !a.pinHash }; });
+      (state.players || []).forEach(p => { const k = p.name.toLowerCase(); if (!rows[k]) rows[k] = { name: p.name, hasPin: !!(state.wettbuero && state.wettbuero.accounts[p.name] && state.wettbuero.accounts[p.name].pin), legacy: true }; });
+      const list = Object.values(rows).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+      el.innerHTML = `<div class="hint" style="font-size:0.8em; opacity:.7; margin-bottom:8px;">Spieler-Logins gelten turnierübergreifend und bleiben im Browser angemeldet. „PIN zurücksetzen“: Beim nächsten Login legt der Spieler eine neue PIN fest (bestehende Logins werden abgemeldet).</div>
+        ${list.length ? list.map(r => `<div style="display:flex; align-items:center; gap:10px; padding:5px 0; border-top:1px solid #22304355;">
+          <b style="flex:1;">${orEsc(r.name)}</b>
+          <span style="font-size:.85em; opacity:.75;">${r.hasPin ? '🔒 PIN gesetzt' : r.reset ? '↺ zurückgesetzt' : '— noch keine PIN'}</span>
+          <button class="btn-secondary" style="width:auto; margin:0; padding:4px 10px;" ${r.hasPin ? '' : 'disabled'} onclick="resetPinFor(this.dataset.n)" data-n="${orEsc(r.name)}">PIN zurücksetzen</button></div>`).join('') : '<div class="hint">Noch keine Konten.</div>'}
+        <div style="margin-top:14px; padding-top:10px; border-top:1px solid #22304355;">
+          <b>Admin-Passwort ändern</b>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+            <input type="password" id="newAdminPw" placeholder="Neues Admin-Passwort" style="max-width:240px;">
+            <input type="password" id="newAdminPw2" placeholder="wiederholen" style="max-width:240px;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="changeAdminPw()">Ändern</button>
+          </div>
+          <div class="hint" style="font-size:0.78em; opacity:.65; margin-top:6px;">Passwort vergessen? In Supabase → Table Editor → <code>app_config</code> die Zeile <code>admin_pw_hash</code> löschen — das nächste Admin-Login legt das neue Passwort fest.</div>
+        </div>`;
+    }
+    async function resetPinFor(name) {
+      if (!confirm(`PIN von ${name} zurücksetzen?`)) return;
+      try { await MB.UI.resetPlayerPin(name); await renderAccountsPanel(); } catch (e) { alert('Fehlgeschlagen: ' + e.message); }
+    }
+    async function changeAdminPw() {
+      const a = document.getElementById('newAdminPw').value, b = document.getElementById('newAdminPw2').value;
+      if (a !== b) { alert('Die Passwörter stimmen nicht überein.'); return; }
+      try { await MB.UI.changeAdminPassword(a); alert('Admin-Passwort geändert.'); document.getElementById('newAdminPw').value = document.getElementById('newAdminPw2').value = ''; }
+      catch (e) { alert(e.message); }
     }
 
     function downloadAnnouncerDryRun() {

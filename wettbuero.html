@@ -151,6 +151,10 @@
       return;
     }
 
+    if (!currentPlayer() && MB.UI.currentUser()) {
+      app.innerHTML = `<div class="v2-card"><div class="v2-empty">Du bist als <b>${MB.UI.currentUser()}</b> angemeldet, spielst im laufenden Turnier aber nicht mit — getippt wird nur von Turnierteilnehmern.</div></div>`;
+      return;
+    }
     if (!currentPlayer()) {
       app.innerHTML = `
         <div class="v2-card" style="text-align:center; padding:26px 16px;">
@@ -414,24 +418,32 @@
     return total ? Math.round((correct / total) * 100) : null;
   }
 
-  function isAllTipped() {
-    let allDone = true;
-    cache.spieltage.forEach(st => {
+  // Offene Tipps nur für den aktuellen Spieltag (erster nicht abgeschlossener)
+  // und den direkt folgenden — weiter entfernte Spieltage zählen nicht mit.
+  function countOpenTips() {
+    const cur = cache.spieltage.findIndex(st => MB.Tipp.getSpieltagStatus(st) !== 'done');
+    if (cur < 0) return { count: 0, labels: [] };
+    let count = 0; const labels = [];
+    cache.spieltage.slice(cur, cur + 2).forEach(st => {
+      let n = 0;
       st.matches.forEach(m => {
-        if (MB.Tipp.isMatchPickable(m, cache.schedule) && !m.finished && !cache.myPicksByKey.get(`match:${m.matchId}`) && pendingMatchPicks[m.matchId] === undefined) allDone = false;
+        if (MB.Tipp.isMatchPickable(m, cache.schedule) && !m.finished && !cache.myPicksByKey.get(`match:${m.matchId}`) && pendingMatchPicks[m.matchId] === undefined) n++;
       });
       const ouKey = `overunder:spieltag-${st.index}`;
-      if (MB.Tipp.isSpieltagOuPickable(st, cache.schedule) && !cache.myPicksByKey.get(ouKey) && pendingOuPicks[st.index] === undefined) allDone = false;
+      if (MB.Tipp.isSpieltagOuPickable(st, cache.schedule) && !cache.myPicksByKey.get(ouKey) && pendingOuPicks[st.index] === undefined) n++;
+      if (n) { count += n; labels.push(st.label || `Spieltag ${st.index}`); }
     });
-    return allDone;
+    return { count, labels };
   }
+  function isAllTipped() { return countOpenTips().count === 0; }
 
   function renderUserOverview() {
     const me = currentPlayer();
     const idx = cache.standings.findIndex(r => r.name === me);
     const myRow = idx >= 0 ? cache.standings[idx] : { points: 0 };
     const quote = computeMyQuote();
-    const allTipped = isAllTipped();
+    const open = countOpenTips();
+    const allTipped = open.count === 0;
     return `
       <div class="v2-card">
         <div class="user-overview">
@@ -442,7 +454,7 @@
           </div>
           <div class="user-stat"><div class="val">${myRow.points}</div><div class="lbl">Punkte</div></div>
           <div class="user-stat"><div class="val">${quote != null ? quote + '%' : '—'}</div><div class="lbl">Richtige Tipps</div></div>
-          <span class="allget-badge ${allTipped ? '' : 'pending'}">${allTipped ? '✅ Alles getippt!' : '⏳ Tipps offen'}</span>
+          <span class="allget-badge ${allTipped ? '' : 'pending'}" ${allTipped ? '' : `style="cursor:pointer;" title="${open.labels.join(' + ')}" onclick="setTab('aktuell')"`}>${allTipped ? '✅ Alles getippt!' : `⏳ ${open.count} ${open.count === 1 ? 'Tipp' : 'Tipps'} offen<small style="display:block;font-weight:600;opacity:.8;font-size:.78em;">${open.labels.join(' + ')}</small>`}</span>
         </div>
       </div>`;
   }

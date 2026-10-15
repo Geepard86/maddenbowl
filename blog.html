@@ -19,9 +19,11 @@
 <script src="ui.js"></script>
 <link rel="stylesheet" href="styles.css" />
 <style>
-  .v2-article { display:flex; gap:12px; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; align-items:flex-start; }
+  .v2-article { display:block; background:var(--v2-surface); border:1px solid var(--v2-border); border-radius:12px; padding:10px; margin-bottom:10px; text-decoration:none; color:inherit; align-items:flex-start; }
   .v2-article img.thumb { width:88px; height:66px; object-fit:cover; border-radius:8px; flex-shrink:0; background:#0007; }
-  .v2-article-body { min-width:0; flex:1; }
+  .v2-article-head { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
+  .v2-article-headtext { min-width:0; flex:1; }
+  .v2-article-body { min-width:0; }
   .v2-article-title { font-weight:900; font-size:0.98em; margin:2px 0 4px; }
   .v2-article-subtitle { font-size:0.82em; opacity:0.72; font-style:italic; margin:0 0 6px; }
   .v2-article-excerpt { font-size:0.84em; opacity:0.82; margin-bottom:6px; }
@@ -51,7 +53,7 @@
   .v2-article-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:4px; }
   .v2-share-btn { font-size:0.7em; padding:4px 10px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
   .v2-share-btn:hover { border-color:var(--v2-gold); color:var(--v2-gold); }
-  .v2-article-media { display:block; width:100%; max-height:320px; object-fit:contain; border-radius:8px; margin-bottom:8px; background:#0007; cursor:zoom-in; }
+  .v2-article-media { display:block; width:100%; max-height:380px; object-fit:contain; border-radius:8px; margin:8px 0 10px; background:#0007; cursor:zoom-in; }
   .v2-lightbox { position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:1000; display:none; align-items:center; justify-content:center; padding:24px; box-sizing:border-box; cursor:zoom-out; }
   .v2-lightbox.open { display:flex; }
   .v2-lightbox img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; }
@@ -104,7 +106,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   function commentTime(iso) { try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } }
   function threadHtml(id) {
-    const me = MB.UI.currentPlayer();
+    const me = MB.UI.currentUser();
     const list = commentsByArticle.get(String(id)) || [];
     const items = list.length ? list.map(c => `<div class="v2-cm"><div class="v2-cm-head"><span><b>${esc(c.player_name)}</b> · ${commentTime(c.created_at)}</span>${(isAdmin || c.player_name === me) ? `<button class="v2-cm-del" title="Kommentar löschen" onclick="deleteComment('${c.id}','${id}')">🗑️</button>` : ''}</div><div class="v2-cm-body">${esc(c.body)}</div></div>`).join('')
       : '<div class="v2-cm-note" style="margin:0;">Noch keine Kommentare — schreib den ersten!</div>';
@@ -126,7 +128,7 @@
     if (btn) { btn.innerHTML = cmLabel(id); btn.classList.toggle('open', openComments.has(id)); }
   }
   async function postComment(id) {
-    const me = MB.UI.currentPlayer(), ta = document.getElementById('cmText-' + id), err = document.getElementById('cmErr-' + id);
+    const me = MB.UI.currentUser(), ta = document.getElementById('cmText-' + id), err = document.getElementById('cmErr-' + id);
     if (!ta) return; err.textContent = '';
     try {
       const c = await MB.Comments.add({ articleId: id, player: me, body: ta.value });
@@ -143,7 +145,7 @@
   }
   // Sammelkarten: wie oft wird der eingeloggte Spieler in den Beiträgen namentlich erwähnt?
   function countMentions() {
-    const me = MB.UI.currentPlayer(); if (!me || !articles.length) return;
+    const me = MB.UI.currentUser(); if (!me || !articles.length) return;
     const re = new RegExp('(^|[^A-Za-zÄÖÜäöüß])' + me.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-zÄÖÜäöüß]|$)', 'i');
     const n = articles.filter(a => re.test(String((a.title || '') + ' ' + (a.body || '')).replace(/<[^>]+>/g, ' '))).length;
     MB.UI.withAchievements(A => A.track('blog_mentions', { count: n }));
@@ -153,7 +155,7 @@
   const SHARE_BASE_URL = "https://altima-bowl.geepard86.workers.dev";
 
   function excerpt(text, n) {
-    const clean = (text || '').replace(/\s+/g, ' ').trim();
+    const clean = (text || '').replace(/\[\[bild:\d+\]\]/g, ' ').replace(/\s+/g, ' ').trim();
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
   }
   function formatDate(dateStr) {
@@ -250,20 +252,30 @@
     // Weitere Bilder (z.B. Memes + Spurious-Correlation-Chart im Power Ranking)
     // liegen in data.extra_media als Liste von URLs.
     if (a.data && Array.isArray(a.data.extra_media)) a.data.extra_media.forEach(u => { if (u) imageUrls.push(u); });
-    const media = imageUrls.map(u =>
-      `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`
-    ).join('');
+    const imgTag = (u) => `<img class="v2-article-media" src="${u}" alt="" loading="lazy" onclick="openLightbox('${u}')">`;
     const adminBtns = isAdmin ? `
       <div class="v2-admin-actions">
         <button onclick="editArticle('${a.id}')">✏️ Bearbeiten</button>
         <button onclick="removeArticle('${a.id}')">🗑️ Löschen</button>
       </div>` : '';
     const fullBody = (a.body || '');
-    const isLong = fullBody.replace(/\s+/g, ' ').trim().length > 140;
+    const isLong = fullBody.replace(/\[\[bild:\d+\]\]/g, '').replace(/\s+/g, ' ').trim().length > 140;
     const isExpanded = expandedIds.has(String(a.id));
-    const bodyHtml = isExpanded
-      ? `<div class="v2-article-full">${fullBody}</div>`
-      : `<div class="v2-article-excerpt">${excerpt(fullBody, 140)}</div>`;
+    // Bilder (Memes, Korrelations-Charts) stehen dort, wo der Text sie per [[bild:N]]
+    // erwähnt; nicht platzierte Bilder als Fallback ganz unten. Eingeklappt: Auszug + erstes Bild.
+    let bodyHtml;
+    if (isExpanded || !isLong) {
+      const used = new Set();
+      const parts = fullBody.split(/(\[\[bild:\d+\]\])/);
+      bodyHtml = parts.map(part => {
+        const m = part.match(/^\[\[bild:(\d+)\]\]$/);
+        if (m) { const i = Number(m[1]); if (!imageUrls[i] || used.has(i)) return ''; used.add(i); return imgTag(imageUrls[i]); }
+        const t = part.replace(/^\s*\n+|\n+\s*$/g, '');
+        return t.trim() ? `<div class="v2-article-full">${t}</div>` : '';
+      }).join('') + imageUrls.filter((_, i) => !used.has(i)).map(imgTag).join('');
+    } else {
+      bodyHtml = `<div class="v2-article-excerpt">${excerpt(fullBody, 140)}</div>` + (imageUrls[0] ? imgTag(imageUrls[0]) : '');
+    }
     const toggleBtn = isLong
       ? `<button class="v2-article-toggle" onclick="toggleArticle('${a.id}')">${isExpanded ? 'Weniger anzeigen ▴' : 'Mehr anzeigen ▾'}</button>`
       : '';
@@ -275,12 +287,15 @@
     const subtitle = (a.data && a.data.subtitle) ? `<div class="v2-article-subtitle">${a.data.subtitle}</div>` : '';
     return `
       <div class="v2-article" id="post-${a.id}">
-        <img class="thumb" src="${meta.image}" alt="">
+        <div class="v2-article-head">
+          <img class="thumb" src="${meta.image}" alt="">
+          <div class="v2-article-headtext">
+            <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
+            <div class="v2-article-title">${a.title || ''}</div>
+            ${subtitle}
+          </div>
+        </div>
         <div class="v2-article-body">
-          <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
-          <div class="v2-article-title">${a.title || ''}</div>
-          ${subtitle}
-          ${media}
           ${bodyHtml}
           ${toggleBtn}
           <div class="v2-article-footer">

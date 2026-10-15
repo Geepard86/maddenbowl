@@ -340,7 +340,7 @@
 @keyframes opVs { from { transform: translate(-50%,-50%) scale(4); opacity: 0; } }
 .op-tag { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 4; background: #d50a0a; color: #fff; padding: 8px 40px; font: 900 40px/1 Impact, sans-serif; letter-spacing: 6px; clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%); }
 .op-tunnel .op-tag.t2 { z-index: 6; }
-.tn { position: absolute; top: 0; bottom: 0; width: 50%; overflow: hidden; background: #05060c; }
+.tn.a, .tn.b { position: absolute; top: 0; bottom: 0; width: 50%; overflow: hidden; background: #05060c; }
 .tn.a { left: 0; border-right: 4px solid #000; } .tn.b { right: 0; }
 .tn-light { position: absolute; inset: 0; background: radial-gradient(circle at 50% 36%, #fff 0, rgba(255,255,255,.55) 5%, color-mix(in srgb, var(--c1) 50%, #05060c) 22%, #05060c 62%); animation: opLight 3.4s ease-in forwards; }
 @keyframes opLight { from { transform: scale(.55); } to { transform: scale(1.6); opacity: .85; } }

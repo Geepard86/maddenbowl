@@ -100,18 +100,99 @@
   const ADMIN_PW_HASH_KEY = "mb_admin_pw_hash"; // altes, geräte-lokales Passwort (nur noch für Migration gelesen)
   const ADMIN_PW_CONFIG_KEY = "admin_pw_hash"; // Schlüssel in Supabase app_config — jetzt die Quelle der Wahrheit
 
+  // ---------------------------------------------------------------
+  // SPIELER-KONTEN — turnierübergreifend in Supabase (app_config "player_accounts":
+  // { "<name klein>": { name, pinHash } }). Login bleibt per localStorage über
+  // Seitenaufrufe/Tabs hinweg bestehen; wird die PIN vom Admin zurückgesetzt,
+  // fliegt die Sitzung beim nächsten Abgleich raus.
+  // ---------------------------------------------------------------
+  const USER_SESSION_KEY = "mb_user_session";
+  const ACCOUNTS_CONFIG_KEY = "player_accounts";
+  function readUserSession() {
+    try {
+      const s = JSON.parse(localStorage.getItem(USER_SESSION_KEY) || "null");
+      if (s && s.name) return s;
+    } catch (e) { /* kaputt -> ignorieren */ }
+    // Migration: alte Tab-Sitzung übernehmen
+    const legacy = sessionStorage.getItem("mb_tipp_player");
+    return legacy ? { name: legacy, h: null } : null;
+  }
+  function writeUserSession(name, h) {
+    if (name) localStorage.setItem(USER_SESSION_KEY, JSON.stringify({ name, h: h || null, at: Date.now() }));
+    else localStorage.removeItem(USER_SESSION_KEY);
+    sessionStorage.removeItem("mb_tipp_player");
+  }
+  // Eingeloggter Nutzer — unabhängig davon, ob gerade ein Turnier läuft.
+  function currentUser() { const s = readUserSession(); return s ? s.name : null; }
+  // Eingeloggter Nutzer, der im LAUFENDEN Turnier mitspielt (Tippspiel etc.).
   function currentPlayer() {
-    const name = sessionStorage.getItem("mb_tipp_player");
-    if (!name || !_state || !_state.wettbuero || !_state.wettbuero.accounts[name]) return null;
-    return name;
+    const name = currentUser();
+    if (!name || !_state || !_state.wettbuero || !_state.wettbuero.accounts) return null;
+    const key = Object.keys(_state.wettbuero.accounts).find((n) => n.toLowerCase() === name.toLowerCase());
+    return key || null;
   }
 
-  // Admin-Status ist geräte-/browserunabhängig vom laufenden Turnier: das
-  // Passwort liegt gehasht in Supabase (app_config, Schlüssel "admin_pw_hash"),
-  // pro Tab per sessionStorage freigeschaltet. Löst das alte "?Altima"-
-  // Query-Flag ab (und den ersten, rein lokalen Login-Entwurf).
+  async function loadAccounts() {
+    try { const raw = await MB.getAppConfig(ACCOUNTS_CONFIG_KEY); return raw ? JSON.parse(raw) : {}; }
+    catch (e) { return {}; }
+  }
+  async function saveAccounts(acc) { await MB.setAppConfig(ACCOUNTS_CONFIG_KEY, JSON.stringify(acc)); }
+  // Admin: PIN eines Spielers zurücksetzen (nächster Login legt eine neue an)
+  async function resetPlayerPin(name) {
+    const acc = await loadAccounts();
+    const k = String(name).trim().toLowerCase();
+    if (acc[k]) { acc[k].pinHash = null; acc[k].resetAt = Date.now(); }
+    else acc[k] = { name, pinHash: null, resetAt: Date.now() };
+    await saveAccounts(acc);
+    if (_state && _state.wettbuero && _state.wettbuero.accounts) {
+      const key = Object.keys(_state.wettbuero.accounts).find((n) => n.toLowerCase() === k);
+      if (key && _state.wettbuero.accounts[key].pin) {
+        _state.wettbuero.accounts[key].pin = null;
+        try { await MB.pushCloudState(_state); } catch (e) { console.warn("Turnier-PIN nicht zurückgesetzt:", e); }
+      }
+    }
+  }
+  // Sitzung gegen die gespeicherte PIN prüfen (z.B. nach Admin-Reset)
+  let _sessionChecked = false;
+  async function verifySession() {
+    if (_sessionChecked) return; _sessionChecked = true;
+    const s = readUserSession(); if (!s || !s.h) return;
+    const acc = await loadAccounts();
+    const a = acc[s.name.toLowerCase()];
+    if (a && a.pinHash !== s.h) { writeUserSession(null); renderAuthArea(); if (_onChange) _onChange(null); }
+  }
+  // Namen für das Login-Dropdown: aktuelles Turnier + bekannte Konten + letztes abgeschlossenes Turnier
+  async function loginNames() {
+    const names = [];
+    const add = (n) => { n = String(n || "").trim(); if (n && !names.some((x) => x.toLowerCase() === n.toLowerCase())) names.push(n); };
+    ((_state && _state.players) || []).forEach((p) => add(p.name));
+    const acc = await loadAccounts();
+    Object.values(acc).forEach((a) => add(a.name));
+    try { const last = await MB.fetchLastCompletedTournament(); ((last && last.state && last.state.players) || []).forEach((p) => add(p.name)); } catch (e) { /* optional */ }
+    return names.sort((a, b) => a.localeCompare(b, "de"));
+  }
+
+  // Admin-Status: bleibt per localStorage bestehen; gültig, solange der gespeicherte
+  // Hash mit dem in Supabase übereinstimmt (wird beim Seitenaufruf im Hintergrund geprüft).
   function isAdminUnlocked() {
-    return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+    if (sessionStorage.getItem(ADMIN_SESSION_KEY) === "1") return true;
+    return !!localStorage.getItem(ADMIN_SESSION_KEY);
+  }
+  async function verifyAdminSession() {
+    const h = localStorage.getItem(ADMIN_SESSION_KEY);
+    if (!h) return;
+    try {
+      const stored = await MB.getAppConfig(ADMIN_PW_CONFIG_KEY);
+      if (stored && stored !== h) { localStorage.removeItem(ADMIN_SESSION_KEY); sessionStorage.removeItem(ADMIN_SESSION_KEY); renderAuthArea(); if (_onAdminChange) _onAdminChange(false); }
+    } catch (e) { /* offline -> Sitzung behalten */ }
+  }
+  // Admin-Passwort ändern (nur eingeloggt)
+  async function changeAdminPassword(newPw) {
+    if (!isAdminUnlocked()) throw new Error("Nicht als Admin angemeldet.");
+    if (!newPw || newPw.length < 4) throw new Error("Passwort zu kurz (mind. 4 Zeichen).");
+    const h = await MB.sha256Hex(newPw);
+    await MB.setAppConfig(ADMIN_PW_CONFIG_KEY, h);
+    localStorage.setItem(ADMIN_SESSION_KEY, h);
   }
 
   const sha256Hex = (s) => MB.sha256Hex(s);
@@ -138,6 +219,7 @@
     if (_state) MB.ensureWettbuero(_state);
     renderAuthArea();
     withAchievements((A) => A.init(_state));
+    verifySession();
   }
 
   // ---------------------------------------------------------------
@@ -151,8 +233,9 @@
     // Admin-Variante (admin.html): eigenes, schlankes Menü statt der Spieler-Navigation.
     // Titelleiste führt zurück auf admin.html, die Admin-Bereiche liegen im Burger-Menü.
     const adminMenu = !!(opts && opts.adminMenu);
+    const onAdminPage = /admin\.html$/.test(location.pathname) || typeof global.setAdminTab === "function";
     const adminNavLink = (key, icon, label, hidden) => `
-      <a class="v2-nav-link" id="mbAdminNav-${key}" href="#" style="${hidden ? "display:none;" : ""}" onclick="MB.UI.adminNavSelect('${key}'); return false;">
+      <a class="v2-nav-link" id="mbAdminNav-${key}" href="admin.html#${key}" style="${hidden && onAdminPage ? "display:none;" : ""}" onclick="if (typeof setAdminTab === 'function') { MB.UI.adminNavSelect('${key}'); return false; }">
         ${icon} ${label}
       </a>`;
     const emoji = (e) => `<span style="display:inline-block; width:20px; text-align:center;">${e}</span>`;
@@ -160,6 +243,7 @@
       adminNavLink("setup", emoji("🏈"), "Turnier-Setup", true),
       adminNavLink("schedule", `<img src="assets/icons/calendar.svg" alt="">`, "Spielplan &amp; Ergebnisse"),
       adminNavLink("settings", emoji("⚙️"), "Einstellungen"),
+      `<a class="v2-nav-link ${active === "seasons" ? "active" : ""}" href="seasons.html">${emoji("🗂️")} Saisons &amp; Vorbereitung</a>`,
       `<a class="v2-nav-link" href="blog.html"><img src="assets/icons/blog.svg" alt=""> Blog</a>`,
     ].join("");
     const adminSecondaryHtml = `
@@ -201,7 +285,8 @@
         <button class="v2-nav-drawer-close" onclick="MB.UI.closeNav()">✕</button>
         ${navHtml}
         <div class="v2-nav-divider"></div>
-        ${adminMenu ? adminSecondaryHtml : `<button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
+        ${adminMenu ? adminSecondaryHtml : `${isAdminUnlocked() ? `<a class="v2-nav-link" href="admin.html">${emoji("🛡️")} Admin-Bereich</a><a class="v2-nav-link" href="seasons.html">${emoji("🗂️")} Saisons &amp; Vorbereitung</a><div class="v2-nav-divider"></div>` : ""}<button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
+        <button class="v2-nav-secondary" onclick="MB.UI.closeNav(); MB.UI.startTour()">Einführung (Tour)</button>
         <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>`}
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
@@ -214,6 +299,14 @@
 
     document.body.insertAdjacentHTML("afterbegin", headerHtml);
     renderAuthArea();
+    verifyAdminSession();
+    // Erstbesuch: Einführung automatisch auf dem Dashboard starten
+    if (active === "dashboard" && !adminMenu) {
+      let done = false; try { done = !!localStorage.getItem(TOUR_KEY); } catch (e) { /* egal */ }
+      if (!done) setTimeout(() => startTour(), 1400);
+    }
+    // Ohne setState() (Seiten ohne Turnierstand) trotzdem Sitzung prüfen
+    setTimeout(() => { verifySession(); }, 1500);
   }
 
   // Admin-Menü: Klick auf einen Bereich schaltet den Admin-Tab um (setAdminTab in
@@ -325,7 +418,7 @@
     const el = document.getElementById("mbAuthArea");
     if (!el) return;
     const admin = isAdminUnlocked();
-    const player = currentPlayer();
+    const player = currentUser();
     if (admin) {
       el.innerHTML = `<button class="v2-btn-login is-user" onclick="MB.UI.toggleUserMenu()">
         🛡️ Admin
@@ -346,7 +439,7 @@
     const el = document.getElementById("mbUserMenu");
     if (!el) return;
     if (isAdminUnlocked()) {
-      el.innerHTML = `<button onclick="MB.UI.doAdminLogout()">Admin abmelden</button>`;
+      el.innerHTML = `<a href="admin.html">🛡️ Admin-Bereich</a><a href="seasons.html">🗂️ Saisons</a><button onclick="MB.UI.doAdminLogout()">Admin abmelden</button>`;
     } else {
       el.innerHTML = `
         <a href="wettbuero.html">🎯 Zum Tippspiel</a>
@@ -361,27 +454,31 @@
   // ---------------------------------------------------------------
   // LOGIN-MODAL (Spieler wählen + PIN — legt beim ersten Mal die PIN an)
   // ---------------------------------------------------------------
-  function openLogin() {
-    const hasPlayers = !!(_state && _state.players && _state.players.length);
-    if (!hasPlayers) {
+  async function openLogin() {
+    const box = document.getElementById("mbLoginModalContent");
+    box.innerHTML = `<h3>Anmelden</h3><div class="hint" style="opacity:.7;">Lade Spieler …</div>`;
+    document.getElementById("mbLoginModal").classList.add("open");
+    let names = [];
+    try { names = await loginNames(); } catch (e) { /* leer */ }
+    if (!names.length) {
       if (_showAdminLogin) { openAdminLogin(); return; }
-      alert("Es läuft aktuell kein Turnier — Anmeldung ist gerade nicht möglich.");
+      box.innerHTML = `<h3>Anmelden</h3><div class="v2-modal-error">Noch keine Spieler bekannt.</div><div class="v2-modal-actions"><button class="v2-btn-ghost" onclick="MB.UI.closeLogin()">Schließen</button></div>`;
       return;
     }
-    const names = _state.players.map(p => p.name);
-    document.getElementById("mbLoginModalContent").innerHTML = `
+    box.innerHTML = `
       <h3>Anmelden</h3>
       <label for="mbLoginName">Spieler</label>
       <select id="mbLoginName">${names.map(n => `<option value="${n}">${n}</option>`).join("")}</select>
       <label for="mbLoginPin">PIN</label>
-      <input type="password" id="mbLoginPin" inputmode="numeric" maxlength="6" placeholder="4-6 stellige PIN">
+      <input type="password" id="mbLoginPin" inputmode="numeric" maxlength="6" placeholder="4-6 stellige PIN" onkeydown="if(event.key==='Enter') MB.UI.doLogin()">
+      <div class="hint" style="font-size:.8em; opacity:.65; margin-top:4px;">Beim ersten Login (oder nach einem PIN-Reset durch den Admin) wird die eingegebene PIN neu festgelegt.</div>
       <div class="v2-modal-error" id="mbLoginError"></div>
       <div class="v2-modal-actions">
         <button class="v2-btn-ghost" onclick="MB.UI.closeLogin()">Abbrechen</button>
         <button class="v2-btn-primary" onclick="MB.UI.doLogin()">Anmelden</button>
       </div>
       ${_showAdminLogin ? `<div class="v2-modal-altlink"><a href="#" onclick="MB.UI.openAdminLogin();return false;">Als Admin anmelden</a></div>` : ""}`;
-    document.getElementById("mbLoginModal").classList.add("open");
+    const last = currentUser(); if (last) document.getElementById("mbLoginName").value = last;
   }
 
   // ---------------------------------------------------------------
@@ -442,6 +539,7 @@
 
     localStorage.removeItem(ADMIN_PW_HASH_KEY); // geräte-lokales Passwort nicht mehr nötig
     sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+    localStorage.setItem(ADMIN_SESSION_KEY, hash); // bleibt über Seitenaufrufe bestehen
     closeLogin();
     renderAuthArea();
     if (_onAdminChange) _onAdminChange(true);
@@ -449,6 +547,7 @@
 
   function doAdminLogout() {
     sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem(ADMIN_SESSION_KEY);
     document.getElementById("mbUserMenu").classList.remove("open");
     renderAuthArea();
     if (_onAdminChange) _onAdminChange(false);
@@ -464,16 +563,24 @@
     const errEl = document.getElementById("mbLoginError");
     errEl.textContent = "";
     if (!/^\d{4,6}$/.test(pin)) { errEl.textContent = "PIN muss 4-6 Ziffern haben."; return; }
-
-    const acc = _state.wettbuero.accounts[name];
-    if (!acc.pin) {
-      acc.pin = pin;
-      try { await MB.pushCloudState(_state); } catch (e) { errEl.textContent = "Konnte PIN nicht speichern: " + e.message; return; }
-    } else if (acc.pin !== pin) {
-      errEl.textContent = "Falsche PIN.";
-      return;
+    const h = await MB.sha256Hex("mb-pin:" + name.toLowerCase() + ":" + pin);
+    const k = name.toLowerCase();
+    let acc;
+    try { acc = await loadAccounts(); } catch (e) { errEl.textContent = "Datenbank nicht erreichbar."; return; }
+    const tAcc = _state && _state.wettbuero && _state.wettbuero.accounts
+      ? _state.wettbuero.accounts[Object.keys(_state.wettbuero.accounts).find((n) => n.toLowerCase() === k)] : null;
+    const entry = acc[k];
+    if (entry && entry.pinHash) {
+      if (entry.pinHash !== h) { errEl.textContent = "Falsche PIN."; return; }
+    } else if (!(entry && entry.resetAt) && tAcc && tAcc.pin) {
+      // Migration: PIN aus dem laufenden Turnier prüfen und ins Konto übernehmen
+      if (tAcc.pin !== pin) { errEl.textContent = "Falsche PIN."; return; }
     }
-    sessionStorage.setItem("mb_tipp_player", name);
+    if (!entry || entry.pinHash !== h) {
+      acc[k] = { name, pinHash: h, since: (entry && entry.since) || Date.now() };
+      try { await saveAccounts(acc); } catch (e) { errEl.textContent = "Konnte PIN nicht speichern: " + e.message; return; }
+    }
+    writeUserSession(name, h);
     closeLogin();
     renderAuthArea();
     withAchievements((A) => A.onLogin(name));
@@ -481,16 +588,107 @@
   }
 
   function doLogout() {
-    sessionStorage.removeItem("mb_tipp_player");
+    writeUserSession(null);
     document.getElementById("mbUserMenu").classList.remove("open");
     renderAuthArea();
     withAchievements((A) => A.onLogout());
     if (_onChange) _onChange(null);
   }
 
+
+  // ---------------------------------------------------------------
+  // EINFÜHRUNG (Tour): stellt die Bereiche vor. Startet beim ersten Besuch
+  // des Dashboards automatisch, später jederzeit über das Burger-Menü.
+  // ---------------------------------------------------------------
+  const TOUR_KEY = "mb_tour_done";
+  const TOUR_STEPS = [
+    { icon: "👋", title: "Willkommen beim Altima Bowl", text: "Kurze Tour durch die Seite — dauert keine Minute. Du kannst jederzeit überspringen und sie später im Menü erneut starten." },
+    { icon: "🏠", title: "Dashboard", href: "index.html", all: true, text: "Die Startseite: was gerade läuft und als Nächstes kommt, die Tabelle, die Tippspiel-Spitze, neue Blog-Beiträge und Merch." },
+    { icon: "📅", title: "Spielplan", href: "spielplan.html", text: "Alle Partien mit Kickoff-Zeiten (inkl. Vorsprung/Verzug gegenüber dem Plan), Quoten, Ergebnissen und dem Playoff-Baum." },
+    { icon: "🏆", title: "Tippspiel", href: "wettbuero.html", text: "Nach dem Anmelden tippst du Sieger und Over/Under je Spieltag sowie Champion, Vize und Toilet-Bowl-Sieger. Das Badge zeigt dir, wie viele Tipps für den aktuellen Spieltag noch offen sind." },
+    { icon: "📰", title: "Blog", href: "blog.html", text: "Automatische Berichte zu Kickoff, Power Rankings, Rekorden, Finale und Champion — dazu Memes, Songs und absurde Schein-Korrelationen. Angemeldet kannst du kommentieren." },
+    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", text: "Ewige Tabelle, alle früheren Saisons und deine gesammelten Karten (Achievements)." },
+    { icon: "🛒", title: "Shop", href: "shop.html", text: "Fan-Merch direkt auf der Seite." },
+    { icon: "👤", title: "Anmelden", target: "#mbAuthArea", text: "Spieler wählen und PIN eingeben — beim ersten Mal legst du die PIN fest. Du bleibst in diesem Browser angemeldet, auch zwischen den Turnieren." },
+    { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Hier findest du alle Bereiche, die Regeln, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
+  ];
+  let _tourIdx = 0;
+  function tourCss() {
+    if (document.getElementById("mbTourCss")) return;
+    const st = document.createElement("style"); st.id = "mbTourCss";
+    st.textContent = `.mb-tour { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 70; width: min(440px, calc(100% - 24px));
+        background: var(--v2-surface, #13203a); border: 1px solid var(--v2-gold, #c99700); border-radius: 14px; padding: 16px 16px 12px; color: #F5F5F5;
+        box-shadow: 0 18px 50px rgba(0,0,0,.6); animation: mbTourIn .25s ease-out; }
+      @keyframes mbTourIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+      .mb-tour .tt { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.05em; margin-bottom: 6px; }
+      .mb-tour .tt span { font-size: 1.5em; }
+      .mb-tour p { margin: 0 0 12px; font-size: .92em; line-height: 1.45; opacity: .9; }
+      .mb-tour .dots { display: flex; gap: 5px; flex: 1; }
+      .mb-tour .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.25); }
+      .mb-tour .dots i.on { background: var(--v2-gold, #c99700); }
+      .mb-tour .row { display: flex; align-items: center; gap: 8px; }
+      .mb-tour button { width: auto; margin: 0; padding: 7px 14px; border-radius: 8px; border: 0; font-weight: 700; cursor: pointer; }
+      .mb-tour .skip { background: transparent; color: #aab6c8; padding-left: 0; }
+      .mb-tour .prev { background: rgba(255,255,255,.1); color: #fff; }
+      .mb-tour .next { background: var(--v2-gold, #c99700); color: #000; }
+      .mb-tour a { color: var(--v2-gold, #c99700); font-size: .85em; }
+      .mb-tour-hl { outline: 3px solid var(--v2-gold, #c99700) !important; outline-offset: 3px; border-radius: 10px; box-shadow: 0 0 0 7px rgba(201,151,0,.18), 0 0 28px rgba(201,151,0,.55) !important; animation: mbTourPulse 1.2s ease-in-out infinite; }
+      @keyframes mbTourPulse { 50% { outline-color: rgba(201,151,0,.25); } }
+      @media (prefers-reduced-motion: reduce) { .mb-tour, .mb-tour-hl { animation: none; } }`;
+    document.head.appendChild(st);
+  }
+  function startTour() { tourCss(); _tourIdx = 0; drawTour(); }
+  function endTour() {
+    try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) { /* egal */ }
+    document.querySelectorAll(".mb-tour-hl").forEach((e) => e.classList.remove("mb-tour-hl"));
+    const b = document.getElementById("mbTour"); if (b) b.remove();
+    closeNav();
+  }
+  function tourStep(d) { _tourIdx = Math.max(0, Math.min(TOUR_STEPS.length - 1, _tourIdx + d)); drawTour(); }
+  // Alles markieren, worauf sich der aktuelle Hinweis bezieht: Dashboard-Karten mit
+  // Link auf den Bereich, den Menüpunkt (Menü wird dafür auf breiten Bildschirmen
+  // geöffnet), bzw. Login-Button / Burger-Menü.
+  function tourTargets(st) {
+    const out = new Set();
+    const drawer = document.getElementById("mbNavDrawer");
+    const inDrawer = (e) => drawer && drawer.contains(e);
+    if (st.all) document.querySelectorAll(".v2-card").forEach((c) => { if (!inDrawer(c)) out.add(c); });
+    if (st.href && !st.all) {
+      document.querySelectorAll(`a[href="${st.href}"]`).forEach((a) => {
+        if (inDrawer(a) || a.closest(".v2-header") || a.closest("#mbTour")) return;
+        out.add(a.closest(".v2-card") || a);
+      });
+    }
+    if (st.target) document.querySelectorAll(st.target).forEach((e) => out.add(e));
+    return [...out];
+  }
+  function drawTour() {
+    document.querySelectorAll(".mb-tour-hl").forEach((e) => e.classList.remove("mb-tour-hl"));
+    const st = TOUR_STEPS[_tourIdx], last = _tourIdx === TOUR_STEPS.length - 1;
+    let box = document.getElementById("mbTour");
+    if (!box) { box = document.createElement("div"); box.id = "mbTour"; box.className = "mb-tour"; box.setAttribute("role", "dialog"); document.body.appendChild(box); }
+    box.innerHTML = `<div class="tt"><span>${st.icon}</span>${st.title}</div><p>${st.text}${st.href && !location.pathname.endsWith(st.href) ? ` <a href="${st.href}">Ansehen</a>` : ""}</p>
+      <div class="row"><button class="skip" onclick="MB.UI.endTour()">${last ? "" : "Überspringen"}</button><div class="dots">${TOUR_STEPS.map((_, i) => `<i class="${i === _tourIdx ? "on" : ""}"></i>`).join("")}</div>
+      ${_tourIdx ? `<button class="prev" onclick="MB.UI.tourStep(-1)">Zurück</button>` : ""}
+      <button class="next" onclick="${last ? "MB.UI.endTour()" : "MB.UI.tourStep(1)"}">${last ? "Los geht’s" : "Weiter"}</button></div>`;
+    const drawer = document.getElementById("mbNavDrawer"), back = document.getElementById("mbNavBackdrop");
+    const wide = window.innerWidth >= 900;
+    // Menü öffnen: beim Menü-Schritt immer, bei Bereichs-Schritten nur, wenn genug Platz ist
+    const openMenu = st.menu || (st.href && wide);
+    if (drawer) { drawer.classList.toggle("open", !!openMenu); if (back) back.classList.toggle("open", !!openMenu && !!st.menu); }
+    const targets = tourTargets(st);
+    if (st.href && drawer && openMenu) drawer.querySelectorAll(`.v2-nav-link[href="${st.href}"]`).forEach((n) => targets.push(n));
+    if (st.menu && drawer) drawer.querySelectorAll(".v2-nav-link, .v2-nav-secondary").forEach((n) => targets.push(n));
+    targets.forEach((t) => t.classList.add("mb-tour-hl"));
+    const first = targets.find((t) => !(drawer && drawer.contains(t)) && !t.closest(".v2-header"));
+    if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
+    else if (!st.target) window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   global.MB = global.MB || {};
   global.MB.UI = {
-    NAV_ITEMS, mountHeader, setState, currentPlayer, isAdminUnlocked, withAchievements,
+    NAV_ITEMS, mountHeader, setState, currentPlayer, currentUser, isAdminUnlocked, withAchievements,
+    loadAccounts, resetPlayerPin, changeAdminPassword, startTour, endTour, tourStep,
     toggleNav, closeNav, toggleUserMenu, adminNavSelect, syncAdminNav,
     openRules, closeInfo, installApp, isStandalone,
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,

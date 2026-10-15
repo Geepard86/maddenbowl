@@ -32,10 +32,15 @@
   const MB = global.MB;
 
   const ENDPOINT = "https://openrouter.ai/api/v1";
-  const SETTINGS_KEY = "mb_llm_blog_settings";
-  const KEY_STORAGE = "mb_openrouter_key"; // gleicher Key wie im Spurious-Test
+  const SETTINGS_KEY = "mb_llm_blog_settings";      // lokaler Cache der DB-Einstellungen
+  const DB_KEY = "llm_blog_settings";               // app_config-Schlüssel in Supabase
+  const KEY_STORAGE = "mb_openrouter_key";          // API-Key bleibt bewusst NUR im Browser
+  const LOG_KEY = "mb_llm_log";
+  const MODELS_CACHE_KEY = "mb_llm_models_cache";
+  // Grobe Token-Annahme je Beitrag für die Kostenschätzung (Prompt+Fakten / Text inkl. etwas Reserve)
+  const EST_IN_TOKENS = 3500, EST_OUT_TOKENS = 900;
 
-  // Beitragsarten, die KI-geschrieben werden können (spurious/manual bewusst nicht).
+  // Beitragsarten, die KI-geschrieben werden können (manual bewusst nicht).
   const KINDS = {
     kickoff:       { label: "Kickoff (Turnierstart)",      words: "100 bis 170" },
     retrospective: { label: "Rückblick auf die Saisons",   words: "150 bis 250" },
@@ -47,8 +52,8 @@
     portrait:      { label: "Spielerporträt",              words: "110 bis 180" },
     wrapup:        { label: "Siegerehrung & Rückblick",    words: "200 bis 320" },
     toiletbowl:    { label: "Toilet Bowl",                 words: "100 bis 170" },
+    spurious:      { label: "Spurious Correlation",        words: "180 bis 300" },
   };
-
   // ------------------------------------------------------------ Prompt
   const SYSTEM_PROMPT = [
     "Du schreibst Beiträge für den Blog des \"Altima Bowl\", eines privaten Madden-NFL-Turniers unter Freunden (Gruppe von Freunden, die gegeneinander an der Konsole spielen).",
@@ -73,25 +78,143 @@
     "Danach eine Leerzeile und der Fließtext. Nichts davor, nichts danach.",
   ].join("\n");
 
+  // Standard-Prompt je Beitragsart (System-Prompt). Spurious nutzt den Tyler-Vigen-Prompt.
+  function defaultPrompt(kind) {
+    if (kind === "spurious") return (MB.LlmTest && MB.LlmTest.SYSTEM_PROMPT) || SYSTEM_PROMPT;
+    return SYSTEM_PROMPT;
+  }
+
   // ------------------------------------------------------------ Einstellungen
+  // Liegen in Supabase (app_config "llm_blog_settings"), damit sie geräteübergreifend gelten;
+  // localStorage ist nur Cache. Gespeichert werden nur ABWEICHENDE Prompts (prompts[kind]).
+  //   modelMode: "auto"   -> geeignetstes verfügbares Modell + zweitgeeignetstes als Fallback
+  //              "manual" -> primaryModel + fallbackModel
+  //   allowPaid / maxCentPerArticle: ob (und bis zu welchen geschätzten Kosten) Auto auch Bezahl-Modelle nimmt
   function defaultSettings() {
     const kinds = {};
     Object.keys(KINDS).forEach((k) => { kinds[k] = { enabled: false, model: "" }; });
-    return { defaultModel: "openrouter/free", temperature: 0.8, timeoutSec: 40, kinds };
+    return { modelMode: "auto", primaryModel: "", fallbackModel: "", allowPaid: false, maxCentPerArticle: 2,
+      temperature: 0.8, timeoutSec: 120, kinds, prompts: {} };
   }
-  function getSettings() {
+  function mergeSettings(s) {
     const d = defaultSettings();
-    try {
-      const raw = global.localStorage && global.localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return d;
-      const s = JSON.parse(raw);
-      const out = { ...d, ...s, kinds: { ...d.kinds } };
-      Object.keys(d.kinds).forEach((k) => { out.kinds[k] = { ...d.kinds[k], ...((s.kinds || {})[k] || {}) }; });
-      return out;
-    } catch (e) { return d; }
+    if (!s || typeof s !== "object") return d;
+    const out = { ...d, ...s, kinds: { ...d.kinds }, prompts: { ...(s.prompts || {}) } };
+    Object.keys(d.kinds).forEach((k) => { out.kinds[k] = { ...d.kinds[k], ...((s.kinds || {})[k] || {}) }; });
+    // Altlast: früheres "defaultModel" -> manuelles Primärmodell
+    if (s.defaultModel && !s.primaryModel && s.defaultModel !== "openrouter/free") { out.primaryModel = s.defaultModel; }
+    delete out.defaultModel;
+    if (!out.timeoutSec || out.timeoutSec < 60) out.timeoutSec = 120;
+    return out;
   }
-  function saveSettings(s) { try { global.localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* egal */ } }
+  let cache = null, loadedFromDb = false;
+  function getSettings() {
+    if (cache) return mergeSettings(cache);
+    try { const raw = global.localStorage && global.localStorage.getItem(SETTINGS_KEY); cache = raw ? JSON.parse(raw) : null; } catch (e) { cache = null; }
+    return mergeSettings(cache);
+  }
+  async function loadSettings(force) {
+    if (loadedFromDb && !force) return getSettings();
+    try {
+      const raw = MB.getAppConfig ? await MB.getAppConfig(DB_KEY) : null;
+      if (raw) { cache = JSON.parse(raw); try { global.localStorage.setItem(SETTINGS_KEY, raw); } catch (e) { /* egal */ } }
+      loadedFromDb = true;
+    } catch (e) { console.warn("KI-Einstellungen aus der DB nicht ladbar, nutze lokalen Stand:", e); }
+    return getSettings();
+  }
+  async function saveSettings(s) {
+    const clean = mergeSettings(s);
+    // nur geänderte Prompts speichern
+    Object.keys(clean.prompts).forEach((k) => { if (!clean.prompts[k] || clean.prompts[k].trim() === defaultPrompt(k).trim()) delete clean.prompts[k]; });
+    const raw = JSON.stringify(clean);
+    cache = clean;
+    try { global.localStorage.setItem(SETTINGS_KEY, raw); } catch (e) { /* egal */ }
+    if (MB.setAppConfig) await MB.setAppConfig(DB_KEY, raw);
+    loadedFromDb = true;
+    return clean;
+  }
+  function getPrompt(kind, s) { s = s || getSettings(); return (s.prompts && s.prompts[kind]) || defaultPrompt(kind); }
   function getKey() { try { return (global.localStorage && global.localStorage.getItem(KEY_STORAGE)) || ""; } catch (e) { return ""; } }
+  function setKey(k) { try { global.localStorage.setItem(KEY_STORAGE, String(k || "").trim()); } catch (e) { /* egal */ } }
+
+  // ------------------------------------------------------------ Protokoll (sichtbar im Admin)
+  function getLog() { try { return JSON.parse(global.localStorage.getItem(LOG_KEY) || "[]"); } catch (e) { return []; } }
+  function addLog(entry) {
+    const log = getLog(); log.unshift({ at: new Date().toISOString(), ...entry });
+    try { global.localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0, 60))); } catch (e) { /* egal */ }
+    try { global.dispatchEvent(new CustomEvent("mb-llm-log")); } catch (e) { /* egal */ }
+  }
+  function clearLog() { try { global.localStorage.removeItem(LOG_KEY); } catch (e) { /* egal */ } }
+
+  // ------------------------------------------------------------ Modelle (frei + bezahlt)
+  // Eignung für deutschen Fließtext mit Humor. Basis: MB.LlmTest.scoreModel (Free-Modelle),
+  // ergänzt um bekannte starke Bezahl-Modelle.
+  function scoreModel(m) {
+    let score = (MB.LlmTest && MB.LlmTest.scoreModel) ? MB.LlmTest.scoreModel(m) : 0;
+    const s = (String(m.id || "") + " " + String(m.name || "")).toLowerCase();
+    if (/anthropic\/claude.*(opus|sonnet)/.test(s)) score += 55;
+    else if (/anthropic\/claude.*haiku/.test(s)) score += 38;
+    if (/openai\/gpt-(5|4\.1|4o)(?!.*(nano|audio|search|realtime|image))/.test(s)) score += /mini/.test(s) ? 34 : 48;
+    if (/google\/gemini.*(pro)/.test(s)) score += 46; else if (/google\/gemini.*flash/.test(s) && !/lite|image/.test(s)) score += 36;
+    if (/x-ai\/grok/.test(s) && !/code|vision|image/.test(s)) score += 30;
+    if (/(:free)$/.test(String(m.id || ""))) score += 0;
+    return score;
+  }
+  function costCents(m, inTok, outTok) {
+    const p = Number(m.promptPrice) || 0, c = Number(m.completionPrice) || 0;
+    return ((inTok || EST_IN_TOKENS) * p + (outTok || EST_OUT_TOKENS) * c) * 100; // USD -> US-Cent
+  }
+  function fmtCost(cents) {
+    if (!cents) return "kostenlos";
+    if (cents < 0.1) return "< 0,1 ct";
+    return "≈ " + (cents < 10 ? cents.toFixed(1) : Math.round(cents)).toString().replace(".", ",") + " ct";
+  }
+  // Liste aller Textmodelle (öffentlicher Endpunkt, kein Key nötig), 6 h gecacht.
+  async function fetchModels(force) {
+    if (!force) {
+      try {
+        const c = JSON.parse(global.localStorage.getItem(MODELS_CACHE_KEY) || "null");
+        if (c && Date.now() - c.at < 6 * 3600 * 1000 && Array.isArray(c.list) && c.list.length) return c.list;
+      } catch (e) { /* neu laden */ }
+    }
+    const res = await fetch(`${ENDPOINT}/models`);
+    if (!res.ok) throw new Error(`OpenRouter-Modellliste nicht ladbar (HTTP ${res.status})`);
+    const json = await res.json();
+    const list = (json.data || []).filter((m) => {
+      if (!m || !m.pricing) return false;
+      const out = JSON.stringify((m.architecture && m.architecture.output_modalities) || ["text"]);
+      return /text/.test(out) && !/image|audio/.test(out) && Number(m.pricing.prompt) >= 0 && Number(m.pricing.completion) >= 0;
+    }).map((m) => {
+      const o = { id: m.id, name: m.name || m.id, context: Number(m.context_length) || 0,
+        promptPrice: Number(m.pricing.prompt) || 0, completionPrice: Number(m.pricing.completion) || 0 };
+      o.free = o.promptPrice === 0 && o.completionPrice === 0;
+      o.score = scoreModel({ ...m, ...o });
+      o.cents = costCents(o);
+      return o;
+    }).filter((m) => m.id !== "openrouter/auto");
+    list.sort((a, b) => b.score - a.score);
+    try { global.localStorage.setItem(MODELS_CACHE_KEY, JSON.stringify({ at: Date.now(), list })); } catch (e) { /* egal */ }
+    return list;
+  }
+  // Auto-Auswahl: die zwei geeignetsten zulässigen Modelle.
+  function pickAutoModels(list, s) {
+    const ok = (list || []).filter((m) => m.free || (s.allowPaid && m.cents <= (Number(s.maxCentPerArticle) || 0)));
+    const out = ok.slice(0, 2).map((m) => m.id);
+    if (!out.length) out.push("openrouter/free");
+    else if (out.length < 2) out.push("openrouter/free");
+    return out;
+  }
+  // Welche Modelle (in Reihenfolge) für eine Beitragsart probiert werden.
+  async function resolveModels(kind, s) {
+    s = s || getSettings();
+    const override = s.kinds[kind] && s.kinds[kind].model;
+    let chain = [];
+    if (s.modelMode === "manual") chain = [s.primaryModel, s.fallbackModel];
+    else { let list = []; try { list = await fetchModels(); } catch (e) { /* ohne Liste */ } chain = pickAutoModels(list, s); }
+    if (override) chain.unshift(override);
+    chain = chain.filter(Boolean).filter((m, i, a) => a.indexOf(m) === i);
+    return chain.length ? chain : ["openrouter/free"];
+  }
 
   // ------------------------------------------------------------ Fakten
   const norm = (n) => (MB.normName ? MB.normName(n) : String(n || "").trim());
@@ -238,7 +361,34 @@
     return String(s == null ? "" : s).replace(/<br\s*\/?>/gi, "\n").replace(/<\/?strong>/gi, "").replace(/<[^>]+>/g, "").trim();
   }
 
-  function buildMessages(article, ctx) {
+  // Bild-Platzhalter [[bild:N]] (blog.html setzt dort Meme/Chart ein)
+  const MARK_RE = /\[\[bild:\d+\]\]/g;
+  function markersOf(body) { return [...new Set(String(body || "").match(MARK_RE) || [])]; }
+  function markerHint(article) {
+    const m = markersOf(article.body);
+    if (!m.length) return "";
+    return `\nBILDER: Im Ausgangstext stehen Platzhalter (${m.join(", ")}) für Bilder (Memes bzw. Diagramme). Übernimm JEDEN Platzhalter unverändert als eigene Zeile an die Stelle deines Textes, an der das jeweilige Bild thematisch passt (direkt nach dem Absatz, der es erwähnt).`;
+  }
+  // Fehlende Platzhalter ans Ende hängen, doppelte entfernen
+  function keepMarkers(newBody, article) {
+    let out = String(newBody || "");
+    const seen = new Set();
+    out = out.replace(MARK_RE, (m) => (seen.has(m) ? "" : (seen.add(m), m)));
+    markersOf(article.body).forEach((m) => { if (!seen.has(m)) out += "\n\n" + m; });
+    return out;
+  }
+
+  function buildMessages(article, ctx, settings) {
+    const sys = getPrompt(article.kind, settings);
+    // Spurious: eigene Eingabe mit Werten/Jahren/r aus dem Kandidaten (llm-test.js)
+    if (article.kind === "spurious") {
+      const cand = article._candidate;
+      let user;
+      if (cand && MB.LlmTest && MB.LlmTest.buildMessages) user = MB.LlmTest.buildMessages(cand).messages[1].content;
+      else user = ["Schreibe den Beitrag zu folgender Schein-Korrelation.", "", "AUSGANGSTEXT:", stripHtml(article.title), stripHtml(article.body)].join("\n");
+      user += markerHint(article);
+      return { messages: [{ role: "system", content: sys }, { role: "user", content: user }], facts: user };
+    }
     const meta = KINDS[article.kind] || { label: article.kind, words: "100 bis 200" };
     const facts = article.facts || factsFor(article, ctx);
     const user = [
@@ -248,13 +398,14 @@
       "FAKTEN (nur diese darfst du verwenden):",
       facts || "(keine weiteren Fakten)",
       "",
-      "AUSGANGSTEXT (so würde das System den Beitrag heute ausgeben; Inhalt und Pointen übernehmen, aber lebendiger und im 11FREUNDE-Ton neu schreiben):",
+      "AUSGANGSTEXT (so würde das System den Beitrag heute ausgeben; Inhalt und Pointen übernehmen, aber lebendiger neu schreiben):",
       article.title ? `Überschrift: ${stripHtml(article.title)}` : "",
       stripHtml(article.body),
       "",
+      markerHint(article),
       "Schreibe jetzt den Beitrag.",
     ].filter((l) => l !== null);
-    return { messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: user.join("\n") }], facts };
+    return { messages: [{ role: "system", content: sys }, { role: "user", content: user.join("\n") }], facts };
   }
 
   function cleanOutput(raw) {
@@ -278,20 +429,27 @@
     }
     if (/\b(undefined|NaN)\b/.test(body)) problems.push("enthält undefined/NaN");
     if (/^\s*[-*•]\s/m.test(body)) problems.push("Aufzählung statt Fließtext");
-    // Erfundene Zahlen: jede Zahl im Text muss in Fakten oder Ausgangstext vorkommen.
+    // Erfundene Zahlen: jede Zahl im Text sollte in Fakten oder Ausgangstext vorkommen.
+    // Tolerant: kleine Zahlen (0–12, z.B. "zwei Spiele", "3. Platz") werden ignoriert;
+    // verworfen wird bei einem erfundenen Ergebnis ("27:24") oder ab zwei unbekannten Zahlen.
     const known = (String(facts || "") + " " + stripHtml(article.body) + " " + stripHtml(article.title)).replace(/\s+/g, " ");
+    const isKnown = (n) => new RegExp("(^|[^\\d])" + n.replace(/[.,]/g, "[.,]") + "([^\\d]|$)").test(known);
     const nums = body.match(/\d+(?:[.,]\d+)?/g) || [];
-    const bad = [...new Set(nums.filter((n) => !new RegExp("(^|[^\\d])" + n.replace(/[.,]/g, "[.,]") + "([^\\d]|$)").test(known)))];
-    if (bad.length) problems.push("Zahlen nicht in den Fakten: " + bad.slice(0, 5).join(", "));
+    const bad = [...new Set(nums.filter((n) => !isKnown(n) && !(Number(n.replace(",", ".")) <= 12 && !/[.,]/.test(n))))];
+    const badScores = (body.match(/\b\d{1,3}\s*:\s*\d{1,3}\b/g) || []).filter((sc) => !new RegExp(sc.replace(/\s*:\s*/, "\\s*:\\s*")).test(known));
+    if (badScores.length) problems.push("erfundenes Ergebnis: " + [...new Set(badScores)].slice(0, 3).join(", "));
+    else if (bad.length >= 2) problems.push("Zahlen nicht in den Fakten: " + bad.slice(0, 5).join(", "));
     // Spielernamen: mindestens ein bekannter Name muss vorkommen, wenn der Ausgangstext Namen hatte.
     const orig = stripHtml(article.body);
     const nameHits = ((state_names(article) || []).filter((n) => orig.includes(n)));
-    if (nameHits.length && !nameHits.some((n) => body.includes(n))) problems.push("keiner der Spielernamen kommt vor");
+    if (article.kind !== "spurious" && nameHits.length && !nameHits.some((n) => body.includes(n))) problems.push("keiner der Spielernamen kommt vor");
     return problems;
   }
   function state_names(article) { return (article && article._names) || []; }
 
   // ------------------------------------------------------------ Aufruf
+  // Hinweis: Reasoning-Modelle verbrauchen sonst ihr max_tokens-Budget fürs "Nachdenken"
+  // und liefern dann eine LEERE Antwort -> großzügiges Budget + niedriger Reasoning-Aufwand.
   async function callModel({ key, model, messages, temperature, maxTokens, signal }) {
     const res = await fetch(`${ENDPOINT}/chat/completions`, {
       method: "POST", signal,
@@ -299,47 +457,102 @@
         Authorization: `Bearer ${key}`, "Content-Type": "application/json",
         "HTTP-Referer": (global.location && global.location.origin) || "https://maddenbowl.local", "X-Title": "Altima Bowl Blog",
       },
-      body: JSON.stringify({ model, messages, temperature: temperature != null ? temperature : 0.8, max_tokens: maxTokens || 1200 }),
+      body: JSON.stringify({ model, messages, temperature: temperature != null ? temperature : 0.8, max_tokens: maxTokens || 4000,
+        reasoning: { effort: "low", exclude: true } }),
     });
     let json = null;
     try { json = await res.json(); } catch (e) { /* kein JSON */ }
-    if (!res.ok) throw new Error(`${model}: ${(json && json.error && (json.error.message || JSON.stringify(json.error))) || "HTTP " + res.status}`);
+    if (!res.ok) {
+      const err = new Error(`${model}: ${(json && json.error && (json.error.message || JSON.stringify(json.error))) || "HTTP " + res.status}`);
+      err.status = res.status; throw err;
+    }
+    if (json && json.error) { const err = new Error(`${model}: ${json.error.message || JSON.stringify(json.error)}`); err.status = json.error.code || 0; throw err; }
     const raw = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-    if (!raw) throw new Error(`${model}: leere Antwort`);
+    if (!raw) { const err = new Error(`${model}: leere Antwort${json && json.choices && json.choices[0] && json.choices[0].finish_reason ? " (" + json.choices[0].finish_reason + ")" : ""}`); err.status = "empty"; throw err; }
     return { raw, model: (json && json.model) || model, usage: json && json.usage };
   }
 
-  // Test-/Einzelaufruf: liefert Text + Prüfergebnis, wirft bei API-Fehlern.
-  async function generate({ key, model, article, ctx, temperature, maxTokens, signal }) {
+  // Einzelaufruf mit Timeout: liefert Text + Prüfergebnis, wirft bei API-Fehlern.
+  async function generate({ key, model, article, ctx, temperature, maxTokens, signal, timeoutSec, settings }) {
     if (!key) throw new Error("Kein OpenRouter-API-Key angegeben.");
-    const { messages, facts } = buildMessages(article, ctx);
-    const r = await callModel({ key, model, messages, temperature, maxTokens, signal });
-    const out = cleanOutput(r.raw);
-    return { ...out, raw: r.raw, model: r.model, usage: r.usage, facts, problems: validate(out, article, facts) };
+    const { messages, facts } = buildMessages(article, ctx, settings);
+    const ctrl = !signal && typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), (timeoutSec || 120) * 1000) : null;
+    try {
+      const r = await callModel({ key, model, messages, temperature, maxTokens, signal: signal || (ctrl && ctrl.signal) });
+      const out = cleanOutput(r.raw);
+      return { ...out, raw: r.raw, model: r.model, usage: r.usage, facts, prompt: messages[1].content, problems: validate(out, article, facts) };
+    } catch (e) {
+      if (e && e.name === "AbortError") { const t = new Error(`${model}: Zeitüberschreitung nach ${timeoutSec || 120} s`); t.status = "timeout"; throw t; }
+      throw e;
+    } finally { if (timer) clearTimeout(timer); }
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Probiert die Modellkette durch (je Modell 1 Wiederholung bei Überlast/leerer Antwort).
+  async function generateWithFallback({ article, ctx, settings, onAttempt }) {
+    const s = settings || getSettings();
+    const key = getKey();
+    if (!key) throw new Error("Kein OpenRouter-API-Key in diesem Browser.");
+    const chain = await resolveModels(article.kind, s);
+    const attempts = [];
+    for (const model of chain) {
+      for (let tryNo = 0; tryNo < 2; tryNo++) {
+        const t0 = Date.now();
+        try {
+          const out = await generate({ key, model, article, ctx, temperature: s.temperature, timeoutSec: s.timeoutSec, settings: s });
+          const a = { model: out.model, seconds: (Date.now() - t0) / 1000, problems: out.problems, usage: out.usage };
+          attempts.push(a); if (onAttempt) onAttempt(a, out);
+          if (!out.problems.length) return { out, attempts, chain };
+          break; // inhaltlich verworfen -> nächstes Modell, keine Wiederholung
+        } catch (e) {
+          const a = { model, seconds: (Date.now() - t0) / 1000, error: e.message, status: e.status };
+          attempts.push(a); if (onAttempt) onAttempt(a, null);
+          const retry = e.status === 429 || e.status === "empty" || (Number(e.status) >= 500);
+          if (!retry || tryNo === 1) break;
+          await sleep(e.status === 429 ? 15000 : 5000);
+        }
+      }
+    }
+    return { out: null, attempts, chain };
   }
 
   // Produktiv: nur wenn für die Beitragsart aktiviert. Bei JEDEM Problem bleibt der Baustein-Text.
   async function maybeRewrite(article) {
     if (!article || !KINDS[article.kind]) return article;
-    const s = getSettings();
+    const s = await loadSettings();
     const cfg = s.kinds[article.kind];
-    const key = getKey();
-    if (!cfg || !cfg.enabled || !key) return article;
-    const model = cfg.model || s.defaultModel || "openrouter/free";
-    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), (s.timeoutSec || 40) * 1000) : null;
+    if (!cfg || !cfg.enabled) return article;
+    const label = KINDS[article.kind].label;
+    if (!getKey()) {
+      addLog({ kind: article.kind, label, title: stripHtml(article.title), status: "kein Key", detail: "In diesem Browser ist kein OpenRouter-Key hinterlegt — Baustein-Text veröffentlicht." });
+      return { ...article, data: { ...(article.data || {}), llm: { status: "no-key" } } };
+    }
     try {
-      const out = await generate({ key, model, article, ctx: article._ctx, temperature: s.temperature, signal: ctrl && ctrl.signal });
-      if (out.problems.length) {
-        console.warn(`KI-Text (${article.kind}, ${model}) verworfen:`, out.problems);
-        return { ...article, data: { ...(article.data || {}), llmRejected: out.problems.join("; ") } };
+      const { out, attempts, chain } = await generateWithFallback({ article, ctx: article._ctx, settings: s });
+      const tried = attempts.map((a) => `${a.model} (${a.seconds.toFixed(0)} s): ${a.error || (a.problems && a.problems.length ? "verworfen – " + a.problems.join("; ") : "ok")}`).join(" | ");
+      if (!out) {
+        addLog({ kind: article.kind, label, title: stripHtml(article.title), status: "Baustein", detail: tried || "keine Modelle", chain });
+        return { ...article, data: { ...(article.data || {}), llm: { status: "fallback", attempts: tried }, llmRejected: tried } };
       }
-      return { ...article, title: out.title || article.title, body: out.body.replace(/\n{3,}/g, "\n\n"), data: { ...(article.data || {}), writer: out.model } };
+      addLog({ kind: article.kind, label, title: out.title || stripHtml(article.title), status: "KI", model: out.model, detail: tried, chain });
+      let title = out.title || article.title;
+      // Spurious: Schlagzeile "X vs. Y" behalten, wenn das Modell sie nicht liefert
+      if (article.kind === "spurious" && !/ vs\.? /i.test(title)) title = article.title;
+      return { ...article, title, body: keepMarkers(out.body, article).replace(/\n{3,}/g, "\n\n"), data: { ...(article.data || {}), writer: out.model, llm: { status: "ok", model: out.model } } };
     } catch (e) {
-      console.warn(`KI-Text (${article.kind}, ${model}) fehlgeschlagen, Baustein-Text bleibt:`, e);
+      addLog({ kind: article.kind, label, title: stripHtml(article.title), status: "Fehler", detail: e.message });
+      console.warn(`KI-Text (${article.kind}) fehlgeschlagen, Baustein-Text bleibt:`, e);
       return article;
-    } finally { if (timer) clearTimeout(timer); }
+    }
   }
 
-  global.MB.LlmBlog = { KINDS, SYSTEM_PROMPT, getSettings, saveSettings, getKey, factsFor, buildMessages, generate, maybeRewrite, validate, cleanOutput, defaultSettings };
+  global.MB.LlmBlog = {
+    KINDS, SYSTEM_PROMPT, defaultPrompt, getPrompt,
+    getSettings, loadSettings, saveSettings, defaultSettings,
+    getKey, setKey, getLog, clearLog,
+    fetchModels, pickAutoModels, resolveModels, costCents, fmtCost, scoreModel, EST_IN_TOKENS, EST_OUT_TOKENS,
+    factsFor, buildMessages, generate, generateWithFallback, maybeRewrite, validate, cleanOutput,
+  };
 })(window);

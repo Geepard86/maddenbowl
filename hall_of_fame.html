@@ -98,7 +98,7 @@
     function renderMyCards() {
       const box = document.getElementById('myCardsCard');
       if (!box) return;
-      const me = MB.UI.currentPlayer();
+      const me = MB.UI.currentUser();
       box.style.display = me ? '' : 'none';
       if (!me) return;
       MB.UI.withAchievements(function (A) { A.renderGallery(document.getElementById('myCardsGallery')); });

@@ -68,7 +68,7 @@
 </head>
 <body>
 <script>
-  MB.UI.mountHeader({ active: '', showAdminLogin: true, onAdminChange: () => location.reload() });
+  MB.UI.mountHeader({ active: 'seasons', adminMenu: MB.UI.isAdminUnlocked(), showAdminLogin: true, onAdminChange: () => location.reload() });
 </script>
 
 <div id="app"><div class="not-admin">Lade…</div></div>
@@ -154,7 +154,22 @@
     }
     draftOrderList = Array.isArray(draftOrderCloudState.config?.draftOrder)
       ? draftOrderCloudState.config.draftOrder.map((e) => ({ ...e })) : [];
+    // Frühere Teilnehmer als Vorschläge (Historie aus Supabase)
+    try {
+      const hist = await MB.loadAndBuildHistory();
+      draftOrderKnownNames = Array.from(hist.players || []).map(String).sort((a, b) => a.localeCompare(b, 'de'));
+    } catch (e) { draftOrderKnownNames = []; }
     drawDraftOrderCard();
+  }
+  let draftOrderKnownNames = [];
+  // Vorschläge = frühere Teilnehmer, die noch nicht in der Liste stehen
+  function draftOrderSuggestions() {
+    const taken = new Set(draftOrderList.map((e) => e.name.trim().toLowerCase()));
+    return draftOrderKnownNames.filter((n) => !taken.has(n.trim().toLowerCase()));
+  }
+  function addDraftOrderName(name) {
+    document.getElementById('draftOrderNewName').value = name;
+    addDraftOrderEntry();
   }
 
   function drawDraftOrderCard() {
@@ -176,9 +191,14 @@
     el.innerHTML = `
       ${running ? `<div class="hint">⚠️ Es existiert bereits ein Turnier (Setup oder laufend) — Änderungen hier wirken auf genau dieses Turnier.</div>` : ''}
       <div class="row-line">
-        <input type="text" id="draftOrderNewName" placeholder="Spielername" style="flex:1; min-width:150px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addDraftOrderEntry();}">
+        <input type="text" id="draftOrderNewName" list="draftOrderNameList" placeholder="Spielername" style="flex:1; min-width:150px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addDraftOrderEntry();}">
         <button onclick="addDraftOrderEntry()">+ Hinzufügen</button>
       </div>
+      <datalist id="draftOrderNameList">${draftOrderSuggestions().map((n) => `<option value="${n.replace(/"/g, '&quot;')}"></option>`).join('')}</datalist>
+      ${draftOrderSuggestions().length ? `<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
+        <span class="hint" style="margin:0;">Frühere Teilnehmer:</span>
+        ${draftOrderSuggestions().map((n) => `<button class="small secondary" onclick="addDraftOrderName(this.dataset.n)" data-n="${n.replace(/"/g, '&quot;')}">+ ${n}</button>`).join('')}
+      </div>` : ''}
       <div id="draftOrderRows" style="display:flex; flex-direction:column; gap:6px; margin:10px 0;">${rowsHtml}</div>
       <div class="row-line">
         <button class="secondary" onclick="recomputeDraftOrder()">🔀 Reihenfolge automatisch berechnen</button>

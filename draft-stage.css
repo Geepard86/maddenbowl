@@ -207,7 +207,7 @@
 .ds-tile:hover:not(:disabled) { transform: translateY(-3px) scale(1.04); border-color: #c99700; }
 .ds-tile.sel { border-color: #ffd23f; box-shadow: 0 0 0 4px rgba(255,210,63,.45), 0 0 34px rgba(255,210,63,.7); transform: scale(1.07); z-index: 2; }
 .ds-tile img { width: 64px; height: 64px; object-fit: contain; }
-.ds-tile .tn { font: 800 20px/1.05 'Segoe UI'; }
+.ds-tile .ds-tn { font: 800 20px/1.05 'Segoe UI'; }
 .ds-tile .ovr { font: 900 19px/1 'Segoe UI'; padding: 3px 10px; border-radius: 4px; background: #33415f; color: #dfe6ee; }
 .ds-tile .ovr.hi { background: #c99700; color: #000; }
 .ds-tile .ovr.mid { background: #2f8f5b; color: #fff; }
@@ -215,7 +215,7 @@
 .ds-tile.tk .ovr { background: transparent; color: #c99700; font-size: 16px; }
 .ds-tile.ex { opacity: .38; cursor: not-allowed; border-style: dashed; }
 .ds-tile.ex img { filter: grayscale(1); }
-.ds-tile.ex .tn { text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: #ff3b3b; }
+.ds-tile.ex .ds-tn { text-decoration: line-through; text-decoration-thickness: 3px; text-decoration-color: #ff3b3b; }
 .ds-tile.ex::after { content: ''; position: absolute; inset: 4px; pointer-events: none;
   background: linear-gradient(to top right, transparent calc(50% - 2.5px), #ff3b3b calc(50% - 2.5px) calc(50% + 2.5px), transparent calc(50% + 2.5px)); }
 .ds-confirm { margin-top: 18px; width: 100%; padding: 20px; font: 900 34px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 3px; text-transform: uppercase;
@@ -282,7 +282,7 @@
 /* Team-Kacheln: genug Höhe für Logo + Name + OVR (vorher 122px -> Logo/OVR wurden abgeschnitten) */
 .ds-tile { height: 144px; padding: 8px 4px; gap: 3px; }
 .ds-tile img { width: 52px; height: 52px; flex: 0 0 auto; }
-.ds-tile .tn { font-size: 17px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-tile .ds-tn { font-size: 17px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ds-tile .ovr { font-size: 18px; flex: 0 0 auto; }
 
 /* --- ruhigere Figuren: Nahaufnahmen (v.a. Ring-Ansager) kaum noch wippen --- */
@@ -387,8 +387,8 @@
 .rs-row .p { width: 44px; color: #9fb0c8; font-size: 14px; font-weight: 800; flex: 0 0 auto; }
 .rs-row .n { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rs-row.ir { opacity: .72; } .rs-row.ir .n { text-decoration: line-through; text-decoration-color: rgba(255,59,59,.8); }
-.b { display: inline-block; font: 900 12px/1 'Segoe UI'; letter-spacing: 1px; padding: 3px 6px; border-radius: 4px; flex: 0 0 auto; }
-.b.xf { background: #ffd23f; color: #000; } .b.ss { background: #1e50c8; color: #fff; } .b.irt { background: #d50a0a; color: #fff; }
+.rs-row .b { display: inline-block; font: 900 12px/1 'Segoe UI'; letter-spacing: 1px; padding: 3px 6px; border-radius: 4px; flex: 0 0 auto; }
+.rs-row .b.xf { background: #ffd23f; color: #000; } .rs-row .b.ss { background: #1e50c8; color: #fff; } .rs-row .b.irt { background: #d50a0a; color: #fff; }
 .rs-foot { flex: 0 0 auto; padding-top: 8px; font: 600 15px/1.35 'Segoe UI'; color: #9fb0c8; }
 .rs-um { margin-top: 6px; color: #fbbf24; }
 .rs-empty { padding: 60px 20px; text-align: center; font: 700 26px/1.4 'Segoe UI'; color: #cfd8e6; grid-column: 1 / -1; }
