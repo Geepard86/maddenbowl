@@ -68,6 +68,17 @@
   .v2-lightbox-hint { position:absolute; left:0; right:0; bottom:74px; text-align:center; color:#fff; font-size:0.8em; opacity:0.85; pointer-events:none; }
   .v2-article-media + .v2-article-media { margin-top:-2px; }
 </style>
+<!-- Vorschau beim Teilen des Seitenlinks (Messenger lesen nur statisches HTML) -->
+<meta property="og:title" content="Altima Bowl – Blog">
+<meta property="og:description" content="Power Rankings, Rekorde, Memes und Schein-Korrelationen.">
+<meta property="og:image" content="https://geepard86.github.io/maddenbowl/assets/images/og_main.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://geepard86.github.io/maddenbowl/blog.html">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="description" content="Power Rankings, Rekorde, Memes und Schein-Korrelationen.">
 </head>
 <body class="v2">
 <div class="v2-wrap" id="app">
@@ -97,9 +108,10 @@
     finals:       { label: 'Finale',          color: '#EF4444', image: 'assets/images/Blog_Finale.png' },
     champion:     { label: 'Champion',        color: '#22C55E', image: 'assets/images/Blog_Sieger.png' },
     song:         { label: 'Song',            color: '#3B82F6', image: 'assets/images/Blog_Song.png' },
-    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_WhoIs.png' },
+    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_Rueckblick.png' },
     spurious:     { label: 'Analyse',         color: '#A855F7', image: 'assets/images/Blog_SpuriousCorrelations.png' },
     manual:       { label: 'Community',       color: '#94A3B8', image: 'assets/images/Blog_WhoIs.png' },
+    meme:         { label: 'Meme',            color: '#EC4899', image: 'assets/images/Blog_Meme.png' },
     achievement:  { label: 'Sammelkarte',     color: '#ff7ad9', image: 'assets/images/Blog_WhoIs.png' },
   };
   function catMeta(kind) { return CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: 'assets/images/Blog_WhoIs.png' }; }

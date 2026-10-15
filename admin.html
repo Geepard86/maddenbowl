@@ -197,6 +197,27 @@
         </div>
 
         <div class="card" style="margin-bottom:15px;">
+          <h2>📺 Live-Studio (Beamer / TV)</h2>
+          <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">Öffnet die Präsentationsseite in einem eigenen Fenster — aufs zweite Display ziehen, einmal hineinklicken (Vollbild + Ton). Ansagen, Kommentatoren und Untertitel laufen dort synchron mit dieser Seite (gleicher Browser nötig).</div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="window.open('studio.html', 'mbStudio', 'popup=yes,width=1280,height=720')">📺 Studio-Fenster öffnen</button>
+            <label style="font-size:0.9em;">Ton der Ansagen:
+              <select id="studioAudioSel" style="width:auto; display:inline-block;" onchange="MB.Announcer.setStudioAudioMode(this.value); drawStudioState();">
+                <option value="admin">auf diesem Laptop</option>
+                <option value="studio">im Studio-Fenster</option>
+              </select></label>
+            <span id="studioState" style="font-size:0.85em;"></span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'kiss'})">💗 Kiss Cam</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'vip'})">😴 VIP-Loge</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'result'})">🏈 Letztes Ergebnis</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'home'})">↩ Zur Übersicht</button>
+          </div>
+          <div class="hint" style="font-size:0.78em; opacity:0.6; margin-top:6px;">Ist das Studio nicht verbunden, spielt der Ton automatisch hier. Song-Wiedergabe und Hintergrundmusik bleiben auf dieser Seite.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
           <h2>🔑 Konten &amp; Passwörter</h2>
           <div id="accountsPanel"><button class="btn-secondary" style="width:auto;" onclick="renderAccountsPanel()">Konten laden</button></div>
         </div>
@@ -5123,6 +5144,15 @@ function renderRanking() {
       });
       saveTextFile(out.join('\n'), `blog-ki-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
     }
+
+    // ---------- Live-Studio ----------
+    function drawStudioState() {
+      const sel = document.getElementById('studioAudioSel'); if (!sel || !MB.Announcer.studioAudioMode) return;
+      if (document.activeElement !== sel) sel.value = MB.Announcer.studioAudioMode();
+      const ok = MB.Announcer.studioConnected();
+      document.getElementById('studioState').innerHTML = ok ? '<span style="color:#3ddc84;">● Studio verbunden</span>' : '<span style="opacity:.6;">○ Studio nicht verbunden</span>';
+    }
+    setInterval(drawStudioState, 2000);
 
     // ---------- Konten (Spieler-PINs) & Admin-Passwort ----------
     async function renderAccountsPanel() {

@@ -1124,8 +1124,49 @@
     return URL.createObjectURL(blob);
   }
 
+  // ======================================================================
+  // STUDIO-BILDSCHIRM (studio.html): bekommt alle Sprech-Events per
+  // BroadcastChannel und kann — wenn in den Admin-Settings so gewählt —
+  // den Ton der Ansagen statt der Admin-Seite abspielen. Antwortet das
+  // Studio nicht, spielt die Admin-Seite wie bisher selbst.
+  // ======================================================================
+  const STUDIO_AUDIO_KEY = "mb_studio_audio"; // "admin" (Standard) | "studio"
+  let _studioCh = null, _studioSeen = 0;
+  const _studioWait = new Map();
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      _studioCh = new BroadcastChannel("mb-studio");
+      _studioCh.onmessage = (ev) => {
+        const m = ev.data || {};
+        if (m.type === "studio-hello") _studioSeen = Date.now();
+        if ((m.type === "audio-ack" || m.type === "audio-done") && _studioWait.has(m.id)) _studioWait.get(m.id)(m.type);
+      };
+    }
+  } catch (e) { _studioCh = null; }
+  function studioConnected() { return !!_studioCh && Date.now() - _studioSeen < 6000; }
+  function studioAudioMode() { try { return localStorage.getItem(STUDIO_AUDIO_KEY) || "admin"; } catch (e) { return "admin"; } }
+  function setStudioAudioMode(v) { try { localStorage.setItem(STUDIO_AUDIO_KEY, v === "studio" ? "studio" : "admin"); } catch (e) { /* egal */ } }
+  function studioPost(msg) { try { if (_studioCh) _studioCh.postMessage(msg); } catch (e) { /* egal */ } }
+
+  // Ton ans Studio übergeben; true = Studio hat gespielt, false = selbst spielen
+  async function playViaStudio(url) {
+    if (studioAudioMode() !== "studio" || !studioConnected()) return false;
+    let blob;
+    try { blob = await (await fetch(url)).blob(); } catch (e) { return false; }
+    const id = "a" + Date.now() + Math.random().toString(36).slice(2, 7);
+    return await new Promise((resolve) => {
+      let acked = false;
+      const done = (ok) => { _studioWait.delete(id); clearTimeout(t1); clearTimeout(t2); resolve(ok); };
+      const t1 = setTimeout(() => { if (!acked) done(false); }, 1500);        // keine Antwort -> lokal spielen
+      const t2 = setTimeout(() => done(true), 120000);                       // Sicherheitsnetz
+      _studioWait.set(id, (type) => { if (type === "audio-ack") acked = true; else done(true); });
+      studioPost({ type: "audio", id, blob });
+    });
+  }
+
   function playAudioUrl(url) {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
+      if (await playViaStudio(url)) { try { URL.revokeObjectURL(url); } catch (e) { /* egal */ } resolve(); return; }
       const audio = new Audio(url);
       const cleanup = () => { URL.revokeObjectURL(url); resolve(); };
       audio.onended = cleanup;
@@ -1161,6 +1202,7 @@
     return () => _speakListeners.delete(fn);
   }
   function _emitSpeak(evt) {
+    studioPost({ type: "speak", evt: { type: evt.type, role: evt.role || null, text: evt.text || "" } });
     _speakListeners.forEach((fn) => { try { fn(evt); } catch (e) { /* Bühne darf nie die Ansage stören */ } });
   }
   function _roleForVoice(voiceId, settings) {
@@ -1628,5 +1670,6 @@
     setNicknames, getNickname,
     onSpeak,
     prepareRingIntro,
+    studioConnected, studioAudioMode, setStudioAudioMode, studioPost,
   };
 })(window);

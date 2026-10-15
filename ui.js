@@ -244,6 +244,7 @@
       adminNavLink("schedule", `<img src="assets/icons/calendar.svg" alt="">`, "Spielplan &amp; Ergebnisse"),
       adminNavLink("settings", emoji("⚙️"), "Einstellungen"),
       `<a class="v2-nav-link ${active === "seasons" ? "active" : ""}" href="seasons.html">${emoji("🗂️")} Saisons &amp; Vorbereitung</a>`,
+      `<a class="v2-nav-link" href="studio.html" target="mbStudio">${emoji("📺")} Live-Studio (TV)</a>`,
       `<a class="v2-nav-link" href="blog.html"><img src="assets/icons/blog.svg" alt=""> Blog</a>`,
     ].join("");
     const adminSecondaryHtml = `

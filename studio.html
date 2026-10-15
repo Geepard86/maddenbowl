@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Altima Bowl · Live-Studio</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<script src="tipp.js"></script>
+<script src="announcer.js"></script>
+<script src="draft-stage.js"></script>
+<script src="blog.js"></script>
+<link rel="stylesheet" href="draft-stage.css">
+<style>
+  /* =====================================================================
+     LIVE-STUDIO für Beamer/TV — 1920x1080-Bühne (skaliert), Look wie die
+     Draft-Show. Läuft in einem zweiten Fenster neben der Admin-Seite und
+     bekommt Ansagen per BroadcastChannel ("mb-studio"); Spielstände,
+     Tabelle und Blog-Beiträge lädt es selbst aus Supabase.
+     ===================================================================== */
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; color: #fff; }
+  .st-strip { position: absolute; left: 24px; right: 24px; top: 122px; height: 150px; z-index: 4; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .st-block { background: linear-gradient(180deg, rgba(19,32,58,.95), rgba(8,14,28,.95)); border: 2px solid #2a3a55; border-radius: 8px; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .st-block h3 { margin: 0; font: 900 18px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 3px; text-transform: uppercase; }
+  .st-block.live h3 { color: #ff5a5a; } .st-block.next h3 { color: #c99700; }
+  .st-block.live h3::before { content: '● '; animation: dsBlink 1.2s steps(1) infinite; }
+  .st-games { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; min-height: 0; }
+  .st-game { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,.04); border-radius: 6px; padding: 6px 12px; min-width: 0; }
+  .st-game img { width: 50px; height: 50px; object-fit: contain; flex: 0 0 auto; }
+  .st-game .nm { font: 800 24px/1.05 'Segoe UI'; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .st-game .at { color: #d50a0a; font: 900 20px/1 Impact; flex: 0 0 auto; }
+  .st-game .side { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .st-game .side.r { justify-content: flex-end; text-align: right; }
+  .st-game .meta { font: 700 14px/1.2 'Segoe UI'; color: #9fb0c8; text-align: center; flex: 0 0 auto; padding: 0 6px; }
+  .st-game .meta b { display: block; color: #fff; font: 900 26px/1 Impact; letter-spacing: 1px; }
+  .st-empty { color: #6f7e96; font: 700 22px/1 'Segoe UI'; align-self: center; padding: 20px; }
+
+  .st-main { position: absolute; left: 24px; right: 24px; top: 290px; bottom: 120px; z-index: 3; display: grid; grid-template-columns: 560px 1fr; gap: 24px; }
+  .st-left { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  .st-left .ds-cam { height: 420px; }
+  .st-left .ds-pip { flex: 1 1 auto; }
+  .st-panel { position: relative; background: linear-gradient(180deg, rgba(13,26,51,.96), rgba(6,12,26,.96)); border: 5px solid #c99700; border-radius: 6px; overflow: hidden; min-height: 0; }
+  .st-view { position: absolute; inset: 0; padding: 22px 28px; box-sizing: border-box; opacity: 0; transition: opacity .35s; pointer-events: none; }
+  .st-view.on { opacity: 1; pointer-events: auto; }
+  .st-title { font: 900 30px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 3px; color: #c99700; text-transform: uppercase; margin: 0 0 14px; display: flex; align-items: center; gap: 14px; }
+  .st-title small { font: 700 16px/1 'Segoe UI'; letter-spacing: 1px; color: #9fb0c8; text-transform: none; }
+
+  /* Übersicht: Tabelle + Titelchancen */
+  .st-overview { display: grid; grid-template-columns: 1.35fr 1fr; gap: 30px; height: 100%; }
+  .st-table { width: 100%; border-collapse: collapse; font-size: 23px; }
+  .st-table th { text-align: left; color: #9fb0c8; font: 800 15px/1 'Segoe UI'; letter-spacing: 1px; text-transform: uppercase; padding: 0 8px 8px; border-bottom: 2px solid #2a3a55; }
+  .st-table td { padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,.06); white-space: nowrap; }
+  .st-table td.n { font-weight: 800; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .st-table td img { width: 32px; height: 32px; object-fit: contain; vertical-align: middle; }
+  .st-table tr.first td { color: #ffd23f; }
+  .st-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .st-table tr.up td { animation: stRowUp 1.6s ease-out; }
+  @keyframes stRowUp { 0% { background: rgba(61,220,132,.35); } 100% { background: transparent; } }
+  .st-odds .row { display: grid; grid-template-columns: 170px 1fr 70px 26px; align-items: center; gap: 10px; margin: 0 0 11px; font-size: 21px; }
+  .st-odds .row .n { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st-odds .bar { height: 22px; border-radius: 4px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .st-odds .bar i { display: block; height: 100%; background: linear-gradient(90deg, #c99700, #ffd23f); transition: width 1.2s ease; }
+  .st-odds .pct { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
+
+  /* Playoff Picture (eingebettet) */
+  .st-view.picture { padding: 10px; }
+  .st-view.picture iframe { width: 100%; height: 100%; border: 0; background: transparent; }
+
+  /* Ergebnis / Spielszene */
+  .st-result { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; }
+  .st-result .kick { font: 900 26px/1 Impact; letter-spacing: 6px; color: #d50a0a; background: #fff; padding: 8px 18px; margin-bottom: 26px; }
+  .st-score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 40px; width: 100%; }
+  .st-score .tm { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .st-score .tm img { width: 150px; height: 150px; object-fit: contain; }
+  .st-score .tm .nm { font: 900 40px/1 Impact; letter-spacing: 2px; text-transform: uppercase; }
+  .st-score .tm.win .nm { color: #ffd23f; }
+  .st-score .sc { font: 900 130px/1 Impact; letter-spacing: 4px; text-shadow: 6px 6px 0 #d50a0a; }
+  .st-field { position: relative; width: 92%; height: 210px; margin-top: 26px; border-radius: 10px; overflow: hidden;
+    background: repeating-linear-gradient(90deg, #1f6b31 0 9.09%, #237a38 9.09% 18.18%); border: 3px solid #fff; }
+  .st-field::before, .st-field::after { content: ''; position: absolute; top: 0; bottom: 0; width: 9.09%; background: rgba(213,10,10,.55); }
+  .st-field::before { left: 0; } .st-field::after { right: 0; background: rgba(30,80,200,.55); }
+  .st-ball { position: absolute; left: 12%; top: 50%; width: 46px; height: 28px; margin-top: -14px; background: #7a3b12; border-radius: 50%; border: 2px solid #3b1a06; z-index: 2; }
+  .st-ball::after { content: ''; position: absolute; left: 30%; right: 30%; top: 45%; height: 2px; background: #fff; }
+  .st-view.on .st-ball { animation: stBall 2.6s cubic-bezier(.3,.1,.4,1) .4s forwards; }
+  @keyframes stBall { 0% { left: 12%; transform: translateY(0) rotate(0); } 50% { transform: translateY(-120px) rotate(400deg); } 100% { left: 88%; transform: translateY(0) rotate(760deg); } }
+  .st-td { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 900 92px/1 Impact; letter-spacing: 8px; color: #ffd23f; text-shadow: 5px 5px 0 #000; opacity: 0; z-index: 3; }
+  .st-view.on .st-td { animation: stTd .6s cubic-bezier(.2,1.6,.4,1) 3s forwards; }
+  @keyframes stTd { from { opacity: 0; transform: scale(2.4); } to { opacity: 1; transform: scale(1); } }
+
+  /* Breaking News (neuer Blog-Beitrag) */
+  .st-break { display: grid; grid-template-columns: 1fr 520px; gap: 30px; height: 100%; align-items: center; }
+  .st-break.noimg { grid-template-columns: 1fr; }
+  .st-break .bn { display: inline-block; background: #d50a0a; color: #fff; font: 900 26px/1 Impact; letter-spacing: 5px; padding: 10px 18px; margin-bottom: 18px; }
+  .st-break .bt { font: 900 50px/1.1 Impact, 'Arial Black'; letter-spacing: 1px; margin-bottom: 18px; }
+  .st-break .bx { font: 500 24px/1.45 'Segoe UI'; color: #d6deea; display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+  .st-break img { width: 100%; max-height: 520px; object-fit: contain; border-radius: 8px; background: #000; }
+
+  /* Pausenfüller: Kiss Cam / schlafender VIP */
+  .st-gag { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+  .st-kiss { position: relative; width: 760px; height: 470px; border: 10px solid #ff4fa3; border-radius: 30px; background: radial-gradient(circle at 50% 40%, #3a1230, #12060f); display: flex; align-items: flex-end; justify-content: center; gap: 70px; overflow: hidden; }
+  .st-kiss .lbl { position: absolute; top: 18px; left: 0; right: 0; text-align: center; font: 900 54px/1 Impact; letter-spacing: 8px; color: #ff4fa3; text-shadow: 0 0 22px rgba(255,79,163,.8); }
+  .st-kiss .p { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 18px; }
+  .st-kiss .p svg { width: 200px; height: 250px; }
+  .st-kiss .p b { font: 900 30px/1 Impact; letter-spacing: 2px; }
+  .st-kiss .p.l svg { animation: stLean 2.4s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+  .st-kiss .p.r svg { animation: stLeanR 2.4s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+  @keyframes stLean { to { transform: rotate(8deg); } } @keyframes stLeanR { to { transform: rotate(-8deg); } }
+  .st-kiss .heart { position: absolute; font-size: 54px; animation: stHeart 3s ease-in infinite; opacity: 0; }
+  @keyframes stHeart { 0% { opacity: 0; transform: translateY(0) scale(.6); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-360px) scale(1.3); } }
+  .st-gag .cap { margin-top: 22px; font: 800 30px/1.2 'Segoe UI'; color: #d6deea; text-align: center; }
+  .st-vip { position: relative; width: 760px; height: 470px; border: 6px solid #5b6b85; border-radius: 12px; background: linear-gradient(180deg, #1b2440, #0b1020); overflow: hidden; }
+  .st-vip .tag { position: absolute; left: 18px; top: 16px; background: #c99700; color: #000; font: 900 24px/1 Impact; letter-spacing: 3px; padding: 8px 14px; }
+  .st-vip svg.guy { position: absolute; left: 50%; bottom: -10px; width: 330px; margin-left: -165px; }
+  .st-vip .head { transform-origin: 160px 150px; animation: stNod 3.2s ease-in-out infinite; }
+  @keyframes stNod { 0%, 30% { transform: rotate(0); } 55%, 80% { transform: rotate(16deg) translateY(10px); } 85% { transform: rotate(-4deg); } 100% { transform: rotate(0); } }
+  .st-vip .z { position: absolute; font: 900 46px/1 Impact; color: #9fe8ff; opacity: 0; animation: stZ 2.6s ease-out infinite; }
+  @keyframes stZ { 0% { opacity: 0; transform: translate(0,0) scale(.5); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(60px,-150px) scale(1.4); } }
+
+  /* Laufband unten (wenn gerade niemand spricht) */
+  .st-ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; z-index: 5; display: flex; align-items: center; background: linear-gradient(180deg, #0d1a33, #060c1a); border-top: 4px solid #c99700; overflow: hidden; transition: opacity .3s; }
+  .st-ticker.hide { opacity: 0; }
+  .st-ticker .lbl { flex: 0 0 auto; height: 100%; display: flex; align-items: center; padding: 0 26px; background: #d50a0a; font: 900 28px/1 Impact; letter-spacing: 3px; }
+  .st-ticker .run { flex: 1; overflow: hidden; white-space: nowrap; }
+  .st-ticker .run span { display: inline-block; padding-left: 100%; font: 800 30px/1 'Segoe UI'; animation: stRun var(--dur, 40s) linear infinite; }
+  .st-ticker .run em { font-style: normal; color: #c99700; margin: 0 26px; }
+  @keyframes stRun { to { transform: translateX(-100%); } }
+  .ds-caption { z-index: 7; }
+
+  .st-clock { font: 900 40px/1 Impact; letter-spacing: 2px; color: #fff; margin-left: auto; margin-right: 24px; font-variant-numeric: tabular-nums; }
+  .st-status { font: 700 16px/1.2 'Segoe UI'; color: #9fb0c8; text-align: right; margin-right: 18px; }
+  .st-status b { color: #3ddc84; }
+
+  /* Start-Overlay (Autoplay/Vollbild brauchen einen Klick) */
+  .st-start { position: fixed; inset: 0; z-index: 2147483000; background: rgba(0,0,0,.82); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .st-start div { text-align: center; font: 800 34px/1.4 'Segoe UI'; }
+  .st-start small { display: block; font: 500 20px/1.4 'Segoe UI'; color: #9fb0c8; margin-top: 10px; }
+  @media (prefers-reduced-motion: reduce) { .st-view, .st-view * { animation-duration: .01s !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="st-start" id="stStart"><div>📺 Live-Studio starten<small>Klicken für Vollbild &amp; Ton · läuft neben der geöffneten Admin-Seite (gleicher Browser)</small></div></div>
+
+<div class="ds-overlay" id="stRoot">
+  <div class="ds-canvas" id="stCanvas">
+    <div class="ds-bg"></div>
+    <div class="ds-header">
+      <div class="ds-brand"><span class="ds-live">LIVE</span><div class="ds-logo" id="stLogo">Altima Bowl<small>LIVE-STUDIO</small></div></div>
+      <div class="st-status" id="stStatus"></div>
+      <div class="st-clock" id="stClock">--:--</div>
+    </div>
+    <div class="st-strip">
+      <div class="st-block live"><h3>On the Field</h3><div class="st-games" id="stLive"></div></div>
+      <div class="st-block next"><h3>Up Next</h3><div class="st-games" id="stNext"></div></div>
+    </div>
+    <div class="st-main">
+      <div class="st-left">
+        <div class="ds-cam" id="stCam"></div>
+        <div class="ds-pip" id="stPip"></div>
+      </div>
+      <div class="st-panel" id="stPanel">
+        <div class="st-view" data-view="overview" id="vOverview"></div>
+        <div class="st-view picture" data-view="picture" id="vPicture"></div>
+        <div class="st-view" data-view="result" id="vResult"></div>
+        <div class="st-view" data-view="breaking" id="vBreaking"></div>
+        <div class="st-view" data-view="gag" id="vGag"></div>
+      </div>
+    </div>
+    <div class="st-ticker" id="stTicker"><div class="lbl">ERGEBNISSE</div><div class="run" id="stRun"></div></div>
+    <div class="ds-caption off" id="stCaption"><div class="ds-cap-name" id="stCapName"></div><div class="ds-cap-text" id="stCapText"></div></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const LOGO = (id) => `https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${id}.png`;
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $ = (id) => document.getElementById(id);
+  let state = null, history = null, lastFinished = -1, lastStandOrder = [], seenArticles = null;
+  let baseView = 'overview', overlayUntil = 0, speaking = false, lastAudio = null;
+
+  // ---------------------------------------------------------- Bühne skalieren (1920x1080)
+  function fit() {
+    const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    $('stCanvas').style.setProperty('--ds-scale', s);
+  }
+  window.addEventListener('resize', fit); fit();
+
+  // ---------------------------------------------------------- Booth (aus der Draft-Show)
+  const names = (() => { try { return MB.Announcer.getSpeakerNames(); } catch (e) { return { commentator: 'Kommentator', moderator: 'Moderation', announcer: 'Ring-Ansager' }; } })();
+  const scenes = ['booth', 'booth-close', 'close-commentator', 'close-moderator', 'ring'];
+  $('stCam').innerHTML = scenes.map(s => MB.DraftStage.sceneHTML(s, names)).join('') + '<div class="ds-flash" id="stFlash"></div>';
+  $('stPip').innerHTML = MB.DraftStage.sceneHTML('ring', names).replace('data-scene="ring"', 'data-scene="pip-ring"');
+  let curCam = '';
+  function setCam(scene) {
+    if (scene === curCam) return; curCam = scene;
+    $('stCam').querySelectorAll('.ds-scene').forEach(s => s.classList.toggle('on', s.dataset.scene === scene));
+    const pip = $('stPip').querySelector('.ds-scene'); if (pip) pip.classList.add('on');
+    const f = $('stFlash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+  }
+  setCam('booth');
+  function setTalking(role, on) {
+    document.querySelectorAll('#stRoot .ds-char').forEach(c => {
+      const mine = c.dataset.role === role;
+      c.classList.toggle('talking', !!on && mine); c.classList.toggle('is-speaker', !!on && mine); c.classList.toggle('dim', !!on && !mine);
+    });
+  }
+  const camForRole = (r) => r === 'announcer' ? 'ring' : r === 'moderator' ? 'close-moderator' : 'close-commentator';
+  const plain = (t) => String(t || '').replace(/\[[^\]]*\]|<[^>]*>/g, '').replace(/\s{2,}/g, ' ').trim();
+  let capTimer = null, backTimer = null;
+  function onSpeak(evt) {
+    const role = evt.role || 'commentator';
+    if (evt.type === 'start') {
+      speaking = true; clearTimeout(backTimer);
+      setCam(camForRole(role)); setTalking(role, true);
+      clearTimeout(capTimer);
+      $('stCapName').innerHTML = `${esc(names[role] || role)}<small>${role === 'announcer' ? 'RING-ANSAGER' : role === 'moderator' ? 'MODERATION' : 'KOMMENTAR'}</small>`;
+      $('stCapText').textContent = plain(evt.text);
+      $('stCaption').classList.remove('off'); $('stTicker').classList.add('hide');
+    } else if (evt.type === 'end') {
+      speaking = false; setTalking(role, false);
+      capTimer = setTimeout(() => { $('stCaption').classList.add('off'); $('stTicker').classList.remove('hide'); }, 1600);
+      backTimer = setTimeout(() => { if (!speaking) setCam('booth'); }, 2600); // zurück in die Totale
+    }
+  }
+
+  // ---------------------------------------------------------- Verbindung zur Admin-Seite
+  let ch = null, lastAdmin = 0;
+  try { ch = new BroadcastChannel('mb-studio'); } catch (e) { ch = null; }
+  if (ch) {
+    ch.onmessage = (ev) => {
+      const m = ev.data || {};
+      lastAdmin = Date.now();
+      if (m.type === 'speak' && m.evt) onSpeak(m.evt);
+      else if (m.type === 'audio' && m.blob) playAudio(m);
+      else if (m.type === 'show' && m.view) showOverlay(m.view, m.ms || 15000);
+      else if (m.type === 'gag') runGag(m.which);
+    };
+    setInterval(() => { try { ch.postMessage({ type: 'studio-hello' }); } catch (e) { /* egal */ } }, 2000);
+    ch.postMessage({ type: 'studio-hello' });
+  }
+  function playAudio(m) {
+    ch.postMessage({ type: 'audio-ack', id: m.id });
+    const url = URL.createObjectURL(m.blob);
+    const a = new Audio(url); lastAudio = a;
+    const done = () => { URL.revokeObjectURL(url); ch.postMessage({ type: 'audio-done', id: m.id }); };
+    a.onended = done; a.onerror = done;
+    a.play().catch(done);
+  }
+  function drawStatus() {
+    const audio = (() => { try { return localStorage.getItem('mb_studio_audio') || 'admin'; } catch (e) { return 'admin'; } })();
+    $('stStatus').innerHTML = (Date.now() - lastAdmin < 8000 ? '<b>● Admin verbunden</b>' : 'Admin-Seite nicht verbunden') + `<br>Ton der Ansagen: ${audio === 'studio' ? 'hier' : 'Admin-Laptop'}`;
+    const d = new Date(); $('stClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  setInterval(drawStatus, 1000); drawStatus();
+
+  // ---------------------------------------------------------- Ansichten
+  function setView(v) { document.querySelectorAll('#stPanel .st-view').forEach(x => x.classList.toggle('on', x.dataset.view === v)); }
+  let overlayTimer = null;
+  function showOverlay(v, ms) {
+    overlayUntil = Date.now() + ms; setView(v);
+    // Animationen neu starten
+    const el = document.querySelector(`#stPanel .st-view[data-view="${v}"]`); if (el) { el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
+    clearTimeout(overlayTimer);
+    overlayTimer = setTimeout(() => { overlayUntil = 0; setView(baseView); }, ms);
+  }
+  const busy = () => Date.now() < overlayUntil;
+
+  // ---------------------------------------------------------- Spiele oben
+  const teamOf = (name) => { const p = (state.players || []).find(x => x.name === name); return p ? p.team : null; };
+  function gameHtml(id, sched) {
+    const info = MB.Tipp.getMatchInfo(state, id); if (!info) return '';
+    const e = sched.byMatchId.get(id);
+    const stadium = info.field === 2 ? state.config.s2 : state.config.s1;
+    const h = teamOf(info.homeName), a = teamOf(info.awayName);
+    return `<div class="st-game">
+      <div class="side">${a ? `<img src="${LOGO(a)}" alt="">` : ''}<span class="nm">${esc(info.awayName)}</span></div>
+      <div class="meta"><b>${e ? esc(e.time) : ''}</b>${esc(stadium || '')}</div>
+      <div class="side r"><span class="nm">${esc(info.homeName)}</span>${h ? `<img src="${LOGO(h)}" alt="">` : ''}</div>
+    </div>`;
+  }
+  function drawGames() {
+    let ids = { live: [], upcoming: [] }, sched = { byMatchId: new Map() };
+    try { ids = MB.getLiveAndUpcomingMatchIds(state); sched = MB.computeLiveKickoffSchedule(state); } catch (e) { /* leer */ }
+    $('stLive').innerHTML = ids.live.map(id => gameHtml(id, sched)).join('') || '<div class="st-empty">Pause / Wartezeit</div>';
+    $('stNext').innerHTML = ids.upcoming.map(id => gameHtml(id, sched)).join('') || '<div class="st-empty">Keine weiteren Spiele</div>';
+  }
+
+  // ---------------------------------------------------------- Übersicht: Tabelle + Titelchancen
+  function standings() {
+    return [...(state.players || [])].sort((a, b) => (b.wins || 0) - (a.wins || 0) || (b.diff || 0) - (a.diff || 0) || (b.pointsFor || 0) - (a.pointsFor || 0));
+  }
+  function drawOverview() {
+    const rows = standings();
+    const prev = lastStandOrder; lastStandOrder = rows.map(p => p.name);
+    const table = `<table class="st-table"><tr><th>#</th><th></th><th>Spieler</th><th class="r">S-N</th><th class="r">Diff</th><th class="r">Pkt</th></tr>${rows.map((p, i) => {
+      const up = prev.length && prev.indexOf(p.name) > i;
+      return `<tr class="${i === 0 ? 'first' : ''} ${up ? 'up' : ''}"><td>${i + 1}</td><td>${p.team ? `<img src="${LOGO(p.team)}" alt="">` : ''}</td><td class="n">${esc(p.name)}</td><td class="r">${p.wins || 0}-${Math.max(0, (p.played || 0) - (p.wins || 0))}</td><td class="r">${(p.diff || 0) > 0 ? '+' : ''}${p.diff || 0}</td><td class="r">${p.pointsFor || 0}</td></tr>`;
+    }).join('')}</table>`;
+    let odds = '';
+    try {
+      const o = MB.computeTitleOdds(history, state) || {};
+      const t = MB.computeTitleOddsTrend ? (MB.computeTitleOddsTrend(history, state) || {}) : {};
+      const list = rows.map(p => ({ n: p.name, pct: o[p.name] || 0, a: (t[p.name] || {}).arrow || '→' })).sort((a, b) => b.pct - a.pct).slice(0, 10);
+      const max = Math.max(1, ...list.map(x => x.pct));
+      odds = `<div class="st-odds">${list.map(x => `<div class="row"><span class="n">${esc(x.n)}</span><div class="bar"><i style="width:${(x.pct / max * 100).toFixed(1)}%"></i></div><span class="pct">${Math.round(x.pct)}%</span><span style="color:${x.a === '↗' ? '#3ddc84' : x.a === '↘' ? '#ff5a5a' : '#9fb0c8'}">${x.a}</span></div>`).join('')}</div>`;
+    } catch (e) { odds = '<div class="st-empty">Titelchancen nicht berechenbar.</div>'; }
+    $('vOverview').innerHTML = `<div class="st-overview"><div><div class="st-title">Tabelle <small>Regular Season</small></div>${table}</div><div><div class="st-title">Titelchancen <small>Trend seit dem letzten Ergebnis</small></div>${odds}</div></div>`;
+  }
+
+  // ---------------------------------------------------------- Neues Ergebnis -> Ergebnis-Karte mit Spielszene
+  function finishedMatches() {
+    const out = [];
+    (state.matches || []).forEach(m => { if (m.s1 != null && m.s2 != null) { const h = state.players[m.p1], a = state.players[m.p2]; if (h && a) out.push({ at: m.finishedAt || '', homePlayer: h.name, awayPlayer: a.name, homeScore: m.s1, awayScore: m.s2 }); } });
+    (state.playoffMatches || []).forEach(m => { if (m.s1 != null && m.s2 != null && m.p1 && m.p2 && m.p1.id !== -1 && m.p2.id !== -1) out.push({ at: m.finishedAt || '', homePlayer: m.p1.name, awayPlayer: m.p2.name, homeScore: m.s1, awayScore: m.s2 }); });
+    return out.sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  }
+  // zuletzt eingetragenes Ergebnis (nach Zeitstempel), Gruppe oder Playoffs
+  function lastResult() {
+    const all = [];
+    (state.matches || []).forEach(m => { if (m.s1 != null && m.s2 != null) { const h = state.players[m.p1], a = state.players[m.p2]; if (h && a) all.push({ at: m.finishedAt || '', homePlayer: h.name, awayPlayer: a.name, homeScore: m.s1, awayScore: m.s2 }); } });
+    (state.playoffMatches || []).forEach(m => { if (m.s1 != null && m.s2 != null && m.p1 && m.p2 && m.p1.id !== -1 && m.p2.id !== -1) all.push({ at: m.finishedAt || '', homePlayer: m.p1.name, awayPlayer: m.p2.name, homeScore: m.s1, awayScore: m.s2 }); });
+    if (!all.length) return null;
+    return all.reduce((best, x) => (String(x.at) >= String(best.at) ? x : best), all[0]);
+  }
+  function drawResult(m) {
+    const hw = m.homeScore > m.awayScore;
+    const h = teamOf(m.homePlayer), a = teamOf(m.awayPlayer);
+    $('vResult').innerHTML = `<div class="st-result"><div class="kick">FINAL</div>
+      <div class="st-score">
+        <div class="tm ${!hw ? 'win' : ''}">${a ? `<img src="${LOGO(a)}" alt="">` : ''}<div class="nm">${esc(m.awayPlayer)}</div></div>
+        <div class="sc">${m.awayScore}:${m.homeScore}</div>
+        <div class="tm ${hw ? 'win' : ''}">${h ? `<img src="${LOGO(h)}" alt="">` : ''}<div class="nm">${esc(m.homePlayer)}</div></div>
+      </div>
+      <div class="st-field"><div class="st-ball"></div><div class="st-td">TOUCHDOWN</div></div></div>`;
+  }
+  function drawTicker() {
+    const fin = finishedMatches().slice(-8).reverse();
+    const txt = fin.length ? fin.map(m => `${esc(m.awayPlayer)} ${m.awayScore}:${m.homeScore} ${esc(m.homePlayer)}`).join('<em>◆</em>') : 'Noch keine Ergebnisse — gleich geht es los.';
+    const run = $('stRun'); const html = `<span style="--dur:${Math.max(25, fin.length * 7)}s">${txt}</span>`;
+    if (run.dataset.txt !== txt) { run.innerHTML = html; run.dataset.txt = txt; }
+  }
+
+  // ---------------------------------------------------------- Neuer Blog-Beitrag -> Breaking News
+  async function checkArticles() {
+    let list = [];
+    try { list = await MB.Blog.fetchAllArticles(5); } catch (e) { return; }
+    if (seenArticles === null) { seenArticles = new Set(list.map(a => String(a.id))); return; }
+    const fresh = list.filter(a => !seenArticles.has(String(a.id)));
+    fresh.forEach(a => seenArticles.add(String(a.id)));
+    const a = fresh[0]; if (!a) return;
+    const img = a.media_type === 'image' && a.media_url ? a.media_url : (a.data && Array.isArray(a.data.extra_media) && a.data.extra_media[0]) || '';
+    const text = String(a.body || '').replace(/\[\[[^\]]+\]\]/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    $('vBreaking').innerHTML = `<div class="st-break ${img ? '' : 'noimg'}"><div><div class="bn">${a.kind === 'song' ? '🎵 NEUER SONG' : 'BREAKING NEWS'}</div><div class="bt">${esc(String(a.title || '').replace(/<[^>]+>/g, ''))}</div><div class="bx">${esc(text)}</div></div>${img ? `<img src="${esc(img)}" alt="">` : ''}</div>`;
+    showOverlay('breaking', 16000);
+  }
+
+  // ---------------------------------------------------------- Pausenfüller
+  const PERSON = (shirt) => `<svg viewBox="0 0 200 250"><path d="M20 250 Q24 170 100 160 Q176 170 180 250Z" fill="${shirt}"/><ellipse cx="100" cy="100" rx="52" ry="60" fill="#d9a074"/><ellipse cx="80" cy="96" rx="6" ry="5" fill="#241a12"/><ellipse cx="120" cy="96" rx="6" ry="5" fill="#241a12"/><path d="M84 128 Q100 140 116 128" stroke="#7a3a2a" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M48 80 Q60 34 100 36 Q142 34 152 80 Q128 58 100 60 Q72 58 48 80Z" fill="#3a2a1a"/></svg>`;
+  function gagKissCam() {
+    const ps = [...(state.players || [])].sort(() => Math.random() - .5).slice(0, 2);
+    if (ps.length < 2) return false;
+    $('vGag').innerHTML = `<div class="st-gag"><div class="st-kiss"><div class="lbl">♥ KISS CAM ♥</div>
+      <div class="p l">${PERSON('#d50a0a')}<b>${esc(ps[0].name)}</b></div><div class="p r">${PERSON('#1e50c8')}<b>${esc(ps[1].name)}</b></div>
+      ${Array.from({ length: 8 }, (_, i) => `<span class="heart" style="left:${8 + i * 11}%;bottom:-40px;animation-delay:${(i * .37).toFixed(2)}s">💗</span>`).join('')}</div>
+      <div class="cap">Die Kamera hat entschieden. Ausreden werden nicht akzeptiert.</div></div>`;
+    return true;
+  }
+  function gagSleepyVip() {
+    $('vGag').innerHTML = `<div class="st-gag"><div class="st-vip"><div class="tag">VIP-LOGE</div>
+      <svg class="guy" viewBox="0 0 320 300"><path d="M20 300 Q30 200 160 186 Q290 200 300 300Z" fill="#1f2738"/><path d="M160 190 L140 300 L180 300Z" fill="#fff"/><path d="M152 196 L168 196 L164 270 L156 270Z" fill="#c0392b"/>
+        <rect x="70" y="236" width="56" height="36" rx="4" fill="#c99700"/><text x="98" y="260" text-anchor="middle" font-family="Impact" font-size="18" fill="#000">VIP</text>
+        <g class="head"><ellipse cx="160" cy="120" rx="60" ry="68" fill="#e0b088"/><path d="M128 118 Q138 124 148 118 M172 118 Q182 124 192 118" stroke="#2b1d12" stroke-width="4" fill="none" stroke-linecap="round"/><ellipse cx="160" cy="156" rx="10" ry="6" fill="#7a3a2a"/><path d="M100 96 Q110 46 160 46 Q210 46 220 96 Q190 76 160 78 Q130 76 100 96Z" fill="#8a8f99"/></g></svg>
+      <span class="z" style="left:62%;top:30%;">Z</span><span class="z" style="left:66%;top:24%;animation-delay:.8s">Z</span><span class="z" style="left:70%;top:18%;animation-delay:1.6s">Z</span></div>
+      <div class="cap">Hochspannung im Stadion — fast alle sind hellwach.</div></div>`;
+    return true;
+  }
+  function gagLastPlay() { const m = lastResult(); if (!m) return false; drawResult(m); return 'result'; }
+  function runGag(which) {
+    if (!state) return;
+    if (which === 'kiss') { if (gagKissCam()) showOverlay('gag', 11000); }
+    else if (which === 'vip') { gagSleepyVip(); showOverlay('gag', 11000); }
+    else if (which === 'result') { if (gagLastPlay()) showOverlay('result', 13000); }
+    else if (which === 'home') { overlayUntil = 0; setView(baseView); }
+  }
+  function maybeGag() {
+    if (busy() || speaking || !state || !(state.players || []).length) return;
+    const pick = [gagKissCam, gagSleepyVip, gagLastPlay][Math.floor(Math.random() * 3)];
+    const r = pick();
+    if (r === 'result') showOverlay('result', 13000); else if (r) showOverlay('gag', 11000);
+  }
+  // alle 4–7 Minuten ein kurzer Pausenfüller
+  (function loopGag() { setTimeout(() => { maybeGag(); loopGag(); }, (240 + Math.random() * 180) * 1000); })();
+
+  // ---------------------------------------------------------- Daten laden
+  async function refresh() {
+    try { state = await MB.fetchCloudState(); } catch (e) { return; }
+    if (!state || !(state.players || []).length) {
+      $('stLive').innerHTML = '<div class="st-empty">Es läuft aktuell kein Turnier.</div>'; $('stNext').innerHTML = '';
+      $('vOverview').innerHTML = '<div class="st-result"><div class="st-title">Gleich geht es los</div></div>'; setView('overview');
+      return;
+    }
+    const playoffs = (state.playoffMatches || []).length > 0 && MB.isGroupPhaseComplete(state);
+    baseView = playoffs ? 'picture' : 'overview';
+    if (playoffs && !$('vPicture').querySelector('iframe')) $('vPicture').innerHTML = '<iframe src="spielplan.html?embed=picture" title="Playoff Picture"></iframe>';
+    drawGames(); drawOverview(); drawTicker();
+    const fin = finishedMatches().length;
+    if (lastFinished >= 0 && fin > lastFinished) { const m = lastResult(); if (m) { drawResult(m); showOverlay('result', 14000); } }
+    lastFinished = fin;
+    if (!busy()) setView(baseView);
+  }
+
+  async function boot() {
+    try { history = await MB.loadAndBuildHistory(); } catch (e) { history = { seasons: [], matches: [], byPlayer: new Map(), ringsByPlayer: new Map(), players: new Set() }; }
+    try { const s = await MB.fetchCloudState(); if (s && s.config && s.config.nicknames && MB.Announcer.setNicknames) MB.Announcer.setNicknames(s.config.nicknames); } catch (e) { /* egal */ }
+    await refresh(); await checkArticles();
+    setInterval(refresh, 6000);
+    setInterval(checkArticles, 20000);
+  }
+  $('stStart').onclick = () => {
+    $('stStart').remove();
+    const r = document.documentElement; if (r.requestFullscreen) r.requestFullscreen().catch(() => {});
+    try { const a = new Audio(); a.play().catch(() => {}); } catch (e) { /* Autoplay freischalten */ }
+  };
+  boot();
+})();
+</script>
+</body>
+</html>

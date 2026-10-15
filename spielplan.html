@@ -40,6 +40,10 @@
   .title-pct .trend { display: block; white-space: nowrap; font-weight: 800; font-size: 0.8em; }
   .btn-secondary { background: transparent; border: 1px solid var(--v2-border); color: var(--v2-silver); border-radius: 6px; padding: 4px 10px; font-size: 0.7em; cursor: pointer; }
 
+  body.embed-picture { background: transparent !important; }
+  body.embed-picture .v2-header, body.embed-picture .v2-nav-drawer, body.embed-picture .v2-nav-backdrop { display: none !important; }
+  body.embed-picture .v2-wrap { max-width: none; padding: 8px; }
+  .embed-wrap { transform-origin: top left; }
   .sp-day-head { font-weight: 800; font-size: 0.85em; letter-spacing: .5px; color: var(--v2-gold); margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--v2-border); }
   .sp-day-head:first-child { margin-top: 2px; }
   .sp-day-badge { font-size: 0.78em; padding: 1px 8px; border-radius: 8px; margin-left: 8px; font-weight: 700; }
@@ -89,6 +93,17 @@
     }
   }
 </style>
+<!-- Vorschau beim Teilen des Seitenlinks (Messenger lesen nur statisches HTML) -->
+<meta property="og:title" content="Altima Bowl – Spielplan">
+<meta property="og:description" content="Alle Partien, Kickoff-Zeiten und das Playoff Picture.">
+<meta property="og:image" content="https://geepard86.github.io/maddenbowl/assets/images/og_main.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://geepard86.github.io/maddenbowl/spielplan.html">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="description" content="Alle Partien, Kickoff-Zeiten und das Playoff Picture.">
 </head>
 <body class="v2">
 <div class="v2-wrap wide" id="app">
@@ -122,7 +137,7 @@
 
 <script src="ui.js"></script>
 <script>
-  MB.UI.mountHeader({ active: 'spielplan' });
+  if (new URLSearchParams(location.search).get('embed') !== 'picture') MB.UI.mountHeader({ active: 'spielplan' });
 
   let state = null, history = null, activeTab = 'tabelle';
 
@@ -451,7 +466,21 @@
     renderBody();
   }
 
+  // Einbettung im Studio-Bildschirm: nur das Playoff Picture, ohne Kopfzeile, alle 10 s aktualisiert
+  const EMBED_PICTURE = new URLSearchParams(location.search).get('embed') === 'picture';
+  async function bootEmbed() {
+    document.body.classList.add('embed-picture');
+    const draw = async () => {
+      try { state = await MB.fetchCloudState(); } catch (e) { return; }
+      if (!history) { try { history = await MB.loadAndBuildHistory(); } catch (e) { /* ohne */ } }
+      document.getElementById('app').innerHTML = `<div class="embed-wrap">${buildPlayoffPictureHtml()}</div>`;
+    };
+    await draw();
+    setInterval(draw, 10000);
+  }
+
   async function boot() {
+    if (EMBED_PICTURE) return bootEmbed();
     try { state = await MB.fetchCloudState(); } catch (e) {
       document.getElementById('app').innerHTML = `<div class="v2-card">Konnte Turnierdaten nicht laden. (${e.message})</div>`;
       return;
