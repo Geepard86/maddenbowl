@@ -1291,6 +1291,7 @@ function isFinished(match) { return MB.isFinished(match); }
       confirmBtn.style.opacity = '1';
     }
 
+    let draftAvailableBeforePick = [];
     async function confirmShowTeamPick() {
       const teamId = showPickedTeamId;
       if (!teamId) return;
@@ -1302,7 +1303,8 @@ function isFinished(match) { return MB.isFinished(match); }
         const taken = new Set([...document.querySelectorAll('[id^="pTeam"]')].map(el => el.value).filter(Boolean));
         const excl = new Set((state.config && state.config.excludedTeams) || []);
         const ratings = MB.getTeamRatingsSync((state.config && state.config.year) || String(new Date().getFullYear())) || {};
-        const available = MB.nflTeams.filter(t => !taken.has(t.id) && !excl.has(t.id)).map(t => ({ id: t.id, rating: Number(ratings[t.id]) || 0 }));
+        const available = MB.nflTeams.filter(t => !taken.has(t.id) && !excl.has(t.id)).map(t => ({ id: t.id, name: t.n, rating: Number(ratings[t.id]) || 0 }));
+        draftAvailableBeforePick = available;
         MB.UI.withAchievements(A => A.evaluateDraftPick && A.evaluateDraftPick(name, teamId, available));
       } catch (e) { console.warn('Draft-Karten:', e); }
       document.getElementById(`pTeam${slot}`).value = teamId;
@@ -1712,7 +1714,12 @@ document.querySelectorAll('.draft-row').forEach(row => {
         const oppNames = getOpponentNamesForSlot(count, parseInt(slotId));
         const badgeMap = MB.computeRingIntroBadges(history, oppNames);
         const opponentBadges = oppNames.map(n => ({ name: n, badge: badgeMap.get(n.trim().toLowerCase()) }));
-        const line = MB.Announcer.buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges });
+        // Lieblingsteam aus dem Spielerprofil (nur wenn selbst gestaltet) + freie Teams vor dem Pick
+        let fav = null, available = draftAvailableBeforePick || [];
+        try {
+          if (MB.Avatar && MB.Avatar.hasOwn(name)) { const fid = MB.Avatar.get(name).team; const fm = nflTeams.find(t => t.id === fid); if (fm) fav = { id: fm.id, name: fm.n }; }
+        } catch (e) { fav = null; }
+        const line = MB.Announcer.buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges, fav, pickedId: teamId, available });
         await MB.Announcer.announceTeamPick(line, speakerIdx, gate);
       } catch (e) {
         console.warn('Team-Pick-Kommentar fehlgeschlagen:', e);

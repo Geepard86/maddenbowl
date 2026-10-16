@@ -1251,14 +1251,18 @@
       const leader = s.aWins > s.bWins ? H : s.bWins > s.aWins ? A : null;
       const diff = Math.abs(s.aWins - s.bWins);
       if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff, "directComparison");
-      else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4, "directComparison");
+      else if (leader) add(`Direktvergleich: ${leader} liegt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen knapp vorne.`, 4, "directComparison");
+      else add(`Direktvergleich: ${H} und ${A} sind mit ${s.aWins}:${s.bWins} aus ${s.games} Spielen exakt gleichauf.`, 5, "directComparison");
 
       // Rivalitäts-Barometer (gleiche Formel wie im Studio): Duelle, Ausgeglichenheit, knappe Spiele, Playoffs
       if (s.games >= 3) {
         const close = s.margins.filter((d) => d <= 7).length;
         const riv = Math.round(Math.min(s.games, 10) * 3 + 30 * (1 - Math.abs(s.aWins - s.bWins) / s.games) + 25 * (close / s.games) + Math.min(s.playoff.games, 3) * 5);
         if (riv >= 75) add(`Achtung, Erzfeinde-Alarm: ${H} gegen ${A} gab es schon ${s.games}-mal, ${close} davon waren knapp. Das Rivalitäts-Barometer steht bei ${riv} von 100.`, 12, "rivalry");
-        else if (riv >= 55) add(`Das Rivalitäts-Barometer zeigt ${riv} von 100: ${s.games} Duelle, ${s.aWins}:${s.bWins} Siege – das ist brisant.`, 9, "rivalry");
+        else if (riv >= 55) {
+          const lead = s.aWins === s.bWins ? `ausgeglichen mit ${s.aWins}:${s.bWins}` : `${s.aWins > s.bWins ? H : A} führt ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)}`;
+          add(`Das Rivalitäts-Barometer zeigt ${riv} von 100: ${s.games} Duelle, ${lead} – das ist brisant.`, 9, "rivalry");
+        }
       }
       // Serie im direkten Vergleich über ALLE Turniere hinweg (ab 2 Siegen in Folge)
       const lw = (s.lastWinners || []).filter(Boolean);

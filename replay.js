@@ -215,18 +215,27 @@
       const newMiles = [...milesNow].filter((x) => !prevMiles.has(x));
       prevMiles = milesNow;
       const songMilestone = newMiles[0] || null;
+      let pendingPreview = null;
 
       out.push("");
-      out.push(`--- Spiel ${n}: ${homeName} ${orig.s1} : ${orig.s2} ${awayName}  (${phase}${ev.type === "playoff" ? " · " + (m.phase || m.id) : ""}${stadium ? ", " + stadium : ""}) ---`);
+      out.push(`--- Spiel ${n}: ${homeName} ${orig.s1} : ${orig.s2} ${awayName}  (${phase}${ev.type === "playoff" && m.phase && m.phase !== phase ? " · " + m.phase : ""}${stadium ? ", " + stadium : ""}) ---`);
       try {
         const r = A.buildResultLine({
           state: work, history, homeName, awayName, homeScore: orig.s1, awayScore: orig.s2, stadium, stadiumPreposition: stadiumPrepFor(work, stadium), prevSeeds,
           matchKind: ev.type, matchId: ev.type === "playoff" ? m.id : null, songMilestone, songGenerated: !!songMilestone,
+          noHandoff: !!(songMilestone && songMilestone !== "champion"),
         });
         say("commentator", r.line);
         let next = null;
         try { next = (MB.getUpcomingMatches(work, { limit: 1 }) || [])[0]; } catch (e) { note(`Vorschau-Zeiten nicht berechenbar: ${e.message}`); }
-        if (next) {
+        // wie live: steht ein Song an, kommt die Vorschau erst NACH dem Song
+        if (next && songMilestone && songMilestone !== "champion") {
+          pendingPreview = () => say("moderator", "Starker Track! Zurück aufs Feld. " + A.buildUpcomingLine({
+            state: work, history, homeName: next.homeName, awayName: next.awayName, time: next.time, stadium: next.stadium,
+            stadiumPreposition: stadiumPrepFor(work, next.stadium), phase: next.phase, usedFactTypes: r.usedFactTypes,
+            songMilestone: null, songGenerated: false,
+          }));
+        } else if (next) {
           say("moderator", A.buildUpcomingLine({
             state: work, history, homeName: next.homeName, awayName: next.awayName, time: next.time, stadium: next.stadium,
             stadiumPreposition: stadiumPrepFor(work, next.stadium), phase: next.phase, usedFactTypes: r.usedFactTypes,
@@ -235,7 +244,7 @@
         }
       } catch (e) { note(`Ansage für dieses Spiel fehlgeschlagen: ${e.message}`); console.warn("Replay Ansage:", e); }
 
-      // Song-Anmoderation + Song-Blogbeitrag
+      // Song-Anmoderation + Song-Blogbeitrag (danach ggf. die zurückgehaltene Vorschau)
       newMiles.forEach((ms) => {
         const label = (MS_LABEL[ms] && MS_LABEL[ms].label) || ms;
         out.push(`   [SONG-MOMENT: ${label}]`);
@@ -246,6 +255,7 @@
           article(B.buildSongArticle(ms, "https://example.invalid/song.mp3", { state: work, history }), `nach Spiel ${n} (${label})`);
         } catch (e) { console.warn("Replay Song:", e); }
       });
+      if (pendingPreview) { try { pendingPreview(); } catch (e) { /* egal */ } pendingPreview = null; }
 
       // ---- Blog: Rekorde, Meilenstein-Rekorde, Power Ranking, Porträts, Abschluss ----
       try {

@@ -501,10 +501,45 @@
   }
 
   // teamTitleInfo: Eintrag aus MB.computeTeamTitleHistory(history).get(teamId) oder undefined
-  function buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges }) {
+  // Lieblingsteam (aus dem Spielerprofil, avatar.js): Kommentar zur Wahl.
+  // fav: { id, name } des Lieblingsteams; pickedId; available: [{ id, name, rating }] VOR dem Pick
+  const DIVS = { "AFC East": ["BUF", "MIA", "NE", "NYJ"], "AFC North": ["BAL", "CIN", "CLE", "PIT"], "AFC South": ["HOU", "IND", "JAX", "TEN"], "AFC West": ["DEN", "KC", "LV", "LAC"],
+    "NFC East": ["DAL", "NYG", "PHI", "WAS"], "NFC North": ["CHI", "DET", "GB", "MIN"], "NFC South": ["ATL", "CAR", "NO", "TB"], "NFC West": ["ARI", "LAR", "SF", "SEA"] };
+  const divOfTeam = (id) => Object.keys(DIVS).find((d) => DIVS[d].includes(id)) || "";
+  function favoriteTeamLine(n, fav, pickedId, available) {
+    if (!fav || !fav.id || !pickedId) return "";
+    const av = available || [];
+    const rate = new Map(av.map((t) => [t.id, Number(t.rating) || 0]));
+    const picked = rate.get(pickedId) || 0;
+    const favTeam = teamFullName(fav.name);
+    if (pickedId === fav.id) {
+      const better = av.filter((t) => t.id !== pickedId && (Number(t.rating) || 0) >= picked + 2).sort((a, b) => b.rating - a.rating)[0];
+      if (better) return pickVaried("favLoveBetter", [
+        `Herz schlägt Verstand: Die ${favTeam} sind sein Lieblingsteam – dabei wären die ${teamFullName(better.name)} deutlich stärker gewesen.`,
+        `Eine Entscheidung aus Liebe: ${n} nimmt sein Lieblingsteam, obwohl stärkere Teams noch zu haben waren.`,
+      ], 1);
+      return pickVaried("favLove", [`Und es ist sein Lieblingsteam – da gab es wohl nicht viel zu überlegen.`, `Treue zahlt sich aus: ${n} holt sich sein Lieblingsteam.`], 1);
+    }
+    if (divOfTeam(pickedId) && divOfTeam(pickedId) === divOfTeam(fav.id)) {
+      return pickVaried("favTraitor", [
+        `Pikant: Ausgerechnet ein Divisionsrivale seiner geliebten ${favTeam}!`,
+        `Das dürfte in der Fankurve der ${favTeam} gar nicht gut ankommen – ${n} wechselt zum Divisionsrivalen.`,
+      ], 1);
+    }
+    const conf = divOfTeam(fav.id).split(" ")[0];
+    if (conf && !divOfTeam(pickedId).startsWith(conf)) {
+      const skipped = av.filter((t) => t.id !== fav.id && divOfTeam(t.id).startsWith(conf) && (Number(t.rating) || 0) >= picked + 2).sort((a, b) => b.rating - a.rating)[0];
+      if (skipped) return `Auffällig: Die ${teamFullName(skipped.name)} wären stärker gewesen – aber als Fan der ${favTeam} nimmt man so ein Team offenbar nicht.`;
+    }
+    if (!rate.has(fav.id)) return pickVaried("favGone", [`Sein Lieblingsteam, die ${favTeam}, war da leider schon weg.`, `Die ${favTeam} wären ihm am liebsten gewesen – aber die hat sich schon jemand anderes geschnappt.`], 1);
+    return "";
+  }
+
+  function buildTeamPickLine({ name, teamName, teamTitleInfo, opponentBadges, fav, pickedId, available }) {
     const n = speechName(name);
     const team = teamFullName(teamName);
     const parts = [];
+    const favLine = favoriteTeamLine(n, fav, pickedId, available);
     if (Math.random() < 0.75) parts.push(pickVaried("teamReaction", TEAM_PICK_REACTIONS, 4));
     if (teamTitleInfo && teamTitleInfo.count > 0) {
       const lastWinner = speechName(teamTitleInfo.lastWinnerName || "");
@@ -516,8 +551,12 @@
       }
     } else {
       // ohne Titel-Historie nicht bei jedem Pick dieselbe Info (sonst 6x "noch kein Ring")
-      if (Math.random() < 0.6 || !parts.length) parts.push(pickVaried("teamTitleNone", TEAM_TITLE_LINES.none, 5, team));
+      // mit Lieblingsteam-Kommentar die Titel-Info weglassen (sonst zu lang)
+      if (!favLine && (Math.random() < 0.6 || !parts.length)) parts.push(pickVaried("teamTitleNone", TEAM_TITLE_LINES.none, 5, team));
     }
+    if (favLine) parts.push(favLine);
+    // nie nur eine nackte Reaktion ("Starke Ansage.") – dann wenigstens das Team nennen
+    if (parts.length === 1 && !favLine && /^[^.!?]{0,30}[.!?]$/.test(parts[0])) parts.push(pickVaried("teamNamed", [`Er geht mit den ${team} ins Rennen.`, `Die ${team} sind vergeben.`, `Für ihn spielen heute die ${team}.`], 2));
     const scheduleFact = buildScheduleFact(opponentBadges);
     if (scheduleFact) parts.push(scheduleFact);
     return parts.join(" ");
@@ -561,7 +600,7 @@
     let m = text.match(/^Direktvergleich: (.+?) führt mit (.+)$/);
     if (m) return `Im Direktvergleich führt ${m[1]} mit ${m[2]}`;
     m = text.match(/^Direktvergleich: (.+?) und (.+?) stehen bei (.+)$/);
-    if (m) return `Im Direktvergleich stehen ${m[1]} und ${m[2]} bei ${m[3]}`;
+    if (m) return `Im Direktvergleich steht es ${m[3]} zwischen ${m[1]} und ${m[2]}`;
     return text;
   }
 
@@ -719,7 +758,7 @@
         text = `${player} feiert damit den ${rec.value}. Sieg in Folge.`;
         break;
       case "upset":
-        text = `Das ist eine faustdicke Überraschung - ${player} war hier klarer Außenseiter gegen ${opponent}.`;
+        text = `Das ist eine faustdicke Überraschung – laut Quote war ${player} hier klarer Außenseiter gegen ${opponent}.`;
         break;
       case "shootout":
         text = `Das ist die höchste Gesamtpunktzahl, die dieses Turnier bisher gesehen hat.`;
@@ -834,9 +873,13 @@
       if (matchKind === "playoff" && matchId) {
         const pm = (state.playoffMatches || []).find((x) => "p-" + x.id === matchId || x.id === matchId);
         const phase = String((pm && (pm.phase || pm.session)) || "");
+        const rawId = String((pm && pm.id) || matchId).replace(/^p-/, "");
         const L = loser;
-        if (/^Elim/i.test(phase)) line += pickVaried("poOut", [`Für ${L} ist das Turnier damit beendet.`, `${L} ist raus – keine zweite Chance mehr.`, `Damit endet die Reise für ${L}.`], 2) + " ";
-        else if (/^(Upper|Wildcard)/i.test(phase)) line += pickVaried("poDrop", [`${L} muss jetzt den Umweg über das Lower Bracket gehen.`, `Für ${L} geht es im Lower Bracket weiter – ab jetzt ohne Netz.`, `${L} rutscht ins Lower Bracket, eine Niederlage noch und es ist vorbei.`], 2) + " ";
+        // Phase-Name, sonst über die ID (lb/ls/lf = Lower Bracket, ub/uf/wc = Upper Bracket)
+        const isElim = /^Elim|Lower/i.test(phase) || (!phase && /^(lb|ls|lf)/i.test(rawId));
+        const isUpper = /^(Upper|Wildcard)/i.test(phase) || (!phase && /^(ub|us|uf|wc)/i.test(rawId));
+        if (isElim) line += pickVaried("poOut", [`Für ${L} ist das Turnier damit beendet.`, `${L} ist raus – keine zweite Chance mehr.`, `Damit endet die Reise für ${L}.`], 2) + " ";
+        else if (isUpper) line += pickVaried("poDrop", [`${L} muss jetzt den Umweg über das Lower Bracket gehen.`, `Für ${L} geht es im Lower Bracket weiter – ab jetzt ohne Netz.`, `${L} rutscht ins Lower Bracket, eine Niederlage noch und es ist vorbei.`], 2) + " ";
       }
     } catch (e) { /* ohne Kontext */ }
 
@@ -917,7 +960,7 @@
   // Der eigentliche Song wird separat über announceSong() angesagt/abgespielt
   // (eigene Intro-Zeile dort) - hier nur der kurze Teaser davor.
   const SONG_TEASER_UPCOMING = {
-    regularSeason: "Die Playoffs sind komplett!",
+    regularSeason: "Das Playoff-Feld steht!",
     firstElimination: "Tja, sowas passiert wohl, wenn man nicht aufpasst.",
     finals: "Jedes Jahr freut sich die ganze Welt auf die Halbzeit-Show und die Werbespots - aber dieses Jahr wurde bereits vorher ein viraler Moment geschaffen...",
   };
