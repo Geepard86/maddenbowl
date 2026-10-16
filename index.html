@@ -61,6 +61,13 @@
   .v2-blog-wide .bw-item:first-of-type { border-top:none; }
   /* Ewige Tabelle im Dashboard: nie umbrechen; wird es eng, fallen die Punkte weg */
   @media (max-width: 640px) { .hof-pts .hof-p { display:none; } }
+  .dash-post { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); color:inherit; text-decoration:none; }
+  .v2-card-title + .dash-post { border-top:none; padding-top:2px; }
+  .dash-thumb { width:88px; height:66px; flex:0 0 88px; border-radius:8px; object-fit:cover; background:#0b1328; }
+  .dash-post-body { min-width:0; flex:1; }
+  .dash-post-title { font-weight:800; font-size:0.86em; margin-top:4px; line-height:1.25; }
+  .dash-post-ex { font-size:0.78em; opacity:.8; margin-top:3px; line-height:1.35; }
+  .dash-post-date { font-size:0.68em; color:var(--v2-silver); margin-top:3px; }
   .v2-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; margin-bottom: 10px; }
   .v2-row-2col:last-child { margin-bottom: 0; }
   .v2-row-2col .v2-card { min-width: 0; margin-bottom: 0; }
@@ -291,17 +298,24 @@
            d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
 
+  // Beitrags-Zeile wie im Blog: Vorschaubild + farbiges Kategorie-Badge
+  function blogItemHtml(a, withExcerpt) {
+    const m = MB.Blog.categoryMeta ? MB.Blog.categoryMeta(a) : { label: 'Beitrag', color: '#64748B', image: '' };
+    return `<a class="dash-post" href="blog.html?post=${encodeURIComponent(a.id)}">
+        ${m.image ? `<img class="dash-thumb" src="${m.image}" alt="">` : ''}
+        <div class="dash-post-body">
+          <span class="v2-badge" style="background:${m.color};">${m.label}</span>
+          <div class="dash-post-title">${withExcerpt ? (a.title || '') : excerpt(a.title, 60)}</div>
+          ${withExcerpt ? `<div class="dash-post-ex">${excerpt(a.body, 160)}</div>` : ''}
+          <div class="dash-post-date">${formatArticleDate(a.created_at)}</div>
+        </div></a>`;
+  }
   function renderBlogCard() {
     if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
-    const items = articles.slice(0, 2).map(a => `
-      <a href="blog.html?post=${encodeURIComponent(a.id)}" style="display:block; margin-bottom:6px; color:inherit; text-decoration:none;">
-        <div style="font-weight:800; font-size:0.84em;">${excerpt(a.title, 42)}</div>
-        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:2px;">${formatArticleDate(a.created_at)}</div>
-      </a>`).join('');
     return `
       <div class="v2-card">
         <div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div>
-        ${items}
+        ${articles.slice(0, 2).map(a => blogItemHtml(a, false)).join('')}
       </div>`;
   }
 
@@ -587,10 +601,7 @@
     const list = (retro.length ? retro : articles).slice(0, 4);
     if (!list.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
     return `<div class="v2-card v2-blog-wide"><div class="v2-card-title">${linkedTitle(retro.length ? '📚 Saisonrückblicke' : '📰 Blog', 'blog.html')}</div>
-      ${list.map(a => `<a class="bw-item" href="blog.html?post=${encodeURIComponent(a.id)}">
-        <div style="font-weight:800; font-size:0.88em;">${a.title || ''}</div>
-        <div style="font-size:0.8em; opacity:.8; margin-top:3px;">${excerpt(a.body, 180)}</div>
-        <div style="font-size:0.68em; color:var(--v2-silver); margin-top:3px;">${formatArticleDate(a.created_at)}</div></a>`).join('')}</div>`;
+      ${list.map(a => blogItemHtml(a, true)).join('')}</div>`;
   }
 
   async function render(opts = {}) {
@@ -598,7 +609,9 @@
     const app = document.getElementById('app');
     if (!state.players || !state.players.length) {
       if (!tmRosters) {
-        tmYear = (state.config && state.config.year) || String(new Date().getFullYear());
+        // Madden-Version des nächsten Turniers (seasons.html), sonst Jahr des Termins, sonst aktuelles Jahr
+        const nt = state.config && state.config.nextTournamentAt ? new Date(state.config.nextTournamentAt) : null;
+        tmYear = String((state.config && state.config.maddenYear) || (nt && !isNaN(nt) ? nt.getFullYear() : '') || (state.config && state.config.year) || new Date().getFullYear());
         try { tmRosters = await MB.Rosters.loadRostersForYear(tmYear); } catch (e) { tmRosters = {}; }
         if (!Object.keys(tmRosters).length) { try { tmYear = String(Number(tmYear) - 1); tmRosters = await MB.Rosters.loadRostersForYear(tmYear); } catch (e) { tmRosters = {}; } }
         try { await MB.loadTeamRatings(tmYear); } catch (e) { /* optional */ }

@@ -85,7 +85,18 @@
     .hof-maintabs { display:flex; gap:8px; flex-wrap:wrap; margin: 0 0 12px; }
   .hof-mt { width:auto; margin:0; padding:9px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.04); color:#cfd8e6; font-weight:800; cursor:pointer; }
   .hof-mt.active { background:var(--v2-gold, #c99700); border-color:var(--v2-gold, #c99700); color:#111; }
-  .av-wrap { display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: start; margin-bottom: 14px; }
+  .av-row { margin-bottom: 10px; }
+  .av-row > label { font-size: .74em; font-weight: 800; letter-spacing: .5px; color: var(--v2-silver, #9fb0c8); display: block; margin-bottom: 4px; text-transform: uppercase; }
+  .av-strip { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .av-chip { flex: 0 0 auto; scroll-snap-align: start; width: auto; margin: 0; padding: 4px 10px; min-width: 64px; border-radius: 10px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.04); color: inherit; font-size: .78em; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+  .av-chip.on { border-color: var(--v2-gold, #c99700); background: rgba(201,151,0,.16); }
+  .av-chip .av-pv { width: 46px; height: 58px; display: block; }
+  .av-chip .av-pv svg { width: 100%; height: 100%; }
+  .av-chip.team img { width: 34px; height: 34px; object-fit: contain; }
+  .av-chip .av-none { font-size: 1.6em; line-height: 34px; opacity: .5; }
+  .av-range { width: 100%; height: 34px; touch-action: pan-y; accent-color: var(--v2-gold, #c99700); }
+  .av-wrap > div { min-width: 0; }
+  .av-wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 14px; }
   .av-fig { width: 200px; height: 300px; background: radial-gradient(circle at 50% 30%, rgba(201,151,0,.18), transparent 70%); border-radius: 12px; }
   .av-fig svg { width: 100%; height: 100%; }
   .av-ed { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
@@ -991,7 +1002,7 @@
       el.innerHTML = `
         <div class="av-wrap"><div class="av-fig" id="avFig"></div>
           <div>${canEdit ? `<button class="btn-secondary" style="width:auto;" onclick="toggleAvatarEditor('${name.replace(/'/g, "\\'")}')">🎨 Figur gestalten</button><div id="avEditor" style="display:none; margin-top:10px;"></div>`
-            : `<div class="hint" style="opacity:.7;">Diese Figur erscheint in Musikvideos, beim Draft-Einlauf und im Live-Studio.${MB.Avatar && !MB.Avatar.hasOwn(name) ? ' (Noch nicht selbst gestaltet – Zufallsfigur.)' : ''}</div>`}</div></div>
+            : `<div class="hint" style="opacity:.7;">Diese Figur wird im Turnierverlauf verwendet.${MB.Avatar && !MB.Avatar.hasOwn(name) ? ' (Noch nicht selbst gestaltet.)' : ''}</div>`}</div></div>
         <div class="kpis" style="margin-bottom:12px;">
           ${kpi('Ewige Tabelle', '#' + rank)}${kpi('Titel', String(me.championships))}${kpi('Teilnahmen', String(me.seasons))}
           ${kpi('Bilanz', `${me.wins}-${me.losses}`)}${kpi('Siegquote', fmtPct(me.winPct))}${kpi('Punkte/Spiel', me.games ? (me.pf / me.games).toFixed(1) : '–')}
@@ -1045,40 +1056,52 @@
     }
     function toggleAvatarEditor(name) {
       const ed = document.getElementById('avEditor'); if (!ed) return;
-      if (ed.style.display === 'none') { avName = name; avDraft = { ...MB.Avatar.get(name) }; ed.style.display = ''; drawAvatarEditor(); }
+      if (ed.style.display === 'none') { avName = name; avDraft = { ...MB.Avatar.get(name) }; avDraft.chainS = avDraft.chain ? '1' : '0'; ed.style.display = ''; drawAvatarEditor(); }
       else { ed.style.display = 'none'; avDraft = null; drawAvatarFig(name); }
     }
-    function avSet(k, v) { avDraft[k] = v; drawAvatarEditor(); drawAvatarFig(avName); }
+    // redraw=false: nur die Figur aktualisieren (Slider/Farbwähler), damit nichts ruckelt
+    function avSet(k, v, redraw) { if (k === 'chainS') { avDraft.chain = v === '1'; avDraft.chainS = v; } else avDraft[k] = v; if (redraw !== false) drawAvatarEditor(); scheduleFig(); }
+    let figRaf = 0;
+    function scheduleFig() { if (figRaf) return; figRaf = requestAnimationFrame(() => { figRaf = 0; drawAvatarFig(avName); }); }
+    // Optionen als waagerecht wischbare Kachel-Leisten (mit Mini-Vorschau des Kopfes)
+    function avStrip(k, list, preview) {
+      return `<div class="av-strip">${list.map(([v, l]) => {
+        const on = avDraft[k] === v || (v === 'none' && !avDraft[k]);
+        const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, [k]: v })}</span>` : '';
+        return `<button type="button" class="av-chip ${on ? 'on' : ''}" onclick="avSet('${k}', '${v}')">${pv}<span>${l}</span></button>`;
+      }).join('')}</div>`;
+    }
     function drawAvatarEditor() {
       const ed = document.getElementById('avEditor'); if (!ed || !avDraft) return;
       const O = MB.Avatar.OPTIONS, d = avDraft;
-      const sel = (k, list) => `<select onchange="avSet('${k}', this.value)">${list.map(([v, l]) => `<option value="${v}" ${d[k] === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-      const sw = (k, list) => `<div class="av-sw">${list.map(c => `<button class="${d[k] === c ? 'on' : ''}" style="background:${c}" onclick="avSet('${k}', '${c}')" aria-label="${c}"></button>`).join('')}</div>`;
+      const sw = (k, list) => `<div class="av-sw">${list.map(c => `<button type="button" class="${d[k] === c ? 'on' : ''}" style="background:${c}" onclick="avSet('${k}', '${c}')" aria-label="${c}"></button>`).join('')}</div>`;
       const teams = (MB.nflTeams || []).slice().sort((a, b) => a.n.localeCompare(b.n));
-      ed.innerHTML = `<div class="av-ed">
-        <div><label>Körperform</label>${sel('body', O.body)}</div>
-        <div><label>Größe</label><input type="range" min="0.88" max="1.12" step="0.02" value="${d.height || 1}" oninput="avSet('height', parseFloat(this.value))"></div>
-        <div><label>Hautton</label>${sw('skin', O.skin)}</div>
-        <div><label>Frisur</label>${sel('hair', O.hair)}</div>
-        <div><label>Haarfarbe</label>${sw('hairColor', O.hairColor)}</div>
-        <div><label>Bart</label>${sel('beard', O.beard)}</div>
-        <div><label>Brille</label>${sel('glasses', O.glasses)}</div>
-        <div><label>Kopfbedeckung</label>${sel('hat', O.hat)}</div>
-        <div><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value)" style="width:100%; height:34px;"></div>
-        <div><label>Lieblingsteam</label><select onchange="avSet('team', this.value)"><option value="">—</option>${teams.map(t => `<option value="${t.id}" ${d.team === t.id ? 'selected' : ''}>${t.n}</option>`).join('')}</select></div>
-        <div><label>Goldkette</label><select onchange="avSet('chain', this.value === '1')"><option value="0" ${!d.chain ? 'selected' : ''}>Nein</option><option value="1" ${d.chain ? 'selected' : ''}>Ja</option></select></div>
-      </div>
-      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-        <button style="width:auto;" onclick="saveAvatar()">💾 Figur speichern</button>
-        <button class="btn-secondary" style="width:auto;" onclick="avDraft = { ...MB.Avatar.randomFor(Math.random()), random: false }; drawAvatarEditor(); drawAvatarFig(avName);">🎲 Zufall</button>
-        <span id="avStatus" class="hint" style="align-self:center;"></span>
-      </div>`;
+      const keep = [...ed.querySelectorAll('.av-strip')].map(x => x.scrollLeft); // Wischposition merken
+      ed.innerHTML = `
+        <div class="av-row"><label>Körperform</label>${avStrip('body', O.body)}</div>
+        <div class="av-row"><label>Größe</label><input type="range" class="av-range" min="0.88" max="1.12" step="0.01" value="${d.height || 1}" oninput="avSet('height', parseFloat(this.value), false)"></div>
+        <div class="av-row"><label>Hautton</label>${sw('skin', O.skin)}</div>
+        <div class="av-row"><label>Frisur</label>${avStrip('hair', O.hair, true)}</div>
+        <div class="av-row"><label>Haarfarbe</label>${sw('hairColor', O.hairColor)}</div>
+        <div class="av-row"><label>Bart</label>${avStrip('beard', O.beard, true)}</div>
+        <div class="av-row"><label>Brille</label>${avStrip('glasses', O.glasses, true)}</div>
+        <div class="av-row"><label>Kopfbedeckung</label>${avStrip('hat', O.hat, true)}</div>
+        <div class="av-row"><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value, false)" style="width:100%; height:38px;"></div>
+        <div class="av-row"><label>Lieblingsteam</label><div class="av-strip">${[{ id: '', n: 'Keins' }, ...teams].map(t => `<button type="button" class="av-chip team ${(d.team || '') === t.id ? 'on' : ''}" onclick="avSet('team', '${t.id}')">${t.id ? `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt="">` : '<span class="av-none">—</span>'}<span>${t.n}</span></button>`).join('')}</div></div>
+        <div class="av-row"><label>Goldkette</label>${avStrip('chainS', [['0', 'Nein'], ['1', 'Ja']])}</div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button style="width:auto;" onclick="saveAvatar()">💾 Figur speichern</button>
+          <button class="btn-secondary" style="width:auto;" onclick="avDraft = { ...MB.Avatar.randomFor(Math.random()), random: false }; drawAvatarEditor(); scheduleFig();">🎲 Zufall</button>
+          <span id="avStatus" class="hint" style="align-self:center;"></span>
+        </div>`;
+      ed.querySelectorAll('.av-strip').forEach((x, i) => { if (keep[i]) x.scrollLeft = keep[i]; });
     }
     async function saveAvatar() {
       const st = document.getElementById('avStatus');
       try {
-        await MB.Avatar.save(avName, avDraft);
-        st.textContent = 'Gespeichert – gilt ab sofort in Musikvideos, Draft-Einlauf und Studio.';
+        const { chainS, ...clean } = avDraft;
+        await MB.Avatar.save(avName, clean);
+        st.textContent = 'Gespeichert – deine Figur wird im Turnierverlauf verwendet.';
         if (MB.UI.currentUser && MB.UI.currentUser() === avName) MB.UI.withAchievements(A => A.track('avatar_saved', {}));
       } catch (e) { st.textContent = 'Speichern fehlgeschlagen: ' + e.message; }
     }

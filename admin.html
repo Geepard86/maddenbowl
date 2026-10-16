@@ -320,8 +320,10 @@
           <div class="config-item">
             <label>Madden Version:</label>
             <select id="maddenYear" onchange="onMaddenYearChange()">
+              <option value="2028">Madden 28</option>
               <option value="2027" selected>Madden 27</option>
               <option value="2026">Madden 26</option>
+              <option value="2025">Madden 25</option>
             </select>
           </div>
         </div>
@@ -1302,7 +1304,7 @@ function isFinished(match) { return MB.isFinished(match); }
       try {
         const taken = new Set([...document.querySelectorAll('[id^="pTeam"]')].map(el => el.value).filter(Boolean));
         const excl = new Set((state.config && state.config.excludedTeams) || []);
-        const ratings = MB.getTeamRatingsSync((state.config && state.config.year) || String(new Date().getFullYear())) || {};
+        const ratings = MB.getTeamRatingsSync(document.getElementById('maddenYear')?.value || (state.config && state.config.year) || String(new Date().getFullYear())) || {};
         const available = MB.nflTeams.filter(t => !taken.has(t.id) && !excl.has(t.id)).map(t => ({ id: t.id, name: t.n, rating: Number(ratings[t.id]) || 0 }));
         draftAvailableBeforePick = available;
         MB.UI.withAchievements(A => A.evaluateDraftPick && A.evaluateDraftPick(name, teamId, available));
@@ -4527,6 +4529,20 @@ function renderRanking() {
                 <button class="btn-secondary" style="width:auto; margin:0;" onclick="grantCard()">🎁 Karte vergeben</button>
               </div>
               <div class="hint" style="font-size:0.78em; opacity:0.65;">Z. B. „🛍️ Erster Kunde“, sobald die erste echte Shop-Bestellung bestätigt ist.</div>
+              <details style="margin-top:8px; font-size:0.8em; opacity:.8;"><summary style="cursor:pointer;">Reset meldet „0“? Einmalig diese SQL-Funktion in Supabase anlegen (SQL Editor)</summary>
+<pre style="white-space:pre-wrap; font-size:0.9em; background:rgba(0,0,0,.3); padding:8px; border-radius:6px;">create or replace function public.mb_reset_achievements(pw_hash text)
+returns json language plpgsql security definer set search_path = public as $$
+declare a int; p int; f int;
+begin
+  if pw_hash is null or pw_hash &lt;&gt; (select value from app_config where key = 'admin_pw_hash') then
+    raise exception 'admin check failed';
+  end if;
+  delete from player_achievements where true; get diagnostics a = row_count;
+  delete from player_progress where true;     get diagnostics p = row_count;
+  delete from achievement_firsts where true;  get diagnostics f = row_count;
+  return json_build_object('player_achievements', a, 'player_progress', p, 'achievement_firsts', f);
+end $$;
+grant execute on function public.mb_reset_achievements(text) to anon, authenticated;</pre></details>
               <button class="btn-secondary" style="margin-top:8px; background:var(--nfl-red);" onclick="resetAllAchievements()">♻️ Alle Sammelkarten aller Spieler zurücksetzen</button>
           <button class="btn-secondary" style="margin-top:8px;" onclick="openMemeTest()">🧪 Memes testen (${MB.Records.getMemeTriggers().length} Auslöser, ${MB.Records.buildTestMemeJobs().length} Vorlagen)</button>
               <div id="imgflipTestResult" style="margin-top:8px;"></div>
@@ -5253,6 +5269,8 @@ function renderRanking() {
       document.getElementById('studioState').innerHTML = ok ? '<span style="color:#3ddc84;">● Studio verbunden</span>' : '<span style="opacity:.6;">○ Studio nicht verbunden</span>';
     }
     setInterval(drawStudioState, 2000);
+    // Madden-Version aus „Nächstes Turnier vorbereiten“ (seasons.html) vorbelegen, solange kein Turnier läuft
+    setTimeout(() => { try { const sel = document.getElementById('maddenYear'); const my = state && state.config && state.config.maddenYear; if (sel && my && !(state.players || []).length && [...sel.options].some(o => o.value === String(my))) { sel.value = String(my); if (typeof onMaddenYearChange === 'function') onMaddenYearChange(); } } catch (e) { /* egal */ } }, 1500);
     // Spielerfiguren (Draft-Einlauf, Musikvideos) vorladen
     try { MB.Avatar && MB.Avatar.load(); } catch (e) { /* Zufallsfiguren */ }
     // Lebenszeichen ans Studio (damit dort „verbunden“ dauerhaft stimmt, nicht nur nach einer Ansage)

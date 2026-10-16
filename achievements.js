@@ -208,17 +208,32 @@
   async function resetAll() {
     const c = sb(); if (!c) throw new Error("Keine Datenbankverbindung.");
     const out = {};
+    // 1) bevorzugt: Supabase-Funktion mb_reset_achievements() (SECURITY DEFINER, siehe SQL in der Anleitung)
+    try {
+      // Admin-Nachweis: der gespeicherte Admin-Passwort-Hash (die Funktion vergleicht mit app_config)
+      const pw = (localStorage.getItem("mb_admin_session") || "");
+      const { data, error } = await c.rpc("mb_reset_achievements", { pw_hash: pw });
+      if (error && /admin/i.test(error.message || "")) throw new Error("Admin-Nachweis abgelehnt – bitte einmal neu als Admin anmelden.");
+      if (!error && data) { Object.assign(out, data, { via: "rpc" }); }
+    } catch (e) { /* Funktion fehlt -> direkt löschen */ }
+    if (out.via === "rpc") { await afterReset(); return out; }
     for (const [table, col] of [["player_achievements", "player_name"], ["player_progress", "player_name"], ["achievement_firsts", "achievement_id"]]) {
       const { error, count } = await c.from(table).delete({ count: "exact" }).neq(col, "");
       if (error && !missing(error)) throw new Error(`${table}: ${error.message}`);
       out[table] = error ? 0 : (count || 0);
     }
+    // Prüfen, ob wirklich gelöscht wurde (RLS löscht sonst stillschweigend 0 Zeilen)
+    const { count: left } = await c.from("player_achievements").select("*", { count: "exact", head: true });
+    if (left > 0) throw new Error(`Die Datenbank hat das Löschen verweigert (noch ${left} Karten vorhanden). Bitte einmalig die SQL-Funktion mb_reset_achievements anlegen – Anleitung im Admin-Bereich.`);
+    await afterReset();
+    return out;
+  }
+  async function afterReset() {
     const now = new Date().toISOString();
     if (global.MB.setAppConfig) await global.MB.setAppConfig("achievements_reset_at", now);
     _resetAt = now;
     try { Object.keys(localStorage).filter((k) => /^mb_(achievements_|ach_progress_|ach_epoch_|teams_seen)/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
     unlocked = new Map(); progress = {}; firsts = new Map(); queue = []; loadedFor = null;
-    return out;
   }
   async function persistUnlock(name, id, v) {
     lsSet(ukey(name), Object.fromEntries(unlocked));
@@ -470,7 +485,10 @@
     st = st || {};
     const r = RARITIES[def.rarity] || RARITIES.common;
     const locked = !st.at && !st.demo;
-    const hidden = locked && (def.secret || (st.hideHow && def.rarity !== "common"));
+    // Galerie (hideHow): gesperrte Karten ab Rare zeigen den Titel, verraten aber nicht, wie man sie bekommt.
+    // Ohne hideHow (z.B. Popup, eigene Karten) bleiben geheime Karten komplett verdeckt.
+    const howHidden = locked && st.hideHow && (def.rarity !== "common" || def.secret);
+    const hidden = locked && def.secret && !st.hideHow;
     const idx = String(DEFS.indexOf(def) + 1).padStart(2, "0");
     let foot;
     if (def.unique) {
@@ -481,7 +499,7 @@
       <div class="ach-top"><span>${r.label}</span><span>#${idx}</span></div>
       <div class="ach-art">${locked ? "" : def.emoji}</div>
       <div class="ach-title" style="${titleStyle(def, hidden)}">${hidden ? "???" : escapeHtml(def.title)}</div>
-      <div class="ach-desc">${hidden ? "Geheime Karte — wird erst verraten, wenn du sie gefunden hast." : escapeHtml(def.desc)}</div>
+      <div class="ach-desc">${hidden ? "Geheime Karte — wird erst verraten, wenn du sie gefunden hast." : howHidden ? "Wie man diese Karte bekommt, bleibt geheim." : escapeHtml(def.desc)}</div>
       <div class="ach-foot">${foot}</div></div>`;
   }
   const titleStyle = (def, hidden) => (!hidden && def.title.length > 14 ? `font-size:${def.title.length > 17 ? 14 : 16}px;` : "");
@@ -522,6 +540,7 @@
 
   // ------------------------------------------------------------ Galerie (Spieler) + Katalog (Admin)
   const SECTION_ORDER = ["kurz", "mittel", "lang", "unique"];
+  const RARITY_ORDER = ["common", "rare", "epic", "legendary", "limited", "unique"];
   async function renderGallery(el) {
     if (!el) return; injectStyle();
     if (!player) { el.innerHTML = `<div class="ach-gal-head">Logge dich ein, um deine Sammelkarten zu sehen.</div>`; return; }
@@ -530,9 +549,10 @@
     const have = DEFS.filter((d) => unlocked.has(d.id)).length, uniq = DEFS.filter((d) => d.unique);
     const warn = [!tables.ach && "Karten", !tables.firsts && "einzigartige Karten"].filter(Boolean);
     el.innerHTML = `<div class="ach-gal-head"><b>${have}</b> von <b>${DEFS.length}</b> Karten gesammelt${warn.length ? `<br><span style="opacity:.6;font-size:.85em;">(${warn.join(" & ")}: Datenbank-Migration steht noch aus${!tables.firsts ? " — einzigartige Karten werden erst danach vergeben" : ""})</span>` : ""}</div>` +
-      SECTION_ORDER.map((term) => {
-        const list = DEFS.filter((d) => d.term === term); if (!list.length) return "";
-        return `<div class="ach-section">${TERMS[term]}</div><div class="ach-gallery">${list.map((d) => {
+      RARITY_ORDER.map((rar) => {
+        const list = DEFS.filter((d) => d.rarity === rar); if (!list.length) return "";
+        const got = list.filter((d) => unlocked.has(d.id)).length;
+        return `<div class="ach-section" style="color:${RARITIES[rar].color}">${RARITIES[rar].label} <span style="opacity:.6;font-weight:600;">· ${got}/${list.length}</span></div><div class="ach-gallery">${list.map((d) => {
           const f = firsts.get(d.id); const mine = unlocked.get(d.id);
           if (mine) return cardHtml(d, { ...mine, holder: d.unique ? player : null });
           // Unique-Karten anderer Spieler aufgedeckt zeigen (mit Besitzer)

@@ -99,8 +99,8 @@
         <div id="rulesCard">Lade…</div>
       </div>
       <div class="card">
-        <h2>📅 Termin des nächsten Turniers</h2>
-        <div class="hint">Für den Countdown ganz oben auf dem Dashboard (solange kein Turnier läuft). Leer lassen = kein Countdown.</div>
+        <h2>📅 Nächstes Turnier: Madden-Version &amp; Termin</h2>
+        <div class="hint">Madden-Version: welche Kader/OVR das Dashboard vor dem Turnier zeigt und womit das Setup startet. Termin: Countdown oben im Dashboard (leer = kein Countdown).</div>
         <div id="nextDateCard">Lade…</div>
       </div>
       <div class="card">
@@ -290,7 +290,11 @@
     const iso = draftOrderCloudState.config && draftOrderCloudState.config.nextTournamentAt;
     const d = iso ? new Date(iso) : null;
     const local = d && !isNaN(d) ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+    const my = (draftOrderCloudState.config && draftOrderCloudState.config.maddenYear) || String((d && !isNaN(d) ? d : new Date()).getFullYear());
+    const years = []; for (let y = new Date().getFullYear() - 1; y <= new Date().getFullYear() + 2; y++) years.push(String(y));
     el.innerHTML = `<div class="row-line" style="align-items:center;">
+        <label style="margin:0;">Gespielt mit</label>
+        <select id="nextMaddenYear" style="width:auto;">${years.map(y => `<option value="${y}" ${y === String(my) ? 'selected' : ''}>Madden ${y.slice(2)}</option>`).join('')}</select>
         <input type="datetime-local" id="nextTournamentAt" value="${local}" style="max-width:240px;">
         <button onclick="saveNextDate()">💾 Speichern</button>
         <button class="secondary" onclick="document.getElementById('nextTournamentAt').value=''; saveNextDate();">Entfernen</button>
@@ -301,7 +305,7 @@
     if (!draftOrderCloudState) return;
     const v = document.getElementById('nextTournamentAt').value;
     const iso = v ? new Date(v).toISOString() : null;
-    const mergedConfig = { ...(draftOrderCloudState.config || {}), nextTournamentAt: iso };
+    const mergedConfig = { ...(draftOrderCloudState.config || {}), nextTournamentAt: iso, maddenYear: document.getElementById('nextMaddenYear').value };
     try {
       await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
       draftOrderCloudState.config = mergedConfig;
