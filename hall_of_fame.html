@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="shared.js"></script>
+  <script src="avatar.js"></script>
   <script src="ui.js"></script>
   <style>
     :root{
@@ -84,6 +85,16 @@
     .hof-maintabs { display:flex; gap:8px; flex-wrap:wrap; margin: 0 0 12px; }
   .hof-mt { width:auto; margin:0; padding:9px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.04); color:#cfd8e6; font-weight:800; cursor:pointer; }
   .hof-mt.active { background:var(--v2-gold, #c99700); border-color:var(--v2-gold, #c99700); color:#111; }
+  .av-wrap { display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: start; margin-bottom: 14px; }
+  .av-fig { width: 200px; height: 300px; background: radial-gradient(circle at 50% 30%, rgba(201,151,0,.18), transparent 70%); border-radius: 12px; }
+  .av-fig svg { width: 100%; height: 100%; }
+  .av-ed { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
+  .av-ed label { font-size: .78em; font-weight: 800; letter-spacing: .5px; color: var(--v2-silver, #9fb0c8); display: block; margin-bottom: 4px; text-transform: uppercase; }
+  .av-sw { display: flex; flex-wrap: wrap; gap: 5px; }
+  .av-sw button { width: 26px; height: 26px; margin: 0; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); cursor: pointer; }
+  .av-sw button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--v2-gold, #c99700); }
+  .av-ed select, .av-ed input[type=range] { width: 100%; }
+  @media (max-width: 640px) { .av-wrap { grid-template-columns: 1fr; } .av-fig { margin: 0 auto; } }
 </style>
 <!-- Vorschau beim Teilen des Seitenlinks (Messenger lesen nur statisches HTML) -->
 <meta property="og:title" content="Altima Bowl – Hall of Fame">
@@ -116,14 +127,16 @@
       MB.UI.withAchievements(function (A) { A.renderGallery(gal); });
     }
     // Reiter: Saisons/Ewige Tabelle · Meine Karten · Unique-Karten
-    let hofMainTab = (location.hash || '').slice(1) || 'history';
+    let hofMainTab = ((location.hash || '').slice(1).split('=')[0]) || 'history';
     function setMainTab(t) {
-      if (!['history', 'cards', 'unique'].includes(t)) t = 'history';
+      if (!['history', 'player', 'cards', 'unique'].includes(t)) t = 'history';
       hofMainTab = t;
       document.querySelectorAll('.hof-mt').forEach(b => b.classList.toggle('active', b.dataset.mt === t));
-      ['history', 'cards', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
-      history.replaceState && history.replaceState(null, '', '#' + t);
+      ['history', 'player', 'cards', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
+      if (!(t === 'player' && /^#player/.test(location.hash))) history.replaceState && history.replaceState(null, '', '#' + t);
+      try { MB.UI.withAchievements(A => A.track('hof_tab', { tab: t })); } catch (e) { /* egal */ }
       if (t === 'cards') renderMyCards();
+      if (t === 'player') initPlayerTab();
       if (t === 'unique') MB.UI.withAchievements(function (A) { A.renderUniqueBoard && A.renderUniqueBoard(document.getElementById('uniqueBoard')); });
     }
     document.addEventListener('DOMContentLoaded', () => setMainTab(hofMainTab));
@@ -132,6 +145,7 @@
   <div class="container">
     <div class="hof-maintabs">
       <button class="hof-mt active" data-mt="history" onclick="setMainTab('history')">📊 Saisons &amp; Ewige Tabelle</button>
+      <button class="hof-mt" data-mt="player" onclick="setMainTab('player')">👤 Spieler</button>
       <button class="hof-mt" data-mt="cards" onclick="setMainTab('cards')">🃏 Meine Karten</button>
       <button class="hof-mt" data-mt="unique" onclick="setMainTab('unique')">💎 Unique-Karten</button>
     </div>
@@ -141,6 +155,16 @@
         <h2>🃏 Meine Karten</h2>
         <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Deine Sammelkarten — freigeschaltet durch Tippen, Stöbern und Mitmachen, unabhängig von deinen Turnierergebnissen. Neue Karten tauchen automatisch als Popup auf. Unique-Karten anderer Spieler siehst du aufgedeckt mit Besitzer.</div>
         <div id="myCardsGallery"></div>
+      </div>
+    </div>
+
+    <div id="hofPane-player" class="hidden">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+          <h2 style="margin:0;">👤 Spielerprofil</h2>
+          <select id="playerSelect" onchange="renderPlayerProfile(this.value)" style="width:auto;"></select>
+        </div>
+        <div id="playerProfile"></div>
       </div>
     </div>
 
@@ -316,6 +340,7 @@
       computeAllTime();
       renderAllTime();
       renderSeason();
+      if (hofMainTab === 'player') initPlayerTab();
     }
 
     function buildSeasonSelect() {
@@ -911,6 +936,153 @@
     // =========================================================
     // RENDER ALL-TIME
     // =========================================================
+
+    // =========================================================
+    // SPIELERPROFIL — eine Person über alle Saisons: Platzierungen, Bilanz,
+    // Bilanz gegen jeden Gegner, persönliche Rekorde, Teams, Karten.
+    // Ergänzt die Ewige Tabelle (Vergleich aller) um die Einzelansicht.
+    // =========================================================
+    function initPlayerTab() {
+      const sel = document.getElementById('playerSelect'); if (!sel) return;
+      if (!hof.allTime || !hof.allTime.table.length) { document.getElementById('playerProfile').innerHTML = '<div class="hint">Noch keine Saisons geladen.</div>'; return; }
+      if (!sel.options.length) {
+        const names = hof.allTime.table.map(p => p.name).sort((a, b) => a.localeCompare(b, 'de'));
+        sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join('');
+        const want = decodeURIComponent(((location.hash || '').split('=')[1]) || '') || (window.MB && MB.UI && MB.UI.currentUser && MB.UI.currentUser()) || names[0];
+        if (names.includes(want)) sel.value = want;
+      }
+      renderPlayerProfile(sel.value);
+    }
+    function renderPlayerProfile(name) {
+      const el = document.getElementById('playerProfile'); if (!el || !name) return;
+      history.replaceState && history.replaceState(null, '', '#player=' + encodeURIComponent(name));
+      const at = hof.allTime.table, me = at.find(p => p.name === name); if (!me) { el.innerHTML = ''; return; }
+      const rank = at.indexOf(me) + 1;
+      const seasons = [...hof.seasons].sort((a, b) => a.season - b.season);
+      const rows = [], vs = new Map(), teams = new Map();
+      let best = null, worst = null, high = null, totalOpp = 0;
+      seasons.forEach(s => {
+        const st = s.standings.find(x => x.name === name); if (!st) return;
+        const team = s.nameToTeam && s.nameToTeam.get(name);
+        if (team) teams.set(team, (teams.get(team) || 0) + 1);
+        let w = 0, l = 0, pf = 0, pa = 0;
+        s.matches.forEach(m => {
+          if (m.homeScore == null || m.awayScore == null) return;
+          const home = m.homePlayer === name, away = m.awayPlayer === name; if (!home && !away) return;
+          const own = home ? m.homeScore : m.awayScore, opp = home ? m.awayScore : m.homeScore, o = home ? m.awayPlayer : m.homePlayer;
+          pf += own; pa += opp; if (own > opp) w++; else if (opp > own) l++;
+          const v = vs.get(o) || { w: 0, l: 0, pf: 0, pa: 0 }; v.pf += own; v.pa += opp; if (own > opp) v.w++; else if (opp > own) v.l++; vs.set(o, v);
+          const mg = own - opp;
+          if (mg > 0 && (!best || mg > best.mg)) best = { mg, own, opp, o, season: s.season };
+          if (mg < 0 && (!worst || mg < worst.mg)) worst = { mg, own, opp, o, season: s.season };
+          if (!high || own > high.own) high = { own, opp, o, season: s.season };
+        });
+        rows.push({ season: s.season, rank: st.rank, of: s.standings.length, w, l, pf, pa, team });
+      });
+      const medal = (r, of) => r === 1 ? '🏆' : r === 2 ? '🥈' : r === 3 ? '🥉' : r === of ? '💩' : '';
+      const tName = (t) => { const x = (MB.nflTeams || []).find(z => z.id === t); return x ? x.n : (t || ''); };
+      const logo = (t) => t ? `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t}.png" style="width:24px;height:24px;object-fit:contain;vertical-align:middle;">` : '';
+      const vsRows = [...vs.entries()].sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l) || a[0].localeCompare(b[0], 'de'));
+      const fav = [...teams.entries()].sort((a, b) => b[1] - a[1])[0];
+      const nemesis = vsRows.filter(([, v]) => v.w + v.l >= 3).sort((a, b) => (a[1].w / (a[1].w + a[1].l)) - (b[1].w / (b[1].w + b[1].l)))[0];
+      const favVictim = vsRows.filter(([, v]) => v.w + v.l >= 3).sort((a, b) => (b[1].w / (b[1].w + b[1].l)) - (a[1].w / (a[1].w + a[1].l)))[0];
+      const canEdit = (MB.UI && MB.UI.currentUser && MB.UI.currentUser() === name) || (MB.UI && MB.UI.isAdminUnlocked && MB.UI.isAdminUnlocked());
+      try { MB.UI.withAchievements(A => A.track('profile_view', { name, total: at.length })); } catch (e) { /* ohne Login egal */ }
+      el.innerHTML = `
+        <div class="av-wrap"><div class="av-fig" id="avFig"></div>
+          <div>${canEdit ? `<button class="btn-secondary" style="width:auto;" onclick="toggleAvatarEditor('${name.replace(/'/g, "\\'")}')">🎨 Figur gestalten</button><div id="avEditor" style="display:none; margin-top:10px;"></div>`
+            : `<div class="hint" style="opacity:.7;">Diese Figur erscheint in Musikvideos, beim Draft-Einlauf und im Live-Studio.${MB.Avatar && !MB.Avatar.hasOwn(name) ? ' (Noch nicht selbst gestaltet – Zufallsfigur.)' : ''}</div>`}</div></div>
+        <div class="kpis" style="margin-bottom:12px;">
+          ${kpi('Ewige Tabelle', '#' + rank)}${kpi('Titel', String(me.championships))}${kpi('Teilnahmen', String(me.seasons))}
+          ${kpi('Bilanz', `${me.wins}-${me.losses}`)}${kpi('Siegquote', fmtPct(me.winPct))}${kpi('Punkte/Spiel', me.games ? (me.pf / me.games).toFixed(1) : '–')}
+        </div>
+        <div class="grid" style="gap:12px;">
+          <div>
+            <h3 style="margin:6px 0;">Saison für Saison</h3>
+            <table><tr><th>Saison</th><th>Team</th><th>Platz</th><th>S-N</th><th>Punkte</th></tr>
+              ${rows.slice().reverse().map(r => `<tr><td>${r.season}</td><td>${logo(r.team)} ${tName(r.team)}</td><td><b>${r.rank}</b>/${r.of} ${medal(r.rank, r.of)}</td><td>${r.w}-${r.l}</td><td>${r.pf}:${r.pa}</td></tr>`).join('')}
+            </table>
+            <h3 style="margin:14px 0 6px;">Persönliche Bestmarken</h3>
+            <table>
+              ${high ? `<tr><td>Meiste Punkte</td><td><b>${high.own}</b> gegen ${high.o} (${high.own}:${high.opp}, ${high.season})</td></tr>` : ''}
+              ${best ? `<tr><td>Höchster Sieg</td><td><b>${best.own}:${best.opp}</b> gegen ${best.o} (${best.season})</td></tr>` : ''}
+              ${worst ? `<tr><td>Bitterste Niederlage</td><td><b>${worst.own}:${worst.opp}</b> gegen ${worst.o} (${worst.season})</td></tr>` : ''}
+              ${me.bestRank != null ? `<tr><td>Beste Platzierung</td><td><b>${me.bestRank}.</b></td></tr>` : ''}
+              ${fav ? `<tr><td>Lieblingsteam</td><td>${logo(fav[0])} ${tName(fav[0])} (${fav[1]}×)</td></tr>` : ''}
+              ${favVictim ? `<tr><td>Lieblingsgegner</td><td>${favVictim[0]} (${favVictim[1].w}-${favVictim[1].l})</td></tr>` : ''}
+              ${nemesis && (!favVictim || nemesis[0] !== favVictim[0]) ? `<tr><td>Angstgegner</td><td>${nemesis[0]} (${nemesis[1].w}-${nemesis[1].l})</td></tr>` : ''}
+            </table>
+          </div>
+          <div>
+            <h3 style="margin:6px 0;">Gegen jeden Gegner</h3>
+            <table><tr><th>Gegner</th><th>S-N</th><th>Punkte</th><th></th></tr>
+              ${vsRows.map(([o, v]) => { const g = v.w + v.l; const pct = g ? v.w / g : 0; return `<tr><td class="name">${o}</td><td>${v.w}-${v.l}</td><td>${v.pf}:${v.pa}</td><td style="width:90px;"><div style="height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;"><div style="height:100%;width:${Math.round(pct * 100)}%;background:${pct >= .5 ? '#3ddc84' : '#ff6b6b'};"></div></div></td></tr>`; }).join('')}
+            </table>
+            <h3 style="margin:14px 0 6px;">Sammelkarten</h3>
+            <div id="profileCards" class="hint">Lade …</div>
+          </div>
+        </div>`;
+      drawAvatarFig(name);
+      // Unique-Karten dieses Spielers (öffentlich sichtbar)
+      try {
+        const c = MB.getSupabaseClient && MB.getSupabaseClient();
+        if (c) c.from('achievement_firsts').select('achievement_id').eq('player_name', name).then(({ data }) => {
+          const box = document.getElementById('profileCards'); if (!box) return;
+          const defs = (MB.Achievements && MB.Achievements.DEFS) || [];
+          const list = (data || []).map(r => defs.find(d => d.id === r.achievement_id)).filter(Boolean);
+          box.innerHTML = list.length ? list.map(d => `<span class="pill" style="margin:2px;">${d.emoji} ${d.title} · Unique</span>`).join(' ') : 'Noch keine Unique-Karte.';
+        });
+      } catch (e) { /* optional */ }
+    }
+
+
+    // ---------- Figur-Editor (avatar.js) ----------
+    let avDraft = null, avName = null;
+    async function drawAvatarFig(name) {
+      const el = document.getElementById('avFig'); if (!el || !MB.Avatar) return;
+      await MB.Avatar.load();
+      el.innerHTML = MB.Avatar.svg(avName === name && avDraft ? avDraft : MB.Avatar.get(name));
+    }
+    function toggleAvatarEditor(name) {
+      const ed = document.getElementById('avEditor'); if (!ed) return;
+      if (ed.style.display === 'none') { avName = name; avDraft = { ...MB.Avatar.get(name) }; ed.style.display = ''; drawAvatarEditor(); }
+      else { ed.style.display = 'none'; avDraft = null; drawAvatarFig(name); }
+    }
+    function avSet(k, v) { avDraft[k] = v; drawAvatarEditor(); drawAvatarFig(avName); }
+    function drawAvatarEditor() {
+      const ed = document.getElementById('avEditor'); if (!ed || !avDraft) return;
+      const O = MB.Avatar.OPTIONS, d = avDraft;
+      const sel = (k, list) => `<select onchange="avSet('${k}', this.value)">${list.map(([v, l]) => `<option value="${v}" ${d[k] === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+      const sw = (k, list) => `<div class="av-sw">${list.map(c => `<button class="${d[k] === c ? 'on' : ''}" style="background:${c}" onclick="avSet('${k}', '${c}')" aria-label="${c}"></button>`).join('')}</div>`;
+      const teams = (MB.nflTeams || []).slice().sort((a, b) => a.n.localeCompare(b.n));
+      ed.innerHTML = `<div class="av-ed">
+        <div><label>Körperform</label>${sel('body', O.body)}</div>
+        <div><label>Größe</label><input type="range" min="0.88" max="1.12" step="0.02" value="${d.height || 1}" oninput="avSet('height', parseFloat(this.value))"></div>
+        <div><label>Hautton</label>${sw('skin', O.skin)}</div>
+        <div><label>Frisur</label>${sel('hair', O.hair)}</div>
+        <div><label>Haarfarbe</label>${sw('hairColor', O.hairColor)}</div>
+        <div><label>Bart</label>${sel('beard', O.beard)}</div>
+        <div><label>Brille</label>${sel('glasses', O.glasses)}</div>
+        <div><label>Kopfbedeckung</label>${sel('hat', O.hat)}</div>
+        <div><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value)" style="width:100%; height:34px;"></div>
+        <div><label>Lieblingsteam</label><select onchange="avSet('team', this.value)"><option value="">—</option>${teams.map(t => `<option value="${t.id}" ${d.team === t.id ? 'selected' : ''}>${t.n}</option>`).join('')}</select></div>
+        <div><label>Goldkette</label><select onchange="avSet('chain', this.value === '1')"><option value="0" ${!d.chain ? 'selected' : ''}>Nein</option><option value="1" ${d.chain ? 'selected' : ''}>Ja</option></select></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+        <button style="width:auto;" onclick="saveAvatar()">💾 Figur speichern</button>
+        <button class="btn-secondary" style="width:auto;" onclick="avDraft = { ...MB.Avatar.randomFor(Math.random()), random: false }; drawAvatarEditor(); drawAvatarFig(avName);">🎲 Zufall</button>
+        <span id="avStatus" class="hint" style="align-self:center;"></span>
+      </div>`;
+    }
+    async function saveAvatar() {
+      const st = document.getElementById('avStatus');
+      try {
+        await MB.Avatar.save(avName, avDraft);
+        st.textContent = 'Gespeichert – gilt ab sofort in Musikvideos, Draft-Einlauf und Studio.';
+        if (MB.UI.currentUser && MB.UI.currentUser() === avName) MB.UI.withAchievements(A => A.track('avatar_saved', {}));
+      } catch (e) { st.textContent = 'Speichern fehlgeschlagen: ' + e.message; }
+    }
+
     function renderAllTime() {
       const at = hof.allTime;
       if (!at) return;
@@ -937,7 +1109,7 @@
         const diffCls = p.diff>0 ? "ok" : (p.diff<0 ? "bad" : "");
         html += `<tr>
           <td><b>${i+1}</b></td>
-          <td class="name">${p.name}</td>
+          <td class="name"><a href="#player=${encodeURIComponent(p.name)}" onclick="event.preventDefault(); setMainTab('player'); document.getElementById('playerSelect').value='${p.name.replace(/'/g, "\\'")}'; renderPlayerProfile('${p.name.replace(/'/g, "\\'")}');" style="color:inherit;">${p.name}</a></td>
           <td>${p.championships}</td>
           <td>${p.seasons}</td>
           <td>${p.games}</td>

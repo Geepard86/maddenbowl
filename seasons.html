@@ -99,8 +99,13 @@
         <div id="rulesCard">Lade…</div>
       </div>
       <div class="card">
+        <h2>📅 Termin des nächsten Turniers</h2>
+        <div class="hint">Für den Countdown ganz oben auf dem Dashboard (solange kein Turnier läuft). Leer lassen = kein Countdown.</div>
+        <div id="nextDateCard">Lade…</div>
+      </div>
+      <div class="card">
         <h2>🎲 Nächstes Turnier vorbereiten</h2>
-        <div class="hint">Spielerliste vorab festlegen — die Ziehreihenfolge für die Live-Auslosung in admin.html wird automatisch aus der Vorsaison berechnet (ToiletBowl-Sieger zuerst, dann Neulinge, Titelverteidiger zuletzt) und lässt sich per Drag &amp; Drop anpassen.</div>
+        <div class="hint">Spielerliste vorab festlegen — die Ziehreihenfolge für die Live-Auslosung in admin.html wird automatisch berechnet (Toilet-Bowl-Sieger, Rookies, Sophomores ohne Vorjahr, Vorjahresteilnehmer vom Letzten bis zum Titelverteidiger, übrige Rückkehrer) und lässt sich per Drag &amp; Drop anpassen.</div>
         <div id="draftOrderCard">Lade…</div>
       </div>
       <div class="card">
@@ -127,6 +132,7 @@
     await renderRatingsCard();
     await renderRulesCard();
     await renderDraftOrderCard();
+    drawNextDateCard();
     drawTeamExclCard();
     await renderNicknamesCard();
     await loadSeasons();
@@ -274,6 +280,32 @@
       await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
       draftOrderCloudState.config = mergedConfig; nickMap = out;
       alert(Object.keys(out).length ? 'Spitznamen gespeichert.' : 'Alle Spitznamen entfernt.');
+    } catch (e) { alert('Speichern fehlgeschlagen: ' + e.message); }
+  }
+
+  // ---- Termin nächstes Turnier (config.nextTournamentAt, ISO-Zeitpunkt) ----
+  function drawNextDateCard() {
+    const el = document.getElementById('nextDateCard'); if (!el) return;
+    if (!draftOrderCloudState) { el.innerHTML = '<div class="hint">Turnierstatus nicht verfügbar.</div>'; return; }
+    const iso = draftOrderCloudState.config && draftOrderCloudState.config.nextTournamentAt;
+    const d = iso ? new Date(iso) : null;
+    const local = d && !isNaN(d) ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+    el.innerHTML = `<div class="row-line" style="align-items:center;">
+        <input type="datetime-local" id="nextTournamentAt" value="${local}" style="max-width:240px;">
+        <button onclick="saveNextDate()">💾 Speichern</button>
+        <button class="secondary" onclick="document.getElementById('nextTournamentAt').value=''; saveNextDate();">Entfernen</button>
+      </div>
+      ${d && !isNaN(d) ? `<div class="hint">Aktuell: ${d.toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</div>` : ''}`;
+  }
+  async function saveNextDate() {
+    if (!draftOrderCloudState) return;
+    const v = document.getElementById('nextTournamentAt').value;
+    const iso = v ? new Date(v).toISOString() : null;
+    const mergedConfig = { ...(draftOrderCloudState.config || {}), nextTournamentAt: iso };
+    try {
+      await MB.pushCloudState({ ...draftOrderCloudState, config: mergedConfig });
+      draftOrderCloudState.config = mergedConfig;
+      drawNextDateCard();
     } catch (e) { alert('Speichern fehlgeschlagen: ' + e.message); }
   }
 

@@ -304,7 +304,8 @@
     // Erstbesuch: Einführung automatisch auf dem Dashboard starten
     if (active === "dashboard" && !adminMenu) {
       let done = false; try { done = !!localStorage.getItem(TOUR_KEY); } catch (e) { /* egal */ }
-      if (!done) setTimeout(() => startTour(), 1400);
+      // warten, bis der Turnierstand (und damit das passende Dashboard) geladen ist
+      if (!done) { let tries = 0; const wait = () => { if ((_state && document.querySelector(".v2-card")) || ++tries > 20) setTimeout(() => startTour(), 600); else setTimeout(wait, 400); }; setTimeout(wait, 800); }
     }
     // Ohne setState() (Seiten ohne Turnierstand) trotzdem Sitzung prüfen
     setTimeout(() => { verifySession(); }, 1500);
@@ -602,17 +603,39 @@
   // des Dashboards automatisch, später jederzeit über das Burger-Menü.
   // ---------------------------------------------------------------
   const TOUR_KEY = "mb_tour_done";
-  const TOUR_STEPS = [
+  // Zwei Varianten: während eines Turniers vs. vor dem Turnierstart (anderes Dashboard)
+  const TOUR_LIVE = [
     { icon: "👋", title: "Willkommen beim Altima Bowl", text: "Kurze Tour durch die Seite — dauert keine Minute. Du kannst jederzeit überspringen und sie später im Menü erneut starten." },
     { icon: "🏠", title: "Dashboard", href: "index.html", all: true, text: "Die Startseite: was gerade läuft und als Nächstes kommt, die Tabelle, die Tippspiel-Spitze, neue Blog-Beiträge und Merch." },
-    { icon: "📅", title: "Spielplan", href: "spielplan.html", text: "Alle Partien mit Kickoff-Zeiten (inkl. Vorsprung/Verzug gegenüber dem Plan), Quoten, Ergebnissen und dem Playoff-Baum." },
-    { icon: "🏆", title: "Tippspiel", href: "wettbuero.html", text: "Nach dem Anmelden tippst du Sieger und Over/Under je Spieltag sowie Champion, Vize und Toilet-Bowl-Sieger. Das Badge zeigt dir, wie viele Tipps für den aktuellen Spieltag noch offen sind." },
+    { icon: "📅", title: "Spielplan", href: "spielplan.html", text: "Alle Partien nach Spieltagen, mit Kickoff-Zeiten (inkl. Vorsprung/Verzug), Quoten, Ergebnissen und dem Playoff Picture." },
+    { icon: "🏆", title: "Tippspiel", href: "wettbuero.html", text: "Nach dem Anmelden tippst du Sieger und Over/Under je Spieltag sowie Champion, Vize und Toilet-Bowl-Sieger. Das Badge zeigt, wie viele Tipps für den aktuellen Spieltag noch offen sind." },
     { icon: "📰", title: "Blog", href: "blog.html", text: "Automatische Berichte zu Kickoff, Power Rankings, Rekorden, Finale und Champion — dazu Memes, Songs und absurde Schein-Korrelationen. Angemeldet kannst du kommentieren." },
-    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", text: "Ewige Tabelle, alle früheren Saisons und deine gesammelten Karten (Achievements)." },
+    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", text: "Ewige Tabelle, alle Saisons, Spielerprofile mit Bilanz gegen jeden Gegner — und dort gestaltest du auch deine eigene Figur für Musikvideos und Draft-Einlauf." },
+    { icon: "🃏", title: "Sammelkarten", href: "hall_of_fame.html", cards: true, text: "Fürs Tippen, Stöbern und Mitmachen gibt es Karten von Common bis Legendary – und Unique-Karten, die nur der Erste bekommt." },
     { icon: "🛒", title: "Shop", href: "shop.html", text: "Fan-Merch direkt auf der Seite." },
     { icon: "👤", title: "Anmelden", target: "#mbAuthArea", text: "Spieler wählen und PIN eingeben — beim ersten Mal legst du die PIN fest. Du bleibst in diesem Browser angemeldet, auch zwischen den Turnieren." },
     { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Hier findest du alle Bereiche, die Regeln, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
   ];
+  const TOUR_PRE = [
+    { icon: "👋", title: "Willkommen beim Altima Bowl", text: "Gerade läuft kein Turnier – Zeit, sich in Ruhe umzuschauen. Kurze Tour, jederzeit überspringbar und später im Menü wieder startbar." },
+    { icon: "⏳", title: "Countdown", target: "#cdCard", text: "Wie lange es noch bis zum Kickoff des nächsten Altima Bowl dauert – auf die Sekunde." },
+    { icon: "🏈", title: "Teams & Kader", target: "#tmBox", text: "Alle 32 Teams nach OVR sortiert, mit kompletten Kadern, XF/SS-Spielern und IR. Gestrichene Teams sind durchgestrichen. " },
+    { icon: "📚", title: "Saisonrückblicke", target: ".v2-blog-wide", text: "Die Geschichte der bisherigen Turniere zum Nachlesen – alles Weitere im Blog." },
+    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", text: "Ewige Tabelle, alle Saisons und Spielerprofile. Im eigenen Profil gestaltest du deine Figur (Körperform, Frisur, Bart, Farben, Lieblingsteam) – sie tritt dann in Musikvideos, beim Draft-Einlauf und im Live-Studio auf." },
+    { icon: "🃏", title: "Sammelkarten", href: "hall_of_fame.html", cards: true, text: "Karten gibt es auch ohne Turnier: fürs Stöbern, Kader-Checken, Profile-Anschauen oder die eigene Figur. Unique-Karten bekommt nur der Erste." },
+    { icon: "🛒", title: "Shop", href: "shop.html", text: "Fan-Merch für das nächste Turnier." },
+    { icon: "👤", title: "Anmelden", target: "#mbAuthArea", text: "Spieler wählen und PIN eingeben — beim ersten Mal legst du die PIN fest. Anmelden geht auch ohne laufendes Turnier und bleibt in diesem Browser bestehen." },
+    { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Alle Bereiche, die Regeln, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
+  ];
+  let TOUR_STEPS = TOUR_LIVE;
+  function tourSteps() {
+    const live = !!(_state && Array.isArray(_state.players) && _state.players.length);
+    // vor dem Turnier nur Schritte zeigen, deren Element es gibt (z.B. kein Countdown ohne Termin)
+    // Sammelkarten erst erwähnen, wenn man selbst schon eine hat
+    let hasCards = false; try { hasCards = !!(MB.Achievements && MB.Achievements.count && MB.Achievements.count() > 0); } catch (e) { hasCards = false; }
+    const base = live ? TOUR_LIVE : TOUR_PRE.filter((st) => !st.target || st.menu || document.querySelector(st.target));
+    return base.filter((st) => !st.cards || hasCards);
+  }
   let _tourIdx = 0;
   function tourCss() {
     if (document.getElementById("mbTourCss")) return;
@@ -638,8 +661,9 @@
       @media (prefers-reduced-motion: reduce) { .mb-tour, .mb-tour-hl { animation: none; } }`;
     document.head.appendChild(st);
   }
-  function startTour() { tourCss(); _tourIdx = 0; drawTour(); }
-  function endTour() {
+  function startTour() { tourCss(); TOUR_STEPS = tourSteps(); _tourIdx = 0; drawTour(); }
+  function endTour(completed) {
+    if (completed) withAchievements((A) => A.track("tour_done", {}));
     try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) { /* egal */ }
     document.querySelectorAll(".mb-tour-hl").forEach((e) => e.classList.remove("mb-tour-hl"));
     const b = document.getElementById("mbTour"); if (b) b.remove();
@@ -671,7 +695,7 @@
     box.innerHTML = `<div class="tt"><span>${st.icon}</span>${st.title}</div><p>${st.text}${st.href && !location.pathname.endsWith(st.href) ? ` <a href="${st.href}">Ansehen</a>` : ""}</p>
       <div class="row"><button class="skip" onclick="MB.UI.endTour()">${last ? "" : "Überspringen"}</button><div class="dots">${TOUR_STEPS.map((_, i) => `<i class="${i === _tourIdx ? "on" : ""}"></i>`).join("")}</div>
       ${_tourIdx ? `<button class="prev" onclick="MB.UI.tourStep(-1)">Zurück</button>` : ""}
-      <button class="next" onclick="${last ? "MB.UI.endTour()" : "MB.UI.tourStep(1)"}">${last ? "Los geht’s" : "Weiter"}</button></div>`;
+      <button class="next" onclick="${last ? "MB.UI.endTour(true)" : "MB.UI.tourStep(1)"}">${last ? "Los geht’s" : "Weiter"}</button></div>`;
     const drawer = document.getElementById("mbNavDrawer"), back = document.getElementById("mbNavBackdrop");
     const wide = window.innerWidth >= 900;
     // Menü öffnen: beim Menü-Schritt immer, bei Bereichs-Schritten nur, wenn genug Platz ist

@@ -12,6 +12,7 @@
   <script src="draft-stage.js"></script>
   <script src="song-scenes.js"></script>
   <script src="song-stage.js"></script>
+  <script src="avatar.js"></script>
   <script src="music.js"></script>
   <script src="records.js"></script>
   <script src="blog.js"></script>
@@ -212,6 +213,20 @@
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'kiss'})">💗 Kiss Cam</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'vip'})">😴 VIP-Loge</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'result'})">🏈 Letztes Ergebnis</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'duel'})">⚔️ Nächstes Duell</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'rivalry'})">🔥 Rivalitäts-Barometer</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'defence'})">🚧 D-Fence</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'wave'})">🌊 La Ola</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'tailgate'})">🍺 Tailgating</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'celeb'})">📸 Promi-Loge</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'fact'})">💡 Wusstest du schon?</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'tipp'})">🏆 Tippspiel</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'review'})">📺 Under Review</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'challenge'})">🚩 Challenge</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'weather'})">🌦️ Wetter</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'mascot'})">🐻 Maskottchen</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'halftime'})">🎆 Halbzeit-Show</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'fancam'})">📹 Fan-Cam</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'home'})">↩ Zur Übersicht</button>
           </div>
           <div class="hint" style="font-size:0.78em; opacity:0.6; margin-top:6px;">Ist das Studio nicht verbunden, spielt der Ton automatisch hier. Song-Wiedergabe und Hintergrundmusik bleiben auf dieser Seite.</div>
@@ -229,6 +244,7 @@
 
         <div class="card" style="margin-bottom:15px;">
           <h2>🎵 Song-Momente</h2>
+          <div id="songAutoBox" style="margin-bottom:10px; padding:10px; border-radius:8px; background:rgba(0,0,0,.18);"></div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
             <label style="font-size:0.85em;">Look:
               <select id="demoStyle" style="width:auto; display:inline-block;">
@@ -1281,6 +1297,14 @@ function isFinished(match) { return MB.isFinished(match); }
       const slot = lastDrawnPlayer.slot;
       const name = lastDrawnPlayer.name;
 
+      // Draft-Sammelkarten (Fanliebe, Verräter, Prinzipientreu): freie Teams VOR dem Pick
+      try {
+        const taken = new Set([...document.querySelectorAll('[id^="pTeam"]')].map(el => el.value).filter(Boolean));
+        const excl = new Set((state.config && state.config.excludedTeams) || []);
+        const ratings = MB.getTeamRatingsSync((state.config && state.config.year) || String(new Date().getFullYear())) || {};
+        const available = MB.nflTeams.filter(t => !taken.has(t.id) && !excl.has(t.id)).map(t => ({ id: t.id, rating: Number(ratings[t.id]) || 0 }));
+        MB.UI.withAchievements(A => A.evaluateDraftPick && A.evaluateDraftPick(name, teamId, available));
+      } catch (e) { console.warn('Draft-Karten:', e); }
       document.getElementById(`pTeam${slot}`).value = teamId;
       showDrivenPick = true;
       updateTeamAvailability();
@@ -3555,6 +3579,50 @@ function renderRanking() {
     // Gibt { milestone, generated } zurück (milestone: null, wenn nichts
     // Neues erreicht wurde) - wird von finishScoreUpdate VOR dem
     // Announcer-Aufruf für dasselbe Spiel awaited.
+    // ---------- Song-Automatik (Einstellung lokal im Admin-Browser) ----------
+    function songAutoSettings() { try { return JSON.parse(localStorage.getItem('mb_song_auto') || '{}'); } catch (e) { return {}; } }
+    function setSongAuto(patch) { localStorage.setItem('mb_song_auto', JSON.stringify({ ...songAutoSettings(), ...patch })); drawSongAutoBox(); }
+    function drawSongAutoBox() {
+      const el = document.getElementById('songAutoBox'); if (!el) return;
+      const a = songAutoSettings();
+      el.innerHTML = `<label style="display:flex; gap:8px; align-items:center; font-weight:700;"><input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="setSongAuto({ enabled: this.checked })" style="width:auto;"> Songs bei Meilensteinen automatisch erzeugen (ohne Popup)</label>
+        <div class="hint" style="font-size:0.8em; opacity:.7; margin:4px 0 0 26px;">Nutzt Stil und Sprache, die unten pro Meilenstein voreingestellt sind; die Fakten kommen frisch aus dem Turnierstand. Läuft im Hintergrund (Ansagen gehen sofort weiter), bei Fehlern ein zweiter Versuch nach 20 s, danach wird der Song einfach ausgelassen.
+          Länge: <input type="number" min="20" max="180" step="5" value="${a.seconds || 60}" style="width:64px; display:inline-block;" onchange="setSongAuto({ seconds: parseInt(this.value, 10) || 60 })"> s</div>
+        <div id="songAutoLog" style="font-size:0.8em; margin:6px 0 0 26px;">${(a.log || []).slice(-4).reverse().map(l => `<div>${l}</div>`).join('')}</div>`;
+    }
+    function songAutoLog(msg) {
+      const a = songAutoSettings(); const line = `${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} ${msg}`;
+      localStorage.setItem('mb_song_auto', JSON.stringify({ ...a, log: [...(a.log || []), line].slice(-10) })); drawSongAutoBox();
+      try { const t = document.createElement('div'); t.textContent = '🎵 ' + msg; t.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:99999;background:#13203a;border:1px solid #c99700;color:#fff;padding:10px 14px;border-radius:10px;font-size:.9em;max-width:360px;'; document.body.appendChild(t); setTimeout(() => t.remove(), 7000); } catch (e) { /* egal */ }
+    }
+    async function autoGenerateSong(key) {
+      const a = songAutoSettings();
+      const label = MUSIC_MILESTONE_LABELS[key] || key;
+      const styleSel = document.getElementById(`songStyle-${key}`);
+      const opts = {
+        styleId: (styleSel && styleSel.value) || null,
+        languageId: songLangSelected[key] || MB.Music.DEFAULT_LANGUAGE_ID,
+        // Fakten immer frisch aus dem aktuellen Turnierstand (ein älterer Entwurf wäre veraltet)
+        seconds: a.seconds || 60,
+      };
+      const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('Zeitüberschreitung nach ' + Math.round(ms / 60000) + ' min')), ms))]);
+      songAutoLog(`${label}: Song wird erzeugt …`);
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const result = await withTimeout(generateAndRecordSong(key, opts), 5 * 60 * 1000);
+          if (!result || !result.url) throw new Error('keine Song-URL erhalten');
+          songAutoLog(`${label}: fertig – läuft nach der aktuellen Ansage.`);
+          MB.Announcer.announceSong(key, result.url, songAnnounceOpts(key));
+          return;
+        } catch (e) {
+          console.warn('Auto-Song', key, 'Versuch', attempt, e);
+          if (attempt === 1) { songAutoLog(`${label}: Fehler (${e.message}) – neuer Versuch in 20 s.`); await new Promise(r => setTimeout(r, 20000)); }
+          else songAutoLog(`${label}: ausgelassen (${e.message}).`);
+        }
+      }
+    }
+    setTimeout(drawSongAutoBox, 1000);
+
     async function maybeHandleSongMoment() {
       if (!isAdmin) return { milestone: null, generated: false };
       const settings = MB.Announcer.getTtsSettings();
@@ -3566,6 +3634,9 @@ function renderRanking() {
       for (const key of AUTO_SONG_MILESTONES) {
         if (reached.includes(key) && !songMomentFlags[key]) {
           songMomentFlags[key] = true; // sofort markieren, egal wie entschieden wird - kein zweites Popup dafür
+          // Automatik: ohne Popup im Hintergrund erzeugen, die Ansage läuft sofort weiter;
+          // der Song kommt in die Ansage-Warteschlange, sobald er fertig ist.
+          if (songAutoSettings().enabled) { autoGenerateSong(key); return { milestone: null, generated: false }; }
           const decision = await promptSongMomentPopup(key);
           return { milestone: key, generated: !!decision.generated, url: decision.url || null };
         }
@@ -4443,6 +4514,12 @@ function renderRanking() {
               <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
               <button style="margin-top:8px;" onclick="testImgflip()">Testen</button>
               <button class="btn-secondary" style="margin-top:8px;" onclick="openAchievementTest()">🃏 Sammelkarten testen (alle Karten ansehen)</button>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+                <select id="grantCard" style="width:auto; display:inline-block;"></select>
+                <input id="grantPlayer" placeholder="Spielername" style="max-width:180px;">
+                <button class="btn-secondary" style="width:auto; margin:0;" onclick="grantCard()">🎁 Karte vergeben</button>
+              </div>
+              <div class="hint" style="font-size:0.78em; opacity:0.65;">Z. B. „🛍️ Erster Kunde“, sobald die erste echte Shop-Bestellung bestätigt ist.</div>
               <button class="btn-secondary" style="margin-top:8px; background:var(--nfl-red);" onclick="resetAllAchievements()">♻️ Alle Sammelkarten aller Spieler zurücksetzen</button>
           <button class="btn-secondary" style="margin-top:8px;" onclick="openMemeTest()">🧪 Memes testen (${MB.Records.getMemeTriggers().length} Auslöser, ${MB.Records.buildTestMemeJobs().length} Vorlagen)</button>
               <div id="imgflipTestResult" style="margin-top:8px;"></div>
@@ -4586,6 +4663,22 @@ function renderRanking() {
     function openAchievementTest() {
       document.getElementById('achTestModal').classList.remove('hidden');
       MB.UI.withAchievements(function (A) { A.renderCatalog(document.getElementById('achTestBody')); });
+    }
+    function fillGrantSelect() {
+      const sel = document.getElementById('grantCard'); if (!sel || sel.options.length) return;
+      MB.UI.withAchievements(function (A) {
+        const defs = A.DEFS.filter(d => d.manual).concat(A.DEFS.filter(d => !d.manual));
+        sel.innerHTML = defs.map(d => `<option value="${d.id}">${d.emoji} ${d.title}${d.unique ? ' (Unique)' : ''}</option>`).join('');
+      });
+    }
+    setTimeout(fillGrantSelect, 1500);
+    function grantCard() {
+      const id = document.getElementById('grantCard').value, name = document.getElementById('grantPlayer').value.trim();
+      if (!id || !name) { alert('Karte und Spielername angeben.'); return; }
+      MB.UI.withAchievements(async function (A) {
+        try { await A.grant(id, name); alert('Karte vergeben – der Spieler sieht sie beim nächsten Seitenaufruf als Popup.'); }
+        catch (e) { alert('Nicht vergeben: ' + e.message); }
+      });
     }
     async function resetAllAchievements() {
       if (!confirm('Wirklich ALLE Sammelkarten aller Spieler zurücksetzen?\n\nGelöscht werden freigeschaltete Karten, Fortschritt (Zähler) und alle vergebenen Unique-Karten — für alle Spieler, unwiderruflich. Blog-Beiträge bleiben bestehen.')) return;
@@ -5153,6 +5246,10 @@ function renderRanking() {
       document.getElementById('studioState').innerHTML = ok ? '<span style="color:#3ddc84;">● Studio verbunden</span>' : '<span style="opacity:.6;">○ Studio nicht verbunden</span>';
     }
     setInterval(drawStudioState, 2000);
+    // Spielerfiguren (Draft-Einlauf, Musikvideos) vorladen
+    try { MB.Avatar && MB.Avatar.load(); } catch (e) { /* Zufallsfiguren */ }
+    // Lebenszeichen ans Studio (damit dort „verbunden“ dauerhaft stimmt, nicht nur nach einer Ansage)
+    setInterval(() => { try { MB.Announcer.studioPost({ type: 'admin-hello' }); } catch (e) { /* egal */ } }, 2000);
 
     // ---------- Konten (Spieler-PINs) & Admin-Passwort ----------
     async function renderAccountsPanel() {

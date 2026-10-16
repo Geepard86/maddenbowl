@@ -120,7 +120,8 @@
     }
 
     const streak = computeCurrentStreak(state, winnerName);
-    if (streak >= 3 && streak > computeMaxStreakExcept(state, winnerName)) {
+    // Serie nur bei 3, 5, 7, … melden (sonst jede einzelne Verlängerung ein eigener Beitrag)
+    if (streak >= 3 && (streak === 3 || streak % 2 === 1) && streak > computeMaxStreakExcept(state, winnerName)) {
       records.push({ type: "winStreak", player: winnerName, value: streak });
     }
 
@@ -201,6 +202,9 @@
         records.push({ type: "champion", player: champion.name, opponent: runnerUp.name, winnerScore: Math.max(gf.s1, gf.s2), loserScore: Math.min(gf.s1, gf.s2) });
       }
     }
+    // Ein Spiel = ein Moment: Überraschung + Turnier-Blowout zusammenfassen
+    const up = records.find((r) => r.type === "upset"), bl = records.find((r) => r.type === "tournamentMargin");
+    if (up && bl) { up.blowoutMargin = bl.value; up.winnerScore = up.winnerScore || bl.winnerScore; up.loserScore = up.loserScore || bl.loserScore; records.splice(records.indexOf(bl), 1); }
     return records;
   }
 

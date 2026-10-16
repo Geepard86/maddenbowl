@@ -67,7 +67,7 @@
       articlesList.push({ kind: a.kind, title: a.title, body: a.body, facts: a.facts, _names: a._names, media_url: a.media_url, data: a.data, when });
       blog.push("", "=".repeat(72), `${a.title || "(ohne Titel)"}`, `   Art: ${a.kind || "?"}  ·  erschienen: ${when}`, "=".repeat(72), strip(a.body));
       if (a.media_url) blog.push(`   [Medium eingebettet: ${a.media_type || "?"}]`);
-      const issues = A.lintText(strip(a.body), { names: playerList });
+      const issues = A.lintText(strip(a.body), { names: playerList, speech: false });
       if (issues.length) blog.push(`   ⚠ Text-Check: ${issues.join("; ")}`);
     };
 
@@ -217,7 +217,7 @@
       const songMilestone = newMiles[0] || null;
 
       out.push("");
-      out.push(`--- Spiel ${n}: ${homeName} ${orig.s1} : ${orig.s2} ${awayName}  (${phase}${ev.type === "playoff" ? " · " + m.id : ""}, ${stadium}) ---`);
+      out.push(`--- Spiel ${n}: ${homeName} ${orig.s1} : ${orig.s2} ${awayName}  (${phase}${ev.type === "playoff" ? " · " + (m.phase || m.id) : ""}${stadium ? ", " + stadium : ""}) ---`);
       try {
         const r = A.buildResultLine({
           state: work, history, homeName, awayName, homeScore: orig.s1, awayScore: orig.s2, stadium, stadiumPreposition: stadiumPrepFor(work, stadium), prevSeeds,

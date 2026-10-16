@@ -34,9 +34,10 @@
     rare: { label: "Rare", color: "#8fb6e8", glow: "rgba(143,182,232,.6)" },
     epic: { label: "Epic", color: "#c07bff", glow: "rgba(192,123,255,.7)" },
     legendary: { label: "Legendary", color: "#ffd23f", glow: "rgba(255,210,63,.8)" },
+    limited: { label: "Limited", color: "#2ee6c5", glow: "rgba(46,230,197,.75)" },
     unique: { label: "Unique 1/1", color: "#ff7ad9", glow: "rgba(255,122,217,.85)" },
   };
-  const TERMS = { kurz: "Kurzfristig · schon im ersten Turnier", mittel: "Mittelfristig · über ein Turnier", lang: "Langfristig · über mehrere Turniere", unique: "Einzigartig · nur der Erste bekommt sie" };
+  const TERMS = { limited: "Limitiert · nur in einem bestimmten Zeitraum erhältlich", kurz: "Kurzfristig · schon im ersten Turnier", mittel: "Mittelfristig · über ein Turnier", lang: "Langfristig · über mehrere Turniere", unique: "Einzigartig · nur der Erste bekommt sie" };
 
   // ------------------------------------------------------------ Karten-Katalog
   // term: kurz | mittel | lang | unique   ·   secret: Text erst nach Freischaltung lesbar
@@ -54,13 +55,22 @@
     { id: "tipp_self_won", emoji: "💪", title: "Selbsterfüllende Prophezeiung", desc: "Du hast auf dich selbst getippt … und gewonnen.", rarity: "rare", term: "mittel" },
     { id: "tipp_self_lost", emoji: "🥲", title: "Eigentor", desc: "Du hast auf dich selbst getippt … und verloren.", rarity: "rare", term: "mittel" },
     { id: "tipp_against_self", emoji: "🕳️", title: "Härtester Kritiker", desc: "Du hast gegen dich selbst getippt.", rarity: "rare", term: "mittel", secret: true },
-    { id: "tipp_against_self_won", emoji: "🧠", title: "Realist", desc: "Du hast gegen dich selbst getippt … und recht behalten.", rarity: "epic", term: "mittel", secret: true },
+    { id: "tipp_against_self_won", emoji: "🧠", title: "Realist", desc: "Du hast gegen dich selbst getippt … und recht behalten.", rarity: "rare", term: "mittel", secret: true },
     { id: "tipp_streak3", emoji: "🔮", title: "Kleines Orakel", desc: "Drei richtige Spieltipps in Folge.", rarity: "rare", term: "mittel" },
     { id: "tipp_streak5", emoji: "🧙", title: "Großes Orakel", desc: "Fünf richtige Spieltipps in Folge.", rarity: "epic", term: "mittel" },
-    { id: "tipp_all", emoji: "🗂️", title: "Allwissend", desc: "Du hast in einem Turnier jedes einzelne Spiel getippt.", rarity: "epic", term: "mittel" },
+    { id: "tipp_all", emoji: "🗂️", title: "Lückenlos", desc: "Du hast in einem Turnier jedes einzelne Spiel getippt.", rarity: "epic", term: "mittel" },
+    { id: "tipp_rate70", emoji: "🎯", title: "Durchblicker", desc: "Mehr als 70 % richtige Spieltipps in einem Turnier (mind. 15 Tipps).", rarity: "epic", term: "mittel" },
+    { id: "tipp_rate80", emoji: "🧿", title: "Allwissend", desc: "Mehr als 80 % richtige Spieltipps in einem Turnier (mind. 15 Tipps).", rarity: "legendary", term: "mittel" },
+    { id: "tipp_final_self_won", emoji: "🏅", title: "Prophet in eigener Sache", desc: "Im Finale auf dich selbst getippt … und gewonnen.", rarity: "epic", term: "mittel", secret: true },
+    { id: "tipp_final_against_self_won", emoji: "🪦", title: "Bittere Wahrheit", desc: "Im Finale gegen dich selbst getippt … und recht behalten.", rarity: "legendary", term: "mittel", secret: true },
+    { id: "tipp_self_crowned", emoji: "🫅", title: "Selbstkrönung", desc: "Dich selbst als Turniersieger getippt … und es tatsächlich geschafft.", rarity: "legendary", term: "mittel", secret: true },
+    { id: "tipp_self_toilet", emoji: "🚽", title: "Ehrliche Haut", desc: "Dich selbst als Toilet-Bowl-Sieger getippt … und recht behalten.", rarity: "epic", term: "mittel", secret: true },
+    { id: "tipp_self_champ_3", emoji: "🪞", title: "Unerschütterlich", desc: "In drei verschiedenen Turnieren dich selbst als Champion getippt.", rarity: "epic", term: "lang" },
+    { id: "tipp_loyal", emoji: "🛡️", title: "Treue Seele", desc: "20 Tipps auf Spiele mit eigener Beteiligung – und kein einziges Mal gegen dich selbst.", rarity: "rare", term: "lang" },
+    { id: "tipp_perfect_day", emoji: "💯", title: "Perfekter Spieltag", desc: "Alle Spiele eines Spieltags richtig getippt.", rarity: "epic", term: "mittel" },
     { id: "tipp_underdog", emoji: "🐕", title: "Underdog-Flüsterer", desc: "Du hast einen Sieger getippt, der in der Tabelle mindestens 3 Plätze schlechter stand.", rarity: "epic", term: "mittel" },
-    { id: "tipp_20", emoji: "📝", title: "Stammtipper", desc: "Du hast insgesamt 20 Tipps abgegeben.", rarity: "rare", term: "lang" },
-    { id: "tipp_100", emoji: "🏦", title: "Wettkönig", desc: "Du hast insgesamt 100 Tipps abgegeben.", rarity: "epic", term: "lang" },
+    { id: "tipp_20", emoji: "📝", title: "Stammtipper", desc: "Du hast insgesamt 50 Spieltipps abgegeben.", rarity: "rare", term: "lang" },
+    { id: "tipp_100", emoji: "🏦", title: "Wettkönig", desc: "Du hast insgesamt 150 Spieltipps abgegeben.", rarity: "epic", term: "lang" },
     { id: "tipp_streak10", emoji: "☄️", title: "Hellseher", desc: "Zehn richtige Spieltipps in Folge.", rarity: "legendary", term: "lang" },
     { id: "tipp_champion", emoji: "👑", title: "Königsmacher", desc: "Du hast den Champion richtig vorhergesagt.", rarity: "legendary", term: "lang" },
     // ---- Blog
@@ -76,17 +86,45 @@
     // ---- Treue
     { id: "night_owl", emoji: "🦉", title: "Nachteule", desc: "Du warst nachts zwischen 0 und 5 Uhr auf der Seite.", rarity: "epic", term: "kurz", secret: true },
     { id: "login_days_7", emoji: "📅", title: "Stammgast", desc: "Du warst an sieben verschiedenen Tagen eingeloggt.", rarity: "rare", term: "mittel" },
+    { id: "login_streak3", emoji: "😰", title: "FOMO", desc: "An drei Tagen hintereinander eingeloggt.", rarity: "rare", term: "mittel" },
     { id: "login_days_30", emoji: "🪑", title: "Inventar", desc: "Du warst an 30 verschiedenen Tagen eingeloggt.", rarity: "legendary", term: "lang" },
     { id: "login_years_2", emoji: "🔁", title: "Wiederholungstäter", desc: "Du warst in zwei verschiedenen Jahren dabei.", rarity: "epic", term: "lang" },
     { id: "cards_all", emoji: "🏆", title: "Komplettist", desc: "Du hast alle regulären Karten gesammelt (ohne die einzigartigen).", rarity: "legendary", term: "lang" },
     // ---- Einzigartig (1/1): nur der ERSTE Spieler bekommt sie
-    { id: "u_first_login", emoji: "🗝️", title: "Gründungsmitglied", desc: "Als Allererster im Wettbüro eingeloggt.", rarity: "unique", term: "unique", unique: true },
-    { id: "u_first_tip", emoji: "🚀", title: "Pionier", desc: "Hat den allerersten Tipp der Geschichte abgegeben.", rarity: "unique", term: "unique", unique: true },
-    { id: "u_first_self_tip", emoji: "📣", title: "Größter Fan", desc: "Hat als Erster auf sich selbst getippt.", rarity: "unique", term: "unique", unique: true },
+    // ---- Limited: nur in einem bestimmten Zeitraum
+    { id: "lim_founder", emoji: "🗝️", title: "Gründungsmitglied", desc: "Beim ersten Turnier mit dem neuen Dashboard (2027) als Teilnehmer eingeloggt.", rarity: "limited", term: "limited" },
+    { id: "lim_earlybird", emoji: "🐦", title: "Earlybird", desc: "2027 vor dem Kickoff des Turniers eingeloggt.", rarity: "limited", term: "limited" },
+    { id: "lim_pioneer", emoji: "🚀", title: "Pionier", desc: "Den allerersten Tipp abgegeben – oder innerhalb von 5 Minuten danach.", rarity: "limited", term: "limited" },
+    // ---- Draft (vergibt die Admin-Seite beim Team-Pick)
+    { id: "draft_fanlove", emoji: "💘", title: "Fanliebe", desc: "Im Draft das eigene Lieblingsteam gewählt, obwohl ein Team mit mind. 2 OVR mehr frei war.", rarity: "epic", term: "mittel" },
+    { id: "draft_traitor", emoji: "🐍", title: "Verräter", desc: "Im Draft ausgerechnet einen Divisionsrivalen des eigenen Lieblingsteams gewählt.", rarity: "rare", term: "mittel", secret: true },
+    { id: "draft_principles", emoji: "🧱", title: "Prinzipientreu", desc: "Einen Conference-Rivalen deines Lieblingsteams links liegen gelassen, obwohl er mind. 2 OVR besser gewesen wäre.", rarity: "epic", term: "mittel", secret: true },
+    // ---- Stöbern: Kader, Profile, Avatar
+    { id: "avatar_made", emoji: "🎨", title: "Ganz der Alte", desc: "Du hast deine eigene Spielerfigur gestaltet.", rarity: "common", term: "kurz" },
+    { id: "roster_8", emoji: "📋", title: "Kaderleser", desc: "Du hast dir die Kader von 8 Teams angeschaut.", rarity: "common", term: "kurz" },
+    { id: "roster_16", emoji: "🔎", title: "Scouting-Abteilung", desc: "Du hast dir die Kader von 16 Teams angeschaut.", rarity: "rare", term: "kurz" },
+    { id: "roster_32", emoji: "🗂️", title: "Ligaexperte", desc: "Du hast dir alle 32 Kader angeschaut.", rarity: "epic", term: "kurz" },
+    { id: "profiles_5", emoji: "🕵️", title: "Gegnerstudium", desc: "Du hast dir 5 Spielerprofile angesehen.", rarity: "rare", term: "kurz" },
+    { id: "seen_all", emoji: "🌌", title: "Alles gesehen", desc: "Jede Seite, alle 32 Kader, alle Spielerprofile, alle Reiter der Hall of Fame und die Tour – mehr gibt es hier nicht zu entdecken.", rarity: "legendary", term: "mittel", secret: true },
+    { id: "u_early_starter", emoji: "⏰", title: "Frühstarter", desc: "Hat sich als Allererster eingeloggt – noch vor dem 1. Januar 2027.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_first_avatar", emoji: "🖌️", title: "Erster Entwurf", desc: "Hat als Erster seine eigene Spielerfigur gestaltet.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_first_perfect_day", emoji: "🎰", title: "Jackpot", desc: "Hat als Erster einen kompletten Spieltag richtig getippt.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_first_kingmaker", emoji: "🤴", title: "Erster Königsmacher", desc: "Hat als Erster den Champion richtig vorhergesagt.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_comment", emoji: "🎙️", title: "Erste Stimme", desc: "Hat den allerersten Blog-Kommentar geschrieben.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_first_merch", emoji: "🛍️", title: "Erster Kunde", desc: "Hat als Erster wirklich etwas im Fan-Shop bestellt.", rarity: "unique", term: "unique", unique: true, manual: true },
     { id: "u_all_teams", emoji: "🔭", title: "Chefscout", desc: "Hat sich als Erster alle 32 Teams samt Kader angeschaut.", rarity: "unique", term: "unique", unique: true },
   ];
   const BY_ID = new Map(DEFS.map((d) => [d.id, d]));
+  // Limited/Unique-Zeiträume
+  const FOUNDER_YEAR = 2027;                       // erstes Turnier mit dem neuen Dashboard
+  const EARLY_DEADLINE = "2027-01-01T00:00:00";    // Frühstarter bis hier, Earlybird ab hier
+  const PIONEER_WINDOW_MIN = 5;
+  // Divisionen (für die Draft-Karten)
+  const DIVISIONS = {
+    "AFC East": ["BUF", "MIA", "NE", "NYJ"], "AFC North": ["BAL", "CIN", "CLE", "PIT"], "AFC South": ["HOU", "IND", "JAX", "TEN"], "AFC West": ["DEN", "KC", "LV", "LAC"],
+    "NFC East": ["DAL", "NYG", "PHI", "WAS"], "NFC North": ["CHI", "DET", "GB", "MIN"], "NFC South": ["ATL", "CAR", "NO", "TB"], "NFC West": ["ARI", "LAR", "SF", "SEA"],
+  };
+  const divOf = (id) => Object.keys(DIVISIONS).find((d) => DIVISIONS[d].includes(id)) || "";
   const PAGE_KEYS = ["dashboard", "spielplan", "wettbuero", "blog", "hall_of_fame", "shop"];
   const PAGE_MAP = { hallOfFame: "hall_of_fame", tippspiel: "wettbuero" };
 
@@ -150,6 +188,22 @@
     try { _resetAt = (global.MB.getAppConfig ? await global.MB.getAppConfig("achievements_reset_at") : null) || null; } catch (e) { _resetAt = null; }
     return _resetAt;
   }
+  // Admin: eine Karte manuell an einen Spieler vergeben (z.B. „Erster Kunde“ nach echter Bestellung).
+  // Unique-Karten werden dabei für diesen Spieler reserviert (achievement_firsts).
+  async function grant(id, name) {
+    const def = BY_ID.get(id); if (!def || !name) throw new Error("Unbekannte Karte oder kein Spieler.");
+    const c = sb(); if (!c) throw new Error("Keine Datenbankverbindung.");
+    if (def.unique) {
+      const { data } = await c.from("achievement_firsts").select("*").eq("achievement_id", id).maybeSingle();
+      if (data && data.player_name !== name) throw new Error(`Die Karte gehört bereits ${data.player_name}.`);
+      if (!data) { const { error } = await c.from("achievement_firsts").insert({ achievement_id: id, player_name: name }); if (error && !missing(error)) throw new Error(error.message); }
+    }
+    const at = new Date().toISOString();
+    const { error } = await c.from("player_achievements").upsert({ player_name: name, achievement_id: id, unlocked_at: at, seen: false }, { onConflict: "player_name,achievement_id" });
+    if (error && !missing(error)) throw new Error(error.message);
+    if (def.unique) postUniqueArticle(def, name);
+    return true;
+  }
   // Admin: ALLE Karten aller Spieler zurücksetzen (inkl. Unique-Karten und Fortschritt).
   async function resetAll() {
     const c = sb(); if (!c) throw new Error("Keine Datenbankverbindung.");
@@ -204,7 +258,7 @@
     unlocked.set(id, v); await persistUnlock(player, id, v);
     queue.push(id); scheduleShow();
     if (def.unique) postUniqueArticle(def, player);
-    const regular = DEFS.filter((d) => !d.unique && d.id !== "cards_all");
+    const regular = DEFS.filter((d) => !d.unique && d.rarity !== "limited" && d.id !== "cards_all");
     if (id !== "cards_all" && !def.unique && regular.every((d) => unlocked.has(d.id))) await unlock("cards_all");
     return true;
   }
@@ -232,10 +286,21 @@
   async function markSeen(id) { const v = unlocked.get(id); if (!v || v.seen || !player) return; v.seen = true; await persistUnlock(player, id, v); }
 
   // ------------------------------------------------------------ Ereignisse
+  // Legendär: wirklich alles angeschaut
+  function checkSeenAll() {
+    const p = progress;
+    const pages = PAGE_KEYS.every((k) => (p.pages || []).includes(k));
+    const teams = (p.teamsViewed || []).length >= 32;
+    const profiles = p.profilesTotal > 0 && (p.profilesViewed || []).length >= p.profilesTotal;
+    const tabs = ["history", "player", "cards", "unique"].every((t) => (p.hofTabs || []).includes(t));
+    const tour = (p.misc || []).includes("tour");
+    if (pages && teams && profiles && tabs && tour) unlock("seen_all");
+  }
   function trackPage(key) {
     if (!player || !key) return;
     addSet("pages", key);
     if (PAGE_KEYS.every((k) => (progress.pages || []).includes(k))) unlock("pages_all");
+    checkSeenAll();
     if (key === "hall_of_fame") unlock("hof_visit");
     if (key === "blog") { const d = addSet("blogDays", new Date().toISOString().slice(0, 10)); if (d >= 5) unlock("blog_reader"); if (d >= 20) unlock("blog_reader_20"); }
     const h = new Date().getHours(); if (h >= 0 && h < 5) unlock("night_owl");
@@ -245,14 +310,14 @@
     const { count, error } = await c.from("tipp_picks").select("id", { count: "exact", head: true }).eq("player_name", player).eq("kind", "match");
     if (error) return;
     const n = bump("tippTotal", count || 0);
-    if (n >= 20) unlock("tipp_20"); if (n >= 100) unlock("tipp_100");
+    if (n >= 50) unlock("tipp_20"); if (n >= 150) unlock("tipp_100");
   }
   function track(event, data) {
     if (!player) return; data = data || {};
     if (event === "tipp_saved") {
-      unlock("tipp_first"); unlock("u_first_tip");
-      if (data.pick && data.pick === player) { unlock("tipp_self"); unlock("u_first_self_tip"); }
-      else if (data.pick && (data.homeName === player || data.awayName === player)) unlock("tipp_against_self");
+      unlock("tipp_first"); checkPioneer();
+      if (data.pick && data.pick === player) { unlock("tipp_self"); }
+      else if (data.pick && (data.homeName === player || data.awayName === player)) { unlock("tipp_against_self"); addSet("misc", "against_self"); }
       refreshTippTotal();
     } else if (event === "shop_view" && data.token) {
       unlock("shop_first");
@@ -264,7 +329,21 @@
       const n = bump("mentions", data.count || 0);
       if (n >= 1) unlock("mention_1"); if (n >= 10) unlock("mention_10"); if (n >= 25) unlock("mention_25");
     } else if (event === "team_view" && data.team) {
-      if (addSet("teamsViewed", String(data.team)) >= (data.total || 32)) unlock("u_all_teams");
+      const n = addSet("teamsViewed", String(data.team));
+      if (n >= 8) unlock("roster_8"); if (n >= 16) unlock("roster_16");
+      if (n >= (data.total || 32)) { unlock("roster_32"); unlock("u_all_teams"); }
+      checkSeenAll();
+    } else if (event === "profile_view" && data.name) {
+      const n = addSet("profilesViewed", String(data.name).toLowerCase());
+      if (n >= 5) unlock("profiles_5");
+      progress.profilesTotal = data.total || progress.profilesTotal || 0;
+      checkSeenAll();
+    } else if (event === "hof_tab" && data.tab) {
+      addSet("hofTabs", String(data.tab)); checkSeenAll();
+    } else if (event === "tour_done") {
+      addSet("misc", "tour"); checkSeenAll();
+    } else if (event === "avatar_saved") {
+      unlock("avatar_made"); unlock("u_first_avatar");
     } else if (event === "blog_share" && data.id != null) {
       if (addSet("shares", String(data.id)) >= 10) unlock("share_10");
     }
@@ -285,19 +364,47 @@
       const winner = info.s1 > info.s2 ? info.homeName : info.awayName, loser = info.s1 > info.s2 ? info.awayName : info.homeName;
       const involved = info.homeName === player || info.awayName === player;
       const sw = seeds && seeds.get(winner), sl = seeds && seeds.get(loser);
-      results.push({ correct: pk.pick === winner, self: pk.pick === player, against: involved && pk.pick !== player, underdog: pk.pick === winner && sw && sl && sw - sl >= 3 });
+      results.push({ id: info.matchId, final: info.matchId === "p-gf", correct: pk.pick === winner, self: pk.pick === player, against: involved && pk.pick !== player, underdog: pk.pick === winner && sw && sl && sw - sl >= 3 });
     }
     results.forEach((r) => {
       if (r.self && r.correct) unlock("tipp_self_won");
       if (r.self && !r.correct) unlock("tipp_self_lost");
       if (r.against && r.correct) unlock("tipp_against_self_won");
       if (r.underdog) unlock("tipp_underdog");
+      if (r.final && r.self && r.correct) unlock("tipp_final_self_won");
+      if (r.final && r.against && r.correct) unlock("tipp_final_against_self_won");
     });
+    // Trefferquote im Turnier
+    if (results.length >= 15) {
+      const rate = results.filter((r) => r.correct).length / results.length;
+      if (rate > 0.7) unlock("tipp_rate70"); if (rate > 0.8) unlock("tipp_rate80");
+    }
+    // Perfekter Spieltag (alle Spiele eines abgeschlossenen Spieltags richtig)
+    try {
+      const byId = new Map(results.map((r) => [r.id, r]));
+      (global.MB.Tipp.getSpieltage(state) || []).forEach((st) => {
+        if (!st.matches.length || !st.matches.every((m) => m.finished)) return;
+        if (st.matches.every((m) => byId.get(m.matchId) && byId.get(m.matchId).correct)) { unlock("tipp_perfect_day"); unlock("u_first_perfect_day"); }
+      });
+    } catch (e) { /* optional */ }
     let run = 0, best = 0; results.forEach((r) => { run = r.correct ? run + 1 : 0; best = Math.max(best, run); });
     if (best >= 3) unlock("tipp_streak3"); if (best >= 5) unlock("tipp_streak5"); if (best >= 10) unlock("tipp_streak10");
     if (allTipped) unlock("tipp_all");
+    // Treue Seele: alle Tipps auf eigene Spiele (auch noch offene) turnierübergreifend zählen
+    seq.forEach((info) => {
+      const pk = picks.find((p) => p.kind === "match" && p.ref_key === info.matchId);
+      if (!pk || (info.homeName !== player && info.awayName !== player)) return;
+      addSet("involvedTips", `${tid}:${info.matchId}`);
+      if (pk.pick !== player) addSet("misc", "against_self");
+    });
+    if ((progress.involvedTips || []).length >= 20 && !(progress.misc || []).includes("against_self")) unlock("tipp_loyal");
+    // Gesamttipps auf sich selbst
+    const seasonPick = (key) => (picks.find((p) => p.kind === "season" && p.ref_key === key) || {}).pick;
+    if (seasonPick("champion") === player && addSet("selfChampTournaments", String(tid)) >= 3) unlock("tipp_self_champ_3");
     const outcome = global.MB.Tipp.resolveSeasonOutcome(state);
-    if (outcome.champion && picks.some((p) => p.kind === "season" && p.ref_key === "champion" && p.pick === outcome.champion)) unlock("tipp_champion");
+    if (outcome.champion && outcome.champion === player && seasonPick("champion") === player) unlock("tipp_self_crowned");
+    if (outcome.toiletBowlWinner && outcome.toiletBowlWinner === player && seasonPick("toiletBowlWinner") === player) unlock("tipp_self_toilet");
+    if (outcome.champion && picks.some((p) => p.kind === "season" && p.ref_key === "champion" && p.pick === outcome.champion)) { unlock("tipp_champion"); unlock("u_first_kingmaker"); }
     refreshTippTotal();
   }
 
@@ -363,7 +470,7 @@
     st = st || {};
     const r = RARITIES[def.rarity] || RARITIES.common;
     const locked = !st.at && !st.demo;
-    const hidden = locked && def.secret;
+    const hidden = locked && (def.secret || (st.hideHow && def.rarity !== "common"));
     const idx = String(DEFS.indexOf(def) + 1).padStart(2, "0");
     let foot;
     if (def.unique) {
@@ -430,7 +537,7 @@
           if (mine) return cardHtml(d, { ...mine, holder: d.unique ? player : null });
           // Unique-Karten anderer Spieler aufgedeckt zeigen (mit Besitzer)
           if (d.unique && f) return cardHtml(d, { at: f.at || new Date().toISOString(), holder: f.player, foreign: true });
-          return cardHtml(d, {});
+          return cardHtml(d, { hideHow: true });
         }).join("")}</div>`;
       }).join("");
     attachTilt(el);
@@ -448,7 +555,7 @@
     const list = DEFS.filter((d) => d.unique);
     const taken = list.filter((d) => fm.has(d.id)).length;
     el.innerHTML = `<div class="ach-gal-head"><b>${taken}</b> von <b>${list.length}</b> Unique-Karten vergeben — jede gibt es nur ein einziges Mal.</div>` +
-      `<div class="ach-gallery">${list.map((d) => { const f = fm.get(d.id); return cardHtml(d, f ? { at: f.at || new Date().toISOString(), holder: f.player } : {}); }).join("")}</div>`;
+      `<div class="ach-gallery">${list.map((d) => { const f = fm.get(d.id); return cardHtml(d, f ? { at: f.at || new Date().toISOString(), holder: f.player } : { hideHow: true }); }).join("")}</div>`;
     attachTilt(el);
   }
 
@@ -478,14 +585,63 @@
     player = name || null;
     if (!player) { unlocked = new Map(); queue = []; loadedFor = null; progress = {}; return; }
     await loadFor(player);
-    unlock("welcome"); unlock("u_first_login");
+    unlock("welcome");
+    checkLimitedLogin();
     const now = new Date(); addSet("loginYears", String(now.getFullYear()));
     if (addSet("loginDays", now.toISOString().slice(0, 10)) >= 7) unlock("login_days_7");
     if ((progress.loginDays || []).length >= 30) unlock("login_days_30");
+    // FOMO: drei Kalendertage am Stück
+    try {
+      const days = [...new Set(progress.loginDays || [])].sort();
+      let run = 1;
+      for (let i = 1; i < days.length; i++) { run = (Date.parse(days[i]) - Date.parse(days[i - 1]) === 86400000) ? run + 1 : 1; if (run >= 3) { unlock("login_streak3"); break; } }
+    } catch (e) { /* egal */ }
     if ((progress.loginYears || []).length >= 2) unlock("login_years_2");
     try { if (global.matchMedia && (global.matchMedia("(display-mode: standalone)").matches || global.navigator.standalone)) unlock("app_installed"); } catch (e) { /* optional */ }
     if (pageKey && !pageTracked) { pageTracked = true; trackPage(pageKey); }
     scheduleShow();
+  }
+  function checkLimitedLogin() {
+    const now = new Date(), early = new Date(EARLY_DEADLINE);
+    if (now < early) unlock("u_early_starter");
+    const st = stateRef || {};
+    const cfg = st.config || {};
+    const kickoff = cfg.nextTournamentAt ? new Date(cfg.nextTournamentAt) : null;
+    const running = Array.isArray(st.players) && st.players.length > 0;
+    if (now >= early && now.getFullYear() === FOUNDER_YEAR && !running && kickoff && now < kickoff) unlock("lim_earlybird");
+    const year = Number(cfg.year) || 0;
+    if (running && year === FOUNDER_YEAR && st.players.some((p) => p.name === player)) unlock("lim_founder");
+  }
+  // Pionier: der erste Tipp überhaupt setzt die Startzeit (achievement_firsts als Zeitstempel),
+  // alle Tipps in den 5 Minuten danach bekommen die Karte ebenfalls.
+  async function checkPioneer() {
+    const c = sb(); if (!c || !player) return;
+    try {
+      const ins = await c.from("achievement_firsts").insert({ achievement_id: "_first_tip_at", player_name: player });
+      if (!ins.error) { unlock("lim_pioneer"); return; }
+      const { data } = await c.from("achievement_firsts").select("claimed_at").eq("achievement_id", "_first_tip_at").maybeSingle();
+      if (data && data.claimed_at && Date.now() - Date.parse(data.claimed_at) <= PIONEER_WINDOW_MIN * 60000) unlock("lim_pioneer");
+    } catch (e) { /* optional */ }
+  }
+  // Draft-Karten: wird von der Admin-Seite nach jedem Team-Pick aufgerufen (vergibt per grant).
+  // available: [{ id, rating }] der VOR dem Pick freien Teams (inkl. gewähltem)
+  async function evaluateDraftPick(name, pickedId, available) {
+    try {
+      if (!global.MB.Avatar) return;
+      await global.MB.Avatar.load();
+      if (!global.MB.Avatar.hasOwn(name)) return;
+      const fav = global.MB.Avatar.get(name).team; if (!fav) return;
+      const rate = new Map((available || []).map((t) => [t.id, Number(t.rating) || 0]));
+      const picked = rate.get(pickedId) || 0;
+      const favFree = rate.has(fav);
+      if (pickedId === fav && favFree && [...rate.values()].some((r) => r >= picked + 2)) await grant("draft_fanlove", name);
+      if (pickedId !== fav && divOf(pickedId) && divOf(pickedId) === divOf(fav)) await grant("draft_traitor", name);
+      if (pickedId !== fav) {
+        const conf = (divOf(fav) || "").split(" ")[0];
+        const skipped = [...rate.entries()].some(([id, r]) => id !== fav && id !== pickedId && divOf(id).startsWith(conf) && divOf(id) !== divOf(pickedId) && r >= picked + 2);
+        if (skipped && conf && !divOf(pickedId).startsWith(conf)) await grant("draft_principles", name);
+      }
+    } catch (e) { console.warn("Draft-Karten:", e); }
   }
   async function onLogin(name) { await setPlayer(name); if (stateRef) evaluateTipps(stateRef); }
   function onLogout() { setPlayer(null); }
@@ -498,5 +654,5 @@
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, evaluateDraftPick, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

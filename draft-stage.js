@@ -466,6 +466,17 @@
   //   die Kamera / Klo-Trophäe / Rookie-Stempel, Fakten eingeblendet) -> Draftboard
   //   (Name-Reveal zum Ende der Ansage, je später der Pick desto triumphaler).
   function coachSVG(o) {
+    // eigene Spielerfigur im Coach-Outfit (avatar.js), sonst die alte Standardfigur
+    if (global.MB.Avatar) {
+      const cfg = global.MB.Avatar.get(o.name);
+      const fig = global.MB.Avatar.svg(cfg, { outfit: "coach", c1: o.toilet ? "#6b5a3a" : "#2a2f3a", c2: o.toilet ? "#e9e2cf" : "#c99700", team: cfg.team });
+      if (!o.toilet) return fig;
+      // Toilet-Bowl-Sieger: Klobrille als Kragen
+      return fig.replace("</svg>", `<ellipse cx="130" cy="196" rx="62" ry="20" fill="none" stroke="#f4f4f4" stroke-width="12"/><ellipse cx="130" cy="196" rx="62" ry="20" fill="none" stroke="#cfd5dc" stroke-width="3"/></svg>`);
+    }
+    return coachSVGLegacy(o);
+  }
+  function coachSVGLegacy(o) {
     const nm = esc(String(o.name || "").toUpperCase().slice(0, 12));
     const toilet = !!o.toilet;
     const jacket = toilet ? "#6b5a3a" : "#2a2f3a", trim = toilet ? "#e9e2cf" : "#c99700";
@@ -490,8 +501,8 @@
 
   // Faust (Fingerrücken zur Kamera) mit Champion-Ringen auf den Fingern.
   // fingers: Indizes 0..3 (Zeige- bis kleiner Finger), die einen Ring tragen.
-  function fistSVG(fingers, mirror, delay0) {
-    const skin = "#d9a074", shade = "#b9825a", sleeve = "#2a2f3a", trim = "#c99700";
+  function fistSVG(fingers, mirror, delay0, skinCol) {
+    const skin = skinCol || "#d9a074", shade = "rgba(0,0,0,.22)", sleeve = "#2a2f3a", trim = "#c99700";
     const fx = (i) => 30 + i * 36; // linke Kante je Finger
     let f = "", r = "";
     for (let i = 0; i < 4; i++) {
@@ -649,7 +660,8 @@
     // Ringe sitzen an den Fingern: rechte Faust zuerst (Ringfinger, Mittelfinger, Zeigefinger, kleiner Finger), dann links
     const order = [2, 1, 0, 3];
     const nR = Math.ceil(titles / 2), nL = titles - nR;
-    const rings = titles ? `<div class="fist l">${fistSVG(order.slice(0, Math.max(nL, 0)), true, 0.95)}</div><div class="fist r">${fistSVG(order.slice(0, nR), false, 0.75)}</div>` : "";
+    const skinC = global.MB.Avatar ? global.MB.Avatar.get(o.name).skin : null;
+    const rings = titles ? `<div class="fist l">${fistSVG(order.slice(0, Math.max(nL, 0)), true, 0.95, skinC)}</div><div class="fist r">${fistSVG(order.slice(0, nR), false, 0.75, skinC)}</div>` : "";
     const facts = (o.facts || []).slice(0, 3).map((f, i) => `<span class="ds-tag-chip ${i % 2 ? "gold" : ""}" style="animation-delay:${.6 + i * .35}s">${esc(f)}</span>`).join("");
     const nm = String(o.name || "");
     const sz = Math.round(Math.min(130, 400 / Math.max(3, nm.length * 0.62)));

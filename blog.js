@@ -42,8 +42,11 @@
     return list.slice(0, -1).join(", ") + " und " + list[list.length - 1];
   }
 
+  const NUM_WORDS_DE = ["null", "einen", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn", "elf", "zwölf"];
+  // "einen Sieg", "drei Siege" (kleine Zahlen ausgeschrieben, Akkusativ für "ein")
   function pluralDE(n, one, many) {
-    return `${n} ${Number(n) === 1 ? one : many}`;
+    const k = Number(n);
+    return `${Number.isInteger(k) && k >= 0 && k <= 12 ? NUM_WORDS_DE[k] : n} ${k === 1 ? one : many}`;
   }
 
   // Wie pick(), vermeidet aber, dasselbe Element wie in den letzten Aufrufen
@@ -149,7 +152,7 @@
           .map((p, i) => `${i + 1}. ${p.name}`)
           .join(", ");
 
-        return `An der Spitze steht derzeit ${names}. Noch trennen sich die Plätze nicht zwingend Welten – aber jede weitere Partie macht aus einer Momentaufnahme langsam eine Richtung.`;
+        return `Die aktuelle Spitzengruppe: ${names}. Noch trennen sich die Plätze nicht zwingend Welten – aber jede weitere Partie macht aus einer Momentaufnahme langsam eine Richtung.`;
       },
 
       closer:
@@ -231,6 +234,8 @@
     winStreak: [
       "Drei Siege in Folge sind irgendwann keine Serie mehr, sondern ein Statement. {player} steht inzwischen bei {value} Erfolgen am Stück.",
       "{player} gewinnt weiter. Und weiter. Und weiter. {value} Siege in Folge – langsam wird aus guter Form ein Problem für den Rest des Feldes.",
+      "Wer stoppt {player}? Bisher niemand: {value} Siege am Stück, und die Konkurrenz sucht noch nach einem Plan.",
+      "{value} Spiele, {value} Siege. {player} ist gerade die Mannschaft, gegen die niemand spielen will.",
     ],
 
     upset: [
@@ -241,6 +246,9 @@
     blowout: [
       "{player} lässt {opponent} keine Chance: {winnerScore}:{loserScore}. Bei so einem Abstand geht es nicht mehr um die Frage, wer gewonnen hat, sondern nur noch darum, wie lange man darüber redet.",
       "Manche Spiele sind früh entschieden, dieses war es wohl noch früher. {player} schlägt {opponent} mit {winnerScore}:{loserScore} und lässt kaum Fragen offen.",
+      "{winnerScore}:{loserScore}. Mehr muss man eigentlich nicht sagen – {player} hat {opponent} heute komplett im Griff gehabt.",
+      "Es gibt knappe Spiele, und es gibt das hier: {player} gegen {opponent}, {winnerScore}:{loserScore}. Der Spannungsbogen war ungefähr so flach wie die Defense des Verlierers.",
+      "{opponent} wird dieses Spiel gerne schnell vergessen wollen. {player} gewinnt {winnerScore}:{loserScore} – und das Ergebnis schmeichelt dem Verlierer eher noch.",
     ],
 
     shootout: [
@@ -265,7 +273,7 @@
 
   const SONG_INTROS = {
     regularSeason: [
-      "Die Gruppenphase ist vorbei. Zeit für den Soundtrack zu den ersten Wochen voller Siege, Niederlagen und mehr oder weniger belastbarer Prognosen.",
+      "Die Gruppenphase ist vorbei. Zeit für den Soundtrack zu den ersten Stunden voller Siege, Niederlagen und mehr oder weniger belastbarer Prognosen.",
       "Die Regular Season ist Geschichte. Wer jetzt noch im Rennen ist, bekommt den passenden Soundtrack für die entscheidende Phase.",
     ],
 
@@ -303,7 +311,7 @@
     const parts = [
       pick(KICKOFF_OPENERS),
       names.length
-        ? `Mit dabei sind diesmal ${names.join(", ")}. Jeder startet bei null, jeder hat seine eigene Vorstellung davon, wie diese Saison laufen soll – und spätestens nach den ersten Spielen dürfte sich zeigen, wie belastbar diese Vorstellungen wirklich sind.`
+        ? `Mit dabei sind diesmal ${joinNames(names)}. Jeder startet bei null, jeder hat seine eigene Vorstellung davon, wie diese Saison laufen soll – und spätestens nach den ersten Spielen dürfte sich zeigen, wie belastbar diese Vorstellungen wirklich sind.`
         : "Das Teilnehmerfeld steht bereit. Jetzt fehlt eigentlich nur noch das erste Spiel.",
       "Wie immer entscheidet nicht die Papierform, sondern das, was auf dem virtuellen Rasen passiert. Favoriten gibt es natürlich trotzdem – schließlich wäre ein Altima Bowl ohne voreilige Prognosen nur halb so unterhaltsam.",
       pick(KICKOFF_CLOSERS),
@@ -613,7 +621,11 @@
     // Das letzte Ergebnis nur nennen, wenn dadurch niemand ein zweites Mal vorkommt.
     if (recent && !style.consumesRecent && !mentioned().includes(recent.winner) && !mentioned().includes(recent.loser)) {
       parts.push(
-        `Zuletzt setzte sich ${recent.winner} gegen ${recent.loser} mit ${recent.score} durch. Ein einzelnes Spiel entscheidet noch keine Saison – aber es kann durchaus entscheiden, wer die nächste Partie mit etwas mehr Ruhe angeht.`
+        pickFresh("prRecent", [
+          `Zuletzt setzte sich ${recent.winner} gegen ${recent.loser} mit ${recent.score} durch. Ein einzelnes Spiel entscheidet noch keine Saison – aber es kann durchaus entscheiden, wer die nächste Partie mit etwas mehr Ruhe angeht.`,
+          `Frisch vom Feld: ${recent.winner} schlägt ${recent.loser} ${recent.score}. Für den einen Rückenwind, für den anderen Grübelstoff.`,
+          `Das jüngste Ergebnis: ${recent.score} für ${recent.winner} gegen ${recent.loser}. Solche Spiele merkt sich die Tabelle länger als die Beteiligten.`,
+        ], 2)
       );
     }
 
@@ -681,9 +693,13 @@
 
     const detail =
       record.type === "winStreak"
-        ? `${record.player} steht damit bei ${record.value} Siegen in Folge. Für die Konkurrenz ist das eine ziemlich deutliche Einladung, diese Serie möglichst bald zu beenden.`
+        ? pickFresh("streakDetail", [
+            `Für die Konkurrenz ist das eine ziemlich deutliche Einladung, diese Serie möglichst bald zu beenden.`,
+            `Die nächste Partie wird damit automatisch zum Serien-Test.`,
+            `Längste Serie des Turniers – und sie ist noch nicht vorbei.`,
+          ], 2)
         : record.type === "upset"
-        ? `Der Blick auf die Ausgangslage macht den Sieg besonders bemerkenswert: ${record.player} lag in der Setzliste deutlich hinter ${record.opponent}. Auf dem Feld spielte das offenbar keine Rolle.`
+        ? `Der Blick auf die Ausgangslage macht den Sieg besonders bemerkenswert: ${record.player} lag in der Setzliste deutlich hinter ${record.opponent}. Auf dem Feld spielte das offenbar keine Rolle.${record.blowoutMargin ? ` Und knapp war es auch nicht: ${record.blowoutMargin} Punkte Unterschied – der deutlichste Sieg des Turniers.` : ""}`
         : null;
 
     const closers = [...(RECORD_CLOSERS[record.type] || []), ...RECORD_CLOSERS_GENERIC];
@@ -1051,7 +1067,8 @@
       sentences.push("Für ihn ist es der erste Altima Bowl – keine Historie, keine Rekorde, aber auch noch keine Niederlagen, die man ihm vorhalten könnte.");
     } else {
       const seasonsPlayed = badge.seasonsPlayed || 0;
-      let line = `Er ist bereits ${seasonsPlayed} ${seasonsPlayed === 1 ? "Saison" : "Saisons"} dabei`;
+      const sp = `${seasonsPlayed} ${seasonsPlayed === 1 ? "Saison" : "Saisons"}`;
+      let line = pickFresh("portraitSeasons", [`Er ist bereits ${sp} dabei`, `Seine ${seasonsPlayed + 1}. Teilnahme nach ${sp}`, `Altima-Bowl-Erfahrung: ${sp}`, `Bisher ${sp} im Turnier`], 3);
       if (stats.played) {
         line += `, Gesamtbilanz ${stats.wins}-${stats.losses} (Siege-Niederlagen)`;
         if (stats.ppg != null) line += ` bei durchschnittlich ${fmtDecimal(stats.ppg)} Punkten pro Spiel`;
@@ -1060,7 +1077,9 @@
     }
 
     if (badge.titles > 0) {
-      let t = badge.titles === 1 ? "Ein Titel steht bereits auf seinem Konto" : `${badge.titles} Titel stehen bereits auf seinem Konto`;
+      let t = badge.titles === 1
+        ? pickFresh("portraitTitle1", ["Ein Titel steht bereits auf seinem Konto", "Einmal stand er schon ganz oben", "Den Ring kennt er bereits aus eigener Erfahrung", "Ein Titel ist schon im Schrank"], 3)
+        : pickFresh("portraitTitleN", [`${badge.titles} Titel stehen bereits auf seinem Konto`, `${badge.titles}-mal stand er schon ganz oben`, `${badge.titles} Ringe hat er schon gesammelt`], 2);
       if (badge.isSoleRecordChampion) t += " – damit ist er alleiniger Rekordchampion";
       sentences.push(t + ".");
     }

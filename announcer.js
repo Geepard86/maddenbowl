@@ -71,6 +71,9 @@
       "Die Uhr steht bei null.",
       "Schlusspfiff!",
       "Das Spiel ist gelaufen!",
+      "Und das war's – das Ergebnis steht!",
+      "Ende im Gelände!",
+      "Der Controller ruht, das Ergebnis steht!",
     ],
     // Nur verwendet, wenn ein Stadion bekannt ist ({s} = z.B. \"im Altima Field\").
     stadium: [
@@ -89,6 +92,7 @@
       "Das ist am Ende eine klare Sache!",
       "Am Ende wird es deutlich!",
       "Hier lässt der Sieger nichts mehr anbrennen!",
+      "Eine Machtdemonstration!",
       "Das war keine Frage des Sieges, nur der Höhe!",
     ],
   };
@@ -106,14 +110,25 @@
     "{winner} gewinnt mit {winnerScore} zu {loserScore} gegen {loser}.",
     "{winner} schlägt {loser} mit {winnerScore} zu {loserScore}.",
     "Am Ende steht es {winnerScore} zu {loserScore} für {winner} gegen {loser}.",
-    "{winner} behält mit {winnerScore} zu {loserScore} gegen {loser} die Oberhand.",
     "{winner} macht die Partie mit {winnerScore} zu {loserScore} gegen {loser} klar.",
+  ];
+  // nur bei knappen Spielen (≤ 7 Punkte)
+  const CLOSE_WIN_PHRASES = [
+    "{winner} behält mit {winnerScore} zu {loserScore} gegen {loser} die Oberhand.",
+    "{winner} rettet den {winnerScore}-zu-{loserScore}-Sieg gegen {loser} über die Zeit.",
+    "Hauchdünn: {winner} gewinnt {winnerScore} zu {loserScore} gegen {loser}.",
+  ];
+  // nur bei Kantersiegen (≥ 21 Punkte)
+  const BLOWOUT_WIN_PHRASES = [
+    "{winner} fegt {loser} mit {winnerScore} zu {loserScore} vom Feld.",
+    "{winner} überrollt {loser} mit {winnerScore} zu {loserScore}.",
+    "{winner} lässt {loser} beim {winnerScore} zu {loserScore} nicht den Hauch einer Chance.",
   ];
   // Bewusst aus der Verlierer-Perspektive formuliert - sorgt zusammen mit
   // WIN_PHRASES für mehr Abwechslung, statt immer nur den Sieger zu betonen.
   const LOSE_PHRASES = [
     "{loser} muss sich {winner} mit {loserScore} zu {winnerScore} geschlagen geben.",
-    "Für {loser} reicht es nicht - {winner} gewinnt mit {winnerScore} zu {loserScore}.",
+    "Für {loser} reicht es nicht – {winner} gewinnt mit {winnerScore} zu {loserScore}.",
     "{loser} verliert mit {loserScore} zu {winnerScore} gegen {winner}.",
     "Am Ende zieht {loser} gegen {winner} mit {loserScore} zu {winnerScore} den Kürzeren.",
   ];
@@ -221,40 +236,44 @@
   }
 
   // ======================================================================
+  // Einleitungen sind kasus-neutral, die Ankündigungen stehen alle im Nominativ
+  // (vorher passte z.B. "Jetzt darf er picken: Den Mann mit…" grammatisch nicht).
   const RING_INTRO_PREFIXES = [
     "Und hier kommt er:",
-    "Als nächstes im Draft:",
-    "Jetzt darf er picken:",
+    "Als Nächstes im Draft:",
+    "Jetzt am Zug:",
     "Und nun:",
+    "Bühne frei:",
+    "Der nächste Head Coach:",
   ];
-  const RING_INTRO_FIRST_PICK_PREFIX = "Der erste Pick geht an:";
-  const RING_INTRO_LAST_PICK_PREFIX = "Der letzte Pick gebührt ihm:";
+  const RING_INTRO_FIRST_PICK_PREFIX = "Mit dem ersten Pick des Abends:";
+  const RING_INTRO_LAST_PICK_PREFIX = "Und mit dem letzten Pick des Abends:";
 
-  // Dativ-Vervielfältigungswörter für "...fachem Champion" (Index = Titelzahl)
-  const RING_FOLD_WORDS_DE = ["", "einfachem", "zweifachem", "dreifachem", "vierfachem", "fünffachem", "sechsfachem"];
-  function foldWordDE(n) { return RING_FOLD_WORDS_DE[n] || `${n}-fachem`; }
+  // "zweifache Champion" (Nominativ nach bestimmtem Artikel)
+  const RING_FOLD_WORDS_DE = ["", "einfache", "zweifache", "dreifache", "vierfache", "fünffache", "sechsfache"];
+  function foldWordDE(n) { return RING_FOLD_WORDS_DE[n] || `${n}-fache`; }
 
   const RING_ANNOUNCEMENTS = {
-    champion: ["Dem amtierenden Champion:"],
-    championRings: [(rings) => `Dem aktuellen Titelträger und ${foldWordDE(rings)} Champion:`],
-    seriesChampion: [(rings) => `Den einzigen Head Coach mit ${numberWordsDE(rings)} Ringen:`],
-    recordHolder: ["Den Mann mit dem Allzeit-Highscore:"],
+    champion: ["Der amtierende Champion:", "Der Titelverteidiger:", "Der Mann, den alle jagen – der amtierende Champion:"],
+    championRings: [(rings) => `Der aktuelle Titelträger und ${foldWordDE(rings)} Champion:`],
+    seriesChampion: [(rings) => `Der einzige Head Coach mit ${numberWordsDE(rings)} Ringen:`, (rings) => `Der Rekordchampion mit ${numberWordsDE(rings)} Ringen:`],
+    recordHolder: ["Der Mann mit dem Allzeit-Highscore:", "Der Rekordhalter für die meisten Punkte in einem Spiel:"],
     contender: ["Der Vize-Champion der letzten Saison:", "Der ewige Herausforderer, immer ganz nah dran am Ring:"],
-    toiletBowl: ["Den Sieger des letztjährigen Toilet Bowls:"],
-    rookie: ["Der Rookie:"],
-    veteran: ["Am Start:", "Bereit für eine neue Saison:"],
+    toiletBowl: ["Der Sieger des letztjährigen Toilet Bowls:", "Der Toilet-Bowl-Champion des Vorjahres:"],
+    rookie: ["Der Rookie:", "Neu im Ring – zum ersten Mal dabei:", "Frisch im Altima Bowl, der Rookie:"],
+    veteran: ["Am Start:", "Bereit für eine neue Saison:", "Zurück im Ring:", "Wieder mit dabei:"],
   };
 
   function ringAnnouncementFor(badge) {
     if (badge.isDefendingChampion) {
-      return badge.titles > 1 ? pick(RING_ANNOUNCEMENTS.championRings)(numberWordsDE(badge.titles)) : pick(RING_ANNOUNCEMENTS.champion);
+      return badge.titles > 1 ? pick(RING_ANNOUNCEMENTS.championRings)(badge.titles) : pick(RING_ANNOUNCEMENTS.champion);
     }
     if (badge.isSoleRecordChampion) return pick(RING_ANNOUNCEMENTS.seriesChampion)(badge.titles);
-    if (badge.isAllTimeHighScoreHolder) return pick(RING_ANNOUNCEMENTS.recordHolder);
-    if (badge.isRunnerUpLastSeason || badge.finalsWithoutTitleCount >= 2) return pick(RING_ANNOUNCEMENTS.contender);
-    if (badge.isToiletBowlLastSeason) return pick(RING_ANNOUNCEMENTS.toiletBowl);
-    if (badge.isRookie) return pick(RING_ANNOUNCEMENTS.rookie);
-    return pick(RING_ANNOUNCEMENTS.veteran);
+    if (badge.isAllTimeHighScoreHolder) return pickVaried("ring_recordHolder", RING_ANNOUNCEMENTS.recordHolder, 2);
+    if (badge.isRunnerUpLastSeason || badge.finalsWithoutTitleCount >= 2) return pickVaried("ring_contender", RING_ANNOUNCEMENTS.contender, 2);
+    if (badge.isToiletBowlLastSeason) return pickVaried("ring_toiletBowl", RING_ANNOUNCEMENTS.toiletBowl, 2);
+    if (badge.isRookie) return pickVaried("ring_rookie", RING_ANNOUNCEMENTS.rookie, 2);
+    return pickVaried("ring_veteran", RING_ANNOUNCEMENTS.veteran, 2);
   }
 
   // badge = ein Eintrag aus MB.computeRingIntroBadges(...).get(name.toLowerCase())
@@ -267,7 +286,7 @@
   function buildRingIntroLine(badge, { isFirstPick, isLastPick, modelId } = {}) {
     if (!badge) return "";
     const n = ringName(badge.name);
-    const prefix = isFirstPick ? RING_INTRO_FIRST_PICK_PREFIX : (isLastPick ? RING_INTRO_LAST_PICK_PREFIX : pick(RING_INTRO_PREFIXES));
+    const prefix = isFirstPick ? RING_INTRO_FIRST_PICK_PREFIX : (isLastPick ? RING_INTRO_LAST_PICK_PREFIX : pickVaried("ringPrefix", RING_INTRO_PREFIXES, 3));
     const announcement = ringAnnouncementFor(badge);
     if (isV3Model(modelId)) {
       // Box-Ansager: Einleitung getragen, Ankündigung steigernd, dann der Name
@@ -415,6 +434,10 @@
       (t) => `Die ${t} warten noch auf den ersten Titel in dieser Liga.`,
       (t) => `Mit den ${t} hat noch niemand den Ring geholt — vielleicht ändert sich das ja jetzt.`,
       (t) => `Für die ${t} wäre es der erste Ring in der Geschichte dieser Liga.`,
+      (t) => `Die ${t} sind im Altima Bowl noch ein unbeschriebenes Blatt, was Titel angeht.`,
+      (t) => `Einen Ring haben die ${t} hier noch nie gesehen.`,
+      (t) => `Bei den ${t} ist die Trophäenvitrine noch leer.`,
+      (t) => `Die ${t} hätten nichts gegen ihren ersten Titel in dieser Liga.`,
     ],
     // Der Titel wurde mit einem anderen Head Coach geholt.
     withOtherCoach: [
@@ -450,7 +473,7 @@
     (n) => `Da wartet ein dickes Brett in der Gruppenphase: ${n}.`,
   ];
   const SCHEDULE_EASY_LINES = [
-    (n) => `Dafür sieht die Gruppenphase machbar aus: ${n}.`,
+    (n) => `Die Gruppenphase sieht machbar aus: ${n}.`,
     (n) => `Der Spielplan lässt sich erstmal ganz entspannt an: ${n}.`,
     (n) => `Das klingt nach einer angenehmen Gruppenphase: ${n}.`,
   ];
@@ -492,7 +515,8 @@
         parts.push(pick(TEAM_TITLE_LINES.withOtherCoach)(team, teamTitleInfo.count, lastWinner, n));
       }
     } else {
-      parts.push(pickVaried("teamTitleNone", TEAM_TITLE_LINES.none, 2, team));
+      // ohne Titel-Historie nicht bei jedem Pick dieselbe Info (sonst 6x "noch kein Ring")
+      if (Math.random() < 0.6 || !parts.length) parts.push(pickVaried("teamTitleNone", TEAM_TITLE_LINES.none, 5, team));
     }
     const scheduleFact = buildScheduleFact(opponentBadges);
     if (scheduleFact) parts.push(scheduleFact);
@@ -598,7 +622,7 @@
       const lastLoserRaw = lastWinnerRaw === H ? awayName : homeName;
       return {
         type: "revenge",
-        text: `Beim letzten Duell hat sich ${speechName(lastWinnerRaw)} gegen ${speechName(lastLoserRaw)} durchgesetzt - gelingt heute die Revanche?`,
+        text: `Beim letzten Duell hat sich ${speechName(lastWinnerRaw)} gegen ${speechName(lastLoserRaw)} durchgesetzt – gelingt heute die Revanche?`,
         score: 10,
       };
     } catch (e) { return null; }
@@ -724,7 +748,7 @@
   //    (Direktvergleich, Punkteschnitt) gemeinsam gewichtet; Kategorien, die
   //    gerade erst vorkamen, rutschen nach hinten (siehe factRecencyPenalty).
   //  * Ein Rekord-Satz ersetzt schwächere Serien-Infos desselben Spiels.
-  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, prevSeeds, matchKind, matchId, songMilestone, songGenerated }) {
+  function buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, prevSeeds, matchKind, matchId, songMilestone, songGenerated, noHandoff }) {
     const winnerRaw = homeScore > awayScore ? homeName : awayName;
     const loserRaw = homeScore > awayScore ? awayName : homeName;
     const winner = speechName(winnerRaw), loser = speechName(loserRaw);
@@ -751,7 +775,8 @@
     let line = `${pickResultIntro(margin, stadium, stadiumPreposition, !!recordType && MARGIN_RECORD_TYPES.has(recordType))} `;
     // Ergebnis UND Sieger/Verlierer in EINEM Satz. Mix aus Sieger- und
     // Verlierer-Perspektive für mehr Abwechslung.
-    line += fmt(pickVaried("resultPhrase", [...WIN_PHRASES, ...LOSE_PHRASES], 4), { winner, loser, winnerScore, loserScore }) + " ";
+    const phrasePool = [...WIN_PHRASES, ...LOSE_PHRASES, ...(margin <= 7 ? CLOSE_WIN_PHRASES : []), ...(margin >= 21 ? BLOWOUT_WIN_PHRASES : [])];
+    line += fmt(pickVaried("resultPhrase", phrasePool, 5), { winner, loser, winnerScore, loserScore }) + " ";
 
     // Nicht JEDES enge/deutliche Spiel bekommt zusätzlich noch eine
     // Farbkommentar-Zeile. Ein Rekord, der bereits \"das war ein Blowout\"
@@ -804,7 +829,21 @@
       }
     }
 
-    if (songMilestone !== "champion") line += pickVaried("handoffOut", HANDOFF_OUT_PHRASES, 3, names);
+    // Playoff-Kontext: Was bedeutet die Niederlage? (Lower Bracket = raus, Upper Bracket = Umweg)
+    try {
+      if (matchKind === "playoff" && matchId) {
+        const pm = (state.playoffMatches || []).find((x) => "p-" + x.id === matchId || x.id === matchId);
+        const phase = String((pm && (pm.phase || pm.session)) || "");
+        const L = loser;
+        if (/^Elim/i.test(phase)) line += pickVaried("poOut", [`Für ${L} ist das Turnier damit beendet.`, `${L} ist raus – keine zweite Chance mehr.`, `Damit endet die Reise für ${L}.`], 2) + " ";
+        else if (/^(Upper|Wildcard)/i.test(phase)) line += pickVaried("poDrop", [`${L} muss jetzt den Umweg über das Lower Bracket gehen.`, `Für ${L} geht es im Lower Bracket weiter – ab jetzt ohne Netz.`, `${L} rutscht ins Lower Bracket, eine Niederlage noch und es ist vorbei.`], 2) + " ";
+      }
+    } catch (e) { /* ohne Kontext */ }
+
+    // Übergabe nur, wenn überhaupt noch ein Spiel ansteht
+    let hasNext = true;
+    try { hasNext = (MB.getUpcomingMatches(state, { limit: 1 }) || []).length > 0; } catch (e) { hasNext = true; }
+    if (songMilestone !== "champion" && hasNext && !noHandoff) line += pickVaried("handoffOut", HANDOFF_OUT_PHRASES, 3, names);
 
     return { line: prepareText(line), usedFactTypes };
   }
@@ -878,7 +917,7 @@
   // Der eigentliche Song wird separat über announceSong() angesagt/abgespielt
   // (eigene Intro-Zeile dort) - hier nur der kurze Teaser davor.
   const SONG_TEASER_UPCOMING = {
-    regularSeason: "Wir starten in die Playoffs, aber vorher noch eine musikalische Zusammenfassung.",
+    regularSeason: "Die Playoffs sind komplett!",
     firstElimination: "Tja, sowas passiert wohl, wenn man nicht aufpasst.",
     finals: "Jedes Jahr freut sich die ganze Welt auf die Halbzeit-Show und die Werbespots - aber dieses Jahr wurde bereits vorher ein viraler Moment geschaffen...",
   };
@@ -1036,14 +1075,14 @@
 
   // Liefert eine Liste lesbarer Auffälligkeiten (leer = sauber). names: optional
   // die Spielernamen des Turniers (für die Genitiv-Prüfung).
-  function lintText(text, { names } = {}) {
+  function lintText(text, { names, speech } = {}) {
     const t = String(text == null ? "" : text);
     const issues = [];
     if (/\b(undefined|NaN)\b/.test(t)) issues.push("enthält undefined/NaN");
     if (/[{}]/.test(t)) issues.push("unersetzter Platzhalter {…}");
     if (/\s[.,:;!?]/.test(t)) issues.push("Leerzeichen vor Satzzeichen");
     if (/(?<!\.)\.\.(?!\.)/.test(t) || /[!?]\./.test(t) || /,,/.test(t)) issues.push("doppelte Satzzeichen");
-    if (/\bTobi [FW]\b/.test(t)) issues.push("interner Kurzname (Tobi F./W.) im Text");
+    if (speech !== false && /\bTobi [FW]\b/.test(t)) issues.push("interner Kurzname (Tobi F./W.) im Text");
     if (/\b\d+ \./.test(t)) issues.push("Zahl mit losem Punkt");
     if (/\bAnpfiff \d/.test(t)) issues.push("Zeitangabe ohne Präposition (\"Anpfiff 18 Uhr\")");
     if (/\b[A-Z]{2,3}\b hat noch niemand/.test(t)) issues.push("Teamkürzel statt Teamname");
@@ -1139,7 +1178,7 @@
       _studioCh.onmessage = (ev) => {
         const m = ev.data || {};
         if (m.type === "studio-hello") _studioSeen = Date.now();
-        if ((m.type === "audio-ack" || m.type === "audio-done") && _studioWait.has(m.id)) _studioWait.get(m.id)(m.type);
+        if ((m.type === "audio-ack" || m.type === "audio-done" || m.type === "song-ack" || m.type === "song-done") && _studioWait.has(m.id)) _studioWait.get(m.id)(m.type, m);
       };
     }
   } catch (e) { _studioCh = null; }
@@ -1163,6 +1202,28 @@
       studioPost({ type: "audio", id, blob });
     });
   }
+
+  // Musikvideo im Studio: Bühne + Song laufen dort (Bild und Ton synchron),
+  // die Ansage davor kommt wie gewohnt (Ton je nach Einstellung). Liefert
+  // false, wenn das Studio nicht antwortet -> Admin spielt selbst.
+  async function playSongInStudio(o, speakIntroFn) {
+    if (!studioConnected()) return false;
+    const id = "s" + Date.now() + Math.random().toString(36).slice(2, 7);
+    let ackResolve, doneResolve;
+    const acked = new Promise((r) => { ackResolve = r; });
+    const done = new Promise((r) => { doneResolve = r; });
+    _studioWait.set(id, (type, msg) => { if (type === "song-ack") ackResolve(true); else if (type === "song-done") doneResolve(msg || {}); });
+    studioPost({ type: "song", id, o });
+    const ok = await Promise.race([acked, new Promise((r) => setTimeout(() => r(false), 2000))]);
+    if (!ok) { _studioWait.delete(id); return false; }
+    try { if (speakIntroFn) await speakIntroFn(); } catch (e) { /* Ansage optional */ }
+    studioPost({ type: "song-go", id });
+    const res = await Promise.race([done, new Promise((r) => setTimeout(() => r({ timeout: true }), 9 * 60 * 1000))]);
+    _studioWait.delete(id);
+    return !res.failed;
+  }
+  // Im Studio: über den Kanal empfangene Sprech-Events an die lokalen Zuhörer (z.B. Song-Bühne) weitergeben
+  function emitSpeakLocal(evt) { _speakListeners.forEach((fn) => { try { fn(evt); } catch (e) { /* egal */ } }); }
 
   function playAudioUrl(url) {
     return new Promise(async (resolve) => {
@@ -1273,8 +1334,20 @@
     // (Anforderung 20: nur der Kommentator übergibt) und liefert zurück,
     // welche(r) Fakt-Typ(en) dabei verbraucht wurden, damit der Moderator
     // nicht denselben Typ nochmal nennt (Anforderungen 3, 15, 16).
-    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, prevSeeds, matchKind, matchId, songMilestone, songGenerated });
-    const nextMatch = (upcoming || [])[0] || null;
+    _pendingPreview = null; // eine liegengebliebene Vorschau (Song kam nie) verfällt
+    const nextMatchPre = (upcoming || [])[0] || null;
+    // Wird gleich ein Song gespielt: Ergebnis jetzt, Vorschau erst NACH dem Song
+    const songFirst = !!(songGenerated && songMilestone && songMilestone !== "champion" && nextMatchPre);
+    const { line: resultLine, usedFactTypes } = buildResultLine({ state, history, homeName, awayName, homeScore, awayScore, stadium, stadiumPreposition, prevSeeds, matchKind, matchId, songMilestone, songGenerated, noHandoff: songFirst });
+    const nextMatch = songFirst ? null : nextMatchPre;
+    if (songFirst) {
+      const voice = settings.provider === "elevenlabs" ? (settings.voiceIdPreview || settings.voiceIdResult) : null;
+      _pendingPreview = () => ({ voiceId: voice, role: "moderator", text: SONG_BACK_LINES[Math.floor(Math.random() * SONG_BACK_LINES.length)] + " " + buildUpcomingLine({
+        state, history, homeName: nextMatchPre.homeName, awayName: nextMatchPre.awayName,
+        time: nextMatchPre.time, stadium: nextMatchPre.stadium, stadiumPreposition: nextMatchPre.stadiumPreposition,
+        phase: nextMatchPre.phase, usedFactTypes, songMilestone: null, songGenerated: false,
+      }) });
+    }
 
     const buildPreviewLine = () => buildUpcomingLine({
       state, history, homeName: nextMatch.homeName, awayName: nextMatch.awayName,
@@ -1436,6 +1509,14 @@
     if (global.MB.SongStage && performers && performers.length) {
       const pn = performers.map((p) => speechName(p.name));
       const micLine = performers[0] && performers[0].host ? `Und wir schalten live ins Studio zu ${pn[0]}!` : (pn.length === 1 ? `Am Mikrofon: ${pn[0]}!` : `Am Mikrofon: ${pn[0]} und ${pn[1]}!`);
+      // Läuft das Studio-Fenster, kommt das Musikvideo dort (Aufnahme-Wunsch bleibt lokal)
+      if (!record && studioConnected()) {
+        const inStudio = await playSongInStudio({ milestone, url, performers, target, players }, () => speakSequence([
+          { text: intro, voiceId: spokenVoiceId, role: "commentator" },
+          { text: micLine, voiceId: modVoiceId, role: "moderator" },
+        ]));
+        if (inStudio) return;
+      }
       const shown = await global.MB.SongStage.play({
         milestone, url, performers, target, players, record,
         speakIntro: () => speakSequence([
@@ -1643,6 +1724,13 @@
   // announceSong() hängt sich in dieselbe Kette ein wie announce(), damit
   // sich Song-Ansage und eine laufende Spielansage nie überlappen.
   let _announceQueue = Promise.resolve();
+  let _pendingPreview = null; // Vorschau, die erst nach einem Song gesprochen wird
+  const SONG_BACK_LINES = ["Starker Track! Zurück aufs Feld.", "Ohrwurm garantiert. Und jetzt wieder Football.", "Was für ein Song! Weiter geht's.", "Applaus fürs Studio – zurück zum Spielbetrieb."];
+  async function _speakPendingPreview() {
+    const p = _pendingPreview; _pendingPreview = null;
+    if (!p) return;
+    try { const seg = p(); await speakSequence([seg]); } catch (e) { console.warn("Vorschau nach dem Song:", e); }
+  }
 
   function _enqueue(fn) {
     const run = () => fn().catch((e) => console.warn("Ansage fehlgeschlagen:", e));
@@ -1655,7 +1743,7 @@
   }
 
   function announceSong(milestone, url, opts) {
-    return _enqueue(() => _announceSongNow(milestone, url, opts));
+    return _enqueue(async () => { try { await _announceSongNow(milestone, url, opts); } finally { await _speakPendingPreview(); } });
   }
 
   global.MB = global.MB || {};
@@ -1670,6 +1758,6 @@
     setNicknames, getNickname,
     onSpeak,
     prepareRingIntro,
-    studioConnected, studioAudioMode, setStudioAudioMode, studioPost,
+    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal,
   };
 })(window);

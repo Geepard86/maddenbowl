@@ -99,22 +99,30 @@
   // "?Altima"-Query-Parameter (siehe MB.UI.doAdminLogin in ui.js).
   const isAdmin = MB.UI.isAdminUnlocked();
 
+  // Vorschaubilder: kleine Thumbs (176x132 WebP = 88x66 @2x) unter assets/images/blog/thumb_<key>.webp;
+  // die großen Teilen-Vorschauen (1200x630 JPG, og_<key>.jpg) wählt der Cloudflare-Worker passend dazu.
+  const T = (k) => `assets/images/blog/thumb_${k}.webp`;
   const CATEGORY_META = {
-    kickoff:      { label: 'Turnierstart',    color: '#0EA5E9', image: 'assets/images/Blog_Kickoff.png' },
-    progress:     { label: 'Power Ranking',   color: '#8B5CF6', image: 'assets/images/Blog_PowerRankings.png' },
-    portrait:     { label: 'Spielerporträt',  color: '#F97316', image: 'assets/images/Blog_WhoIs.png' },
-    wrapup:       { label: 'Turnierrückblick', color: '#EAB308', image: 'assets/images/Blog_Sieger.png' },
-    record:       { label: 'Rekord',          color: '#F59E0B', image: 'assets/images/Blog_Rekord.png' },
-    finals:       { label: 'Finale',          color: '#EF4444', image: 'assets/images/Blog_Finale.png' },
-    champion:     { label: 'Champion',        color: '#22C55E', image: 'assets/images/Blog_Sieger.png' },
-    song:         { label: 'Song',            color: '#3B82F6', image: 'assets/images/Blog_Song.png' },
-    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: 'assets/images/Blog_Rueckblick.png' },
-    spurious:     { label: 'Analyse',         color: '#A855F7', image: 'assets/images/Blog_SpuriousCorrelations.png' },
-    manual:       { label: 'Community',       color: '#94A3B8', image: 'assets/images/Blog_WhoIs.png' },
-    meme:         { label: 'Meme',            color: '#EC4899', image: 'assets/images/Blog_Meme.png' },
-    achievement:  { label: 'Sammelkarte',     color: '#ff7ad9', image: 'assets/images/Blog_WhoIs.png' },
+    kickoff:      { label: 'Turnierstart',    color: '#0EA5E9', image: T('kickoff') },
+    progress:     { label: 'Power Ranking',   color: '#8B5CF6', image: T('progress') },
+    portrait:     { label: 'Spielerporträt',  color: '#F97316', image: T('portrait_field') },
+    wrapup:       { label: 'Turnierrückblick', color: '#EAB308', image: T('wrapup') },
+    record:       { label: 'Rekord',          color: '#F59E0B', image: T('record') },
+    finals:       { label: 'Finale',          color: '#EF4444', image: T('finals') },
+    champion:     { label: 'Champion',        color: '#22C55E', image: T('champion') },
+    song:         { label: 'Song',            color: '#3B82F6', image: T('song') },
+    retrospective:{ label: 'Rückblick',       color: '#14B8A6', image: T('retrospective') },
+    spurious:     { label: 'Analyse',         color: '#A855F7', image: T('spurious') },
+    manual:       { label: 'Community',       color: '#94A3B8', image: T('manual') },
+    meme:         { label: 'Meme',            color: '#EC4899', image: T('meme') },
+    achievement:  { label: 'Sammelkarte',     color: '#ff7ad9', image: T('achievement') },
   };
-  function catMeta(kind) { return CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: 'assets/images/Blog_WhoIs.png' }; }
+  // Porträts: eigenes Bild je Gruppe (Titelverteidiger / Contender / Rest des Feldes)
+  function portraitKey(a) {
+    const g = String((a && a.data && a.data.group) || '');
+    return /champ|defend|titel/i.test(g) ? 'portrait_champion' : /contend|chall|favor/i.test(g) ? 'portrait_contender' : 'portrait_field';
+  }
+  function catMeta(kind, a) { const m = CATEGORY_META[kind] || { label: 'Beitrag', color: '#64748B', image: T('manual') }; return kind === 'portrait' && a ? { ...m, image: T(portraitKey(a)) } : m; }
 
   let state = null, articles = [], activeTab = 'aktuell';
   const expandedIds = new Set();
@@ -269,7 +277,7 @@
   }
 
   function renderArticle(a) {
-    const meta = catMeta(a.kind);
+    const meta = catMeta(a.kind, a);
     const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
     const imageUrls = [];
     if (a.media_type === 'image' && a.media_url) imageUrls.push(a.media_url);

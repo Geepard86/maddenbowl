@@ -1173,14 +1173,14 @@
     const all = [...histMatches, ...curMatches];
 
     const base = {
-      games: all.length, aWins: 0, bWins: 0, aPoints: 0, bPoints: 0, totals: [], lastWinners: [],
+      games: all.length, aWins: 0, bWins: 0, aPoints: 0, bPoints: 0, totals: [], lastWinners: [], margins: [],
       playoff: { games: 0, aWins: 0, bWins: 0 },
     };
     const scoreFor = (m, who) => (m.homePlayer === who ? m.homeScore : m.awayPlayer === who ? m.awayScore : 0);
 
     all.forEach((m) => {
       const aS = scoreFor(m, A), bS = scoreFor(m, B);
-      base.aPoints += aS; base.bPoints += bS; base.totals.push(m.total);
+      base.aPoints += aS; base.bPoints += bS; base.totals.push(m.total); base.margins.push(Math.abs(aS - bS));
       let winner = null;
       if (aS > bS) { base.aWins++; winner = A; } else if (bS > aS) { base.bWins++; winner = B; }
       base.lastWinners.push(winner);
@@ -1253,11 +1253,20 @@
       if (leader && diff >= 2) add(`Direktvergleich: ${leader} führt mit ${Math.max(s.aWins, s.bWins)}:${Math.min(s.aWins, s.bWins)} Siegen aus ${s.games} Spielen.`, 8 + diff, "directComparison");
       else add(`Direktvergleich: ${H} und ${A} stehen bei ${s.aWins}:${s.bWins} aus ${s.games} Spielen.`, 4, "directComparison");
 
-      if (s.curLastWinners.length) {
-        const recent = s.curLastWinners[s.curLastWinners.length - 1];
-        const streak = s.curLastWinners.slice().reverse().findIndex(x => x !== recent);
-        const n = streak < 0 ? s.curLastWinners.length : streak;
-        add(`Im laufenden Turnier gewann zuletzt ${recent}${n >= 2 ? ` — ${n} direkte Siege in Folge für ${recent}` : ""}.`, 6 + n, "directComparison");
+      // Rivalitäts-Barometer (gleiche Formel wie im Studio): Duelle, Ausgeglichenheit, knappe Spiele, Playoffs
+      if (s.games >= 3) {
+        const close = s.margins.filter((d) => d <= 7).length;
+        const riv = Math.round(Math.min(s.games, 10) * 3 + 30 * (1 - Math.abs(s.aWins - s.bWins) / s.games) + 25 * (close / s.games) + Math.min(s.playoff.games, 3) * 5);
+        if (riv >= 75) add(`Achtung, Erzfeinde-Alarm: ${H} gegen ${A} gab es schon ${s.games}-mal, ${close} davon waren knapp. Das Rivalitäts-Barometer steht bei ${riv} von 100.`, 12, "rivalry");
+        else if (riv >= 55) add(`Das Rivalitäts-Barometer zeigt ${riv} von 100: ${s.games} Duelle, ${s.aWins}:${s.bWins} Siege – das ist brisant.`, 9, "rivalry");
+      }
+      // Serie im direkten Vergleich über ALLE Turniere hinweg (ab 2 Siegen in Folge)
+      const lw = (s.lastWinners || []).filter(Boolean);
+      if (lw.length >= 2) {
+        const recent = lw[lw.length - 1];
+        const streak = lw.slice().reverse().findIndex(x => x !== recent);
+        const n = streak < 0 ? lw.length : streak;
+        if (n >= 2) add(`${recent} hat die letzten ${n} direkten Duelle gewonnen.`, 6 + n, "directComparison");
       }
       if (s.playoff.games >= 2) {
         if (s.playoff.aWins !== s.playoff.bWins) {
@@ -1266,11 +1275,14 @@
         } else add(`In den Playoffs ist das Duell ausgeglichen: ${s.playoff.aWins}:${s.playoff.bWins}.`, 6, "playoffFact");
       }
       const avgTotal = s.totals.length ? s.totals.reduce((x,y) => x+y, 0) / s.totals.length : 0;
-      if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7, "averagePoints");
-      else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7, "averagePoints");
-      else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3, "averagePoints");
+      // gerundet: "rund 59" statt "neunundfünfzig Komma drei"; erst ab 2 Duellen
+      if (s.totals.length >= 2) {
+        if (avgTotal >= 45) add(`In diesem Duell fallen im Schnitt ${one(avgTotal)} Gesamtpunkte — offensiv ist hier meist einiges los.`, 7, "averagePoints");
+        else if (avgTotal <= 38 && avgTotal > 0) add(`Die bisherigen Duelle waren eher zäh: im Schnitt ${one(avgTotal)} Gesamtpunkte.`, 7, "averagePoints");
+        else if (avgTotal > 0) add(`Die bisherigen Duelle liegen bei durchschnittlich ${one(avgTotal)} Gesamtpunkten.`, 3, "averagePoints");
+      }
       const gap = Math.abs(s.aPPG - s.bPPG);
-      if (gap >= 4) {
+      if (gap >= 4 && s.games >= 2) {
         const scorer = s.aPPG > s.bPPG ? H : A, other = scorer === H ? A : H;
         add(`${scorer} kommt im direkten Vergleich auf ${one(Math.max(s.aPPG, s.bPPG))} Punkte pro Spiel und damit ${one(gap)} mehr als ${other}.`, 7, "averagePoints");
       }

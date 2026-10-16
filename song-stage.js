@@ -69,6 +69,11 @@
       const nose = `<path d="M130 118 Q124 138 130 142 Q136 142 134 136" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="3" stroke-linecap="round"/>`;
       const mouth = `<g class="mouth"><path class="m0" d="M114 156 Q130 163 146 156" fill="none" stroke="${v.beard ? "#3a1b10" : "#7a3a2a"}" stroke-width="5" stroke-linecap="round"/>` +
         `<ellipse class="m1" cx="130" cy="158" rx="13" ry="6" fill="#3a0f0f"/><g class="m2"><ellipse cx="130" cy="160" rx="16" ry="12" fill="#3a0f0f"/><ellipse cx="130" cy="167" rx="8" ry="4" fill="#d9707a"/></g></g>`;
+      // Eigene Spielerfigur (avatar.js): gleicher Kopf wie im Profil, Mund bleibt animierbar
+      if (v.own && global.MB.Avatar && v.cfg) {
+        const A = global.MB.Avatar;
+        return A.hairBack(v.cfg) + A.faceSVG(v.cfg, { noMouth: true }) + A.hairTop(v.cfg, c1, c2) + mouth;
+      }
       return hairBack + ears + face + hairTop + beard + eyes + nose + mouth;
     };
     const jerseyFront = `<path d="M40 440 L48 238 Q60 196 100 188 L130 232 L160 188 Q200 196 212 238 L220 440Z" fill="${c1}"/>` +
@@ -88,7 +93,10 @@
       ? `<g class="arm-l"><path d="M62 220 L28 312" stroke="${c1}" stroke-width="44" stroke-linecap="round"/><path d="M28 312 L18 372" stroke="${v.skin}" stroke-width="28" stroke-linecap="round"/><circle cx="17" cy="382" r="17" fill="${v.skin}"/></g>`
       : `<g class="arm-r"><path d="M200 220 L238 292" stroke="${c1}" stroke-width="44" stroke-linecap="round"/><path d="M238 292 L180 176" stroke="${v.skin}" stroke-width="28" stroke-linecap="round"/><circle cx="176" cy="168" r="17" fill="${v.skin}"/>` +
         `<g transform="rotate(-24 168 150)"><rect x="160" y="124" width="16" height="50" rx="7" fill="#26262e"/><circle cx="168" cy="122" r="14" fill="#3c3c46" stroke="#c99700" stroke-width="3"/></g></g>`;
-    const front = `<svg class="front" viewBox="0 0 260 440" xmlns="http://www.w3.org/2000/svg">${sleeves("l")}${neck}${jerseyFront}${chain}${flex}<g class="head">${headFront()}</g>${sleeves("r")}</svg>`;
+    const bw = v.bodyW || 1, hh = Math.max(0.88, Math.min(1.12, v.height || 1));
+    const wide = (inner) => bw === 1 ? inner : `<g transform="translate(130 0) scale(${bw} 1) translate(-130 0)">${inner}</g>`;
+    const tall = (inner) => hh === 1 ? inner : `<g transform="translate(0 ${440 * (1 - hh)}) scale(1 ${hh})">${inner}</g>`;
+    const front = `<svg class="front" viewBox="0 0 260 440" xmlns="http://www.w3.org/2000/svg">${tall(wide(sleeves("l") + neck + jerseyFront + chain) + flex + `<g class="head">${headFront()}</g>` + wide(sleeves("r")))}</svg>`;
 
     // Rückansicht: Name im Bogen + große Nummer
     const nm = String(name || "").toUpperCase().slice(0, 14);
@@ -166,6 +174,7 @@
     const DS = global.MB.DraftStage;
     if (active || !DS || !DS.charSVG) { return null; } // läuft schon / Abhängigkeit fehlt -> Aufrufer nutzt Fallback
     active = true;
+    try { if (global.MB.Avatar) await global.MB.Avatar.load(); } catch (e) { /* Zufallsfiguren */ }
     const names = DS.speakerNames();
     const meta = (global.MB.Music && global.MB.Music.MILESTONE_META && global.MB.Music.MILESTONE_META[o.milestone]) || {};
     const label = meta.label || "Song";
@@ -177,7 +186,9 @@
       let vi = hash(p.name) % VARIANTS.length;
       if (i === 1 && vi === (hash(arr[0].name) % VARIANTS.length)) vi = (vi + 3) % VARIANTS.length;
       const number = String(1 + (hash(p.name + "#") % 99));
-      return { name: p.name, team: p.team || "", id: p.id || "", host: !!p.host, c1, c2, number: p.host ? "22" : number, v: VARIANTS[vi] };
+      let v = VARIANTS[vi];
+      if (global.MB.Avatar && !p.host) { const cfg = global.MB.Avatar.get(p.name); v = { ...VARIANTS[vi], ...global.MB.Avatar.toVariant(cfg), own: true, cfg }; }
+      return { name: p.name, team: p.team || "", id: p.id || "", host: !!p.host, c1, c2, number: p.host ? "22" : number, v };
     });
     if (!perfs.length) perfs.push({ name: "Altima", team: "", c1: "#8a0606", c2: "#c99700", number: "22", v: VARIANTS[0] });
     const duo = perfs.length === 2;

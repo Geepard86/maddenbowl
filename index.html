@@ -29,6 +29,19 @@
   .tm-logo .tm-o { font-size:.62em; color:var(--v2-silver); }
   .tm-logo.active { border-color:var(--v2-gold); background:rgba(201,151,0,.14); }
   .tm-logo.seen::after { content:'✓'; position:absolute; top:3px; right:5px; font-size:.62em; color:var(--v2-gold); }
+  .tm-logo.excl img { filter: grayscale(1); opacity: .45; }
+  .tm-logo.excl .tm-n, .tm-logo.excl .tm-o { text-decoration: line-through; opacity: .55; }
+  .tm-logo.excl::before { content: ''; position: absolute; left: 10%; right: 10%; top: 34px; height: 3px; background: #ff3b3b; transform: rotate(-18deg); border-radius: 2px; }
+  .tm-head.excl .t { text-decoration: line-through; text-decoration-color: #ff3b3b; }
+  .tm-x { display: inline-block; text-decoration: none; font-size: .62em; font-weight: 800; color: #fff; background: #d50a0a; border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  /* Countdown zum nächsten Turnier */
+  .cd-card { text-align: center; padding: 16px 12px 14px; background: radial-gradient(ellipse at 50% 0%, rgba(201,151,0,.22), transparent 70%), var(--v2-surface); }
+  .cd-kick { font-size: .72em; font-weight: 800; letter-spacing: 2px; color: var(--v2-gold); text-transform: uppercase; }
+  .cd-when { font-size: .82em; color: var(--v2-silver); margin: 4px 0 10px; }
+  .cd-units { display: flex; justify-content: center; gap: 10px; }
+  .cd-u { min-width: 62px; background: rgba(0,0,0,.28); border: 1px solid var(--v2-border); border-radius: 10px; padding: 8px 6px 6px; }
+  .cd-u b { display: block; font-size: 1.9em; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+  .cd-u span { font-size: .62em; color: var(--v2-silver); letter-spacing: 1px; text-transform: uppercase; }
   .tm-nav { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
   .tm-nav button { width:auto; margin:0; padding:4px 10px; border-radius:8px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
   .tm-head { display:flex; align-items:center; gap:12px; margin:6px 0 8px; }
@@ -506,8 +519,18 @@
     tmTeam = id;
     tmSeen.add(id); localStorage.setItem('mb_teams_seen', JSON.stringify([...tmSeen]));
     MB.UI.withAchievements(A => A.track('team_view', { team: id, total: MB.nflTeams.length }));
-    const box = document.getElementById('tmBox'); if (box) box.outerHTML = renderTeamCard();
-    if (scroll) { const el = document.querySelector(`.tm-logo[data-team="${id}"]`); if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }); }
+    const box = document.getElementById('tmBox');
+    const prevScroll = box ? (box.querySelector('.tm-slider') || {}).scrollLeft || 0 : 0;
+    const pageY = window.scrollY;
+    if (box) box.outerHTML = renderTeamCard();
+    const slider = document.querySelector('#tmBox .tm-slider');
+    if (slider) slider.scrollLeft = prevScroll; // Position nach dem Neuzeichnen beibehalten
+    window.scrollTo(0, pageY);
+    if (scroll && slider) {
+      // nur bei Pfeil-Navigation: das gewählte Logo sanft in den sichtbaren Bereich holen (ohne die Seite zu scrollen)
+      const el = slider.querySelector(`.tm-logo[data-team="${id}"]`);
+      if (el) { const l = el.offsetLeft - slider.offsetLeft, r = l + el.offsetWidth; if (l < slider.scrollLeft || r > slider.scrollLeft + slider.clientWidth) slider.scrollTo({ left: l - slider.clientWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' }); }
+    }
   }
   function stepTeam(d) {
     const list = tmTeams(); const i = Math.max(0, list.findIndex(t => t.id === tmTeam));
@@ -519,7 +542,8 @@
     const t = list.find(x => x.id === tmTeam) || list[0];
     const row = tmRosters && tmRosters[t.id];
     const players = ((row && row.players) || []).slice().sort((a, b) => (b.ovr - a.ovr) || String(a.n).localeCompare(String(b.n)));
-    const logos = list.map(x => `<button class="tm-logo ${x.id === t.id ? 'active' : ''} ${tmSeen.has(x.id) ? 'seen' : ''}" data-team="${x.id}" onclick="selectTeam('${x.id}')">
+    const excl = new Set((state && state.config && Array.isArray(state.config.excludedTeams)) ? state.config.excludedTeams : []);
+    const logos = list.map(x => `<button class="tm-logo ${x.id === t.id ? 'active' : ''} ${tmSeen.has(x.id) ? 'seen' : ''} ${excl.has(x.id) ? 'excl' : ''}" data-team="${x.id}" onclick="selectTeam('${x.id}')" title="${excl.has(x.id) ? 'Für den Draft gestrichen' : ''}">
         <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${x.id}.png" alt="" loading="lazy"><div class="tm-n">${tmEsc(x.n)}</div><div class="tm-o">${x.ovr ? 'OVR ' + x.ovr : '–'}</div></button>`).join('');
     const roster = players.length
       ? `<div class="tm-roster">${players.map(p => `<div class="tm-p ${p.ir ? 'ir' : ''}"><span class="o ${p.ovr >= 90 ? 'h' : p.ovr >= 80 ? 'm' : ''}">${p.ovr}</span><span class="pp">${tmEsc(p.pos)}</span><span class="nn">${tmEsc(p.n)}</span>${p.badge ? `<span class="bb ${p.badge === 'XF' ? 'xf' : 'ss'}">${p.badge}</span>` : ''}${p.ir ? '<span class="bb ir">IR</span>' : ''}</div>`).join('')}</div>`
@@ -529,10 +553,35 @@
         <div class="v2-card-title">🏈 Teams &amp; Kader ${tmYear ? `<span style="font-weight:600; opacity:.6; font-size:.8em;">Madden ${tmEsc(row && row.madden_version || tmYear)}</span>` : ''}</div>
         <div class="tm-nav"><button onclick="stepTeam(-1)" aria-label="Vorheriges Team">‹</button><span style="font-size:.72em; color:var(--v2-silver); flex:1;">Nach Team-OVR sortiert · ${tmSeen.size}/${MB.nflTeams.length} angeschaut</span><button onclick="stepTeam(1)" aria-label="Nächstes Team">›</button></div>
         <div class="tm-slider">${logos}</div>
-        <div class="tm-head"><img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt=""><div><div class="t">${tmEsc(t.n)}${t.ovr ? ` · OVR ${t.ovr}` : ''}</div><div class="s">${players.length ? `${players.length} Spieler${irCount ? ' · ' + irCount + ' auf IR' : ''}` : ''}</div></div></div>
+        <div class="tm-head ${excl.has(t.id) ? 'excl' : ''}"><img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt=""><div><div class="t">${tmEsc(t.n)}${t.ovr ? ` · OVR ${t.ovr}` : ''}${excl.has(t.id) ? ' <span class="tm-x">Im Draft gestrichen</span>' : ''}</div><div class="s">${players.length ? `${players.length} Spieler${irCount ? ' · ' + irCount + ' auf IR' : ''}` : ''}</div></div></div>
         ${roster}
       </div>`;
   }
+  // Countdown bis zum nächsten Turnier (Termin in seasons.html, config.nextTournamentAt)
+  function renderCountdownCard() {
+    const iso = state && state.config && state.config.nextTournamentAt;
+    const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) return '';
+    return `<div class="v2-card cd-card" id="cdCard" data-at="${d.toISOString()}">
+      <div class="cd-kick">🏈 Kickoff des nächsten Altima Bowl</div>
+      <div class="cd-when">${d.toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</div>
+      <div class="cd-units" id="cdUnits">${countdownUnits(d)}</div></div>`;
+  }
+  function countdownUnits(d) {
+    let ms = d.getTime() - Date.now();
+    if (ms <= 0) return '<div style="font-weight:900; font-size:1.3em;">Heute geht es los! 🔥</div>';
+    const day = Math.floor(ms / 86400000); ms -= day * 86400000;
+    const h = Math.floor(ms / 3600000); ms -= h * 3600000;
+    const m = Math.floor(ms / 60000); ms -= m * 60000;
+    const sec = Math.floor(ms / 1000);
+    const u = (v, l) => `<div class="cd-u"><b>${String(v).padStart(2, '0')}</b><span>${l}</span></div>`;
+    return u(day, day === 1 ? 'Tag' : 'Tage') + u(h, 'Std') + u(m, 'Min') + u(sec, 'Sek');
+  }
+  setInterval(() => {
+    const c = document.getElementById('cdCard'); if (!c) return;
+    document.getElementById('cdUnits').innerHTML = countdownUnits(new Date(c.dataset.at));
+  }, 1000);
+
   function renderBlogWideCard() {
     const retro = articles.filter(a => a.kind === 'retrospective');
     const list = (retro.length ? retro : articles).slice(0, 4);
@@ -555,6 +604,7 @@
         try { await MB.loadTeamRatings(tmYear); } catch (e) { /* optional */ }
       }
       app.innerHTML = `
+        ${renderCountdownCard()}
         ${renderTeamCard()}
         ${renderBlogWideCard()}
         <div class="v2-row-2col">
