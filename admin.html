@@ -1418,6 +1418,19 @@ function isFinished(match) { return MB.isFinished(match); }
         onConfirm: () => confirmShowTeamPick(),
         onFinish: () => finishDraftShow(),
         getRoster: (teamId) => MB.Rosters.loadRoster(document.getElementById('maddenYear').value, teamId),
+        // Bühnen-Töne nur im Studio, wenn der Ton dort laufen soll
+        muted: () => MB.Announcer.studioConnected && MB.Announcer.studioConnected() && MB.Announcer.studioAudioMode() === 'studio',
+        // jeden Bühnen-Schritt ans Studio-Fenster spiegeln (dort läuft dieselbe Show)
+        onMirror: (fn, args) => {
+          if (!MB.Announcer.studioConnected || !MB.Announcer.studioConnected()) return;
+          let data = null; try { data = JSON.parse(JSON.stringify(getDraftStageData() || {})); } catch (e) { data = null; }
+          let a = args; try { a = JSON.parse(JSON.stringify(args || [])); } catch (e) { a = []; }
+          MB.Announcer.studioPost({ type: 'ds', fn, args: a, data });
+          if (fn === 'roster' && args && args[0]) {
+            MB.Rosters.loadRoster(document.getElementById('maddenYear').value, args[0])
+              .then(row => MB.Announcer.studioPost({ type: 'ds-roster', teamId: args[0], row: JSON.parse(JSON.stringify(row || null)) })).catch(() => {});
+          }
+        },
       });
       document.addEventListener('ds-closed', () => {
         const b = document.getElementById('dsReopenBtn');
@@ -1425,7 +1438,9 @@ function isFinished(match) { return MB.isFinished(match); }
       });
     }
 
+    let lastStageMode = {};
     function renderDraftShowStage(mode) {
+      lastStageMode = mode || {};
       if (mode && mode.calling) { try { const nick = MB.Announcer.getNickname(mode.calling); if (nick) mode = { ...mode, nickname: nick }; } catch (e) { /* optional */ } }
       stageCallingName = (mode && (mode.callingLabelOnly || mode.calling)) ? (mode.calling || '') : null;
       if (mode && mode.callingLabelOnly) stageCallingName = '\u0000';
@@ -5331,6 +5346,19 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
       document.getElementById('studioState').innerHTML = ok ? '<span style="color:#3ddc84;">● Studio verbunden</span>' : '<span style="opacity:.6;">○ Studio nicht verbunden</span>';
     }
     setInterval(drawStudioState, 2000);
+    // Studio-Fenster erst während der laufenden Draft-Show geöffnet? -> aktuellen Stand nachschicken
+    let studioWasConnected = false;
+    setInterval(() => {
+      const now = !!(MB.Announcer.studioConnected && MB.Announcer.studioConnected());
+      if (now && !studioWasConnected && MB.DraftStage && MB.DraftStage.isOpen && MB.DraftStage.isOpen()) {
+        let data = null; try { data = JSON.parse(JSON.stringify(getDraftStageData() || {})); } catch (e) { data = null; }
+        MB.Announcer.studioPost({ type: 'ds', fn: 'open', args: [], data });
+        let mode = {}; try { mode = JSON.parse(JSON.stringify(lastStageMode || {})); } catch (e) { mode = {}; }
+        MB.Announcer.studioPost({ type: 'ds', fn: 'phase', args: [mode], data });
+        try { if (typeof renderDraftOrderStrip === 'function') renderDraftOrderStrip(); } catch (e) { /* egal */ }
+      }
+      studioWasConnected = now;
+    }, 1500);
     // Madden-Version aus „Nächstes Turnier vorbereiten“ (seasons.html) vorbelegen, solange kein Turnier läuft
     setTimeout(() => { try { const sel = document.getElementById('maddenYear'); const my = state && state.config && state.config.maddenYear; if (sel && my && !(state.players || []).length && [...sel.options].some(o => o.value === String(my))) { sel.value = String(my); if (typeof onMaddenYearChange === 'function') onMaddenYearChange(); } } catch (e) { /* egal */ } }, 1500);
     // Spielerfiguren (Draft-Einlauf, Musikvideos) vorladen

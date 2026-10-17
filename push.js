@@ -90,10 +90,23 @@
     } catch (e) { throw new Error("Push-Funktion nicht erreichbar: " + e.message); }
     if (!res.ok) throw new Error(`Push-Funktion antwortet mit HTTP ${res.status}: ${(data && (data.error || data.message || data.msg)) || "?"}${res.status === 401 ? " – „Verify JWT“ in der Funktion ausschalten." : ""}`);
     if (!data || !data.sent) {
+      // Alte Funktionsversion (ohne "details"): Abo gefunden, Zustellung aber gescheitert – Grund unbekannt
+      if (data && !data.details && (data.failed || data.removed)) throw new Error(`Zustellung fehlgeschlagen (${data.failed || 0} Fehler, ${data.removed || 0} abgelaufen). Auf dem Server läuft noch die alte Version der Push-Funktion – bitte index.ts UND webpush.js neu deployen, dann steht hier der genaue Grund.`);
       const d = data && data.details && data.details[0];
-      const hint = d && d.status === 403 ? " – der öffentliche Schlüssel in der Admin-Seite passt nicht zum VAPID_PRIVATE_KEY (Schlüsselpaar neu erzeugen, beide neu eintragen, Benachrichtigungen neu aktivieren)."
-        : d && d.status === 400 ? " – Anfrage abgelehnt (VAPID_SUBJECT muss mit mailto: beginnen)." : "";
-      throw new Error(`Nicht zugestellt: ${d ? (d.error || "HTTP " + d.status + (d.info ? " " + d.info : "")) : "kein Abo gefunden"}${hint}`);
+      // Diagnose der Server-Einstellungen
+      let diag = "";
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", apikey: c.supabaseKey, Authorization: "Bearer " + c.supabaseKey }, body: JSON.stringify({ type: "diag" }) });
+        const g = await r.json();
+        const probs = [];
+        if (g.keypair && !g.keypair.ok) probs.push("Secrets: " + g.keypair.reason);
+        if (g.publicMatchesSite === false) probs.push(`VAPID_PUBLIC_KEY (beginnt mit „${g.publicSecretStart}“) ist nicht der in der Admin-Seite gespeicherte Schlüssel („${g.publicSiteStart}“)`);
+        if (g.subjectValid === false) probs.push(`VAPID_SUBJECT „${g.subject}“ ist keine gültige mailto:-Adresse`);
+        const ownKey = sub.options && sub.options.applicationServerKey ? bytesToB64u(sub.options.applicationServerKey) : "";
+        if (ownKey && g.publicSiteStart && !ownKey.startsWith(g.publicSiteStart)) probs.push("Dieses Gerät ist noch mit einem alten Schlüssel angemeldet – bitte Deaktivieren und neu Aktivieren");
+        diag = probs.length ? " Gefunden: " + probs.join(" · ") + "." : " Schlüssel, Absender und Abo sehen korrekt aus – nach dem Ändern der Secrets die Funktion neu deployen und auf dem Gerät deaktivieren/aktivieren.";
+      } catch (e) { diag = ""; }
+      throw new Error(`Nicht zugestellt: ${d ? (d.error || "HTTP " + d.status + (d.info ? " " + d.info : "")) : "kein Abo gefunden"}.${diag}`);
     }
     return data;
   }

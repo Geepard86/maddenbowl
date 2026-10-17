@@ -266,6 +266,7 @@
         el.center.querySelectorAll(".ds-tile").forEach((x) => x.classList.toggle("sel", x === b));
         const c = el.center.querySelector("#dsConfirm"); c.disabled = false;
         opts.onSelect(selectedTeam);
+        mirror("select", [selectedTeam]);
       };
     });
     el.center.querySelectorAll(".ds-info").forEach((i) => {
@@ -277,13 +278,14 @@
   // ---------------------------------------------------------------- Kader-Ansicht
   function closeRoster() {
     const r = el.center && el.center.querySelector(".ds-roster");
-    if (r) r.remove();
+    if (r) { r.remove(); mirror("rosterClose", []); }
     document.removeEventListener("keydown", rosterKey, true);
   }
   function rosterKey(e) { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeRoster(); } }
 
   async function openRoster(teamId) {
     if (!opts.getRoster || !el.center) return;
+    mirror("roster", [teamId]);
     closeRoster();
     const d = opts.getData() || {};
     const t = (d.teams || []).find((x) => x.id === teamId) || { id: teamId, n: teamId, rating: 0 };
@@ -386,6 +388,7 @@
   let audioCtx = null;
   function ac() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === "suspended") audioCtx.resume(); } catch (e) {} return audioCtx; }
   function tone(freq, t0, dur, type, vol, attack) {
+    try { if (opts.muted && opts.muted()) return; } catch (e) { /* egal */ } // Ton kommt dann aus dem Studio-Fenster
     const c = ac(); if (!c) return;
     const o = c.createOscillator(), g = c.createGain(); o.type = type || "sine"; o.frequency.value = freq;
     const t = c.currentTime + (t0 || 0);
@@ -726,5 +729,30 @@
   }
   function isOpen() { return !!root && !root.classList.contains("ds-hidden"); }
 
-  global.MB.DraftStage = { init, open, close, isOpen, phase, walkIn, endWalk, setStrip, refreshSide, boot, charSVG, sceneHTML, speakerNames };
+  // ---------------------------------------------------------------- Spiegelung ins Studio
+  // opts.onMirror(fn, args) wird nach jedem Bühnen-Schritt aufgerufen (Admin-Seite schickt ihn
+  // per BroadcastChannel ans Studio-Fenster, das dieselbe Bühne nachspielt).
+  function mirror(fn, args) { try { if (opts.onMirror) opts.onMirror(fn, args); } catch (e) { /* Studio optional */ } }
+  const wrap = (fn, impl) => function (...args) {
+    const r = impl.apply(null, args);
+    mirror(fn, args.map((a) => (typeof a === "function" ? null : a)));
+    return r;
+  };
+  // Für das Studio: Auswahl/Kader von außen setzen (ohne erneut zu spiegeln)
+  function selectTeam(id) {
+    selectedTeam = id;
+    if (!el.center) return;
+    el.center.querySelectorAll(".ds-tile").forEach((x) => x.classList.toggle("sel", x.dataset.team === id));
+    const c = el.center.querySelector("#dsConfirm"); if (c) c.disabled = !id;
+  }
+  function showRoster(id) { const m = opts.onMirror; opts.onMirror = null; openRoster(id).finally(() => { opts.onMirror = m; }); }
+  function hideRoster() { const m = opts.onMirror; opts.onMirror = null; closeRoster(); opts.onMirror = m; }
+
+  global.MB.DraftStage = {
+    init, isOpen, charSVG, sceneHTML, speakerNames, select: selectTeam, showRoster, hideRoster,
+    open: wrap("open", open), close: wrap("close", close), phase: wrap("phase", phase), walkIn: wrap("walkIn", walkIn),
+    endWalk: wrap("endWalk", endWalk), setStrip: wrap("setStrip", setStrip), refreshSide: wrap("refreshSide", refreshSide), boot: wrap("boot", boot),
+    // ungespiegelt (Studio-Seite)
+    raw: { open, close, phase, walkIn, endWalk, setStrip, refreshSide, boot },
+  };
 })(window);

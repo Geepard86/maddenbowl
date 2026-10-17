@@ -216,6 +216,21 @@
   .st-gauge .lab { position: absolute; left: 0; right: 0; bottom: -108px; text-align: center; font: 900 30px/1 Impact; letter-spacing: 4px; color: #ff5a5a; text-transform: uppercase; }
   .st-riv .facts { margin-top: 130px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
   .st-riv .facts span { background: rgba(255,255,255,.07); border: 1px solid #2a3a55; border-radius: 8px; padding: 12px 18px; font: 700 23px/1.2 'Segoe UI'; }
+  /* Startbild (kein Turnier, Draft noch nicht gestartet) */
+  .st-welcome { position: absolute; left: 0; right: 0; top: 110px; bottom: 0; z-index: 8; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(ellipse at 50% 35%, rgba(201,151,0,.22), transparent 60%), linear-gradient(180deg, #0b1328, #050a16); }
+  .st-welcome.on { display: flex; }
+  .sw-live { font: 900 26px/1 Impact, sans-serif; letter-spacing: 6px; color: #ff5a5a; margin-bottom: 26px; animation: dsBlink 2s steps(1) infinite; }
+  .sw-title { font: 900 210px/0.9 Impact, 'Arial Black', sans-serif; letter-spacing: 10px; color: #c99700; text-shadow: 10px 10px 0 #d50a0a; }
+  .sw-sub { margin-top: 30px; font: 800 44px/1.2 'Segoe UI'; color: #fff; letter-spacing: 2px; }
+  .sw-cd { margin-top: 30px; display: flex; gap: 22px; }
+  .sw-cd .u { min-width: 150px; padding: 18px 10px 12px; border: 3px solid #2a3a55; border-radius: 14px; background: rgba(0,0,0,.35); }
+  .sw-cd .u b { display: block; font: 900 92px/1 Impact; font-variant-numeric: tabular-nums; }
+  .sw-cd .u span { font: 800 20px/1 'Segoe UI'; color: #9fb0c8; letter-spacing: 3px; text-transform: uppercase; }
+  .sw-hint { margin-top: 40px; font: 600 24px/1.3 'Segoe UI'; color: #9fb0c8; }
+  /* Draft-Show im Studio: nur Anzeige, keine Bedienung */
+  body.st-draft .ds-overlay:not(#stRoot) { pointer-events: none; }
+  body.st-draft .ds-overlay:not(#stRoot) .ds-tools, body.st-draft .ds-overlay:not(#stRoot) .skip { display: none !important; }
   /* Laufband unten (wenn gerade niemand spricht) */
   .st-ticker { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; z-index: 5; display: flex; align-items: center; background: linear-gradient(180deg, #0d1a33, #060c1a); border-top: 4px solid #c99700; overflow: hidden; transition: opacity .3s; }
   .st-ticker.hide { opacity: 0; }
@@ -263,6 +278,13 @@
         <div class="st-view" data-view="breaking" id="vBreaking"></div>
         <div class="st-view" data-view="gag" id="vGag"></div>
       </div>
+    </div>
+    <div class="st-welcome" id="stWelcome">
+      <div class="sw-live">● LIVE AUS DEM ALTIMA-BOWL-STUDIO</div>
+      <div class="sw-title">ALTIMA BOWL</div>
+      <div class="sw-sub" id="swSub">Gleich geht es los</div>
+      <div class="sw-cd" id="swCd"></div>
+      <div class="sw-hint">Die Draft Night startet, sobald der Admin die Show beginnt.</div>
     </div>
     <div class="st-ticker" id="stTicker"><div class="lbl">ERGEBNISSE</div><div class="run" id="stRun"></div></div>
     <div class="ds-caption off" id="stCaption"><div class="ds-cap-name" id="stCapName"></div><div class="ds-cap-text" id="stCapText"></div></div>
@@ -334,6 +356,8 @@
       else if (m.type === 'audio' && m.blob) playAudio(m);
       else if (m.type === 'show' && m.view) showOverlay(m.view, m.ms || 15000);
       else if (m.type === 'gag') runGag(m.which);
+      else if (m.type === 'ds') applyDraft(m);
+      else if (m.type === 'ds-roster') { rosterCache.set(m.teamId, m.row); (rosterWait.get(m.teamId) || []).forEach(fn => fn(m.row)); rosterWait.delete(m.teamId); }
     };
     setInterval(() => { try { ch.postMessage({ type: 'studio-hello' }); } catch (e) { /* egal */ } }, 2000);
     ch.postMessage({ type: 'studio-hello' });
@@ -349,6 +373,37 @@
     try { shown = await MB.SongStage.play({ ...m.o, speakIntro: () => go }); } catch (e) { console.warn('Musikvideo:', e); }
     ch.postMessage({ type: 'song-done', id: m.id, failed: !shown });
   }
+  // ---------------------------------------------------------- Draft-Show (gespiegelt von der Admin-Seite)
+  let dsData = {}, dsInited = false;
+  const rosterCache = new Map(), rosterWait = new Map();
+  function initDraftMirror() {
+    if (dsInited || !MB.DraftStage) return; dsInited = true;
+    MB.DraftStage.init({
+      getData: () => dsData,
+      getRoster: (id) => rosterCache.has(id) ? Promise.resolve(rosterCache.get(id)) : new Promise((res) => {
+        rosterWait.set(id, [...(rosterWait.get(id) || []), res]); setTimeout(() => res(rosterCache.get(id) || null), 4000);
+      }),
+      onSelect() {}, onConfirm() {}, onFinish() {},
+      muted: () => { try { return (localStorage.getItem('mb_studio_audio') || 'admin') !== 'studio'; } catch (e) { return true; } },
+    });
+  }
+  function applyDraft(m) {
+    initDraftMirror();
+    if (m.data) dsData = m.data;
+    const D = MB.DraftStage, raw = D.raw || D, a = m.args || [];
+    try {
+      switch (m.fn) {
+        case 'open': document.body.classList.add('st-draft'); $('stWelcome').classList.remove('on'); raw.open({}); break;
+        case 'close': raw.close(); document.body.classList.remove('st-draft'); break;
+        case 'boot': raw.boot(() => {}); break;
+        case 'select': D.select(a[0]); break;
+        case 'roster': D.showRoster(a[0]); break;
+        case 'rosterClose': D.hideRoster(); break;
+        default: if (typeof raw[m.fn] === 'function') raw[m.fn](...a);
+      }
+    } catch (e) { console.warn('Draft-Spiegelung', m.fn, e); }
+  }
+
   function playAudio(m) {
     ch.postMessage({ type: 'audio-ack', id: m.id });
     const url = URL.createObjectURL(m.blob);
@@ -363,6 +418,18 @@
     const d = new Date(); $('stClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
   setInterval(drawStatus, 1000); drawStatus();
+  // Countdown auf dem Startbild (Termin aus seasons.html)
+  setInterval(() => {
+    const el = $('swCd'); if (!el || !$('stWelcome').classList.contains('on')) return;
+    const iso = state && state.config && state.config.nextTournamentAt; const d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d)) { el.innerHTML = ''; $('swSub').textContent = 'Gleich geht es los'; return; }
+    let ms = d - Date.now();
+    if (ms <= 0) { el.innerHTML = ''; $('swSub').textContent = 'Heute ist Draft Night! 🔥'; return; }
+    $('swSub').textContent = 'Kickoff ' + d.toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    const u = (v, l) => `<div class="u"><b>${String(v).padStart(2, '0')}</b><span>${l}</span></div>`;
+    const dd = Math.floor(ms / 864e5); ms -= dd * 864e5; const hh = Math.floor(ms / 36e5); ms -= hh * 36e5; const mm = Math.floor(ms / 6e4); const ss = Math.floor((ms % 6e4) / 1000);
+    el.innerHTML = u(dd, 'Tage') + u(hh, 'Std') + u(mm, 'Min') + u(ss, 'Sek');
+  }, 1000);
 
   // ---------------------------------------------------------- Ansichten
   function setView(v) { document.querySelectorAll('#stPanel .st-view').forEach(x => x.classList.toggle('on', x.dataset.view === v)); }
@@ -754,8 +821,10 @@
     if (!state || !(state.players || []).length) {
       $('stLive').innerHTML = '<div class="st-empty">Es läuft aktuell kein Turnier.</div>'; $('stNext').innerHTML = '';
       $('vOverview').innerHTML = '<div class="st-result"><div class="st-title">Gleich geht es los</div></div>'; setView('overview');
+      if (!document.body.classList.contains('st-draft')) $('stWelcome').classList.add('on');
       return;
     }
+    $('stWelcome').classList.remove('on');
     const playoffs = (state.playoffMatches || []).length > 0 && MB.isGroupPhaseComplete(state);
     baseView = playoffs ? 'picture' : 'overview';
     if (playoffs && !$('vPicture').querySelector('iframe')) $('vPicture').innerHTML = '<iframe src="spielplan.html?embed=picture" title="Playoff Picture"></iframe>';
