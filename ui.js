@@ -243,7 +243,7 @@
     const on = document.getElementById("mbPushOn"); if (on) on.onclick = () => run(async () => { await P.enable(prefs()); withAchievements((A) => A.track("push_on", {})); drawPush(P); }, "Aktiviert ✓");
     const save = document.getElementById("mbPushSave"); if (save) save.onclick = () => run(() => P.updatePrefs(prefs()), "Gespeichert ✓");
     const off = document.getElementById("mbPushOff"); if (off) off.onclick = () => run(async () => { await P.disable(); drawPush(P); }, "Deaktiviert");
-    const test = document.getElementById("mbPushTest"); if (test) test.onclick = () => run(() => P.test(), "Test gesendet – kommt gleich an.");
+    const test = document.getElementById("mbPushTest"); if (test) test.onclick = () => run(() => P.test(), "Zugestellt ✓ – falls trotzdem nichts erscheint: Benachrichtigungen fürs Gerät/den Browser in den Systemeinstellungen prüfen (Fokus/Nicht stören?). " + P.settingsHint());
   }
 
   function withAchievements(cb) {

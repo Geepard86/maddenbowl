@@ -61,6 +61,16 @@
   .v2-blog-wide .bw-item:first-of-type { border-top:none; }
   /* Ewige Tabelle im Dashboard: nie umbrechen; wird es eng, fallen die Punkte weg */
   @media (max-width: 640px) { .hof-pts .hof-p { display:none; } }
+  /* Blog-Karte im Dashboard: Höhe = Nachbarkarte (Tippspiel), Inhalt passt sich an */
+  .dash-blog-fit { position: relative; display: flex; flex-direction: column; min-height: 300px; overflow: hidden; }
+  .dbf-list { position: absolute; left: 14px; right: 14px; top: 46px; bottom: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .dbf-item { display: block; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.06); color: inherit; text-decoration: none; min-width: 0; flex: 0 0 auto; }
+  .dbf-item:first-child { border-top: none; padding-top: 0; }
+  .dbf-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .dbf-top .v2-badge { white-space: nowrap; flex: 0 0 auto; }
+  .dbf-date { margin-left: auto; font-size: .66em; color: var(--v2-silver); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .dbf-title { font-weight: 800; font-size: .86em; margin-top: 4px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dbf-ex { font-size: .78em; opacity: .8; margin-top: 2px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   .unread-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff3b3b; box-shadow:0 0 6px rgba(255,59,59,.7); margin-left:7px; vertical-align:middle; }
   .dash-post { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); color:inherit; text-decoration:none; }
   .v2-card-title + .dash-post { border-top:none; padding-top:2px; }
@@ -311,14 +321,34 @@
           <div class="dash-post-date">${formatArticleDate(a.created_at)}</div>
         </div></a>`;
   }
+  // Blog-Karte neben dem Tippspiel: ohne Bilder, gleiche Höhe wie die Nachbarkarte,
+  // es werden so viele Beiträge gezeigt, wie hineinpassen (mindestens 2).
   function renderBlogCard() {
     if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
+    const item = (a) => {
+      const m = MB.Blog.categoryMeta ? MB.Blog.categoryMeta(a) : { label: 'Beitrag', color: '#64748B' };
+      return `<a class="dbf-item" href="blog.html?post=${encodeURIComponent(a.id)}">
+          <div class="dbf-top"><span class="v2-badge" style="background:${m.color};">${m.label}</span>${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}<span class="dbf-date">${formatArticleDate(a.created_at)}</span></div>
+          <div class="dbf-title">${a.title || ''}</div>
+          <div class="dbf-ex">${excerpt(a.body, 160)}</div></a>`;
+    };
     return `
-      <div class="v2-card">
+      <div class="v2-card dash-blog-fit">
         <div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div>
-        ${articles.slice(0, 2).map(a => blogItemHtml(a, false)).join('')}
+        <div class="dbf-list" id="dbfList">${articles.slice(0, 8).map(item).join('')}</div>
       </div>`;
   }
+  // nach dem Zeichnen: überzählige Beiträge entfernen, bis alles in die Karte passt (min. 2)
+  function fitBlogCard() {
+    const list = document.getElementById('dbfList'); if (!list) return;
+    const items = [...list.children];
+    items.forEach(el => { el.style.display = ''; });
+    for (let i = items.length - 1; i >= 2; i--) {
+      if (list.scrollHeight <= list.clientHeight + 1) break;
+      items[i].style.display = 'none';
+    }
+  }
+  window.addEventListener('resize', () => { clearTimeout(window.__dbfT); window.__dbfT = setTimeout(fitBlogCard, 150); });
 
   // ---------------------------------------------------------------
   // All-Time-Rekorde: schlanke Variante von computeAllTime() aus
@@ -677,6 +707,7 @@
         ${renderMerchCard()}
       </div>
     `;
+    requestAnimationFrame(fitBlogCard);
   }
 
   async function boot() {

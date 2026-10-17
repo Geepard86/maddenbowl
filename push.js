@@ -58,12 +58,12 @@
     const perm = await Notification.requestPermission();
     if (perm !== "granted") throw new Error("Benachrichtigungen wurden nicht erlaubt. So schaltest du sie nachträglich frei – " + settingsHint());
     const reg = await register(); if (!reg) throw new Error("Service Worker konnte nicht gestartet werden.");
+    const key = global.MB.getAppConfig ? await global.MB.getAppConfig("push_vapid_public") : null;
+    if (!key) throw new Error("Push ist noch nicht eingerichtet (öffentlicher Schlüssel fehlt).");
     let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      const key = global.MB.getAppConfig ? await global.MB.getAppConfig("push_vapid_public") : null;
-      if (!key) throw new Error("Push ist noch nicht eingerichtet (öffentlicher Schlüssel fehlt).");
-      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(key) });
-    }
+    // Abo mit anderem (altem) Schlüssel? Dann neu anlegen, sonst lehnt der Push-Dienst ab
+    if (sub && sub.options && sub.options.applicationServerKey && bytesToB64u(sub.options.applicationServerKey) !== key) { try { await sub.unsubscribe(); } catch (e) { /* egal */ } sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(key) });
     await saveSub(sub, p);
     return true;
   }
@@ -76,10 +76,25 @@
     try { const c = sb(); if (c) await c.rpc("mb_push_unsubscribe", { p_endpoint: sub.endpoint }); } catch (e) { /* egal */ }
     await sub.unsubscribe();
   }
+  // Test an dieses Gerät – zeigt das Ergebnis der Zustellung im Klartext an
   async function test() {
-    const sub = await currentSub(); if (!sub) throw new Error("Nicht angemeldet.");
-    const { data, error } = await sb().functions.invoke("push", { body: { type: "test", endpoint: sub.endpoint } });
-    if (error) throw new Error(error.message || "Senden fehlgeschlagen");
+    const sub = await currentSub(); if (!sub) throw new Error("Auf diesem Gerät ist kein Abo aktiv – bitte deaktivieren und neu aktivieren.");
+    // Abo sicherheitshalber erneut speichern (falls es serverseitig fehlt oder der Schlüssel gewechselt hat)
+    await saveSub(sub, getPrefs());
+    const c = sb(); const url = (c && c.supabaseUrl) ? c.supabaseUrl.replace(/\/$/, "") + "/functions/v1/push" : null;
+    if (!url) throw new Error("Supabase-Adresse unbekannt.");
+    let res, data = null;
+    try {
+      res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", apikey: c.supabaseKey, Authorization: "Bearer " + c.supabaseKey }, body: JSON.stringify({ type: "test", endpoint: sub.endpoint }) });
+      try { data = await res.json(); } catch (e) { data = null; }
+    } catch (e) { throw new Error("Push-Funktion nicht erreichbar: " + e.message); }
+    if (!res.ok) throw new Error(`Push-Funktion antwortet mit HTTP ${res.status}: ${(data && (data.error || data.message || data.msg)) || "?"}${res.status === 401 ? " – „Verify JWT“ in der Funktion ausschalten." : ""}`);
+    if (!data || !data.sent) {
+      const d = data && data.details && data.details[0];
+      const hint = d && d.status === 403 ? " – der öffentliche Schlüssel in der Admin-Seite passt nicht zum VAPID_PRIVATE_KEY (Schlüsselpaar neu erzeugen, beide neu eintragen, Benachrichtigungen neu aktivieren)."
+        : d && d.status === 400 ? " – Anfrage abgelehnt (VAPID_SUBJECT muss mit mailto: beginnen)." : "";
+      throw new Error(`Nicht zugestellt: ${d ? (d.error || "HTTP " + d.status + (d.info ? " " + d.info : "")) : "kein Abo gefunden"}${hint}`);
+    }
     return data;
   }
   // Nach dem Login: Abo dem Spieler zuordnen (falls vorher ohne Login aktiviert)
