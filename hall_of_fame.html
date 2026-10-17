@@ -158,7 +158,7 @@
       <button class="hof-mt active" data-mt="history" onclick="setMainTab('history')">📊 Saisons &amp; Ewige Tabelle</button>
       <button class="hof-mt" data-mt="player" onclick="setMainTab('player')">👤 Spieler</button>
       <button class="hof-mt" data-mt="cards" onclick="setMainTab('cards')">🃏 Meine Karten</button>
-      <button class="hof-mt" data-mt="unique" onclick="setMainTab('unique')">💎 Unique-Karten</button>
+      <button class="hof-mt" data-mt="unique" onclick="setMainTab('unique')">💎 Unique &amp; Limited</button>
     </div>
 
     <div id="hofPane-cards" class="hidden">
@@ -181,8 +181,8 @@
 
     <div id="hofPane-unique" class="hidden">
       <div class="card" style="margin-bottom:12px;">
-        <h2>💎 Unique-Karten</h2>
-        <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Jede dieser Karten gibt es genau einmal — wer sie zuerst verdient, behält sie für immer.</div>
+        <h2>💎 Unique &amp; Limited</h2>
+        <div class="hint" style="font-size:0.85em; opacity:0.7; margin-bottom:6px;">Unique-Karten gibt es genau einmal — wer sie zuerst verdient, behält sie für immer. Limited-Karten gibt es nur in einem bestimmten Zeitraum.</div>
         <div id="uniqueBoard"></div>
       </div>
     </div>
@@ -1085,7 +1085,9 @@
         <div class="av-row"><label>Haarfarbe</label>${sw('hairColor', O.hairColor)}</div>
         <div class="av-row"><label>Bart</label>${avStrip('beard', O.beard, true)}</div>
         <div class="av-row"><label>Brille</label>${avStrip('glasses', O.glasses, true)}</div>
+        ${d.glasses && d.glasses !== 'none' ? `<div class="av-row"><label>Farbe der Brille</label>${sw('glassesColor', O.glassesColor)}</div>` : ''}
         <div class="av-row"><label>Kopfbedeckung</label>${avStrip('hat', O.hat, true)}</div>
+        ${d.hat && d.hat !== 'none' ? `<div class="av-row"><label>Farbe der Kopfbedeckung</label>${sw('hatColor', O.hatColor)}</div>` : ''}
         <div class="av-row"><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value, false)" style="width:100%; height:38px;"></div>
         <div class="av-row"><label>Lieblingsteam</label><div class="av-strip">${[{ id: '', n: 'Keins' }, ...teams].map(t => `<button type="button" class="av-chip team ${(d.team || '') === t.id ? 'on' : ''}" onclick="avSet('team', '${t.id}')">${t.id ? `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt="">` : '<span class="av-none">—</span>'}<span>${t.n}</span></button>`).join('')}</div></div>
         <div class="av-row"><label>Goldkette</label>${avStrip('chainS', [['0', 'Nein'], ['1', 'Ja']])}</div>

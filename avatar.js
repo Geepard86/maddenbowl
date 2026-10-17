@@ -20,6 +20,9 @@
     beard: [["none", "Kein Bart"], ["stubble", "Drei-Tage-Bart"], ["full", "Vollbart"], ["full_mustache", "Vollbart + Oberlippe"], ["chinstrap", "Kinnbart"], ["goatee", "Ziegenbart"], ["mustache", "Schnurrbart"]],
     glasses: [["none", "Keine"], ["glasses", "Rund"], ["glasses_square", "Eckig"], ["shades", "Sonnenbrille"], ["shades_sport", "Sportbrille"]],
     hat: [["none", "Nichts"], ["cap", "Cap"], ["beanie", "Mütze"], ["band", "Stirnband"]],
+    // Farben für Brillengestell und Kopfbedeckung
+    glassesColor: ["#1a1a1a", "#6b4a2b", "#9aa3ad", "#c9a227", "#d50a0a", "#1e50c8", "#ffffff", "#ff4fa3"],
+    hatColor: ["#14181f", "#2a2f3a", "#d50a0a", "#1e50c8", "#0b6b3a", "#c99700", "#ffffff", "#7a3cff", "#f97316"],
   };
   const BODY_W = { slim: 0.86, normal: 1, athletic: 1.08, strong: 1.18, round: 1.24 };
   const esc = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -90,6 +93,7 @@
   }
   function hairTop(c, c1, c2) {
     const h = c.hairColor;
+    if (c.hatColor) { c1 = c.hatColor; c2 = c.hatColor === "#ffffff" ? "#1a1a1a" : "#ffffff"; }
     if (c.hat === "cap") return `<path d="M80 108 Q76 54 130 52 Q184 54 180 108Z" fill="${c1}"/><path d="M78 108 Q130 96 182 108 L198 118 Q130 100 70 116Z" fill="${c2}"/><circle cx="130" cy="54" r="5" fill="${c2}"/>` +
       (c.team ? `<image href="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${esc(c.team)}.png" x="110" y="62" width="40" height="34"/>` : "");
     if (c.hat === "beanie") return `<path d="M78 112 Q74 50 130 46 Q186 50 182 112Z" fill="${c1}"/><rect x="76" y="98" width="108" height="18" rx="7" fill="${c2}"/><circle cx="130" cy="42" r="12" fill="${c2}"/>`;
@@ -132,12 +136,12 @@
     const eyes = o.sleep
       ? `<path d="M100 118 Q110 124 120 118 M140 118 Q150 124 160 118" stroke="#241a12" stroke-width="4" fill="none" stroke-linecap="round"/>`
       : c.glasses === "shades_sport"
-        ? `<defs><linearGradient id="spg" x1="0" x2="1"><stop offset="0" stop-color="#ff5a1f"/><stop offset=".5" stop-color="#ffd23f"/><stop offset="1" stop-color="#2b8cff"/></linearGradient></defs><path d="M84 110 Q130 98 176 110 L172 124 Q152 132 132 122 L128 122 Q108 132 88 124Z" fill="url(#spg)" stroke="#111" stroke-width="3"/><path d="M96 110 L118 108" stroke="rgba(255,255,255,.7)" stroke-width="3"/>`
+        ? `<defs><linearGradient id="spg" x1="0" x2="1"><stop offset="0" stop-color="#ff5a1f"/><stop offset=".5" stop-color="#ffd23f"/><stop offset="1" stop-color="#2b8cff"/></linearGradient></defs><path d="M84 110 Q130 98 176 110 L172 124 Q152 132 132 122 L128 122 Q108 132 88 124Z" fill="url(#spg)" stroke="${c.glassesColor || "#111"}" stroke-width="3"/><path d="M96 110 L118 108" stroke="rgba(255,255,255,.7)" stroke-width="3"/>`
       : c.glasses === "shades"
-        ? `<rect x="94" y="106" width="34" height="20" rx="6" fill="#0a0a0a"/><rect x="132" y="106" width="34" height="20" rx="6" fill="#0a0a0a"/><rect x="126" y="112" width="8" height="5" fill="#0a0a0a"/><path d="M99 110 L112 110 M137 110 L150 110" stroke="rgba(255,255,255,.55)" stroke-width="3"/>`
+        ? `<rect x="94" y="106" width="34" height="20" rx="6" fill="#0a0a0a" stroke="${c.glassesColor || "#0a0a0a"}" stroke-width="3"/><rect x="132" y="106" width="34" height="20" rx="6" fill="#0a0a0a" stroke="${c.glassesColor || "#0a0a0a"}" stroke-width="3"/><rect x="126" y="112" width="8" height="5" fill="${c.glassesColor || "#0a0a0a"}"/><path d="M99 110 L112 110 M137 110 L150 110" stroke="rgba(255,255,255,.55)" stroke-width="3"/>`
         : `<g class="eyes"><ellipse cx="110" cy="116" rx="8" ry="6" fill="#fff"/><ellipse cx="150" cy="116" rx="8" ry="6" fill="#fff"/><circle cx="112" cy="117" r="3.8" fill="#3a2a1a"/><circle cx="148" cy="117" r="3.8" fill="#3a2a1a"/><circle cx="113" cy="116" r="1.2" fill="#fff"/><circle cx="149" cy="116" r="1.2" fill="#fff"/></g>` +
-          (c.glasses === "glasses" ? `<g fill="none" stroke="#1a1a1a" stroke-width="3.5"><circle cx="110" cy="116" r="14"/><circle cx="150" cy="116" r="14"/><path d="M124 116 L136 116 M96 114 L84 110 M164 114 L176 110"/></g>`
-           : c.glasses === "glasses_square" ? `<g fill="rgba(180,220,255,.12)" stroke="#1a1a1a" stroke-width="4"><rect x="95" y="105" width="30" height="22" rx="4"/><rect x="135" y="105" width="30" height="22" rx="4"/><path d="M125 114 L135 114 M95 112 L84 108 M165 112 L176 108" fill="none"/></g>` : "");
+          (c.glasses === "glasses" ? `<g fill="none" stroke="${c.glassesColor || "#1a1a1a"}" stroke-width="3.5"><circle cx="110" cy="116" r="14"/><circle cx="150" cy="116" r="14"/><path d="M124 116 L136 116 M96 114 L84 110 M164 114 L176 110"/></g>`
+           : c.glasses === "glasses_square" ? `<g fill="rgba(180,220,255,.12)" stroke="${c.glassesColor || "#1a1a1a"}" stroke-width="4"><rect x="95" y="105" width="30" height="22" rx="4"/><rect x="135" y="105" width="30" height="22" rx="4"/><path d="M125 114 L135 114 M95 112 L84 108 M165 112 L176 108" fill="none"/></g>` : "");
     const brows = (c.glasses === "shades" || c.glasses === "shades_sport") ? "" : `<path d="M98 101 Q110 95 122 101 M138 101 Q150 95 162 101" fill="none" stroke="${brow}" stroke-width="5" stroke-linecap="round"/>`;
     const nose = `<path d="M130 118 Q123 138 130 142 Q137 142 135 136" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="3" stroke-linecap="round"/>`;
     const mouth = o.noMouth ? "" : o.kiss ? `<ellipse cx="130" cy="158" rx="7" ry="6" fill="#b5404a"/>` : o.open ? `<ellipse cx="130" cy="158" rx="14" ry="10" fill="#3a0f0f"/><ellipse cx="130" cy="164" rx="7" ry="3" fill="#d9707a"/>`

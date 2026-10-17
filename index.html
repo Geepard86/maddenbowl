@@ -28,7 +28,6 @@
   .tm-logo .tm-n { font-size:.66em; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tm-logo .tm-o { font-size:.62em; color:var(--v2-silver); }
   .tm-logo.active { border-color:var(--v2-gold); background:rgba(201,151,0,.14); }
-  .tm-logo.seen::after { content:'✓'; position:absolute; top:3px; right:5px; font-size:.62em; color:var(--v2-gold); }
   .tm-logo.excl img { filter: grayscale(1); opacity: .45; }
   .tm-logo.excl .tm-n, .tm-logo.excl .tm-o { text-decoration: line-through; opacity: .55; }
   .tm-logo.excl::before { content: ''; position: absolute; left: 10%; right: 10%; top: 34px; height: 3px; background: #ff3b3b; transform: rotate(-18deg); border-radius: 2px; }
@@ -42,6 +41,7 @@
   .cd-u { min-width: 62px; background: rgba(0,0,0,.28); border: 1px solid var(--v2-border); border-radius: 10px; padding: 8px 6px 6px; }
   .cd-u b { display: block; font-size: 1.9em; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
   .cd-u span { font-size: .62em; color: var(--v2-silver); letter-spacing: 1px; text-transform: uppercase; }
+  .cd-cal { width:auto; margin:10px auto 0; padding:6px 14px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); font-weight:700; font-size:.8em; cursor:pointer; }
   .tm-nav { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
   .tm-nav button { width:auto; margin:0; padding:4px 10px; border-radius:8px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
   .tm-head { display:flex; align-items:center; gap:12px; margin:6px 0 8px; }
@@ -61,6 +61,7 @@
   .v2-blog-wide .bw-item:first-of-type { border-top:none; }
   /* Ewige Tabelle im Dashboard: nie umbrechen; wird es eng, fallen die Punkte weg */
   @media (max-width: 640px) { .hof-pts .hof-p { display:none; } }
+  .unread-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff3b3b; box-shadow:0 0 6px rgba(255,59,59,.7); margin-left:7px; vertical-align:middle; }
   .dash-post { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); color:inherit; text-decoration:none; }
   .v2-card-title + .dash-post { border-top:none; padding-top:2px; }
   .dash-thumb { width:88px; height:66px; flex:0 0 88px; border-radius:8px; object-fit:cover; background:#0b1328; }
@@ -304,7 +305,7 @@
     return `<a class="dash-post" href="blog.html?post=${encodeURIComponent(a.id)}">
         ${m.image ? `<img class="dash-thumb" src="${m.image}" alt="">` : ''}
         <div class="dash-post-body">
-          <span class="v2-badge" style="background:${m.color};">${m.label}</span>
+          <span class="v2-badge" style="background:${m.color};">${m.label}</span>${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}
           <div class="dash-post-title">${withExcerpt ? (a.title || '') : excerpt(a.title, 60)}</div>
           ${withExcerpt ? `<div class="dash-post-ex">${excerpt(a.body, 160)}</div>` : ''}
           <div class="dash-post-date">${formatArticleDate(a.created_at)}</div>
@@ -547,17 +548,19 @@
     }
   }
   function stepTeam(d) {
-    const list = tmTeams(); const i = Math.max(0, list.findIndex(t => t.id === tmTeam));
-    selectTeam(list[(i + d + list.length) % list.length].id, true);
+    const list = tmTeams(); const i = list.findIndex(t => t.id === tmTeam);
+    // noch keins gewählt: › startet beim ersten, ‹ beim letzten Team
+    const next = i < 0 ? (d > 0 ? 0 : list.length - 1) : (i + d + list.length) % list.length;
+    selectTeam(list[next].id, true);
   }
   function renderTeamCard() {
     const list = tmTeams();
-    if (!tmTeam) tmTeam = list[0] && list[0].id;
-    const t = list.find(x => x.id === tmTeam) || list[0];
-    const row = tmRosters && tmRosters[t.id];
+    // standardmäßig kein Team gewählt – Kader erst nach Antippen
+    const t = list.find(x => x.id === tmTeam) || null;
+    const row = t && tmRosters && tmRosters[t.id];
     const players = ((row && row.players) || []).slice().sort((a, b) => (b.ovr - a.ovr) || String(a.n).localeCompare(String(b.n)));
     const excl = new Set((state && state.config && Array.isArray(state.config.excludedTeams)) ? state.config.excludedTeams : []);
-    const logos = list.map(x => `<button class="tm-logo ${x.id === t.id ? 'active' : ''} ${tmSeen.has(x.id) ? 'seen' : ''} ${excl.has(x.id) ? 'excl' : ''}" data-team="${x.id}" onclick="selectTeam('${x.id}')" title="${excl.has(x.id) ? 'Für den Draft gestrichen' : ''}">
+    const logos = list.map(x => `<button class="tm-logo ${t && x.id === t.id ? 'active' : ''} ${excl.has(x.id) ? 'excl' : ''}" data-team="${x.id}" onclick="selectTeam('${x.id}')" title="${excl.has(x.id) ? 'Für den Draft gestrichen' : ''}">
         <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${x.id}.png" alt="" loading="lazy"><div class="tm-n">${tmEsc(x.n)}</div><div class="tm-o">${x.ovr ? 'OVR ' + x.ovr : '–'}</div></button>`).join('');
     const roster = players.length
       ? `<div class="tm-roster">${players.map(p => `<div class="tm-p ${p.ir ? 'ir' : ''}"><span class="o ${p.ovr >= 90 ? 'h' : p.ovr >= 80 ? 'm' : ''}">${p.ovr}</span><span class="pp">${tmEsc(p.pos)}</span><span class="nn">${tmEsc(p.n)}</span>${p.badge ? `<span class="bb ${p.badge === 'XF' ? 'xf' : 'ss'}">${p.badge}</span>` : ''}${p.ir ? '<span class="bb ir">IR</span>' : ''}</div>`).join('')}</div>`
@@ -565,10 +568,10 @@
     const irCount = players.filter(p => p.ir).length;
     return `<div class="v2-card" id="tmBox">
         <div class="v2-card-title">🏈 Teams &amp; Kader ${tmYear ? `<span style="font-weight:600; opacity:.6; font-size:.8em;">Madden ${tmEsc(row && row.madden_version || tmYear)}</span>` : ''}</div>
-        <div class="tm-nav"><button onclick="stepTeam(-1)" aria-label="Vorheriges Team">‹</button><span style="font-size:.72em; color:var(--v2-silver); flex:1;">Nach Team-OVR sortiert · ${tmSeen.size}/${MB.nflTeams.length} angeschaut</span><button onclick="stepTeam(1)" aria-label="Nächstes Team">›</button></div>
+        <div class="tm-nav"><button onclick="stepTeam(-1)" aria-label="Vorheriges Team">‹</button><span style="font-size:.72em; color:var(--v2-silver); flex:1;">Nach Team-OVR sortiert</span><button onclick="stepTeam(1)" aria-label="Nächstes Team">›</button></div>
         <div class="tm-slider">${logos}</div>
-        <div class="tm-head ${excl.has(t.id) ? 'excl' : ''}"><img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt=""><div><div class="t">${tmEsc(t.n)}${t.ovr ? ` · OVR ${t.ovr}` : ''}${excl.has(t.id) ? ' <span class="tm-x">Im Draft gestrichen</span>' : ''}</div><div class="s">${players.length ? `${players.length} Spieler${irCount ? ' · ' + irCount + ' auf IR' : ''}` : ''}</div></div></div>
-        ${roster}
+        ${t ? `<div class="tm-head ${excl.has(t.id) ? 'excl' : ''}"><img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt=""><div><div class="t">${tmEsc(t.n)}${t.ovr ? ` · OVR ${t.ovr}` : ''}${excl.has(t.id) ? ' <span class="tm-x">Im Draft gestrichen</span>' : ''}</div><div class="s">${players.length ? `${players.length} Spieler${irCount ? ' · ' + irCount + ' auf IR' : ''}` : ''}</div></div></div>
+        ${roster}` : `<div class="v2-empty" style="padding:10px 0 4px;">Tippe auf ein Team, um den Kader zu sehen.</div>`}
       </div>`;
   }
   // Countdown bis zum nächsten Turnier (Termin in seasons.html, config.nextTournamentAt)
@@ -579,7 +582,42 @@
     return `<div class="v2-card cd-card" id="cdCard" data-at="${d.toISOString()}">
       <div class="cd-kick">🏈 Kickoff des nächsten Altima Bowl</div>
       <div class="cd-when">${d.toLocaleString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</div>
-      <div class="cd-units" id="cdUnits">${countdownUnits(d)}</div></div>`;
+      <div class="cd-units" id="cdUnits">${countdownUnits(d)}</div>
+      <button class="cd-cal" onclick="downloadIcs()">📅 In meinen Kalender</button></div>`;
+  }
+  // .ics-Datei: iPhone, Android und Outlook bieten direkt „Zum Kalender hinzufügen“ an
+  function downloadIcs() {
+    const d = new Date(state.config.nextTournamentAt); if (isNaN(d)) return;
+    const end = new Date(d.getTime() + 6 * 3600 * 1000);
+    const f = (x) => x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Altima Bowl//DE', 'BEGIN:VEVENT', `UID:altimabowl-${f(d)}@maddenbowl`, `DTSTAMP:${f(new Date())}`,
+      `DTSTART:${f(d)}`, `DTEND:${f(end)}`, 'SUMMARY:🏈 Altima Bowl', `URL:${location.origin + location.pathname}`, 'DESCRIPTION:Kickoff des nächsten Altima Bowl!',
+      'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Morgen ist Altima Bowl!', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'altima-bowl.ics'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+  // Einladung zu Benachrichtigungen (einmalig; „Später“ = 5 Tage Ruhe)
+  function renderPushInviteCard() {
+    try {
+      if (!('serviceWorker' in navigator)) return '';
+      if (Number(localStorage.getItem('mb_push_invite_until') || 0) > Date.now()) return '';
+      if (localStorage.getItem('mb_push_invite_done') === '1') return '';
+      if (window.Notification && Notification.permission !== 'default') return '';
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+      const text = ios && !standalone
+        ? 'Installiere den Altima Bowl über <b>Teilen → „Zum Home-Bildschirm“</b> – dann kannst du dich benachrichtigen lassen, wenn du dran bist, Tipps offen sind oder neue Beiträge erscheinen.'
+        : 'Willst du benachrichtigt werden, wenn du dran bist, Tipps offen sind oder neue Beiträge erscheinen?';
+      return `<div class="v2-card" id="pushInvite" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <div style="font-size:1.8em;">🔔</div><div style="flex:1; min-width:200px; font-size:.9em;">${text}</div>
+        <div style="display:flex; gap:8px;">${ios && !standalone ? '' : `<button style="width:auto; margin:0;" onclick="acceptPushInvite()">Ja, aktivieren</button>`}
+        <button class="v2-btn-ghost" style="width:auto; margin:0;" onclick="localStorage.setItem('mb_push_invite_until', String(Date.now() + 5 * 864e5)); document.getElementById('pushInvite').remove();">Später</button></div></div>`;
+    } catch (e) { return ''; }
+  }
+  function acceptPushInvite() {
+    localStorage.setItem('mb_push_invite_done', '1');
+    document.getElementById('pushInvite')?.remove();
+    MB.UI.openPush();
   }
   function countdownUnits(d) {
     let ms = d.getTime() - Date.now();
@@ -617,6 +655,7 @@
         try { await MB.loadTeamRatings(tmYear); } catch (e) { /* optional */ }
       }
       app.innerHTML = `
+        ${renderPushInviteCard()}
         ${renderCountdownCard()}
         ${renderTeamCard()}
         ${renderBlogWideCard()}
@@ -627,6 +666,7 @@
       return;
     }
     app.innerHTML = `
+      ${renderPushInviteCard()}
       ${renderSpielplanCard()}
       <div class="v2-row-2col">
         ${await renderTippspielCard()}

@@ -199,6 +199,53 @@
 
   // Achievements (Sammelkarten) werden bei Bedarf nachgeladen — kein Eintrag in den einzelnen Seiten nötig.
   let _achLoading = null;
+  // ---------------------------------------------------------------
+  // PUSH-BENACHRICHTIGUNGEN (push.js wird bei Bedarf nachgeladen)
+  // ---------------------------------------------------------------
+  let _pushLoading = null;
+  function withPush(cb) {
+    if (global.MB.Push) { cb(global.MB.Push); return; }
+    if (!_pushLoading) _pushLoading = new Promise((res) => { const s = document.createElement("script"); s.src = "push.js"; s.onload = () => res(global.MB.Push || null); s.onerror = () => res(null); document.head.appendChild(s); });
+    _pushLoading.then((P) => { if (P) cb(P); });
+  }
+  function openPush() {
+    let ov = document.getElementById("mbPushModal");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "mbPushModal"; ov.className = "v2-modal-overlay open";
+      ov.style.cssText = "position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;";
+      ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = `<div class="v2-modal" style="max-width:420px;width:100%;background:var(--v2-surface,#13203a);border:1px solid var(--v2-border,#2a3a55);border-radius:14px;padding:18px;"><h3 style="margin-top:0;">🔔 Benachrichtigungen</h3><div id="mbPushBody">Lade …</div></div>`;
+    withPush(drawPush);
+  }
+  async function drawPush(P) {
+    const box = document.getElementById("mbPushBody"); if (!box) return;
+    const st = await P.status();
+    const close = `<button class="v2-btn-ghost" onclick="document.getElementById('mbPushModal').remove()">Schließen</button>`;
+    if (st.blocked === "ios-install") { box.innerHTML = `<p>Auf dem iPhone funktionieren Benachrichtigungen nur in der installierten App:</p><ol style="padding-left:18px;"><li>Unten auf <b>Teilen</b> tippen</li><li><b>„Zum Home-Bildschirm“</b> wählen</li><li>Die App vom Home-Bildschirm öffnen und hier aktivieren</li></ol><div class="v2-modal-actions">${close}</div>`; return; }
+    if (st.blocked === "unsupported") { box.innerHTML = `<p>Dieser Browser unterstützt leider keine Benachrichtigungen.</p><div class="v2-modal-actions">${close}</div>`; return; }
+    if (st.blocked === "denied") { box.innerHTML = `<p>Benachrichtigungen sind für diese Seite blockiert. Eine Web-App kann die Einstellungen leider nicht selbst öffnen – so schaltest du sie frei:</p><p style="background:rgba(201,151,0,.12);border-left:3px solid var(--v2-gold,#c99700);padding:8px 10px;border-radius:6px;">${P.settingsHint()}</p><p style="font-size:.85em;opacity:.75;">Danach diese Seite neu laden und hier aktivieren.</p><div class="v2-modal-actions">${close}</div>`; return; }
+    const p = st.prefs, user = currentUser();
+    const cb = (k, label, hint) => `<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0;"><input type="checkbox" data-k="${k}" ${p[k] ? "checked" : ""} style="width:auto;margin-top:3px;"><span><b>${label}</b><br><span style="font-size:.82em;opacity:.7;">${hint}</span></span></label>`;
+    box.innerHTML = `${cb("match", "Du spielst gleich", "Wenn dein nächstes Spiel ansteht." + (user ? "" : " (nur angemeldet)"))}
+      ${cb("tips", "Offene Tipps", "Einmal pro Spieltag, wenn du noch nicht getippt hast." + (user ? "" : " (nur angemeldet)"))}
+      ${cb("blog", "Neue Blog-Beiträge", "Power Rankings, Rekorde, Songs und mehr.")}
+      ${st.subscribed ? "" : `<div style="font-size:.8em;opacity:.7;margin:6px 0;">Nach „Aktivieren“ fragt dein Gerät einmal um Erlaubnis – bitte dort „Erlauben“ tippen. Falls kein Dialog erscheint: ${P.settingsHint()}</div>`}
+      <div id="mbPushMsg" style="font-size:.85em;min-height:1.2em;margin:6px 0;color:var(--v2-gold,#c99700);"></div>
+      <div class="v2-modal-actions" style="flex-wrap:wrap;gap:8px;">
+        ${st.subscribed ? `<button class="v2-btn-ghost" id="mbPushOff">Deaktivieren</button><button class="v2-btn-ghost" id="mbPushTest">Test senden</button><button class="v2-btn-primary" id="mbPushSave">Speichern</button>`
+          : `${close}<button class="v2-btn-primary" id="mbPushOn">Aktivieren</button>`}
+      </div>`;
+    const prefs = () => Object.fromEntries([...box.querySelectorAll("input[data-k]")].map((i) => [i.dataset.k, i.checked]));
+    const msg = (t) => { const m = document.getElementById("mbPushMsg"); if (m) m.textContent = t; };
+    const run = async (fn, ok) => { try { msg("…"); await fn(); msg(ok); } catch (e) { msg(e.message || String(e)); } };
+    const on = document.getElementById("mbPushOn"); if (on) on.onclick = () => run(async () => { await P.enable(prefs()); withAchievements((A) => A.track("push_on", {})); drawPush(P); }, "Aktiviert ✓");
+    const save = document.getElementById("mbPushSave"); if (save) save.onclick = () => run(() => P.updatePrefs(prefs()), "Gespeichert ✓");
+    const off = document.getElementById("mbPushOff"); if (off) off.onclick = () => run(async () => { await P.disable(); drawPush(P); }, "Deaktiviert");
+    const test = document.getElementById("mbPushTest"); if (test) test.onclick = () => run(() => P.test(), "Test gesendet – kommt gleich an.");
+  }
+
   function withAchievements(cb) {
     try {
       if (MB.Achievements) { cb(MB.Achievements); return; }
@@ -288,6 +335,7 @@
         <div class="v2-nav-divider"></div>
         ${adminMenu ? adminSecondaryHtml : `${isAdminUnlocked() ? `<a class="v2-nav-link" href="admin.html">${emoji("🛡️")} Admin-Bereich</a><a class="v2-nav-link" href="seasons.html">${emoji("🗂️")} Saisons &amp; Vorbereitung</a><div class="v2-nav-divider"></div>` : ""}<button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
         <button class="v2-nav-secondary" onclick="MB.UI.closeNav(); MB.UI.startTour()">Einführung (Tour)</button>
+        <button class="v2-nav-secondary" onclick="MB.UI.closeNav(); MB.UI.openPush()">🔔 Benachrichtigungen</button>
         <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>`}
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>
@@ -301,6 +349,9 @@
     document.body.insertAdjacentHTML("afterbegin", headerHtml);
     renderAuthArea();
     verifyAdminSession();
+    if ("serviceWorker" in navigator) setTimeout(() => withPush(() => {}), 2500);
+    // Als App installiert (Home-Bildschirm)? -> Sammelkarte
+    try { if ((global.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true) setTimeout(() => withAchievements((A) => A.track("pwa_installed", {})), 3000); } catch (e) { /* egal */ }
     // Erstbesuch: Einführung automatisch auf dem Dashboard starten
     if (active === "dashboard" && !adminMenu) {
       let done = false; try { done = !!localStorage.getItem(TOUR_KEY); } catch (e) { /* egal */ }
@@ -586,6 +637,7 @@
     closeLogin();
     renderAuthArea();
     withAchievements((A) => A.onLogin(name));
+    withPush((P) => P.relink());
     if (_onChange) _onChange(name);
   }
 
@@ -713,7 +765,7 @@
   global.MB = global.MB || {};
   global.MB.UI = {
     NAV_ITEMS, mountHeader, setState, currentPlayer, currentUser, isAdminUnlocked, withAchievements,
-    loadAccounts, resetPlayerPin, changeAdminPassword, startTour, endTour, tourStep,
+    loadAccounts, resetPlayerPin, changeAdminPassword, startTour, endTour, tourStep, openPush, withPush,
     toggleNav, closeNav, toggleUserMenu, adminNavSelect, syncAdminNav,
     openRules, closeInfo, installApp, isStandalone,
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,

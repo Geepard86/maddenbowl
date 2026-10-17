@@ -94,12 +94,13 @@
     // ---- Limited: nur in einem bestimmten Zeitraum
     { id: "lim_founder", emoji: "🗝️", title: "Gründungsmitglied", desc: "Beim ersten Turnier mit dem neuen Dashboard (2027) als Teilnehmer eingeloggt.", rarity: "limited", term: "limited" },
     { id: "lim_earlybird", emoji: "🐦", title: "Earlybird", desc: "2027 vor dem Kickoff des Turniers eingeloggt.", rarity: "limited", term: "limited" },
-    { id: "lim_pioneer", emoji: "🚀", title: "Pionier", desc: "Den allerersten Tipp abgegeben – oder innerhalb von 5 Minuten danach.", rarity: "limited", term: "limited" },
     // ---- Draft (vergibt die Admin-Seite beim Team-Pick)
-    { id: "draft_fanlove", emoji: "💘", title: "Fanliebe", desc: "Im Draft das eigene Lieblingsteam gewählt, obwohl ein Team mit mind. 2 OVR mehr frei war.", rarity: "epic", term: "mittel" },
+    { id: "draft_fanlove", emoji: "💘", title: "Fanliebe", desc: "Im Draft das eigene Lieblingsteam gewählt, obwohl ein Team mit mind. 3 OVR mehr frei war.", rarity: "epic", term: "mittel" },
     { id: "draft_traitor", emoji: "🐍", title: "Verräter", desc: "Im Draft ausgerechnet einen Divisionsrivalen des eigenen Lieblingsteams gewählt.", rarity: "rare", term: "mittel", secret: true },
-    { id: "draft_principles", emoji: "🧱", title: "Prinzipientreu", desc: "Einen Conference-Rivalen deines Lieblingsteams links liegen gelassen, obwohl er mind. 2 OVR besser gewesen wäre.", rarity: "epic", term: "mittel", secret: true },
+    { id: "draft_principles", emoji: "🧱", title: "Prinzipientreu", desc: "Einen Divisionsrivalen deines Lieblingsteams links liegen gelassen, obwohl er mind. 3 OVR besser gewesen wäre.", rarity: "epic", term: "mittel", secret: true },
     // ---- Stöbern: Kader, Profile, Avatar
+    { id: "pwa_installed", emoji: "📲", title: "Immer dabei", desc: "Den Altima Bowl als App auf dem Home-Bildschirm installiert.", rarity: "common", term: "kurz" },
+    { id: "push_on", emoji: "🔔", title: "Nichts verpassen", desc: "Benachrichtigungen aktiviert.", rarity: "common", term: "kurz" },
     { id: "avatar_made", emoji: "🎨", title: "Ganz der Alte", desc: "Du hast deine eigene Spielerfigur gestaltet.", rarity: "common", term: "kurz" },
     { id: "roster_8", emoji: "📋", title: "Kaderleser", desc: "Du hast dir die Kader von 8 Teams angeschaut.", rarity: "common", term: "kurz" },
     { id: "roster_16", emoji: "🔎", title: "Scouting-Abteilung", desc: "Du hast dir die Kader von 16 Teams angeschaut.", rarity: "rare", term: "kurz" },
@@ -109,16 +110,29 @@
     { id: "u_early_starter", emoji: "⏰", title: "Frühstarter", desc: "Hat sich als Allererster eingeloggt – noch vor dem 1. Januar 2027.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_avatar", emoji: "🖌️", title: "Erster Entwurf", desc: "Hat als Erster seine eigene Spielerfigur gestaltet.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_perfect_day", emoji: "🎰", title: "Jackpot", desc: "Hat als Erster einen kompletten Spieltag richtig getippt.", rarity: "unique", term: "unique", unique: true },
-    { id: "u_first_kingmaker", emoji: "🤴", title: "Erster Königsmacher", desc: "Hat als Erster den Champion richtig vorhergesagt.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_pioneer", emoji: "🚀", title: "Pionier", desc: "Hat den allerersten Tipp der Geschichte abgegeben.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_sole_oracle", emoji: "🔮", title: "Das Orakel", desc: "Als Einziger im ganzen Turnier den späteren Champion vorhergesagt – und das als Erster in der Geschichte des Altima Bowl.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_comment", emoji: "🎙️", title: "Erste Stimme", desc: "Hat den allerersten Blog-Kommentar geschrieben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_merch", emoji: "🛍️", title: "Erster Kunde", desc: "Hat als Erster wirklich etwas im Fan-Shop bestellt.", rarity: "unique", term: "unique", unique: true, manual: true },
     { id: "u_all_teams", emoji: "🔭", title: "Chefscout", desc: "Hat sich als Erster alle 32 Teams samt Kader angeschaut.", rarity: "unique", term: "unique", unique: true },
   ];
   const BY_ID = new Map(DEFS.map((d) => [d.id, d]));
   // Limited/Unique-Zeiträume
-  const FOUNDER_YEAR = 2027;                       // erstes Turnier mit dem neuen Dashboard
+  const FOUNDER_YEAR = 2027;
+  // Limited: bis wann erhältlich? ("open" | "over")
+  function limitedState(def) {
+    const now = new Date();
+    const cfg = (stateRef && stateRef.config) || {};
+    if (def.id === "lim_earlybird") {
+      const k = cfg.nextTournamentAt ? new Date(cfg.nextTournamentAt) : null;
+      if (now.getFullYear() > FOUNDER_YEAR) return "over";
+      if (k && now >= k) return "over";
+      return "open";
+    }
+    if (def.id === "lim_founder") return now.getFullYear() > FOUNDER_YEAR ? "over" : "open";
+    return "open";
+  }                       // erstes Turnier mit dem neuen Dashboard
   const EARLY_DEADLINE = "2027-01-01T00:00:00";    // Frühstarter bis hier, Earlybird ab hier
-  const PIONEER_WINDOW_MIN = 5;
   // Divisionen (für die Draft-Karten)
   const DIVISIONS = {
     "AFC East": ["BUF", "MIA", "NE", "NYJ"], "AFC North": ["BAL", "CIN", "CLE", "PIT"], "AFC South": ["HOU", "IND", "JAX", "TEN"], "AFC West": ["DEN", "KC", "LV", "LAC"],
@@ -164,6 +178,15 @@
       try { if (resetAt && (localStorage.getItem(ek) || "") < resetAt) { localStorage.removeItem(ukey(name)); localStorage.removeItem(pkey(name)); localStorage.setItem(ek, resetAt); } } catch (e) { /* egal */ }
       unlocked = new Map(); queue = []; progress = lsGet(pkey(name), {});
       const loc = lsGet(ukey(name), {}); Object.keys(loc).forEach((k) => unlocked.set(k, loc[k]));
+      // Vom Admin entzogene Karten: lokale Kopie verwerfen, wenn sie älter als der Entzug ist
+      try {
+        const rv = await getRevoked();
+        for (const [id, v] of [...unlocked]) {
+          const at = rv[`${String(name).toLowerCase()}|${id}`];
+          if (at && (!v.at || v.at <= at)) unlocked.delete(id);
+        }
+        lsSet(ukey(name), Object.fromEntries(unlocked));
+      } catch (e) { /* egal */ }
       const c = sb();
       if (c) {
         const [a, p, f] = await Promise.all([
@@ -181,6 +204,26 @@
       unlocked.forEach((v, id) => { if (!v.seen && BY_ID.has(id)) queue.push(id); });
     })().finally(() => { loading = null; });
     return loading;
+  }
+  let _revoked = null;
+  async function getRevoked(force) {
+    if (_revoked && !force) return _revoked;
+    try { const raw = global.MB.getAppConfig ? await global.MB.getAppConfig("achievements_revoked") : null; _revoked = raw ? JSON.parse(raw) : {}; } catch (e) { _revoked = {}; }
+    return _revoked;
+  }
+  // Admin: eine Karte einem Spieler wieder entziehen (Testphase). Unique-Karten werden wieder frei.
+  async function revoke(id, name) {
+    const def = BY_ID.get(id); if (!def || !name) throw new Error("Unbekannte Karte oder kein Spieler.");
+    const c = sb(); if (!c) throw new Error("Keine Datenbankverbindung.");
+    const pw = localStorage.getItem("mb_admin_session") || "";
+    const { data, error } = await c.rpc("mb_revoke_achievement", { pw_hash: pw, p_player: name, p_id: id });
+    if (error) throw new Error(/function|does not exist/i.test(error.message) ? "SQL-Funktion mb_revoke_achievement fehlt – Anleitung im Admin-Bereich." : /admin/i.test(error.message) ? "Admin-Nachweis abgelehnt – bitte neu als Admin anmelden." : error.message);
+    // Entzug merken, damit lokale Kopien im Browser des Spielers verworfen werden
+    const rv = { ...(await getRevoked(true)) }; rv[`${String(name).toLowerCase()}|${id}`] = new Date().toISOString();
+    if (global.MB.setAppConfig) await global.MB.setAppConfig("achievements_revoked", JSON.stringify(rv));
+    _revoked = rv;
+    if (player && player.toLowerCase() === String(name).toLowerCase()) { unlocked.delete(id); lsSet(ukey(player), Object.fromEntries(unlocked)); }
+    return data || {};
   }
   let _resetAt;
   async function getResetAt() {
@@ -330,7 +373,7 @@
   function track(event, data) {
     if (!player) return; data = data || {};
     if (event === "tipp_saved") {
-      unlock("tipp_first"); checkPioneer();
+      unlock("tipp_first"); unlock("u_pioneer");
       if (data.pick && data.pick === player) { unlock("tipp_self"); }
       else if (data.pick && (data.homeName === player || data.awayName === player)) { unlock("tipp_against_self"); addSet("misc", "against_self"); }
       refreshTippTotal();
@@ -357,6 +400,10 @@
       addSet("hofTabs", String(data.tab)); checkSeenAll();
     } else if (event === "tour_done") {
       addSet("misc", "tour"); checkSeenAll();
+    } else if (event === "pwa_installed") {
+      unlock("pwa_installed");
+    } else if (event === "push_on") {
+      unlock("push_on");
     } else if (event === "avatar_saved") {
       unlock("avatar_made"); unlock("u_first_avatar");
     } else if (event === "blog_share" && data.id != null) {
@@ -419,7 +466,14 @@
     const outcome = global.MB.Tipp.resolveSeasonOutcome(state);
     if (outcome.champion && outcome.champion === player && seasonPick("champion") === player) unlock("tipp_self_crowned");
     if (outcome.toiletBowlWinner && outcome.toiletBowlWinner === player && seasonPick("toiletBowlWinner") === player) unlock("tipp_self_toilet");
-    if (outcome.champion && picks.some((p) => p.kind === "season" && p.ref_key === "champion" && p.pick === outcome.champion)) { unlock("tipp_champion"); unlock("u_first_kingmaker"); }
+    if (outcome.champion && picks.some((p) => p.kind === "season" && p.ref_key === "champion" && p.pick === outcome.champion)) {
+      unlock("tipp_champion");
+      try {
+        const all = await global.MB.Tipp.fetchAllPicks(tid);
+        const right = [...new Set((all || []).filter((p) => p.kind === "season" && p.ref_key === "champion" && p.pick === outcome.champion).map((p) => p.player_name))];
+        if (right.length === 1 && right[0] === player) unlock("u_sole_oracle");
+      } catch (e) { /* ohne Vergleich keine Karte */ }
+    }
     refreshTippTotal();
   }
 
@@ -433,6 +487,14 @@
         font-family: 'Segoe UI', Arial, sans-serif; transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)); transition: transform .12s ease-out; overflow: hidden; }
       .ach-card.rare { --rc: ${RARITIES.rare.color}; --rg: ${RARITIES.rare.glow}; } .ach-card.epic { --rc: ${RARITIES.epic.color}; --rg: ${RARITIES.epic.glow}; }
       .ach-card.legendary { --rc: ${RARITIES.legendary.color}; --rg: ${RARITIES.legendary.glow}; } .ach-card.unique { --rc: ${RARITIES.unique.color}; --rg: ${RARITIES.unique.glow}; }
+      .ach-card.limited { --rc: ${RARITIES.limited.color}; --rg: ${RARITIES.limited.glow}; }
+      .ach-card.limited .ach-foil { background-image: linear-gradient(115deg, #00e5c0, #b6fff2, #00a3ff, #c4f5ff, #2ee6c5, #00e5c0); opacity: .36; animation-duration: 6s; }
+      .ach-card.limited::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(135deg, rgba(46,230,197,.16) 0 10px, transparent 10px 22px); animation: achSlide 4s linear infinite; }
+      @keyframes achSlide { to { background-position: 62px 0; } }
+      .ach-limband { position: absolute; top: 18px; right: -34px; z-index: 6; transform: rotate(35deg); background: linear-gradient(90deg, #00b894, #2ee6c5); color: #04251f; font: 900 11px/1 'Segoe UI', sans-serif; letter-spacing: 2px; padding: 5px 40px; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+      .ach-card.missed { filter: grayscale(.9) brightness(.6); }
+      .ach-missed { position: absolute; left: 0; right: 0; top: 46%; z-index: 7; text-align: center; transform: rotate(-12deg); }
+      .ach-missed span { display: inline-block; border: 3px solid #ff6b6b; color: #ff6b6b; font: 900 18px/1 'Segoe UI', sans-serif; letter-spacing: 2px; padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,.55); }
       .ach-card::after { content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: color-dodge; opacity: var(--shine, 0); transition: opacity .2s;
         background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,.55) 40%, rgba(255,120,220,.35) 50%, rgba(120,220,255,.4) 60%, transparent 80%); background-size: 250% 250%; background-position: var(--sx, 50%) var(--sy, 50%); }
       .ach-foil { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: color-dodge; opacity: .18; background-size: 300% 300%; animation: achFoil 8s linear infinite; z-index: 2; }
@@ -494,8 +556,11 @@
     if (def.unique) {
       foot = st.holder ? `<span>${locked ? "Vergeben an" : "Gehört"}: ${escapeHtml(st.holder)}</span><span>1/1</span>` : `<span>${locked ? "Noch frei — sei der Erste!" : "Altima Bowl Cards"}</span><span>1/1</span>`;
     } else foot = `<span>Altima Bowl Cards</span><span>${st.at && !st.demo ? new Date(st.at).toLocaleDateString("de-DE") : "Serie 1"}</span>`;
-    const fx = !locked && ["epic", "legendary", "unique"].includes(def.rarity) ? `<div class="ach-foil"></div><div class="ach-glitter"></div>${def.rarity !== "epic" ? '<div class="ach-glitter2"></div>' : ""}` : "";
-    return `<div class="ach-card ${def.rarity} ${locked ? "locked" : ""} ${locked && st.holder ? "taken" : ""} ${st.foreign ? "foreign" : ""}" data-id="${def.id}">${fx}${def.unique && !locked ? '<div class="ach-ribbon">UNIQUE 1/1</div>' : ""}
+    const fx = !locked && ["epic", "legendary", "unique", "limited"].includes(def.rarity) ? `<div class="ach-foil"></div><div class="ach-glitter"></div>${def.rarity !== "epic" ? '<div class="ach-glitter2"></div>' : ""}` : "";
+    const missed = locked && def.rarity === "limited" && limitedState(def) === "over";
+    const limBand = def.rarity === "limited" ? `<div class="ach-limband">LIMITED</div>` : "";
+    const missedTag = missed ? `<div class="ach-missed"><span>LEIDER VERPASST</span></div>` : "";
+    return `<div class="ach-card ${def.rarity} ${locked ? "locked" : ""} ${locked && st.holder ? "taken" : ""} ${st.foreign ? "foreign" : ""} ${missed ? "missed" : ""}" data-id="${def.id}">${limBand}${missedTag}${fx}${def.unique && !locked ? '<div class="ach-ribbon">UNIQUE 1/1</div>' : ""}
       <div class="ach-top"><span>${r.label}</span><span>#${idx}</span></div>
       <div class="ach-art">${locked ? "" : def.emoji}</div>
       <div class="ach-title" style="${titleStyle(def, hidden)}">${hidden ? "???" : escapeHtml(def.title)}</div>
@@ -566,16 +631,32 @@
   // Öffentliche Übersicht aller Unique-Karten mit Besitzer (Hall of Fame, ohne Login)
   async function renderUniqueBoard(el) {
     if (!el) return; injectStyle();
-    el.innerHTML = `<div class="ach-gal-head">Lade Unique-Karten …</div>`;
-    const c = sb(); const fm = new Map();
+    el.innerHTML = `<div class="ach-gal-head">Lade Karten …</div>`;
+    const c = sb(); const fm = new Map(); const limCount = new Map();
     if (c) {
       const { data, error } = await c.from("achievement_firsts").select("*");
       if (!error) (data || []).forEach((r) => fm.set(r.achievement_id, { player: r.player_name, at: r.claimed_at }));
+      // wie viele haben die Limited-Karten? (falls lesbar)
+      try {
+        const ids = DEFS.filter((d) => d.rarity === "limited").map((d) => d.id);
+        const { data: la } = await c.from("player_achievements").select("achievement_id").in("achievement_id", ids);
+        (la || []).forEach((r) => limCount.set(r.achievement_id, (limCount.get(r.achievement_id) || 0) + 1));
+      } catch (e) { /* optional */ }
     }
     const list = DEFS.filter((d) => d.unique);
+    const lim = DEFS.filter((d) => d.rarity === "limited");
     const taken = list.filter((d) => fm.has(d.id)).length;
     el.innerHTML = `<div class="ach-gal-head"><b>${taken}</b> von <b>${list.length}</b> Unique-Karten vergeben — jede gibt es nur ein einziges Mal.</div>` +
-      `<div class="ach-gallery">${list.map((d) => { const f = fm.get(d.id); return cardHtml(d, f ? { at: f.at || new Date().toISOString(), holder: f.player } : { hideHow: true }); }).join("")}</div>`;
+      `<div class="ach-gallery">${list.map((d) => { const f = fm.get(d.id); return cardHtml(d, f ? { at: f.at || new Date().toISOString(), holder: f.player } : { hideHow: true }); }).join("")}</div>` +
+      `<div class="ach-section" style="color:${RARITIES.limited.color}; margin-top:18px;">Limited – nur in einem bestimmten Zeitraum</div>` +
+      `<div class="ach-gallery">${lim.map((d) => {
+        const mine = player && unlocked.get(d.id);
+        const open = limitedState(d) === "open";
+        const n = limCount.get(d.id);
+        const html = cardHtml(d, mine ? { ...mine } : {});
+        const note = mine ? "✓ Gesammelt" : open ? "Noch erhältlich" : "Leider verpasst";
+        return `<div style="display:flex; flex-direction:column; align-items:center; gap:6px;">${html}<div style="font-size:.8em; opacity:.8;">${note}${n != null ? ` · ${n}× vergeben` : ""}</div></div>`;
+      }).join("")}</div>`;
     attachTilt(el);
   }
 
@@ -632,17 +713,6 @@
     const year = Number(cfg.year) || 0;
     if (running && year === FOUNDER_YEAR && st.players.some((p) => p.name === player)) unlock("lim_founder");
   }
-  // Pionier: der erste Tipp überhaupt setzt die Startzeit (achievement_firsts als Zeitstempel),
-  // alle Tipps in den 5 Minuten danach bekommen die Karte ebenfalls.
-  async function checkPioneer() {
-    const c = sb(); if (!c || !player) return;
-    try {
-      const ins = await c.from("achievement_firsts").insert({ achievement_id: "_first_tip_at", player_name: player });
-      if (!ins.error) { unlock("lim_pioneer"); return; }
-      const { data } = await c.from("achievement_firsts").select("claimed_at").eq("achievement_id", "_first_tip_at").maybeSingle();
-      if (data && data.claimed_at && Date.now() - Date.parse(data.claimed_at) <= PIONEER_WINDOW_MIN * 60000) unlock("lim_pioneer");
-    } catch (e) { /* optional */ }
-  }
   // Draft-Karten: wird von der Admin-Seite nach jedem Team-Pick aufgerufen (vergibt per grant).
   // available: [{ id, rating }] der VOR dem Pick freien Teams (inkl. gewähltem)
   async function evaluateDraftPick(name, pickedId, available) {
@@ -654,12 +724,12 @@
       const rate = new Map((available || []).map((t) => [t.id, Number(t.rating) || 0]));
       const picked = rate.get(pickedId) || 0;
       const favFree = rate.has(fav);
-      if (pickedId === fav && favFree && [...rate.values()].some((r) => r >= picked + 2)) await grant("draft_fanlove", name);
+      if (pickedId === fav && favFree && [...rate.values()].some((r) => r >= picked + 3)) await grant("draft_fanlove", name);
       if (pickedId !== fav && divOf(pickedId) && divOf(pickedId) === divOf(fav)) await grant("draft_traitor", name);
-      if (pickedId !== fav) {
-        const conf = (divOf(fav) || "").split(" ")[0];
-        const skipped = [...rate.entries()].some(([id, r]) => id !== fav && id !== pickedId && divOf(id).startsWith(conf) && divOf(id) !== divOf(pickedId) && r >= picked + 2);
-        if (skipped && conf && !divOf(pickedId).startsWith(conf)) await grant("draft_principles", name);
+      // Prinzipientreu: Divisionsrivale des Lieblingsteams war mind. 3 OVR besser als das gewählte (fremde) Team
+      if (pickedId !== fav && divOf(pickedId) !== divOf(fav)) {
+        const skipped = [...rate.entries()].some(([id, r]) => id !== fav && divOf(id) && divOf(id) === divOf(fav) && r >= picked + 3);
+        if (skipped) await grant("draft_principles", name);
       }
     } catch (e) { console.warn("Draft-Karten:", e); }
   }
@@ -674,5 +744,5 @@
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, evaluateDraftPick, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

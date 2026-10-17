@@ -513,7 +513,7 @@
     const picked = rate.get(pickedId) || 0;
     const favTeam = teamFullName(fav.name);
     if (pickedId === fav.id) {
-      const better = av.filter((t) => t.id !== pickedId && (Number(t.rating) || 0) >= picked + 2).sort((a, b) => b.rating - a.rating)[0];
+      const better = av.filter((t) => t.id !== pickedId && (Number(t.rating) || 0) >= picked + 3).sort((a, b) => b.rating - a.rating)[0];
       if (better) return pickVaried("favLoveBetter", [
         `Herz schlägt Verstand: Die ${favTeam} sind sein Lieblingsteam – dabei wären die ${teamFullName(better.name)} deutlich stärker gewesen.`,
         `Eine Entscheidung aus Liebe: ${n} nimmt sein Lieblingsteam, obwohl stärkere Teams noch zu haben waren.`,
@@ -526,9 +526,9 @@
         `Das dürfte in der Fankurve der ${favTeam} gar nicht gut ankommen – ${n} wechselt zum Divisionsrivalen.`,
       ], 1);
     }
-    const conf = divOfTeam(fav.id).split(" ")[0];
-    if (conf && !divOfTeam(pickedId).startsWith(conf)) {
-      const skipped = av.filter((t) => t.id !== fav.id && divOfTeam(t.id).startsWith(conf) && (Number(t.rating) || 0) >= picked + 2).sort((a, b) => b.rating - a.rating)[0];
+    // Divisionsrivale des Lieblingsteams war mind. 3 OVR besser – trotzdem nicht genommen
+    if (divOfTeam(fav.id) && divOfTeam(pickedId) !== divOfTeam(fav.id)) {
+      const skipped = av.filter((t) => t.id !== fav.id && divOfTeam(t.id) === divOfTeam(fav.id) && (Number(t.rating) || 0) >= picked + 3).sort((a, b) => b.rating - a.rating)[0];
       if (skipped) return `Auffällig: Die ${teamFullName(skipped.name)} wären stärker gewesen – aber als Fan der ${favTeam} nimmt man so ein Team offenbar nicht.`;
     }
     if (!rate.has(fav.id)) return pickVaried("favGone", [`Sein Lieblingsteam, die ${favTeam}, war da leider schon weg.`, `Die ${favTeam} wären ihm am liebsten gewesen – aber die hat sich schon jemand anderes geschnappt.`], 1);

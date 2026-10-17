@@ -1624,8 +1624,23 @@
     return { label: m[0], color: m[1], image: `assets/images/blog/thumb_${key}.webp` };
   }
 
+  // Gelesen-Status (nur in diesem Browser). Beim allerersten Besuch gelten alle
+  // vorhandenen Beiträge als gelesen, damit nicht alles rot leuchtet.
+  const READ_KEY = "mb_blog_read", READ_SINCE = "mb_blog_read_since";
+  function readSince() {
+    let t = null; try { t = localStorage.getItem(READ_SINCE); if (!t) { t = new Date().toISOString(); localStorage.setItem(READ_SINCE, t); } } catch (e) { t = new Date(0).toISOString(); }
+    return t;
+  }
+  function readSet() { try { return new Set(JSON.parse(localStorage.getItem(READ_KEY) || "[]")); } catch (e) { return new Set(); } }
+  function isUnread(a) { if (!a || a.id == null) return false; return String(a.created_at || "") > readSince() && !readSet().has(String(a.id)); }
+  function markRead(id) {
+    const s = readSet(); if (s.has(String(id))) return false; s.add(String(id));
+    try { localStorage.setItem(READ_KEY, JSON.stringify([...s].slice(-500))); } catch (e) { /* voll */ }
+    return true;
+  }
+
   global.MB.Blog = {
-    categoryMeta,
+    categoryMeta, isUnread, markRead, readSince,
     buildKickoffArticle: withFacts(buildKickoffArticle, (state, history) => ctxState(state, history)),
     buildRetrospectiveArticle: withFacts(buildRetrospectiveArticle, (seasons) => ({ seasons })),
     buildProgressArticle: withFacts(buildProgressArticle, (state, history, count) => ({ state, history, finishedCount: count })),

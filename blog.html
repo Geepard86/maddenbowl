@@ -25,6 +25,7 @@
   .v2-article-table th { text-align:left; color:var(--v2-silver); font-weight:700; padding:3px 6px; border-bottom:1px solid var(--v2-border); }
   .v2-article-table td { padding:3px 6px; border-bottom:1px solid rgba(255,255,255,.06); }
   .v2-article-table tr:nth-child(2) td { color:var(--v2-gold); font-weight:700; }
+  .unread-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff3b3b; box-shadow:0 0 6px rgba(255,59,59,.7); margin-right:7px; vertical-align:middle; }
   .v2-article-head { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
   .v2-article-headtext { min-width:0; flex:1; }
   .v2-article-body { min-width:0; }
@@ -190,7 +191,7 @@
   }
 
   function toggleArticle(id) {
-    if (expandedIds.has(id)) expandedIds.delete(id); else expandedIds.add(id);
+    if (expandedIds.has(id)) expandedIds.delete(id); else { expandedIds.add(id); markReadId(id); }
     renderList();
   }
 
@@ -324,7 +325,7 @@
           <img class="thumb" src="${meta.image}" alt="">
           <div class="v2-article-headtext">
             <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
-            <div class="v2-article-title">${a.title || ''}</div>
+            <div class="v2-article-title">${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}${a.title || ''}</div>
             ${subtitle}
           </div>
         </div>
@@ -404,6 +405,26 @@
     const filtered = articles.filter(a => activeTab === 'rueckblick' ? a.kind === 'retrospective' : a.kind !== 'retrospective');
     const list = document.getElementById('mbArticleList');
     list.innerHTML = filtered.length ? filtered.map(renderArticle).join('') : `<div class="v2-empty">Noch keine Beiträge in dieser Kategorie.</div>`;
+    watchShortUnread(filtered);
+  }
+  // Gelesen: lange Beiträge beim Aufklappen (oder per Link/Benachrichtigung geöffnet),
+  // kurze (nichts zum Aufklappen) sobald sie 1,5 s im Bild waren.
+  function markReadId(id) {
+    if (!MB.Blog.markRead || !MB.Blog.markRead(id)) return;
+    const dot = document.querySelector(`#post-${CSS.escape(String(id))} .unread-dot`); if (dot) dot.remove();
+  }
+  let readObserver = null;
+  function watchShortUnread(list) {
+    if (readObserver) readObserver.disconnect();
+    if (!('IntersectionObserver' in window) || !MB.Blog.isUnread) return;
+    const timers = new Map();
+    readObserver = new IntersectionObserver((entries) => entries.forEach(en => {
+      const id = en.target.id.replace('post-', '');
+      if (en.isIntersecting) timers.set(id, setTimeout(() => markReadId(id), 1500));
+      else { clearTimeout(timers.get(id)); timers.delete(id); }
+    }), { threshold: 0.6 });
+    list.filter(a => MB.Blog.isUnread(a) && String(a.body || '').replace(/\[\[[^\]]+\]\]/g, '').replace(/\s+/g, ' ').trim().length <= 140)
+      .forEach(a => { const el = document.getElementById('post-' + a.id); if (el) readObserver.observe(el); });
   }
 
   function renderShell() {
@@ -435,6 +456,7 @@
     const el = document.getElementById('post-' + postId);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    markReadId(postId);
     el.classList.add('v2-article-highlight');
     setTimeout(() => el.classList.remove('v2-article-highlight'), 2500);
   }

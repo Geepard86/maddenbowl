@@ -455,6 +455,8 @@
     const quote = computeMyQuote();
     const open = countOpenTips();
     const allTipped = open.count === 0;
+    // Zahl am App-Icon = offene Tipps (aktueller + nächster Spieltag)
+    try { if (navigator.setAppBadge) { if (open.count) navigator.setAppBadge(open.count); else navigator.clearAppBadge(); } } catch (e) { /* nicht unterstützt */ }
     return `
       <div class="v2-card">
         <div class="user-overview">

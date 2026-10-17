@@ -21,6 +21,7 @@
   <script src="llm-test.js"></script>
   <script src="llm-blog.js"></script>
   <script src="comments.js"></script>
+  <script src="push.js"></script>
 
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="draft-stage.css">
@@ -195,6 +196,18 @@
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportAllSeasonsJson(this)">🗄️ Gesamtexport (alle Saisons)</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="location.href='seasons.html'">🗂️ Saisons verwalten</button>
           <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🔔 Push-Benachrichtigungen</h2>
+          <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">Spieler aktivieren Benachrichtigungen selbst im Menü (🔔). Diese Seite schickt beim Eintragen eines Ergebnisses den Aufruf an die nächsten Spieler und einmal pro Spieltag eine Tipp-Erinnerung; neue Blog-Beiträge meldet Supabase per Webhook. Einrichtung: siehe Anleitung (PUSH-EINRICHTUNG.md).</div>
+          <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" id="pushTriggers" style="width:auto;" onchange="localStorage.setItem('mb_push_triggers', this.checked ? '1' : '0')"> Spielaufrufe und Tipp-Erinnerungen von dieser Seite senden</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+            <input id="vapidPublic" placeholder="Öffentlicher VAPID-Schlüssel" style="flex:1; min-width:220px;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="saveVapidPublic()">💾 Speichern</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="makeVapidKeys()">🔑 Schlüsselpaar erzeugen</button>
+          </div>
+          <div id="vapidOut" style="font-size:0.8em; margin-top:8px; word-break:break-all;"></div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -1338,6 +1351,8 @@ function isFinished(match) { return MB.isFinished(match); }
         try {
           const upcoming = (MB.getUpcomingMatches(state, { limit: 2 }) || []).map(u => ({ ...u, stadiumPreposition: u.stadium === state.config.s2 ? (state.config.s2Prep || 'im') : (state.config.s1Prep || 'im') }));
           MB.Announcer.announceTournamentStart({ context: 'afterDraft', upcoming });
+          // Push: die ersten Spieler aufrufen
+          if (MB.Push && pushTriggersEnabled()) { MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {}); }
         } catch (e) { console.warn('Ansage nach dem Draft fehlgeschlagen:', e); }
       });
     }
@@ -2141,6 +2156,9 @@ const ringsHtml = rings > 0
         // gebaut wird - so kann der Kommentator schon wissen, ob (und dass)
         // gerade ein Song entstanden ist.
         const songMoment = await maybeHandleSongMoment();
+
+        // Push: nächste Spieler aufrufen + Tipp-Erinnerungen (läuft im Hintergrund, Fehler egal)
+        if (MB.Push && pushTriggersEnabled()) { MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {}); }
 
         MB.Announcer.announce({
           state, history, homeName, awayName, homeTeam, awayTeam,
@@ -4527,9 +4545,10 @@ function renderRanking() {
                 <select id="grantCard" style="width:auto; display:inline-block;"></select>
                 <input id="grantPlayer" placeholder="Spielername" style="max-width:180px;">
                 <button class="btn-secondary" style="width:auto; margin:0;" onclick="grantCard()">🎁 Karte vergeben</button>
+                <button class="btn-secondary" style="width:auto; margin:0;" onclick="revokeCard()">🗑️ Karte entziehen</button>
               </div>
               <div class="hint" style="font-size:0.78em; opacity:0.65;">Z. B. „🛍️ Erster Kunde“, sobald die erste echte Shop-Bestellung bestätigt ist.</div>
-              <details style="margin-top:8px; font-size:0.8em; opacity:.8;"><summary style="cursor:pointer;">Reset meldet „0“? Einmalig diese SQL-Funktion in Supabase anlegen (SQL Editor)</summary>
+              <details style="margin-top:8px; font-size:0.8em; opacity:.8;"><summary style="cursor:pointer;">Reset/Entziehen funktioniert nicht? Einmalig diese SQL-Funktionen in Supabase anlegen (SQL Editor)</summary>
 <pre style="white-space:pre-wrap; font-size:0.9em; background:rgba(0,0,0,.3); padding:8px; border-radius:6px;">create or replace function public.mb_reset_achievements(pw_hash text)
 returns json language plpgsql security definer set search_path = public as $$
 declare a int; p int; f int;
@@ -4542,7 +4561,21 @@ begin
   delete from achievement_firsts where true;  get diagnostics f = row_count;
   return json_build_object('player_achievements', a, 'player_progress', p, 'achievement_firsts', f);
 end $$;
-grant execute on function public.mb_reset_achievements(text) to anon, authenticated;</pre></details>
+grant execute on function public.mb_reset_achievements(text) to anon, authenticated;
+
+-- Für „Karte entziehen“:
+create or replace function public.mb_revoke_achievement(pw_hash text, p_player text, p_id text)
+returns json language plpgsql security definer set search_path = public as $$
+declare a int; f int;
+begin
+  if pw_hash is null or pw_hash &lt;&gt; (select value from app_config where key = 'admin_pw_hash') then
+    raise exception 'admin check failed';
+  end if;
+  delete from player_achievements where lower(player_name) = lower(p_player) and achievement_id = p_id; get diagnostics a = row_count;
+  delete from achievement_firsts where lower(player_name) = lower(p_player) and achievement_id = p_id; get diagnostics f = row_count;
+  return json_build_object('removed', a, 'unique_freed', f);
+end $$;
+grant execute on function public.mb_revoke_achievement(text, text, text) to anon, authenticated;</pre></details>
               <button class="btn-secondary" style="margin-top:8px; background:var(--nfl-red);" onclick="resetAllAchievements()">♻️ Alle Sammelkarten aller Spieler zurücksetzen</button>
           <button class="btn-secondary" style="margin-top:8px;" onclick="openMemeTest()">🧪 Memes testen (${MB.Records.getMemeTriggers().length} Auslöser, ${MB.Records.buildTestMemeJobs().length} Vorlagen)</button>
               <div id="imgflipTestResult" style="margin-top:8px;"></div>
@@ -4701,6 +4734,15 @@ grant execute on function public.mb_reset_achievements(text) to anon, authentica
       MB.UI.withAchievements(async function (A) {
         try { await A.grant(id, name); alert('Karte vergeben – der Spieler sieht sie beim nächsten Seitenaufruf als Popup.'); }
         catch (e) { alert('Nicht vergeben: ' + e.message); }
+      });
+    }
+    function revokeCard() {
+      const id = document.getElementById('grantCard').value, name = document.getElementById('grantPlayer').value.trim();
+      if (!id || !name) { alert('Karte und Spielername angeben.'); return; }
+      if (!confirm(`Karte „${document.getElementById('grantCard').selectedOptions[0].textContent}“ bei ${name} wirklich entziehen?`)) return;
+      MB.UI.withAchievements(async function (A) {
+        try { await A.revoke(id, name); alert('Karte entzogen. Unique-Karten sind damit wieder frei.'); }
+        catch (e) { alert('Nicht entzogen: ' + e.message); }
       });
     }
     async function resetAllAchievements() {
@@ -5259,6 +5301,26 @@ grant execute on function public.mb_reset_achievements(text) to anon, authentica
         rec.outputs.forEach(o => out.push('', o.error ? `--- ${o.model}: FEHLER: ${o.error}` : `--- ${o.model} (${o.seconds.toFixed(0)} s)${o.problems && o.problems.length ? ' — WÜRDE VERWORFEN: ' + o.problems.join('; ') : ' — Prüfung bestanden'} ---`, ...(o.error ? [] : [`TITEL: ${o.title}`, '', o.body])));
       });
       saveTextFile(out.join('\n'), `blog-ki-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
+    }
+
+    // ---------- Push ----------
+    function pushTriggersEnabled() { return localStorage.getItem('mb_push_triggers') !== '0'; }
+    setTimeout(async () => {
+      const cb = document.getElementById('pushTriggers'); if (cb) cb.checked = pushTriggersEnabled();
+      const inp = document.getElementById('vapidPublic'); if (inp) { try { inp.value = (await MB.getAppConfig('push_vapid_public')) || ''; } catch (e) { /* egal */ } }
+    }, 1200);
+    async function saveVapidPublic() {
+      const v = document.getElementById('vapidPublic').value.trim();
+      try { await MB.setAppConfig('push_vapid_public', v); document.getElementById('vapidOut').textContent = 'Öffentlicher Schlüssel gespeichert.'; }
+      catch (e) { alert('Speichern fehlgeschlagen: ' + e.message); }
+    }
+    async function makeVapidKeys() {
+      if (document.getElementById('vapidPublic').value && !confirm('Es ist schon ein Schlüssel eingetragen. Ein neues Paar macht alle bestehenden Abos ungültig – trotzdem erzeugen?')) return;
+      const k = await MB.Push.generateVapidKeys();
+      document.getElementById('vapidPublic').value = k.publicKey;
+      document.getElementById('vapidOut').innerHTML = `<b>Neues Schlüsselpaar</b> – den öffentlichen Schlüssel oben speichern und beide als Supabase-Secrets hinterlegen:<br>
+        <code>VAPID_PUBLIC_KEY=${k.publicKey}</code><br><code>VAPID_PRIVATE_KEY=${k.privateKey}</code><br>
+        <span style="color:#ff8a8a;">Den privaten Schlüssel nirgends sonst speichern – er wird hier nicht noch einmal angezeigt.</span>`;
     }
 
     // ---------- Live-Studio ----------
