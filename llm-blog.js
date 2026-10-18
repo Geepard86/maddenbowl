@@ -70,6 +70,7 @@
     "  Zahlen (Ergebnisse, Bilanzen, Prozente, Jahre, Titel) nur so nennen, wie sie in den Fakten stehen.",
     "  Spielergebnisse schreibst du mit Doppelpunkt (24:17), Bilanzen IMMER mit Bindestrich (3-1 = Siege-Niederlagen) — nie umgekehrt.",
     "  Rechne nichts aus (keine Summen, Differenzen, Schnitte), was nicht schon in den Fakten steht.",
+    "- Interview-Antworten von Spielern nur wörtlich und in Anführungszeichen zitieren – nie erfinden oder verändern.",
     "- Spielernamen und Teamnamen exakt wie angegeben. Jeder Spieler wird pro Text möglichst nur einmal als Hauptfigur eingeführt, dann gern mit Pronomen.",
     "- Der AUSGANGSTEXT zeigt, welche Aussagen der Beitrag mindestens enthalten soll. Übernimm seine wichtigen Inhalte und Pointen, formuliere aber frei und lebendiger.",
     "- Nichts erklären, was der Witz ist. Kein \"Fazit:\", keine Meta-Kommentare zum Schreiben, keine Anrede an den Leser außer, wenn es passt.",
@@ -352,6 +353,10 @@
         // kickoff, retrospective, progress, ...
         if (state) L.push(...tournamentFacts(state, history));
         if (kind === "progress" && (ctx.finishedCount || d.finishedCount)) L.push(`Stand: nach ${ctx.finishedCount || d.finishedCount} gespielten Partien`);
+        if (Array.isArray(d.interviews) && d.interviews.length) {
+          L.push("", "INTERVIEWS (Rudi hat Spieler befragt – Antworten WÖRTLICH in Anführungszeichen zitieren, nichts hinzudichten, nichts umformulieren; leere Antwort = „Kein Kommentar“):");
+          d.interviews.forEach((iv) => (iv.questions || []).forEach((q, i) => L.push(`  ${iv.name} – Frage: ${q} | Antwort: ${iv.answers && iv.answers[i] ? iv.answers[i] : "(kein Kommentar)"}`)));
+        }
         if (kind === "retrospective" && ctx.seasons) {
           L.push("SAISON-RÜCKBLICK (Platz 1 bis 3 je Saison):");
           ctx.seasons.slice(-12).forEach((s) => {

@@ -106,6 +106,14 @@
   .av-sw button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--v2-gold, #c99700); }
   .av-ed select, .av-ed input[type=range] { width: 100%; }
   @media (max-width: 640px) { .av-wrap { grid-template-columns: 1fr; } .av-fig { margin: 0 auto; } }
+  .hof-compact { width: 100%; table-layout: fixed; }
+  .hof-compact th, .hof-compact td { padding: 7px 6px; white-space: nowrap; }
+  .hof-compact th:first-child, .hof-compact td:first-child { width: 2.2em; }
+  .hof-compact td.name { overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .hof-compact th:nth-child(n+3), .hof-compact td:nth-child(n+3) { width: 4.6em; text-align: center; }
+  .hof-full th, .hof-full td { white-space: nowrap; }
+  .hof-row { cursor: pointer; }
+  .hof-row:hover td { background: rgba(201,151,0,.08); }
 </style>
 <!-- Vorschau beim Teilen des Seitenlinks (Messenger lesen nur statisches HTML) -->
 <meta property="og:title" content="Altima Bowl – Hall of Fame">
@@ -140,10 +148,10 @@
     // Reiter: Saisons/Ewige Tabelle · Meine Karten · Unique-Karten
     let hofMainTab = ((location.hash || '').slice(1).split('=')[0]) || 'history';
     function setMainTab(t) {
-      if (!['history', 'player', 'cards', 'unique'].includes(t)) t = 'history';
+      if (!['history', 'seasons', 'player', 'cards', 'unique'].includes(t)) t = 'history';
       hofMainTab = t;
       document.querySelectorAll('.hof-mt').forEach(b => b.classList.toggle('active', b.dataset.mt === t));
-      ['history', 'player', 'cards', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
+      ['history', 'seasons', 'player', 'cards', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
       if (!(t === 'player' && /^#player/.test(location.hash))) history.replaceState && history.replaceState(null, '', '#' + t);
       try { MB.UI.withAchievements(A => A.track('hof_tab', { tab: t })); } catch (e) { /* egal */ }
       if (t === 'cards') renderMyCards();
@@ -155,7 +163,8 @@
 
   <div class="container">
     <div class="hof-maintabs">
-      <button class="hof-mt active" data-mt="history" onclick="setMainTab('history')">📊 Saisons &amp; Ewige Tabelle</button>
+      <button class="hof-mt active" data-mt="history" onclick="setMainTab('history')">🏆 Ewige Tabelle</button>
+      <button class="hof-mt" data-mt="seasons" onclick="setMainTab('seasons')">📅 Saisons</button>
       <button class="hof-mt" data-mt="player" onclick="setMainTab('player')">👤 Spieler</button>
       <button class="hof-mt" data-mt="cards" onclick="setMainTab('cards')">🃏 Meine Karten</button>
       <button class="hof-mt" data-mt="unique" onclick="setMainTab('unique')">💎 Unique &amp; Limited</button>
@@ -188,69 +197,57 @@
     </div>
 
     <div id="hofPane-history">
-    <div class="card" style="margin-bottom:12px;">
-      <h2>Navigation</h2>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <span class="pill">Saison:</span>
-        <select id="seasonSelect" onchange="renderSeason()"></select>
-
-        <span class="pill">Spiele-Filter:</span>
-        <select id="stageFilter" onchange="renderSeasonMatches()">
-          <option value="all">Alle</option>
-          <option value="group">Group</option>
-          <option value="playoff">Playoff</option>
-        </select>
-
-        <span class="pill">Suche:</span>
-        <input id="searchInput" placeholder="Spieler/Team..." oninput="renderSeasonMatches()" />
-
-        <span class="pill">Sort:</span>
-        <select id="matchSort" onchange="renderSeasonMatches()">
-          <option value="time">Original</option>
-          <option value="pts_desc">Gesamtpunkte ↓</option>
-          <option value="diff_desc">Blowout ↓</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="grid">
-      <div class="card season-card">
-        <h2>Saison Overview</h2>
-        <div id="seasonKpis" class="kpis"></div>
-
-        <div class="tabs">
-          <div class="tab active" data-tab="standings" onclick="setTab('standings')">Abschluss-Tabelle</div>
-          <div class="tab" data-tab="stats" onclick="setTab('stats')">Saison-Stats</div>
-          <div class="tab" data-tab="records" onclick="setTab('records')">Saison-Rekorde</div>
-        </div>
-
-        <div id="tab-standings"></div>
-        <div id="tab-stats" class="hidden"></div>
-        <div id="tab-records" class="hidden"></div>
-      </div>
-
       <div class="card alltime-card">
         <h2>Ewige Tabelle</h2>
         <div id="alltimeKpis" class="kpis" style="margin-bottom:10px;"></div>
         <div class="tabs">
-          <div class="tab active" data-tab="alltime" onclick="setTab2('alltime')">All-Time Table</div>
+          <div class="tab active" data-tab="alltime" onclick="setTab2('alltime')">Tabelle</div>
           <div class="tab" data-tab="allrecords" onclick="setTab2('allrecords')">All-Time Rekorde</div>
         </div>
         <div id="tab2-alltime"></div>
         <div id="tab2-allrecords" class="hidden"></div>
       </div>
-    </div>
-
-    <div class="card" style="margin-top:12px;">
-      <h2>Alle Spiele der Saison</h2>
-      <div id="matchesWrap"></div>
-    </div>
-
     </div><!-- /hofPane-history -->
 
-    <div class="footer">
-      Hall of Fame liest lokale JSON-Dateien. Wenn etwas “leer” wirkt: prüfen ob die Datei existiert und per HTTP gehostet wird.
+    <div id="hofPane-seasons" class="hidden">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <span class="pill">Saison:</span>
+          <select id="seasonSelect" onchange="renderSeason()"></select>
+        </div>
+      </div>
+      <div class="card season-card" style="margin-bottom:12px;">
+        <h2>Saison-Übersicht</h2>
+        <div id="seasonKpis" class="kpis"></div>
+        <div class="tabs">
+          <div class="tab active" data-tab="standings" onclick="setTab('standings')">Abschluss-Tabelle</div>
+          <div class="tab" data-tab="stats" onclick="setTab('stats')">Saison-Stats</div>
+          <div class="tab" data-tab="records" onclick="setTab('records')">Saison-Rekorde</div>
+        </div>
+        <div id="tab-standings"></div>
+        <div id="tab-stats" class="hidden"></div>
+        <div id="tab-records" class="hidden"></div>
+      </div>
+      <div class="card">
+        <h2>Alle Spiele der Saison</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+          <select id="stageFilter" onchange="renderSeasonMatches()" style="width:auto;">
+            <option value="all">Alle Spiele</option>
+            <option value="group">Regular Season</option>
+            <option value="playoff">Playoffs</option>
+          </select>
+          <input id="searchInput" placeholder="Spieler/Team…" oninput="renderSeasonMatches()" style="flex:1; min-width:120px;" />
+          <select id="matchSort" onchange="renderSeasonMatches()" style="width:auto;">
+            <option value="time">Reihenfolge</option>
+            <option value="pts_desc">Meiste Punkte</option>
+            <option value="diff_desc">Höchster Sieg</option>
+          </select>
+        </div>
+        <div id="matchesWrap"></div>
+      </div>
     </div>
+
+
   </div>
 
   <script>
@@ -780,15 +777,15 @@
         $("tab-standings").innerHTML = `<div class="hint">Keine Standings in dieser Saison-Datei gefunden.</div>`;
         return;
       }
-      let html = `<table>
-        <tr><th>#</th><th>Name</th><th>Punkte</th><th>Info</th></tr>`;
+      let html = `<table class="hof-compact">
+        <tr><th>#</th><th>Name</th><th>Punkte</th><th></th></tr>`;
       st.forEach(r=>{
-        const badge = r.rank===1 ? `<span class="pill">🏆 Champion</span>` : (r.rank===2 ? `<span class="pill">🥈 Runner-Up</span>` : (r.rank===3?`<span class="pill">🥉 Podium</span>`:""));
-        html += `<tr>
+        const badge = r.rank===1 ? `🏆` : (r.rank===2 ? `🥈` : (r.rank===3 ? `🥉` : (r.rank === st.length ? `💩` : "")));
+        html += `<tr class="hof-row" onclick="openProfile('${String(r.name).replace(/'/g, "\\'")}')">
           <td><b>${r.rank}</b></td>
           <td class="name">${r.name}</td>
           <td>${r.points ?? 0}</td>
-          <td>${badge}</td>
+          <td style="text-align:right;">${badge}</td>
         </tr>`;
       });
       html += `</table>`;
@@ -1108,6 +1105,11 @@
       } catch (e) { st.textContent = 'Speichern fehlgeschlagen: ' + e.message; }
     }
 
+    function openProfile(name) {
+      setMainTab('player');
+      const sel = document.getElementById('playerSelect'); if (sel) sel.value = name;
+      renderPlayerProfile(name);
+    }
     function renderAllTime() {
       const at = hof.allTime;
       if (!at) return;
@@ -1125,28 +1127,21 @@
         kpi("Matches (Raw)", String(at.matchCount)),
       ].join("");
 
-      // All-time table
-      let html = `<table>
-        <tr>
-          <th>#</th><th>Name</th><th>🏆</th><th>Seasons</th><th>G</th><th>W-L</th><th>Win%</th><th>Diff</th><th>PF</th><th>Punkte</th><th>Best</th>
-        </tr>`;
-      at.table.forEach((p, i)=>{
-        const diffCls = p.diff>0 ? "ok" : (p.diff<0 ? "bad" : "");
-        html += `<tr>
-          <td><b>${i+1}</b></td>
-          <td class="name"><a href="#player=${encodeURIComponent(p.name)}" onclick="event.preventDefault(); setMainTab('player'); document.getElementById('playerSelect').value='${p.name.replace(/'/g, "\\'")}'; renderPlayerProfile('${p.name.replace(/'/g, "\\'")}');" style="color:inherit;">${p.name}</a></td>
-          <td>${p.championships}</td>
-          <td>${p.seasons}</td>
-          <td>${p.games}</td>
-          <td>${p.wins}-${p.losses}</td>
-          <td>${fmtPct(p.winPct)}</td>
-          <td class="${diffCls}">${fmtSigned(p.diff)}</td>
-          <td>${p.pf}</td>
-          <td><b>${p.points}</b></td>
-          <td>${p.bestRank ?? "-"}</td>
-        </tr>`;
+      // All-time table: kompakt (#, Name, Titel, Punkte, S-N); alle Spalten per Umschalter
+      const full = !!window.__hofFull;
+      const go = (n) => `onclick="openProfile('${n.replace(/'/g, "\\'")}')"`;
+      let html = `<div style="display:flex; justify-content:flex-end; margin-bottom:6px;"><button class="btn-secondary small" style="width:auto; margin:0; padding:4px 10px;" onclick="window.__hofFull = !window.__hofFull; renderAllTime();">${full ? 'Kompakt' : 'Alle Spalten'}</button></div>`;
+      html += full ? `<div style="overflow-x:auto;"><table class="hof-full">
+        <tr><th>#</th><th>Name</th><th>🏆</th><th>Saisons</th><th>Spiele</th><th>S-N</th><th>Quote</th><th>Diff</th><th>Pkt erz.</th><th>Punkte</th><th>Best</th></tr>`
+        : `<table class="hof-compact"><tr><th>#</th><th>Name</th><th title="Titel">🏆</th><th>Punkte</th><th>S-N</th></tr>`;
+      at.table.forEach((p, i) => {
+        const diffCls = p.diff > 0 ? "ok" : (p.diff < 0 ? "bad" : "");
+        html += full ? `<tr class="hof-row" ${go(p.name)}>
+          <td><b>${i + 1}</b></td><td class="name">${p.name}</td><td>${p.championships}</td><td>${p.seasons}</td><td>${p.games}</td>
+          <td>${p.wins}-${p.losses}</td><td>${fmtPct(p.winPct)}</td><td class="${diffCls}">${fmtSigned(p.diff)}</td><td>${p.pf}</td><td><b>${p.points}</b></td><td>${p.bestRank ?? "-"}</td></tr>`
+          : `<tr class="hof-row" ${go(p.name)}><td><b>${i + 1}</b></td><td class="name">${p.name}</td><td>${p.championships || ''}</td><td><b>${p.points}</b></td><td>${p.wins}-${p.losses}</td></tr>`;
       });
-      html += `</table>`;
+      html += full ? `</table></div>` : `</table><div class="hint" style="font-size:.78em; opacity:.6; margin-top:6px;">Tippe auf einen Namen für das Spielerprofil.</div>`;
       $("tab2-alltime").innerHTML = html;
 
       // All-time records

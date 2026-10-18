@@ -116,6 +116,7 @@
     spurious:     { label: 'Analyse',         color: '#A855F7', image: T('spurious') },
     manual:       { label: 'Community',       color: '#94A3B8', image: T('manual') },
     meme:         { label: 'Meme',            color: '#EC4899', image: T('meme') },
+    interview:    { label: 'Interview',       color: '#06B6D4', image: T('manual') },
     achievement:  { label: 'Sammelkarte',     color: '#ff7ad9', image: T('achievement') },
   };
   // Porträts: eigenes Bild je Gruppe (Titelverteidiger / Contender / Rest des Feldes)
@@ -161,7 +162,7 @@
       const arr = commentsByArticle.get(String(id)) || []; arr.push(c); commentsByArticle.set(String(id), arr);
       refreshComments(id);
       const total = await MB.Comments.countByPlayer(me);
-      MB.UI.withAchievements(A => A.track('comment_added', { total }));
+      MB.UI.withAchievements(A => { A.track('comment_added', { total }); A.track('comment_text', { text: c.body || '' }); });
     } catch (e) { err.textContent = e.message || String(e); }
   }
   async function deleteComment(cid, aid) {
@@ -190,6 +191,12 @@
            d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
 
+  // Easter Egg: die Zielscheibe (Contender-Porträt) genau in der Mitte treffen
+  function bullseye(ev) {
+    const r = ev.currentTarget.getBoundingClientRect();
+    const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+    if (Math.hypot(dx, dy) <= Math.max(4, r.width * 0.05)) MB.UI.easterEgg('egg_bullseye', '🎯 Volltreffer!');
+  }
   function toggleArticle(id) {
     if (expandedIds.has(id)) expandedIds.delete(id); else { expandedIds.add(id); markReadId(id); }
     renderList();
@@ -322,10 +329,10 @@
     return `
       <div class="v2-article" id="post-${a.id}">
         <div class="v2-article-head">
-          <img class="thumb" src="${meta.image}" alt="">
+          <img class="thumb" src="${meta.image}" alt="" ${/portrait_contender/.test(meta.image) ? 'onclick="bullseye(event)"' : ''}>
           <div class="v2-article-headtext">
             <span class="v2-badge" style="background:${meta.color};">${meta.label}</span>
-            <div class="v2-article-title">${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}${a.title || ''}</div>
+            <div class="v2-article-title">${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}${MB.Blog.cleanTitle ? MB.Blog.cleanTitle(a.title) : (a.title || '')}</div>
             ${subtitle}
           </div>
         </div>

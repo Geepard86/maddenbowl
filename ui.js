@@ -230,7 +230,7 @@
     const cb = (k, label, hint) => `<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0;"><input type="checkbox" data-k="${k}" ${p[k] ? "checked" : ""} style="width:auto;margin-top:3px;"><span><b>${label}</b><br><span style="font-size:.82em;opacity:.7;">${hint}</span></span></label>`;
     box.innerHTML = `${cb("match", "Du spielst gleich", "Wenn dein nächstes Spiel ansteht." + (user ? "" : " (nur angemeldet)"))}
       ${cb("tips", "Offene Tipps", "Einmal pro Spieltag, wenn du noch nicht getippt hast." + (user ? "" : " (nur angemeldet)"))}
-      ${cb("blog", "Neue Blog-Beiträge", "Power Rankings, Rekorde, Songs und mehr.")}
+      ${cb("blog", "Blog &amp; Allgemeines", "Neue Beiträge (Power Rankings, Rekorde, Songs …) und sonstige Hinweise wie Interview-Anfragen.")}
       ${st.subscribed ? "" : `<div style="font-size:.8em;opacity:.7;margin:6px 0;">Nach „Aktivieren“ fragt dein Gerät einmal um Erlaubnis – bitte dort „Erlauben“ tippen. Falls kein Dialog erscheint: ${P.settingsHint()}</div>`}
       <div id="mbPushMsg" style="font-size:.85em;min-height:1.2em;margin:6px 0;color:var(--v2-gold,#c99700);"></div>
       <div class="v2-modal-actions" style="flex-wrap:wrap;gap:8px;">
@@ -244,6 +244,66 @@
     const save = document.getElementById("mbPushSave"); if (save) save.onclick = () => run(() => P.updatePrefs(prefs()), "Gespeichert ✓");
     const off = document.getElementById("mbPushOff"); if (off) off.onclick = () => run(async () => { await P.disable(); drawPush(P); }, "Deaktiviert");
     const test = document.getElementById("mbPushTest"); if (test) test.onclick = () => run(() => P.test(), "Zugestellt ✓ – falls trotzdem nichts erscheint: Benachrichtigungen fürs Gerät/den Browser in den Systemeinstellungen prüfen (Fokus/Nicht stören?). " + P.settingsHint());
+  }
+
+  // ---------------------------------------------------------------
+  // EASTER EGGS (Konami-Code, Krone) + gemeinsame Effekte
+  // ---------------------------------------------------------------
+  function eggCelebrate(text) {
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;z-index:99998;pointer-events:none;display:flex;align-items:center;justify-content:center;";
+    ov.innerHTML = `<div style="font:900 clamp(40px,11vw,120px)/1 Impact,'Arial Black',sans-serif;color:#ffd23f;text-shadow:6px 6px 0 #d50a0a,0 0 40px rgba(255,210,63,.7);letter-spacing:4px;transform:scale(.2);transition:transform .45s cubic-bezier(.2,1.6,.4,1),opacity .4s;text-align:center;">${text}</div>`;
+    document.body.appendChild(ov);
+    const cols = ["#ffd23f", "#d50a0a", "#ffffff", "#1e50c8", "#3ddc84"];
+    for (let i = 0; i < 90; i++) {
+      const c = document.createElement("i");
+      const x = Math.random() * 100, d = 1.2 + Math.random() * 1.6;
+      c.style.cssText = `position:fixed;top:-12px;left:${x}vw;width:9px;height:14px;background:${cols[i % cols.length]};z-index:99999;border-radius:2px;transform:rotate(${Math.random() * 360}deg);transition:transform ${d}s linear, top ${d}s cubic-bezier(.3,.6,.6,1), opacity ${d}s;pointer-events:none;`;
+      document.body.appendChild(c);
+      requestAnimationFrame(() => { c.style.top = "105vh"; c.style.transform = `rotate(${720 + Math.random() * 720}deg) translateX(${(Math.random() - .5) * 200}px)`; });
+      setTimeout(() => c.remove(), d * 1000 + 100);
+    }
+    requestAnimationFrame(() => { ov.firstChild.style.transform = "scale(1)"; });
+    setTimeout(() => { ov.firstChild.style.opacity = "0"; }, 2200);
+    setTimeout(() => ov.remove(), 2700);
+  }
+  function easterEgg(id, text) {
+    eggCelebrate(text || "✨");
+    if (currentUser()) withAchievements((A) => A.track("egg", { id }));
+  }
+  // Konami-Code: Tastatur (↑↑↓↓←→←→BA) oder am Handy Wischgesten (hoch hoch runter runter links rechts links rechts) + 2× tippen
+  (function konami() {
+    const SEQ = ["U", "U", "D", "D", "L", "R", "L", "R", "B", "A"];
+    let pos = 0;
+    const feed = (k) => { pos = k === SEQ[pos] ? pos + 1 : (k === SEQ[0] ? 1 : 0); if (pos === SEQ.length) { pos = 0; easterEgg("egg_konami", "TOUCHDOWN!"); } };
+    const KEYS = { ArrowUp: "U", ArrowDown: "D", ArrowLeft: "L", ArrowRight: "R", b: "B", B: "B", a: "A", A: "A" };
+    document.addEventListener("keydown", (e) => { const k = KEYS[e.key]; if (k) feed(k); });
+    let sx = 0, sy = 0, st = 0;
+    document.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
+    document.addEventListener("touchend", (e) => {
+      const t = e.changedTouches[0]; const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && Date.now() - st < 300) { feed(pos === 8 ? "B" : pos === 9 ? "A" : "tap"); return; } // die 2 Taps = B, A
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
+      feed(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "R" : "L") : (dy > 0 ? "D" : "U"));
+    }, { passive: true });
+  })();
+  // Krone im Seitenkopf: 10× schnell tippen -> sie fällt herunter (einzelner Tipp = normaler Link)
+  function hookCrown() {
+    const logo = document.querySelector(".v2-logo"); const img = logo && logo.querySelector("img");
+    if (!img || img.dataset.egg) return; img.dataset.egg = "1";
+    let n = 0, timer = null;
+    img.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      n++; clearTimeout(timer);
+      img.style.transition = "transform .15s"; img.style.transform = `rotate(${(n % 2 ? -1 : 1) * n * 3}deg) scale(${1 + n * 0.07})`;
+      if (n >= 10) {
+        n = 0; img.style.transition = "transform .9s cubic-bezier(.5,0,.8,.4), opacity .9s"; img.style.transform = "translateY(110vh) rotate(260deg)"; img.style.opacity = "0";
+        easterEgg("egg_crown", "👑 Die Krone ist gefallen!");
+        setTimeout(() => { img.style.transition = "none"; img.style.transform = ""; img.style.opacity = "1"; }, 2600);
+        return;
+      }
+      timer = setTimeout(() => { const k = n; n = 0; img.style.transform = ""; if (k === 1) location.href = logo.getAttribute("href"); }, 450);
+    });
   }
 
   function withAchievements(cb) {
@@ -350,6 +410,7 @@
     renderAuthArea();
     verifyAdminSession();
     if ("serviceWorker" in navigator) setTimeout(() => withPush(() => {}), 2500);
+    hookCrown();
     // Als App installiert (Home-Bildschirm)? -> Sammelkarte
     try { if ((global.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true) setTimeout(() => withAchievements((A) => A.track("pwa_installed", {})), 3000); } catch (e) { /* egal */ }
     // Erstbesuch: Einführung automatisch auf dem Dashboard starten
@@ -496,13 +557,23 @@
     } else {
       el.innerHTML = `
         <a href="wettbuero.html">🎯 Zum Tippspiel</a>
+        <a href="hall_of_fame.html#player=${encodeURIComponent(currentUser() || "")}">👤 Mein Profil</a>
         <button onclick="MB.UI.doLogout()">Abmelden</button>`;
     }
   }
 
-  function toggleUserMenu() {
-    document.getElementById("mbUserMenu").classList.toggle("open");
+  function toggleUserMenu(ev) {
+    const m = document.getElementById("mbUserMenu"); if (!m) return;
+    m.classList.toggle("open");
   }
+  // Klick irgendwo anders (oder Esc) schließt das Nutzer-Menü
+  document.addEventListener("click", (e) => {
+    const m = document.getElementById("mbUserMenu"); if (!m || !m.classList.contains("open")) return;
+    const auth = document.getElementById("mbAuthArea");
+    if (m.contains(e.target) || (auth && auth.contains(e.target))) return;
+    m.classList.remove("open");
+  }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { const m = document.getElementById("mbUserMenu"); if (m) m.classList.remove("open"); } });
 
   // ---------------------------------------------------------------
   // LOGIN-MODAL (Spieler wählen + PIN — legt beim ersten Mal die PIN an)
@@ -656,28 +727,26 @@
   // ---------------------------------------------------------------
   const TOUR_KEY = "mb_tour_done";
   // Zwei Varianten: während eines Turniers vs. vor dem Turnierstart (anderes Dashboard)
+  const HOF_TEXT = "Ewige Tabelle, alle Rekorde, Spielerprofile und Sammelkarten.";
   const TOUR_LIVE = [
     { icon: "👋", title: "Willkommen beim Altima Bowl", text: "Kurze Tour durch die Seite — dauert keine Minute. Du kannst jederzeit überspringen und sie später im Menü erneut starten." },
-    { icon: "🏠", title: "Dashboard", href: "index.html", all: true, text: "Die Startseite: was gerade läuft und als Nächstes kommt, die Tabelle, die Tippspiel-Spitze, neue Blog-Beiträge und Merch." },
     { icon: "📅", title: "Spielplan", href: "spielplan.html", text: "Alle Partien nach Spieltagen, mit Kickoff-Zeiten (inkl. Vorsprung/Verzug), Quoten, Ergebnissen und dem Playoff Picture." },
-    { icon: "🏆", title: "Tippspiel", href: "wettbuero.html", text: "Nach dem Anmelden tippst du Sieger und Over/Under je Spieltag sowie Champion, Vize und Toilet-Bowl-Sieger. Das Badge zeigt, wie viele Tipps für den aktuellen Spieltag noch offen sind." },
+    { icon: "🏆", title: "Tippspiel", href: "wettbuero.html", text: "Nach dem Anmelden tippst du Sieger und Over/Under je Spieltag sowie Champion, Vize und Toilet-Bowl-Sieger." },
     { icon: "📰", title: "Blog", href: "blog.html", text: "Automatische Berichte zu Kickoff, Power Rankings, Rekorden, Finale und Champion — dazu Memes, Songs und absurde Schein-Korrelationen. Angemeldet kannst du kommentieren." },
-    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", text: "Ewige Tabelle, alle Saisons, Spielerprofile mit Bilanz gegen jeden Gegner — und dort gestaltest du auch deine eigene Figur für Musikvideos und Draft-Einlauf." },
-    { icon: "🃏", title: "Sammelkarten", href: "hall_of_fame.html", cards: true, text: "Fürs Tippen, Stöbern und Mitmachen gibt es Karten von Common bis Legendary – und Unique-Karten, die nur der Erste bekommt." },
+    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", noScroll: true, text: HOF_TEXT },
     { icon: "🛒", title: "Shop", href: "shop.html", text: "Fan-Merch direkt auf der Seite." },
     { icon: "👤", title: "Anmelden", target: "#mbAuthArea", text: "Spieler wählen und PIN eingeben — beim ersten Mal legst du die PIN fest. Du bleibst in diesem Browser angemeldet, auch zwischen den Turnieren." },
-    { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Hier findest du alle Bereiche, die Regeln, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
+    { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Hier findest du alle Bereiche, die Regeln, Benachrichtigungen, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
   ];
   const TOUR_PRE = [
     { icon: "👋", title: "Willkommen beim Altima Bowl", text: "Gerade läuft kein Turnier – Zeit, sich in Ruhe umzuschauen. Kurze Tour, jederzeit überspringbar und später im Menü wieder startbar." },
     { icon: "⏳", title: "Countdown", target: "#cdCard", text: "Wie lange es noch bis zum Kickoff des nächsten Altima Bowl dauert – auf die Sekunde." },
-    { icon: "🏈", title: "Teams & Kader", target: "#tmBox", text: "Alle 32 Teams nach OVR sortiert, mit kompletten Kadern, XF/SS-Spielern und IR. Gestrichene Teams sind durchgestrichen. " },
+    { icon: "🏈", title: "Teams & Kader", target: "#tmBox", text: "Alle 32 Teams nach OVR sortiert, mit kompletten Kadern, XF/SS-Spielern und IR. Gestrichene Teams sind durchgestrichen." },
     { icon: "📚", title: "Saisonrückblicke", target: ".v2-blog-wide", text: "Die Geschichte der bisherigen Turniere zum Nachlesen – alles Weitere im Blog." },
-    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", text: "Ewige Tabelle, alle Saisons und Spielerprofile. Im eigenen Profil gestaltest du deine Figur (Körperform, Frisur, Bart, Farben, Lieblingsteam) – sie tritt dann in Musikvideos, beim Draft-Einlauf und im Live-Studio auf." },
-    { icon: "🃏", title: "Sammelkarten", href: "hall_of_fame.html", cards: true, text: "Karten gibt es auch ohne Turnier: fürs Stöbern, Kader-Checken, Profile-Anschauen oder die eigene Figur. Unique-Karten bekommt nur der Erste." },
+    { icon: "👑", title: "Hall of Fame", href: "hall_of_fame.html", noScroll: true, text: HOF_TEXT },
     { icon: "🛒", title: "Shop", href: "shop.html", text: "Fan-Merch für das nächste Turnier." },
     { icon: "👤", title: "Anmelden", target: "#mbAuthArea", text: "Spieler wählen und PIN eingeben — beim ersten Mal legst du die PIN fest. Anmelden geht auch ohne laufendes Turnier und bleibt in diesem Browser bestehen." },
-    { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Alle Bereiche, die Regeln, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
+    { icon: "☰", title: "Menü", target: ".v2-burger", menu: true, text: "Alle Bereiche, die Regeln, Benachrichtigungen, „Zum Home-Bildschirm“ und diese Tour noch einmal." },
   ];
   let TOUR_STEPS = TOUR_LIVE;
   function tourSteps() {
@@ -753,19 +822,19 @@
     // Menü öffnen: beim Menü-Schritt immer, bei Bereichs-Schritten nur, wenn genug Platz ist
     const openMenu = st.menu || (st.href && wide);
     if (drawer) { drawer.classList.toggle("open", !!openMenu); if (back) back.classList.toggle("open", !!openMenu && !!st.menu); }
-    const targets = tourTargets(st);
+    const targets = st.noScroll ? [] : tourTargets(st);
     if (st.href && drawer && openMenu) drawer.querySelectorAll(`.v2-nav-link[href="${st.href}"]`).forEach((n) => targets.push(n));
-    if (st.menu && drawer) drawer.querySelectorAll(".v2-nav-link, .v2-nav-secondary").forEach((n) => targets.push(n));
     targets.forEach((t) => t.classList.add("mb-tour-hl"));
     const first = targets.find((t) => !(drawer && drawer.contains(t)) && !t.closest(".v2-header"));
-    if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (st.noScroll) { /* nicht nach unten springen (Tour-Text würde die Karte verdecken) */ }
+    else if (first && first.scrollIntoView) first.scrollIntoView({ behavior: "smooth", block: "center" });
     else if (!st.target) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   global.MB = global.MB || {};
   global.MB.UI = {
     NAV_ITEMS, mountHeader, setState, currentPlayer, currentUser, isAdminUnlocked, withAchievements,
-    loadAccounts, resetPlayerPin, changeAdminPassword, startTour, endTour, tourStep, openPush, withPush,
+    loadAccounts, resetPlayerPin, changeAdminPassword, startTour, endTour, tourStep, openPush, withPush, easterEgg,
     toggleNav, closeNav, toggleUserMenu, adminNavSelect, syncAdminNav,
     openRules, closeInfo, installApp, isStandalone,
     RULES_CONTENT_KEY, RULES_CONTENT_DEFAULTS,

@@ -22,6 +22,7 @@
   <script src="llm-blog.js"></script>
   <script src="comments.js"></script>
   <script src="push.js"></script>
+  <script src="interview.js"></script>
 
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="draft-stage.css">
@@ -208,6 +209,13 @@
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="makeVapidKeys()">🔑 Schlüsselpaar erzeugen</button>
           </div>
           <div id="vapidOut" style="font-size:0.8em; margin-top:8px; word-break:break-all;"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+            <input id="pushTestPlayer" placeholder="Spielername" style="max-width:180px;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="testPushAdmin('match')">Test: Spielaufruf</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="testPushAdmin('tips')">Test: Tipp-Erinnerung</button>
+          </div>
+          <div style="font-weight:700; margin-top:10px; font-size:.85em;">Protokoll (dieser Browser)</div>
+          <div id="pushAdminLog" style="font-size:0.8em; opacity:.85;"></div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -1352,7 +1360,14 @@ function isFinished(match) { return MB.isFinished(match); }
           const upcoming = (MB.getUpcomingMatches(state, { limit: 2 }) || []).map(u => ({ ...u, stadiumPreposition: u.stadium === state.config.s2 ? (state.config.s2Prep || 'im') : (state.config.s1Prep || 'im') }));
           MB.Announcer.announceTournamentStart({ context: 'afterDraft', upcoming });
           // Push: die ersten Spieler aufrufen
-          if (MB.Push && pushTriggersEnabled()) { MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {}); }
+          if (MB.Push && pushTriggersEnabled()) {
+          MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {});
+          // Rudi lädt den nächsten Interviewpartner ein (Push öffnet das Dashboard mit der Anfrage)
+          if (MB.Interview) MB.Interview.adminPick(state).then(who => {
+            if (who) MB.Push.notifyAdmin({ type: 'interview', players: [who], tag: 'interview', url: 'index.html',
+              title: '🎙️ Rudi hat ein paar Fragen an dich', body: 'Hast du kurz Zeit für ein Interview? Nur zwei Fragen – einfach antippen.' });
+          }).catch(() => {});
+        }
         } catch (e) { console.warn('Ansage nach dem Draft fehlgeschlagen:', e); }
       });
     }
@@ -4282,6 +4297,17 @@ function renderRanking() {
         const cc = await getCommentContext();
         const article = MB.Blog.buildProgressArticle(state, history, finishedCount, { comments: cc.comments });
         cc.commit();
+        // Interviews seit dem letzten Power Ranking (max. 2) als eigener Absatz
+        let ivNames = [];
+        try {
+          const ivs = MB.Interview ? await MB.Interview.takeUnused(tid, 2) : [];
+          if (ivs.length) {
+            const para = MB.Interview.paragraph(ivs);
+            article.body = article.body.includes('[[tabelle]]') ? article.body.replace('[[tabelle]]', para + '\n\n[[tabelle]]') : article.body + '\n\n' + para;
+            article.data = { ...(article.data || {}), interviews: ivs };
+            ivNames = ivs.map(x => x.name);
+          }
+        } catch (e) { console.warn('Interviews:', e); }
         // Vorgemerkte Rekord-/Story-Memes ("Ins nächste Power Ranking") kommen zuerst.
         const queued = getQueuedMemes(tid);
         const images = queued.map((q) => q.url);
@@ -4346,6 +4372,7 @@ function renderRanking() {
           if (images.length > 1) article.data = { ...(article.data || {}), extra_media: images.slice(1) };
         }
         const savedRanking = await MB.Blog.pushArticle(tid, article);
+        try { if (savedRanking && ivNames.length && MB.Interview) await MB.Interview.markUsed(tid, ivNames); } catch (e) { /* egal */ }
         if (savedRanking && queued.length) removeQueuedMemes(queued.map((q) => q.id));
       } catch (e) {
         console.warn('Power Ranking konnte nicht veröffentlicht werden:', e);
@@ -4379,7 +4406,13 @@ function renderRanking() {
         if ((await MB.Blog.countArticlesByKind(tid, 'wrapup')) > 0) return; // schon vorhanden
         const cc = await getCommentContext();
         const article = MB.Blog.buildWrapUpArticle(state, history, { comments: cc.comments });
-        if (article) { await MB.Blog.pushArticle(tid, article); cc.commit(); }
+        // Interviews, die es in kein Power Ranking mehr geschafft haben
+        let ivNames = [];
+        try {
+          const ivs = article && MB.Interview ? await MB.Interview.takeUnused(tid, 4) : [];
+          if (ivs.length) { article.body += '\n\n' + MB.Interview.paragraph(ivs); article.data = { ...(article.data || {}), interviews: ivs }; ivNames = ivs.map(x => x.name); }
+        } catch (e) { console.warn('Interviews:', e); }
+        if (article) { await MB.Blog.pushArticle(tid, article); cc.commit(); if (ivNames.length) MB.Interview.markUsed(tid, ivNames).catch(() => {}); }
         // Toilet-Bowl-Beitrag (inkl. Song, falls vorhanden) direkt hinterher
         if ((await MB.Blog.countArticlesByKind(tid, 'toiletbowl')) === 0) {
           const tbArticle = MB.Blog.buildToiletBowlArticle(state, history);
@@ -5324,6 +5357,20 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
       const cb = document.getElementById('pushTriggers'); if (cb) cb.checked = pushTriggersEnabled();
       const inp = document.getElementById('vapidPublic'); if (inp) { try { inp.value = (await MB.getAppConfig('push_vapid_public')) || ''; } catch (e) { /* egal */ } }
     }, 1200);
+    function drawPushAdminLog() {
+      const el = document.getElementById('pushAdminLog'); if (!el) return;
+      let l = []; try { l = JSON.parse(localStorage.getItem('mb_push_adminlog') || '[]'); } catch (e) { l = []; }
+      el.innerHTML = l.length ? l.map(x => `<div>${x.replace(/</g, '&lt;')}</div>`).join('') : '<div style="opacity:.6;">Noch nichts gesendet.</div>';
+    }
+    window.addEventListener('mb-push-adminlog', drawPushAdminLog);
+    setTimeout(drawPushAdminLog, 1300);
+    async function testPushAdmin(type) {
+      const name = document.getElementById('pushTestPlayer').value.trim();
+      if (!name) { alert('Spielername angeben (wie beim Login).'); return; }
+      await MB.Push.notifyAdmin(type === 'match'
+        ? { type: 'match', players: [name], title: '🏈 Gleich bist du dran!', body: 'Test-Spielaufruf aus der Admin-Seite', url: 'spielplan.html', tag: 'match' }
+        : { type: 'tips', players: [name], title: '🎯 Test: Tipps offen', body: 'Test-Erinnerung aus der Admin-Seite', url: 'wettbuero.html', tag: 'tips' });
+    }
     async function saveVapidPublic() {
       const v = document.getElementById('vapidPublic').value.trim();
       try { await MB.setAppConfig('push_vapid_public', v); document.getElementById('vapidOut').textContent = 'Öffentlicher Schlüssel gespeichert.'; }

@@ -1614,12 +1614,14 @@
     kickoff: ["Turnierstart", "#0EA5E9"], progress: ["Power Ranking", "#8B5CF6"], portrait: ["Spielerporträt", "#F97316"],
     wrapup: ["Turnierrückblick", "#EAB308"], record: ["Rekord", "#F59E0B"], finals: ["Finale", "#EF4444"], champion: ["Champion", "#22C55E"],
     song: ["Song", "#3B82F6"], retrospective: ["Rückblick", "#14B8A6"], spurious: ["Analyse", "#A855F7"], manual: ["Community", "#94A3B8"],
-    meme: ["Meme", "#EC4899"], achievement: ["Sammelkarte", "#ff7ad9"],
+    meme: ["Meme", "#EC4899"], achievement: ["Sammelkarte", "#ff7ad9"], interview: ["Interview", "#06B6D4"],
   };
+  // Emoji/Symbole am Titelanfang entfernen ("🎯 Shootout" -> "Shootout")
+  function cleanTitle(t) { return String(t || "").replace(/^(?:[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\u20E3]|\s)+/u, "").trim(); }
   function categoryMeta(a) {
     const kind = (a && a.kind) || "manual";
     const m = CAT_META[kind] || ["Beitrag", "#64748B"];
-    let key = CAT_META[kind] ? kind : "manual";
+    let key = CAT_META[kind] && kind !== "interview" ? kind : "manual";
     if (kind === "portrait") { const g = String((a.data && a.data.group) || ""); key = /champ|defend|titel/i.test(g) ? "portrait_champion" : /contend|chall|favor/i.test(g) ? "portrait_contender" : "portrait_field"; }
     return { label: m[0], color: m[1], image: `assets/images/blog/thumb_${key}.webp` };
   }
@@ -1640,7 +1642,7 @@
   }
 
   global.MB.Blog = {
-    categoryMeta, isUnread, markRead, readSince,
+    categoryMeta, cleanTitle, isUnread, markRead, readSince,
     buildKickoffArticle: withFacts(buildKickoffArticle, (state, history) => ctxState(state, history)),
     buildRetrospectiveArticle: withFacts(buildRetrospectiveArticle, (seasons) => ({ seasons })),
     buildProgressArticle: withFacts(buildProgressArticle, (state, history, count) => ({ state, history, finishedCount: count })),

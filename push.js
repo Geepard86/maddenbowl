@@ -114,19 +114,36 @@
   async function relink() { try { const sub = await currentSub(); if (sub) await saveSub(sub, getPrefs()); } catch (e) { /* egal */ } }
 
   // ---------------------------------------------------------------- Admin-Auslöser
-  function sentOnce(key) {
+  function wasSent(key) { try { return !!JSON.parse(localStorage.getItem(SENT_KEY) || "{}")[key]; } catch (e) { return false; } }
+  function markSent(key) {
     let m = {}; try { m = JSON.parse(localStorage.getItem(SENT_KEY) || "{}"); } catch (e) { m = {}; }
-    if (m[key]) return false; m[key] = Date.now();
+    m[key] = Date.now();
     const keys = Object.keys(m); if (keys.length > 300) keys.slice(0, 100).forEach((k) => delete m[k]);
-    localStorage.setItem(SENT_KEY, JSON.stringify(m)); return true;
+    localStorage.setItem(SENT_KEY, JSON.stringify(m));
   }
+  // Protokoll für die Admin-Seite (letzte 20 Auslöser)
+  function adminLog(line) {
+    let l = []; try { l = JSON.parse(localStorage.getItem("mb_push_adminlog") || "[]"); } catch (e) { l = []; }
+    l.unshift(new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " " + line);
+    localStorage.setItem("mb_push_adminlog", JSON.stringify(l.slice(0, 20)));
+    try { global.dispatchEvent(new CustomEvent("mb-push-adminlog")); } catch (e) { /* egal */ }
+  }
+  // Direkter Aufruf der Edge Function (wie beim Test) – mit Auswertung der Antwort
   async function notifyAdmin(payload) {
-    const c = sb(); if (!c) return null;
+    const c = sb(); if (!c || !c.supabaseUrl) { adminLog("✗ keine Datenbankverbindung"); return null; }
     const pw = localStorage.getItem("mb_admin_session") || "";
+    if (!pw || pw === "1") { adminLog("✗ Admin-Nachweis fehlt – bitte einmal ab- und wieder als Admin anmelden"); return null; }
     try {
-      const { data, error } = await c.functions.invoke("push", { body: { ...payload, pw_hash: pw } });
-      if (error) console.warn("Push:", error.message); return data;
-    } catch (e) { console.warn("Push:", e); return null; }
+      const res = await fetch(c.supabaseUrl.replace(/\/$/, "") + "/functions/v1/push", {
+        method: "POST", headers: { "Content-Type": "application/json", apikey: c.supabaseKey, Authorization: "Bearer " + c.supabaseKey },
+        body: JSON.stringify({ ...payload, pw_hash: pw }),
+      });
+      let data = null; try { data = await res.json(); } catch (e) { data = null; }
+      const who = (payload.players || []).join(", ");
+      if (!res.ok) { adminLog(`✗ ${payload.type} an ${who}: HTTP ${res.status} ${(data && data.error) || ""}`); return null; }
+      adminLog(`${data.sent ? "✓" : "–"} ${payload.type === "match" ? "Spielaufruf" : payload.type === "tips" ? "Tipp-Erinnerung" : payload.type === "interview" ? "Interview-Einladung" : payload.type} an ${who}: ${data.sent || 0} zugestellt${data.subscriptions === 0 ? " (keine Geräte mit aktivierten Benachrichtigungen)" : ""}${data.failed ? `, ${data.failed} Fehler` : ""}`);
+      return data;
+    } catch (e) { adminLog("✗ " + e.message); return null; }
   }
   // Nächster Block: beide Spieler jedes anstehenden Spiels benachrichtigen (je Spiel nur einmal)
   async function notifyUpcoming(state) {
@@ -135,9 +152,10 @@
     for (const m of next) {
       if (!m || !m.homeName || !m.awayName) continue;
       const key = `${(global.MB.getCurrentTournamentId && global.MB.getCurrentTournamentId()) || ""}:match:${m.matchId || m.homeName + "-" + m.awayName}`;
-      if (!sentOnce(key)) continue;
-      await notifyAdmin({ type: "match", players: [m.homeName, m.awayName], tag: "match", url: "spielplan.html",
+      if (wasSent(key)) continue;
+      const r = await notifyAdmin({ type: "match", players: [m.homeName, m.awayName], tag: "match", url: "spielplan.html",
         title: "🏈 Gleich bist du dran!", body: `${m.awayName} @ ${m.homeName}${m.time ? ` · ca. ${m.time} Uhr` : ""}${m.stadium ? ` · ${m.stadium}` : ""}` });
+      if (r) markSent(key);
     }
   }
   // Offene Tipps im aktuellen Spieltag: jeden Spieler einmal pro Spieltag erinnern
@@ -155,9 +173,11 @@
       for (const name of players) {
         const open = pickable.filter((m) => !picks.some((p) => p.player_name === name && p.kind === "match" && p.ref_key === m.matchId)).length;
         if (!open) continue;
-        if (!sentOnce(`${tid}:tips:${cur.index}:${name}`)) continue;
-        await notifyAdmin({ type: "tips", players: [name], tag: "tips", url: "wettbuero.html",
+        const tk = `${tid}:tips:${cur.index}:${name}`;
+        if (wasSent(tk)) continue;
+        const r = await notifyAdmin({ type: "tips", players: [name], tag: "tips", url: "wettbuero.html",
           title: `🎯 ${open} ${open === 1 ? "Tipp" : "Tipps"} offen`, body: `Spieltag ${cur.index} läuft – jetzt noch tippen, bevor die Spiele angepfiffen werden.`, badge: open });
+        if (r) markSent(tk);
       }
     } catch (e) { console.warn("Tipp-Erinnerung:", e); }
   }

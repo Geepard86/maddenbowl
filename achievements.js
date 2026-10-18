@@ -99,7 +99,15 @@
     { id: "draft_traitor", emoji: "🐍", title: "Verräter", desc: "Im Draft ausgerechnet einen Divisionsrivalen des eigenen Lieblingsteams gewählt.", rarity: "rare", term: "mittel", secret: true },
     { id: "draft_principles", emoji: "🧱", title: "Prinzipientreu", desc: "Einen Divisionsrivalen deines Lieblingsteams links liegen gelassen, obwohl er mind. 3 OVR besser gewesen wäre.", rarity: "epic", term: "mittel", secret: true },
     // ---- Stöbern: Kader, Profile, Avatar
-    { id: "pwa_installed", emoji: "📲", title: "Immer dabei", desc: "Den Altima Bowl als App auf dem Home-Bildschirm installiert.", rarity: "common", term: "kurz" },
+    // ---- Easter Eggs (geheim, nur Titel sichtbar)
+    { id: "egg_konami", emoji: "🎮", title: "Old School", desc: "Den Konami-Code eingegeben: ↑ ↑ ↓ ↓ ← → ← → B A (am Handy als Wischgeste + 2× tippen).", rarity: "legendary", term: "kurz", secret: true },
+    { id: "egg_roster", emoji: "🕵️‍♂️", title: "Maulwurf im Kader", desc: "Den Spieler gefunden, der in keinem echten Kader steht.", rarity: "legendary", term: "kurz", secret: true },
+    { id: "egg_wrong_card", emoji: "🎴", title: "Die falsche Karte", desc: "Auf eine Karte getippt, die eigentlich gar keine ist.", rarity: "legendary", term: "kurz", secret: true, eggCard: true },
+    { id: "egg_crown", emoji: "👑", title: "Kronprinz", desc: "So lange auf die Krone getippt, bis sie heruntergefallen ist.", rarity: "epic", term: "kurz", secret: true },
+    { id: "egg_bullseye", emoji: "🎯", title: "Bullseye", desc: "Die Zielscheibe eines Blog-Beitrags genau in der Mitte getroffen.", rarity: "legendary", term: "kurz", secret: true },
+    // ---- Interview & Community
+    { id: "interview_1", emoji: "🎙️", title: "Gesprächspartner", desc: "Rudi ein Interview gegeben.", rarity: "rare", term: "mittel" },
+    { id: "praise", emoji: "💌", title: "Fanpost", desc: "In einem Kommentar die Orga, das Turnier oder die Seite gelobt.", rarity: "legendary", term: "lang", secret: true },
     { id: "push_on", emoji: "🔔", title: "Nichts verpassen", desc: "Benachrichtigungen aktiviert.", rarity: "common", term: "kurz" },
     { id: "avatar_made", emoji: "🎨", title: "Ganz der Alte", desc: "Du hast deine eigene Spielerfigur gestaltet.", rarity: "common", term: "kurz" },
     { id: "roster_8", emoji: "📋", title: "Kaderleser", desc: "Du hast dir die Kader von 8 Teams angeschaut.", rarity: "common", term: "kurz" },
@@ -112,6 +120,7 @@
     { id: "u_first_perfect_day", emoji: "🎰", title: "Jackpot", desc: "Hat als Erster einen kompletten Spieltag richtig getippt.", rarity: "unique", term: "unique", unique: true },
     { id: "u_pioneer", emoji: "🚀", title: "Pionier", desc: "Hat den allerersten Tipp der Geschichte abgegeben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_sole_oracle", emoji: "🔮", title: "Das Orakel", desc: "Als Einziger im ganzen Turnier den späteren Champion vorhergesagt – und das als Erster in der Geschichte des Altima Bowl.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_first_interview", emoji: "📼", title: "Exklusiv", desc: "Hat Rudi das allererste Interview gegeben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_comment", emoji: "🎙️", title: "Erste Stimme", desc: "Hat den allerersten Blog-Kommentar geschrieben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_merch", emoji: "🛍️", title: "Erster Kunde", desc: "Hat als Erster wirklich etwas im Fan-Shop bestellt.", rarity: "unique", term: "unique", unique: true, manual: true },
     { id: "u_all_teams", emoji: "🔭", title: "Chefscout", desc: "Hat sich als Erster alle 32 Teams samt Kader angeschaut.", rarity: "unique", term: "unique", unique: true },
@@ -174,6 +183,7 @@
       // Admin-Reset: lokale Kopien, die älter als der Reset sind, verwerfen
       // (sonst würden sie beim nächsten Laden wieder in die Datenbank geschrieben).
       const resetAt = await getResetAt();
+      _loadedResetAt = resetAt || "";
       const ek = `mb_ach_epoch_${name}`;
       try { if (resetAt && (localStorage.getItem(ek) || "") < resetAt) { localStorage.removeItem(ukey(name)); localStorage.removeItem(pkey(name)); localStorage.setItem(ek, resetAt); } } catch (e) { /* egal */ }
       unlocked = new Map(); queue = []; progress = lsGet(pkey(name), {});
@@ -225,6 +235,23 @@
     if (player && player.toLowerCase() === String(name).toLowerCase()) { unlocked.delete(id); lsSet(ukey(player), Object.fromEntries(unlocked)); }
     return data || {};
   }
+  // Offene Tabs merken sich den Stand beim Laden; ein späterer Admin-Reset würde sonst
+  // durch alte Zähler (besuchte Seiten etc.) sofort wieder Karten auslösen.
+  let _loadedResetAt = null, _lastResetCheck = 0;
+  async function resetHappenedSinceLoad() {
+    if (Date.now() - _lastResetCheck < 30000) return false;
+    _lastResetCheck = Date.now();
+    let cur = null;
+    try { cur = global.MB.getAppConfig ? await global.MB.getAppConfig("achievements_reset_at") : null; } catch (e) { return false; }
+    if (cur && _loadedResetAt !== null && cur !== _loadedResetAt) {
+      _loadedResetAt = cur; _resetAt = cur;
+      const name = player;
+      try { localStorage.removeItem(ukey(name)); localStorage.removeItem(pkey(name)); localStorage.setItem(`mb_ach_epoch_${name}`, cur); } catch (e) { /* egal */ }
+      unlocked = new Map(); progress = {}; queue = []; loadedFor = null;
+      return true;
+    }
+    return false;
+  }
   let _resetAt;
   async function getResetAt() {
     if (_resetAt !== undefined) return _resetAt;
@@ -267,6 +294,8 @@
     }
     // Prüfen, ob wirklich gelöscht wurde (RLS löscht sonst stillschweigend 0 Zeilen)
     const { count: left } = await c.from("player_achievements").select("*", { count: "exact", head: true });
+    const { count: leftProg } = await c.from("player_progress").select("*", { count: "exact", head: true });
+    if (leftProg > 0) throw new Error(`Die Datenbank hat das Löschen des Fortschritts verweigert (noch ${leftProg} Einträge – z. B. besuchte Seiten). Ohne die SQL-Funktion mb_reset_achievements kämen Karten sofort zurück – Anleitung im Admin-Bereich.`);
     if (left > 0) throw new Error(`Die Datenbank hat das Löschen verweigert (noch ${left} Karten vorhanden). Bitte einmalig die SQL-Funktion mb_reset_achievements anlegen – Anleitung im Admin-Bereich.`);
     await afterReset();
     return out;
@@ -275,10 +304,11 @@
     const now = new Date().toISOString();
     if (global.MB.setAppConfig) await global.MB.setAppConfig("achievements_reset_at", now);
     _resetAt = now;
-    try { Object.keys(localStorage).filter((k) => /^mb_(achievements_|ach_progress_|ach_epoch_|teams_seen)/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
+    try { Object.keys(localStorage).filter((k) => /^mb_(achievements_|ach_progress_|ach_epoch_|ach_seen|teams_seen|push_invite)/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
     unlocked = new Map(); progress = {}; firsts = new Map(); queue = []; loadedFor = null;
   }
   async function persistUnlock(name, id, v) {
+    if (await resetHappenedSinceLoad()) return;
     lsSet(ukey(name), Object.fromEntries(unlocked));
     const c = sb(); if (!c || !tables.ach) return;
     const { error } = await c.from("player_achievements").upsert({ player_name: name, achievement_id: id, unlocked_at: v.at, seen: !!v.seen }, { onConflict: "player_name,achievement_id" });
@@ -289,6 +319,8 @@
     clearTimeout(progSaveTimer);
     progSaveTimer = setTimeout(async () => {
       const c = sb(); if (!c || !tables.prog || !player) return;
+      // Wurde inzwischen (in einem anderen Fenster) alles zurückgesetzt? Dann nichts Altes zurückschreiben.
+      if (await resetHappenedSinceLoad()) return;
       const { error } = await c.from("player_progress").upsert({ player_name: player, data: progress, updated_at: new Date().toISOString() }, { onConflict: "player_name" });
       if (error) { if (missing(error)) tables.prog = false; else console.warn("Fortschritt speichern:", error.message); }
     }, 1500);
@@ -344,13 +376,20 @@
   async function markSeen(id) { const v = unlocked.get(id); if (!v || v.seen || !player) return; v.seen = true; await persistUnlock(player, id, v); }
 
   // ------------------------------------------------------------ Ereignisse
+  // Lob in Kommentaren: ein Thema (Turnier/Orga/Seite) + ein lobendes oder staunendes Wort
+  function isPraise(text) {
+    const t = String(text || "").toLowerCase();
+    const subject = /(altima|madden)[ -]?bowl|turnier|orga|veranstalt|ausricht|organisat|seite|website|webseite|homepage|app\b|dashboard|blog|studio|kommentator|ansager|rudi|mona|enzo|aufwand|liebe zum detail/.test(t);
+    const praise = /geil|mega|super|genial|krass|wahnsinn|verrückt|verrueckt|irre|hammer|großartig|grossartig|klasse|spitze|top\b|stark|unglaublich|abgefahren|crazy|insane|awesome|amazing|wow|respekt|chapeau|danke|liebe|beste|bester|unfassbar|episch|legendär|legendaer|weltklasse|bombe|next level|geisteskrank|übertrieben|uebertrieben|bekloppt/.test(t);
+    return subject && praise;
+  }
   // Legendär: wirklich alles angeschaut
   function checkSeenAll() {
     const p = progress;
     const pages = PAGE_KEYS.every((k) => (p.pages || []).includes(k));
     const teams = (p.teamsViewed || []).length >= 32;
     const profiles = p.profilesTotal > 0 && (p.profilesViewed || []).length >= p.profilesTotal;
-    const tabs = ["history", "player", "cards", "unique"].every((t) => (p.hofTabs || []).includes(t));
+    const tabs = ["history", "seasons", "player", "cards", "unique"].every((t) => (p.hofTabs || []).includes(t));
     const tour = (p.misc || []).includes("tour");
     if (pages && teams && profiles && tabs && tour) unlock("seen_all");
   }
@@ -401,7 +440,13 @@
     } else if (event === "tour_done") {
       addSet("misc", "tour"); checkSeenAll();
     } else if (event === "pwa_installed") {
-      unlock("pwa_installed");
+      unlock("app_installed");
+    } else if (event === "egg" && data.id && BY_ID.has(data.id) && /^egg_/.test(data.id)) {
+      unlock(data.id);
+    } else if (event === "interview_done") {
+      unlock("interview_1"); unlock("u_first_interview");
+    } else if (event === "comment_text" && data.text) {
+      if (isPraise(data.text)) unlock("praise");
     } else if (event === "push_on") {
       unlock("push_on");
     } else if (event === "avatar_saved") {
@@ -626,6 +671,8 @@
         }).join("")}</div>`;
       }).join("");
     attachTilt(el);
+    const egg = el.querySelector('.ach-card[data-id="egg_wrong_card"].locked');
+    if (egg) egg.addEventListener("click", () => { if (!player) return; unlock("egg_wrong_card"); setTimeout(() => renderGallery(el), 400); }, { once: true });
   }
 
   // Öffentliche Übersicht aller Unique-Karten mit Besitzer (Hall of Fame, ohne Login)

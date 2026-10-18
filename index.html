@@ -16,6 +16,8 @@
 <script src="shared.js"></script>
 <script src="tipp.js"></script>
 <script src="blog.js"></script>
+<script src="draft-stage.js"></script>
+<script src="interview.js"></script>
 <script src="ui.js"></script>
 <script src="shop-products.js"></script>
 <link rel="stylesheet" href="styles.css" />
@@ -62,15 +64,14 @@
   /* Ewige Tabelle im Dashboard: nie umbrechen; wird es eng, fallen die Punkte weg */
   @media (max-width: 640px) { .hof-pts .hof-p { display:none; } }
   /* Blog-Karte im Dashboard: Höhe = Nachbarkarte (Tippspiel), Inhalt passt sich an */
-  .dash-blog-fit { position: relative; display: flex; flex-direction: column; min-height: 300px; overflow: hidden; }
-  .dbf-list { position: absolute; left: 14px; right: 14px; top: 46px; bottom: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .dbf-item { display: block; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.06); color: inherit; text-decoration: none; min-width: 0; flex: 0 0 auto; }
+  .dash-blog-fit { position: relative; overflow: hidden; }
+  .dbf-list { position: absolute; left: 14px; right: 14px; top: 46px; bottom: 10px; overflow: hidden; }
+  .dbf-item { display: block; padding: 7px 0; border-top: 1px solid rgba(255,255,255,.06); color: inherit; text-decoration: none; min-width: 0; }
   .dbf-item:first-child { border-top: none; padding-top: 0; }
-  .dbf-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-  .dbf-top .v2-badge { white-space: nowrap; flex: 0 0 auto; }
-  .dbf-date { margin-left: auto; font-size: .66em; color: var(--v2-silver); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .dbf-title { font-weight: 800; font-size: .86em; margin-top: 4px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dbf-ex { font-size: .78em; opacity: .8; margin-top: 2px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .dbf-title { font-weight: 800; font-size: .88em; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .dbf-title .unread-dot { margin: 0 6px 0 0; }
+  .dbf-meta { font-size: .66em; color: var(--v2-silver); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dbf-ex { font-size: .76em; opacity: .78; margin-top: 2px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
   .unread-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff3b3b; box-shadow:0 0 6px rgba(255,59,59,.7); margin-left:7px; vertical-align:middle; }
   .dash-post { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); color:inherit; text-decoration:none; }
   .v2-card-title + .dash-post { border-top:none; padding-top:2px; }
@@ -313,10 +314,10 @@
   function blogItemHtml(a, withExcerpt) {
     const m = MB.Blog.categoryMeta ? MB.Blog.categoryMeta(a) : { label: 'Beitrag', color: '#64748B', image: '' };
     return `<a class="dash-post" href="blog.html?post=${encodeURIComponent(a.id)}">
-        ${m.image ? `<img class="dash-thumb" src="${m.image}" alt="">` : ''}
+        ${withExcerpt ? '' : (m.image ? `<img class="dash-thumb" src="${m.image}" alt="">` : '')}
         <div class="dash-post-body">
           <span class="v2-badge" style="background:${m.color};">${m.label}</span>${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}
-          <div class="dash-post-title">${withExcerpt ? (a.title || '') : excerpt(a.title, 60)}</div>
+          <div class="dash-post-title">${MB.Blog.cleanTitle ? MB.Blog.cleanTitle(a.title) : (a.title || '')}</div>
           ${withExcerpt ? `<div class="dash-post-ex">${excerpt(a.body, 160)}</div>` : ''}
           <div class="dash-post-date">${formatArticleDate(a.created_at)}</div>
         </div></a>`;
@@ -325,12 +326,13 @@
   // es werden so viele Beiträge gezeigt, wie hineinpassen (mindestens 2).
   function renderBlogCard() {
     if (!articles.length) return `<div class="v2-card"><div class="v2-card-title">${linkedTitle('📰 Blog', 'blog.html')}</div><div class="v2-empty">Noch keine Artikel.</div></div>`;
+    const shortDate = (d) => { const x = new Date(d); return x.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ', ' + x.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }); };
     const item = (a) => {
-      const m = MB.Blog.categoryMeta ? MB.Blog.categoryMeta(a) : { label: 'Beitrag', color: '#64748B' };
+      const m = MB.Blog.categoryMeta ? MB.Blog.categoryMeta(a) : { label: 'Beitrag', color: '#94A3B8' };
       return `<a class="dbf-item" href="blog.html?post=${encodeURIComponent(a.id)}">
-          <div class="dbf-top"><span class="v2-badge" style="background:${m.color};">${m.label}</span>${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}<span class="dbf-date">${formatArticleDate(a.created_at)}</span></div>
-          <div class="dbf-title">${a.title || ''}</div>
-          <div class="dbf-ex">${excerpt(a.body, 160)}</div></a>`;
+          <div class="dbf-title" style="color:${m.color};">${MB.Blog.isUnread && MB.Blog.isUnread(a) ? '<span class="unread-dot" title="Neu"></span>' : ''}${MB.Blog.cleanTitle ? MB.Blog.cleanTitle(a.title) : (a.title || '')}</div>
+          <div class="dbf-meta">${m.label} · ${shortDate(a.created_at)}</div>
+          <div class="dbf-ex">${excerpt(a.body, 140)}</div></a>`;
     };
     return `
       <div class="v2-card dash-blog-fit">
@@ -338,11 +340,16 @@
         <div class="dbf-list" id="dbfList">${articles.slice(0, 8).map(item).join('')}</div>
       </div>`;
   }
-  // nach dem Zeichnen: überzählige Beiträge entfernen, bis alles in die Karte passt (min. 2)
+  // Höhe kommt von der Tippspiel-Karte daneben; reicht sie nicht für 2 Beiträge, wird die Karte
+  // genau so hoch, dass 2 hineinpassen. Überzählige Beiträge werden ausgeblendet.
   function fitBlogCard() {
     const list = document.getElementById('dbfList'); if (!list) return;
+    const card = list.closest('.dash-blog-fit');
     const items = [...list.children];
     items.forEach(el => { el.style.display = ''; });
+    card.style.minHeight = '';
+    const top = list.offsetTop, need2 = items.slice(0, 2).reduce((h, el) => h + el.offsetHeight, 0);
+    card.style.minHeight = (top + need2 + 14) + 'px';
     for (let i = items.length - 1; i >= 2; i--) {
       if (list.scrollHeight <= list.clientHeight + 1) break;
       items[i].style.display = 'none';
@@ -561,9 +568,12 @@
       .sort((a, b) => (b.ovr || 0) - (a.ovr || 0) || a.n.localeCompare(b.n));
   }
   function selectTeam(id, scroll) {
+    if (!scroll && tmTeam === id) id = null; // nochmal antippen -> abwählen
     tmTeam = id;
-    tmSeen.add(id); localStorage.setItem('mb_teams_seen', JSON.stringify([...tmSeen]));
-    MB.UI.withAchievements(A => A.track('team_view', { team: id, total: MB.nflTeams.length }));
+    if (id) {
+      tmSeen.add(id); localStorage.setItem('mb_teams_seen', JSON.stringify([...tmSeen]));
+      MB.UI.withAchievements(A => A.track('team_view', { team: id, total: MB.nflTeams.length }));
+    }
     const box = document.getElementById('tmBox');
     const prevScroll = box ? (box.querySelector('.tm-slider') || {}).scrollLeft || 0 : 0;
     const pageY = window.scrollY;
@@ -589,11 +599,17 @@
     const t = list.find(x => x.id === tmTeam) || null;
     const row = t && tmRosters && tmRosters[t.id];
     const players = ((row && row.players) || []).slice().sort((a, b) => (b.ovr - a.ovr) || String(a.n).localeCompare(String(b.n)));
+    // Easter Egg: in einem (pro Madden-Jahr festen) Team steht ein Spieler, den es nicht gibt
+    if (t && players.length) {
+      const all = MB.nflTeams.map(x => x.id).sort();
+      const pickTeam = all[[...String(tmYear)].reduce((h, c) => h * 31 + c.charCodeAt(0), 7) % all.length];
+      if (t.id === pickTeam) players.splice(Math.min(players.length, 17), 0, { n: 'Alex Tim Markus', pos: 'K', ovr: 12, egg: true });
+    }
     const excl = new Set((state && state.config && Array.isArray(state.config.excludedTeams)) ? state.config.excludedTeams : []);
     const logos = list.map(x => `<button class="tm-logo ${t && x.id === t.id ? 'active' : ''} ${excl.has(x.id) ? 'excl' : ''}" data-team="${x.id}" onclick="selectTeam('${x.id}')" title="${excl.has(x.id) ? 'Für den Draft gestrichen' : ''}">
         <img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${x.id}.png" alt="" loading="lazy"><div class="tm-n">${tmEsc(x.n)}</div><div class="tm-o">${x.ovr ? 'OVR ' + x.ovr : '–'}</div></button>`).join('');
     const roster = players.length
-      ? `<div class="tm-roster">${players.map(p => `<div class="tm-p ${p.ir ? 'ir' : ''}"><span class="o ${p.ovr >= 90 ? 'h' : p.ovr >= 80 ? 'm' : ''}">${p.ovr}</span><span class="pp">${tmEsc(p.pos)}</span><span class="nn">${tmEsc(p.n)}</span>${p.badge ? `<span class="bb ${p.badge === 'XF' ? 'xf' : 'ss'}">${p.badge}</span>` : ''}${p.ir ? '<span class="bb ir">IR</span>' : ''}</div>`).join('')}</div>`
+      ? `<div class="tm-roster">${players.map(p => `<div class="tm-p ${p.ir ? 'ir' : ''}" ${p.egg ? `onclick="MB.UI.easterEgg('egg_roster', '🕵️ Erwischt!')" style="cursor:pointer;"` : ''}><span class="o ${p.ovr >= 90 ? 'h' : p.ovr >= 80 ? 'm' : ''}">${p.ovr}</span><span class="pp">${tmEsc(p.pos)}</span><span class="nn">${tmEsc(p.n)}</span>${p.badge ? `<span class="bb ${p.badge === 'XF' ? 'xf' : 'ss'}">${p.badge}</span>` : ''}${p.ir ? '<span class="bb ir">IR</span>' : ''}</div>`).join('')}</div>`
       : `<div class="v2-empty">Für dieses Team ist noch kein Kader hinterlegt.</div>`;
     const irCount = players.filter(p => p.ir).length;
     return `<div class="v2-card" id="tmBox">
@@ -708,6 +724,8 @@
       </div>
     `;
     requestAnimationFrame(fitBlogCard);
+    // Rudi bittet ggf. zum Interview (nur Turnierteilnehmer, nach Regeln in interview.js)
+    try { if (MB.Interview) MB.Interview.check(state, history); } catch (e) { /* optional */ }
   }
 
   async function boot() {
