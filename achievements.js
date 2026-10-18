@@ -115,6 +115,10 @@
     { id: "roster_32", emoji: "🗂️", title: "Ligaexperte", desc: "Du hast dir alle 32 Kader angeschaut.", rarity: "epic", term: "kurz" },
     { id: "profiles_5", emoji: "🕵️", title: "Gegnerstudium", desc: "Du hast dir 5 Spielerprofile angesehen.", rarity: "rare", term: "kurz" },
     { id: "seen_all", emoji: "🌌", title: "Alles gesehen", desc: "Jede Seite, alle 32 Kader, alle Spielerprofile, alle Reiter der Hall of Fame und die Tour – mehr gibt es hier nicht zu entdecken.", rarity: "legendary", term: "mittel", secret: true },
+    // ---- Die drei Organisatoren (werden beim Login automatisch vergeben)
+    { id: "u_org_tim", emoji: "🛠️", title: "Der Architekt", desc: "Hat sich diesen ganzen Wahnsinn ausgedacht und Zeile für Zeile gebaut.", rarity: "unique", term: "unique", unique: true, org: "tim" },
+    { id: "u_org_alex", emoji: "🧪", title: "Der Testpilot", desc: "Testet, berät, findet jeden Fehler – und war früher der Gastgeber des Altima Bowl.", rarity: "unique", term: "unique", unique: true, org: "alex" },
+    { id: "u_org_markus", emoji: "🤝", title: "Der Mitorganisator", desc: "Sorgt dafür, dass der Altima Bowl jedes Jahr wirklich stattfindet.", rarity: "unique", term: "unique", unique: true, org: "markus" },
     { id: "u_early_starter", emoji: "⏰", title: "Frühstarter", desc: "Hat sich als Allererster eingeloggt – noch vor dem 1. Januar 2027.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_avatar", emoji: "🖌️", title: "Erster Entwurf", desc: "Hat als Erster seine eigene Spielerfigur gestaltet.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_perfect_day", emoji: "🎰", title: "Jackpot", desc: "Hat als Erster einen kompletten Spieltag richtig getippt.", rarity: "unique", term: "unique", unique: true },
@@ -735,6 +739,7 @@
     await loadFor(player);
     unlock("welcome");
     checkLimitedLogin();
+    checkOrganizer();
     const now = new Date(); addSet("loginYears", String(now.getFullYear()));
     if (addSet("loginDays", now.toISOString().slice(0, 10)) >= 7) unlock("login_days_7");
     if ((progress.loginDays || []).length >= 30) unlock("login_days_30");
@@ -748,6 +753,10 @@
     try { if (global.matchMedia && (global.matchMedia("(display-mode: standalone)").matches || global.navigator.standalone)) unlock("app_installed"); } catch (e) { /* optional */ }
     if (pageKey && !pageTracked) { pageTracked = true; trackPage(pageKey); }
     scheduleShow();
+  }
+  function checkOrganizer() {
+    const me = String(player || "").trim().toLowerCase();
+    DEFS.filter((d) => d.org && d.org === me).forEach((d) => unlock(d.id));
   }
   function checkLimitedLogin() {
     const now = new Date(), early = new Date(EARLY_DEADLINE);

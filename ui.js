@@ -278,14 +278,19 @@
     const feed = (k) => { pos = k === SEQ[pos] ? pos + 1 : (k === SEQ[0] ? 1 : 0); if (pos === SEQ.length) { pos = 0; easterEgg("egg_konami", "TOUCHDOWN!"); } };
     const KEYS = { ArrowUp: "U", ArrowDown: "D", ArrowLeft: "L", ArrowRight: "R", b: "B", B: "B", a: "A", A: "A" };
     document.addEventListener("keydown", (e) => { const k = KEYS[e.key]; if (k) feed(k); });
-    let sx = 0, sy = 0, st = 0;
-    document.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
-    document.addEventListener("touchend", (e) => {
-      const t = e.changedTouches[0]; const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && Date.now() - st < 300) { feed(pos === 8 ? "B" : pos === 9 ? "A" : "tap"); return; } // die 2 Taps = B, A
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
+    // Handy: Wischen wird oft als Scrollen abgebrochen (touchcancel) – deshalb letzte Position merken
+    let sx = 0, sy = 0, lx = 0, ly = 0, st = 0, active = false;
+    document.addEventListener("touchstart", (e) => { const t = e.touches[0]; sx = lx = t.clientX; sy = ly = t.clientY; st = Date.now(); active = true; }, { passive: true });
+    document.addEventListener("touchmove", (e) => { const t = e.touches[0]; lx = t.clientX; ly = t.clientY; }, { passive: true });
+    const end = () => {
+      if (!active) return; active = false;
+      const dx = lx - sx, dy = ly - sy;
+      if (Math.abs(dx) < 15 && Math.abs(dy) < 15) { if (Date.now() - st < 400 && pos >= 8) feed(pos === 8 ? "B" : "A"); return; } // die 2 Taps am Ende
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
       feed(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "R" : "L") : (dy > 0 ? "D" : "U"));
-    }, { passive: true });
+    };
+    document.addEventListener("touchend", end, { passive: true });
+    document.addEventListener("touchcancel", end, { passive: true });
   })();
   // Krone im Seitenkopf: 10× schnell tippen -> sie fällt herunter (einzelner Tipp = normaler Link)
   function hookCrown() {
@@ -295,14 +300,14 @@
     img.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
       n++; clearTimeout(timer);
-      img.style.transition = "transform .15s"; img.style.transform = `rotate(${(n % 2 ? -1 : 1) * n * 3}deg) scale(${1 + n * 0.07})`;
-      if (n >= 10) {
+      img.style.transition = "transform .15s"; img.style.transform = `rotate(${(n % 2 ? -1 : 1) * n * 5}deg) scale(${1 + n * 0.12})`;
+      if (n >= 6) {
         n = 0; img.style.transition = "transform .9s cubic-bezier(.5,0,.8,.4), opacity .9s"; img.style.transform = "translateY(110vh) rotate(260deg)"; img.style.opacity = "0";
         easterEgg("egg_crown", "👑 Die Krone ist gefallen!");
         setTimeout(() => { img.style.transition = "none"; img.style.transform = ""; img.style.opacity = "1"; }, 2600);
         return;
       }
-      timer = setTimeout(() => { const k = n; n = 0; img.style.transform = ""; if (k === 1) location.href = logo.getAttribute("href"); }, 450);
+      timer = setTimeout(() => { const k = n; n = 0; img.style.transform = ""; if (k === 1) location.href = logo.getAttribute("href"); }, 800);
     });
   }
 

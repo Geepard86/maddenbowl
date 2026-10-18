@@ -1858,7 +1858,9 @@ document.querySelectorAll('.draft-row').forEach(row => {
       // pName{i}/pTeam{i}-Inputs, die startTournament() danach ausliest).
       initSetupInputs(count);
 
-      const names = shuffleArray(real).slice(0, count);
+      // die drei Organisatoren sind immer dabei, der Rest zufällig aus der Historie
+      const fixed = ['Tim', 'Alex', 'Markus'].slice(0, count);
+      const names = [...fixed, ...shuffleArray(real.filter(n => !fixed.some(f => f.toLowerCase() === n.toLowerCase()))).slice(0, Math.max(0, count - fixed.length))];
       shuffleArray(RANDOM_TEST_NAMES).forEach(n => { if (names.length < count && !names.includes(n)) names.push(n); });
       while (names.length < count) names.push(`Testspieler ${names.length + 1}`);
       const teamIds = shuffleArray(nflTeams.map(t => t.id)).slice(0, count);
