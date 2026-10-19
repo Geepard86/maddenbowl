@@ -358,24 +358,67 @@
   }
   // Neu ergatterte Unique-Karte -> eigener Blog-Beitrag (nur der Gewinner der
   // Karte schreibt ihn, claimUnique stellt sicher, dass das genau einmal passiert).
+  // Unique-Karten im Blog: Nur die allererste vergebene Karte bekommt sofort einen eigenen Beitrag.
+  // Alle weiteren werden gesammelt (app_config "unique_pending") und erscheinen gebündelt:
+  //  - vor dem Turnier: ein Sammelbeitrag ab 24 h vor dem Kickoff (erster Seitenaufruf löst aus)
+  //  - im Turnier: ein Sammelbeitrag pro abgeschlossenem Spieltag (Admin-Seite löst aus)
+  async function blogTournamentId() {
+    let tid = MB.getCurrentTournamentId ? MB.getCurrentTournamentId() : null;
+    if (!tid && MB.fetchLastCompletedTournament) { try { const lt = await MB.fetchLastCompletedTournament(); tid = lt && (lt.tournamentId || lt.id); } catch (e) { /* ohne */ } }
+    return tid;
+  }
+  async function insertArticle(tid, article) {
+    const c = sb(); if (!c || !tid) return false;
+    const ins = (kind) => c.from("blog_articles").insert({ tournament_id: tid, kind, title: article.title, body: article.body, data: article.data });
+    const r = await ins(article.kind);
+    if (!r.error) return true;
+    const r2 = await ins("manual"); // falls die DB die Beitragsart (noch) nicht kennt
+    if (r2.error) { console.warn("Unique-Beitrag:", r2.error.message); return false; }
+    return true;
+  }
+  // Exklusive Sperre über achievement_firsts (Eintrag kann nur einmal angelegt werden)
+  async function claimLock(key) {
+    const c = sb(); if (!c) return false;
+    const { error } = await c.from("achievement_firsts").insert({ achievement_id: "_lock_" + key, player_name: player || "system" });
+    return !error;
+  }
+  const descFor = (def, name) => escapeHtml(def.desc.replace(/^Hat /, name + " hat ").replace(/^Als /, name + " war als "));
   async function postUniqueArticle(def, name) {
     try {
       const c = sb(); if (!c) return;
-      let tid = MB.getCurrentTournamentId ? MB.getCurrentTournamentId() : null;
-      if (!tid && MB.fetchLastCompletedTournament) { try { const lt = await MB.fetchLastCompletedTournament(); tid = lt && (lt.tournamentId || lt.id); } catch (e) { /* ohne */ } }
-      if (!tid) return;
-      const intros = [
-        `Es gibt sie genau ein einziges Mal – und ab sofort gehört sie ${name}.`,
-        `Sammelkarten-Alarm: Eine der einzigartigen 1/1-Karten hat einen Besitzer gefunden.`,
-        `Wer zuerst kommt, sammelt zuerst: ${name} hat sich eine Unique-Karte gesichert.`,
-      ];
-      const body = `${intros[Math.floor(Math.random() * intros.length)]}\n\n<strong>${def.emoji} ${escapeHtml(def.title)}</strong> – ${escapeHtml(def.desc.replace(/^Hat /, name + " hat ").replace(/^Als /, name + " war als "))}\n\nDie Karte ist damit vergeben und taucht bei allen anderen in der Hall of Fame als „Vergeben an ${escapeHtml(name)}“ auf. Wer noch eine der übrigen Unique-Karten ergattern will, sollte sich beeilen.`;
-      const article = { kind: "achievement", title: `🃏 Unique-Karte vergeben: ${def.title}`, body, data: { achievement: def.id, player: name } };
-      // Falls die DB die neue Beitragsart (noch) nicht kennt: als "manual" speichern
-      const ins = (kind) => c.from("blog_articles").insert({ tournament_id: tid, kind, title: article.title, body: article.body, data: article.data });
-      const r = await ins(article.kind);
-      if (r.error) { const r2 = await ins("manual"); if (r2.error) console.warn("Unique-Beitrag:", r2.error.message); }
+      if (await claimLock("unique_first_article")) {
+        const tid = await blogTournamentId(); if (!tid) return;
+        const body = `Die erste Unique-Karte des Altima Bowl ist vergeben – und sie gehört ${escapeHtml(name)}.\n\n<strong>${def.emoji} ${escapeHtml(def.title)}</strong> – ${descFor(def, name)}\n\nJede Unique-Karte gibt es genau ein einziges Mal. Wer welche ergattert, steht ab jetzt gesammelt im Blog.`;
+        await insertArticle(tid, { kind: "achievement", title: `Erste Unique-Karte vergeben: ${def.title}`, body, data: { achievement: def.id, player: name } });
+        return;
+      }
+      // sonst sammeln
+      let pend = []; try { pend = JSON.parse((await global.MB.getAppConfig("unique_pending")) || "[]"); } catch (e) { pend = []; }
+      if (!pend.some((x) => x.id === def.id)) pend.push({ id: def.id, name, at: new Date().toISOString() });
+      await global.MB.setAppConfig("unique_pending", JSON.stringify(pend));
     } catch (e) { console.warn("Unique-Beitrag konnte nicht erstellt werden:", e); }
+  }
+  // Gesammelte Unique-Karten als einen Beitrag veröffentlichen (lockKey verhindert Doppelte)
+  async function flushUniqueRoundup(lockKey, label) {
+    try {
+      let pend = []; try { pend = JSON.parse((await global.MB.getAppConfig("unique_pending")) || "[]"); } catch (e) { pend = []; }
+      if (!pend.length) return false;
+      if (!(await claimLock("uq_" + lockKey))) return false;
+      await global.MB.setAppConfig("unique_pending", "[]");
+      const tid = await blogTournamentId(); if (!tid) return false;
+      const lines = pend.map((x) => { const d = BY_ID.get(x.id); return d ? `<strong>${d.emoji} ${escapeHtml(d.title)}</strong> – ${descFor(d, x.name)}` : ""; }).filter(Boolean);
+      const intro = pend.length === 1 ? "Eine weitere Unique-Karte hat ihren Besitzer gefunden:" : `${pend.length} weitere Unique-Karten haben ihre Besitzer gefunden:`;
+      const body = `${intro}\n\n${lines.join("\n\n")}\n\nAlle vergebenen und noch freien Unique-Karten stehen in der Hall of Fame.`;
+      await insertArticle(tid, { kind: "achievement", title: label || "Neue Unique-Karten", body, data: { roundup: true, cards: pend } });
+      return true;
+    } catch (e) { console.warn("Unique-Sammelbeitrag:", e); return false; }
+  }
+  // Vor dem Turnier: ab 24 h vor dem Kickoff einmal alle gesammelten Karten veröffentlichen
+  async function checkPreTournamentRoundup() {
+    const st = stateRef || {}; const cfg = st.config || {};
+    if ((st.players || []).length || !cfg.nextTournamentAt) return;
+    const k = new Date(cfg.nextTournamentAt); if (isNaN(k)) return;
+    if (Date.now() >= k.getTime() - 24 * 3600 * 1000) flushUniqueRoundup("pre_" + k.toISOString().slice(0, 10), "Unique-Karten vor dem Turnier");
   }
   async function markSeen(id) { const v = unlocked.get(id); if (!v || v.seen || !player) return; v.seen = true; await persistUnlock(player, id, v); }
 
@@ -643,7 +686,9 @@
     const ov = document.createElement("div"); ov.className = "ach-overlay " + (def.unique ? "unique" : "");
     ov.innerHTML = `<div class="ach-new">${def.unique ? "✦ EINZIGARTIGE KARTE ✦" : "★ NEUE KARTE ★"}</div>${cardHtml(def, st)}<div class="ach-hint">${total > 1 ? `noch ${total - 1} weitere · ` : ""}Tippen zum Fortfahren${preview ? " · Vorschau" : ""}</div>`;
     document.body.appendChild(ov); attachTilt(ov);
-    ov.addEventListener("click", () => { ov.remove(); if (!preview) markSeen(id); popupBusy = false; setTimeout(() => { if (queue.length) showNext(preview); }, 250); });
+    // Schutz vor versehentlichem Wegtippen: die ersten 0,9 s zählen Klicks nicht (z.B. noch laufende Tipps eines Easter Eggs)
+    const shownAt = Date.now();
+    ov.addEventListener("click", () => { if (Date.now() - shownAt < 900) return; ov.remove(); if (!preview) markSeen(id); popupBusy = false; setTimeout(() => { if (queue.length) showNext(preview); }, 250); });
   }
   function previewPopup(ids) { injectStyle(); const list = (ids && ids.length ? ids : DEFS.map((d) => d.id)); const saved = queue; queue = list.slice(); popupBusy = false; showNext(true); setTimeout(() => { queue = saved; }, 0); }
   function armInteraction() {
@@ -796,9 +841,10 @@
     const name = global.MB.UI && global.MB.UI.currentUser ? global.MB.UI.currentUser() : null;
     if (name !== player) { pageTracked = false; await setPlayer(name); }
     if (player && stateRef) evaluateTipps(stateRef);
+    if (stateRef) setTimeout(checkPreTournamentRoundup, 3000);
   }
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, flushUniqueRoundup, checkPreTournamentRoundup, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

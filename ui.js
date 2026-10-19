@@ -230,7 +230,7 @@
     const cb = (k, label, hint) => `<label style="display:flex;gap:10px;align-items:flex-start;margin:8px 0;"><input type="checkbox" data-k="${k}" ${p[k] ? "checked" : ""} style="width:auto;margin-top:3px;"><span><b>${label}</b><br><span style="font-size:.82em;opacity:.7;">${hint}</span></span></label>`;
     box.innerHTML = `${cb("match", "Du spielst gleich", "Wenn dein nächstes Spiel ansteht." + (user ? "" : " (nur angemeldet)"))}
       ${cb("tips", "Offene Tipps", "Einmal pro Spieltag, wenn du noch nicht getippt hast." + (user ? "" : " (nur angemeldet)"))}
-      ${cb("blog", "Blog &amp; Allgemeines", "Neue Beiträge (Power Rankings, Rekorde, Songs …) und sonstige Hinweise wie Interview-Anfragen.")}
+      ${cb("blog", "Blog &amp; Allgemeines", "Neue Beiträge und sonstige Hinweise")}
       ${st.subscribed ? "" : `<div style="font-size:.8em;opacity:.7;margin:6px 0;">Nach „Aktivieren“ fragt dein Gerät einmal um Erlaubnis – bitte dort „Erlauben“ tippen. Falls kein Dialog erscheint: ${P.settingsHint()}</div>`}
       <div id="mbPushMsg" style="font-size:.85em;min-height:1.2em;margin:6px 0;color:var(--v2-gold,#c99700);"></div>
       <div class="v2-modal-actions" style="flex-wrap:wrap;gap:8px;">
@@ -269,7 +269,13 @@
   }
   function easterEgg(id, text) {
     eggCelebrate(text || "✨");
-    if (currentUser()) withAchievements((A) => A.track("egg", { id }));
+    // Karte erst nach der Jubel-Animation zeigen (sonst wird sie vom Konfetti verdeckt oder weggetippt)
+    if (currentUser()) setTimeout(() => withAchievements((A) => A.track("egg", { id })), 2600);
+    else setTimeout(() => {
+      const t = document.createElement("div"); t.textContent = "Angemeldet hättest du dafür eine Sammelkarte bekommen 😉";
+      t.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;background:#13203a;border:1px solid #c99700;color:#fff;padding:10px 14px;border-radius:10px;font-size:.9em;max-width:90vw;text-align:center;";
+      document.body.appendChild(t); setTimeout(() => t.remove(), 4000);
+    }, 2600);
   }
   // Konami-Code: Tastatur (↑↑↓↓←→←→BA) oder am Handy Wischgesten (hoch hoch runter runter links rechts links rechts) + 2× tippen
   (function konami() {
