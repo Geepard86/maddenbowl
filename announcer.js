@@ -566,6 +566,7 @@
   // Interview in der Live-Show: Mona moderiert an, Rudi stellt die Fragen, der Spieler
   // antwortet mit "seiner" Gaststimme (feste Zuordnung aus der Liste in den Admin-Einstellungen).
   async function guestVoiceFor(name) {
+    try { const map = JSON.parse((global.MB.getAppConfig && await global.MB.getAppConfig("guest_voice_map")) || "{}"); if (map[name]) return map[name]; } catch (e) { /* egal */ }
     let list = [];
     try { list = String((global.MB.getAppConfig && await global.MB.getAppConfig("guest_voices")) || "").split(/\n/).map((l) => l.split("=")[0].trim()).filter((x) => /^[A-Za-z0-9]{10,}$/.test(x)); } catch (e) { list = []; }
     if (!list.length) return null;

@@ -343,6 +343,15 @@
     renderDashboardHtml(document.getElementById('app'));
   }
 
+  // "Kickoff ca. 20:40" für noch nicht laufende Spieltage (Zeit des ersten Spiels laut Live-Zeitplan)
+  function kickoffLabel(st) {
+    try {
+      const up = MB.getUpcomingMatches(state) || [];
+      const ids = new Set(st.matches.map(m => m.matchId));
+      const first = up.find(u => ids.has(u.matchId));
+      return first && first.time ? `Kickoff ca. ${first.time}` : 'kommt noch';
+    } catch (e) { return 'kommt noch'; }
+  }
   async function saveMatchPick(matchId) {
     const val = pendingMatchPicks[matchId];
     if (!val) return;
@@ -350,7 +359,7 @@
       await MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'match', matchId, val);
       cache.myPicksByKey.set(`match:${matchId}`, val);
       delete pendingMatchPicks[matchId];
-      try { const mi = MB.Tipp.getMatchInfo(state, matchId); MB.UI.withAchievements((A) => A.track('tipp_saved', { pick: val, homeName: mi && mi.homeName, awayName: mi && mi.awayName })); } catch (e) { /* Achievements optional */ }
+      { let mi = null; try { mi = MB.Tipp.getMatchInfo(state, matchId); } catch (e) { mi = null; } MB.UI.withAchievements((A) => A.track('tipp_saved', { pick: val, homeName: mi && mi.homeName, awayName: mi && mi.awayName })); }
       renderDashboardHtml(document.getElementById('app'));
     } catch (e) { alert('Fehler: ' + e.message); }
   }
@@ -394,7 +403,12 @@
     const jobs = [];
     Object.entries(pendingMatchPicks).forEach(([matchId, val]) => {
       jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'match', matchId, val)
-        .then(() => { cache.myPicksByKey.set(`match:${matchId}`, val); delete pendingMatchPicks[matchId]; }));
+        .then(() => {
+          cache.myPicksByKey.set(`match:${matchId}`, val); delete pendingMatchPicks[matchId];
+          // Sammelkarten (Erster Tipp, Pionier, Eigener Fan …) auch beim gesammelten Speichern
+          let mi = null; try { mi = MB.Tipp.getMatchInfo(state, matchId); } catch (e) { mi = null; }
+          MB.UI.withAchievements((A) => A.track('tipp_saved', { pick: val, homeName: mi && mi.homeName, awayName: mi && mi.awayName }));
+        }));
     });
     Object.entries(pendingOuPicks).forEach(([idx, val]) => {
       jobs.push(MB.Tipp.savePick(cache.tournamentId, currentPlayer(), 'overunder', `spieltag-${idx}`, val)
@@ -563,7 +577,7 @@
     const status = MB.Tipp.getSpieltagStatus(st);
     return `
       <div class="v2-card">
-        <div class="v2-card-title">📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : (cache.spieltage.find(x => MB.Tipp.getSpieltagStatus(x) !== 'done') === st ? 'läuft' : 'kommt noch')}</span></div>
+        <div class="v2-card-title">📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : (cache.spieltage.find(x => MB.Tipp.getSpieltagStatus(x) !== 'done') === st ? 'läuft' : kickoffLabel(st))}</span></div>
         ${renderSpieltagSection(st, status)}
       </div>`;
   }

@@ -277,6 +277,7 @@
     const { error } = await c.from("player_achievements").upsert({ player_name: name, achievement_id: id, unlocked_at: at, seen: false }, { onConflict: "player_name,achievement_id" });
     if (error && !missing(error)) throw new Error(error.message);
     if (def.unique) postUniqueArticle(def, name);
+    else if (def.rarity === "legendary") noteLegendary(def, name);
     return true;
   }
   // Admin: ALLE Karten aller Spieler zurücksetzen (inkl. Unique-Karten und Fortschritt).
@@ -293,7 +294,14 @@
     } catch (e) { out.rpcError = e.message; }
     // Admin-Prüfung der Funktion fehlgeschlagen -> klar melden statt still auf direktes Löschen auszuweichen
     if (out.rpcError && /admin/i.test(out.rpcError)) throw new Error("Admin-Nachweis abgelehnt – bitte in der Admin-Seite einmal ab- und wieder anmelden (dann ist der Passwort-Hash im Browser gespeichert).");
-    if (out.via === "rpc") { await afterReset(); return out; }
+    if (out.via === "rpc") {
+      await afterReset();
+      // Kontrolle: steht noch etwas in den Tabellen?
+      try {
+        for (const t of ["player_achievements", "player_progress", "achievement_firsts"]) { const { count } = await c.from(t).select("*", { count: "exact", head: true }); out["rest_" + t] = count || 0; }
+      } catch (e) { /* egal */ }
+      return out;
+    }
     for (const [table, col] of [["player_achievements", "player_name"], ["player_progress", "player_name"], ["achievement_firsts", "achievement_id"]]) {
       const { error, count } = await c.from(table).delete({ count: "exact" }).neq(col, "");
       if (error && !missing(error)) throw new Error(`${table}: ${error.message}`);
@@ -355,6 +363,7 @@
     unlocked.set(id, v); await persistUnlock(player, id, v);
     queue.push(id); scheduleShow();
     if (def.unique) postUniqueArticle(def, player);
+    else if (def.rarity === "legendary") noteLegendary(def, player);
     const regular = DEFS.filter((d) => !d.unique && d.rarity !== "limited" && d.id !== "cards_all");
     if (id !== "cards_all" && !def.unique && regular.every((d) => unlocked.has(d.id))) await unlock("cards_all");
     return true;
@@ -386,20 +395,32 @@
     return !error;
   }
   const descFor = (def, name) => escapeHtml(def.desc.replace(/^Hat /, name + " hat ").replace(/^Als /, name + " war als "));
+  // Unique-Karten im Blog:
+  //  - die festen Organisator-Karten nie
+  //  - vor Turnierstart vergebene: gesammelt als Absatz im Turnierstart-Beitrag (Admin-Seite)
+  //  - während/nach dem Turnier: jede Karte ein eigener Beitrag
   async function postUniqueArticle(def, name) {
     try {
-      const c = sb(); if (!c) return;
-      if (await claimLock("unique_first_article")) {
-        const tid = await blogTournamentId(); if (!tid) return;
-        const body = `Die erste Unique-Karte des Altima Bowl ist vergeben – und sie gehört ${escapeHtml(name)}.\n\n<strong>${def.emoji} ${escapeHtml(def.title)}</strong> – ${descFor(def, name)}\n\nJede Unique-Karte gibt es genau ein einziges Mal. Wer welche ergattert, steht ab jetzt gesammelt im Blog.`;
-        await insertArticle(tid, { kind: "achievement", title: `Erste Unique-Karte vergeben: ${def.title}`, body, data: { achievement: def.id, player: name } });
+      if (def.org) return;
+      const running = !!(stateRef && (stateRef.players || []).length);
+      if (!running) {
+        let pend = []; try { pend = JSON.parse((await global.MB.getAppConfig("unique_pending")) || "[]"); } catch (e) { pend = []; }
+        if (!pend.some((x) => x.id === def.id)) pend.push({ id: def.id, name, at: new Date().toISOString() });
+        await global.MB.setAppConfig("unique_pending", JSON.stringify(pend));
         return;
       }
-      // sonst sammeln
-      let pend = []; try { pend = JSON.parse((await global.MB.getAppConfig("unique_pending")) || "[]"); } catch (e) { pend = []; }
-      if (!pend.some((x) => x.id === def.id)) pend.push({ id: def.id, name, at: new Date().toISOString() });
-      await global.MB.setAppConfig("unique_pending", JSON.stringify(pend));
+      if (!(await claimLock("uq_article_" + def.id))) return;
+      const tid = await blogTournamentId(); if (!tid) return;
+      const body = `Diese Karte gibt es nur ein einziges Mal – und ab jetzt gehört sie ${escapeHtml(name)}.\n\n<strong>${def.emoji} ${escapeHtml(def.title)}</strong> – ${descFor(def, name)}\n\nAlle vergebenen und noch freien Unique-Karten stehen in der Hall of Fame.`;
+      await insertArticle(tid, { kind: "achievement", title: `Unique-Karte vergeben: ${def.title}`, body, data: { achievement: def.id, player: name } });
     } catch (e) { console.warn("Unique-Beitrag konnte nicht erstellt werden:", e); }
+  }
+  // Legendäre Karten für den Abschnitt im nächsten Power Ranking merken
+  async function noteLegendary(def, name) {
+    try {
+      let pend = []; try { pend = JSON.parse((await global.MB.getAppConfig("legendary_pending")) || "[]"); } catch (e) { pend = []; }
+      if (!pend.some((x) => x.id === def.id && x.name === name)) { pend.push({ id: def.id, name }); await global.MB.setAppConfig("legendary_pending", JSON.stringify(pend)); }
+    } catch (e) { /* egal */ }
   }
   // Gesammelte Unique-Karten als einen Beitrag veröffentlichen (lockKey verhindert Doppelte)
   async function flushUniqueRoundup(lockKey, label) {
@@ -853,7 +874,6 @@
     const name = global.MB.UI && global.MB.UI.currentUser ? global.MB.UI.currentUser() : null;
     if (name !== player) { pageTracked = false; await setPlayer(name); }
     if (player && stateRef) evaluateTipps(stateRef);
-    if (stateRef) setTimeout(checkPreTournamentRoundup, 3000);
   }
 
   armInteraction();

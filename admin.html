@@ -201,18 +201,27 @@
         </div>
 
         <div class="card" style="margin-bottom:15px;">
+          <h2>🔐 Zugangsdaten &amp; Schnellstart</h2>
+          <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">Alle Schlüssel an einer Stelle (bleiben nur in diesem Browser). „Alles speichern“ übernimmt zugleich alle Standard-Einstellungen (Eleven v3, Stimmen MaddenBowl_Kommentator/-Kommentatorin/-Ansager, automatische Songs) – danach kann die Show direkt starten.</div>
+          <label style="font-size:.8em; opacity:.75;">ElevenLabs API-Key</label>
+          <input type="password" id="credEleven" placeholder="sk_…">
+          <label style="display:flex; gap:8px; align-items:center; margin:6px 0 10px; font-size:.9em;"><input type="checkbox" id="credUseEleven" style="width:auto;" checked> ElevenLabs verwenden (aus = kostenlose Browser-Stimme zum Testen, keine Credits)</label>
+          <label style="font-size:.8em; opacity:.75;">OpenRouter API-Key (KI-Texte)</label>
+          <input type="password" id="credOpenRouter" placeholder="sk-or-…">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <div style="flex:1; min-width:160px;"><label style="font-size:.8em; opacity:.75;">Imgflip-Benutzername</label><input type="text" id="credImgUser"></div>
+            <div style="flex:1; min-width:160px;"><label style="font-size:.8em; opacity:.75;">Imgflip-Passwort</label><input type="password" id="credImgPass"></div>
+          </div>
+          <button style="margin-top:10px;" onclick="saveAllCredentials()">💾 Alles speichern</button>
+          <span id="credState" class="hint" style="margin-left:8px;"></span>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
           <h2>🩺 Systemcheck vor der Show</h2>
           <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">Prüft alle Anbindungen ohne Ton und ohne Blog-Beitrag. Push-Tests gehen nur an „Tim“.</div>
           <button class="btn-secondary" style="width:auto;" onclick="runSystemCheck()">▶ Alle Anbindungen prüfen</button>
           <div id="sysCheck" style="margin-top:10px; font-size:0.88em;"></div>
           <label style="display:flex; gap:8px; align-items:center; margin-top:10px; font-size:.9em;"><input type="checkbox" id="adminAlerts" style="width:auto;" onchange="localStorage.setItem('mb_admin_alerts', this.checked ? '1' : '0')"> Während des Turniers Fehler (KI-Text, Meme, Song, Karten …) per Push an Tim melden</label>
-        </div>
-
-        <div class="card" style="margin-bottom:15px;">
-          <h2>🎤 Stimmen für Spieler (Interviews in der Show)</h2>
-          <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">ElevenLabs-Voice-IDs, aus denen jeder Spieler fest eine Stimme bekommt (eine pro Zeile, optional „ID = Name“). Leer = Stimme des Moderators.</div>
-          <textarea id="guestVoices" rows="5" style="width:100%; font-family:monospace; font-size:.85em;" placeholder="pNInz6obpgDQGcFmaJgB = Adam"></textarea>
-          <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="saveGuestVoices()">💾 Speichern</button> <span id="guestVoicesState" class="hint"></span>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -296,32 +305,78 @@
             <button class="btn-secondary" style="width:auto;" onclick="MB.SongStage.demo({kind:'diss', style: document.getElementById('demoStyle').value || undefined})">📺 Demo (Toilet Bowl, selbstironisch)</button>
           </div>
           <div id="songMomentsPanel"></div>
-        </div>
-
-        <!-- Testet die Song-Engine für JEDEN Meilenstein, unabhängig vom
-             echten Turnierstand — mit Platzhalter-Fakten (TEST_FACTS).
-             "Testweise senden" erzeugt einen ECHTEN Song zum Anhören
-             (kostet Credits), speichert ihn aber NIE als offiziellen
-             Meilenstein-Song (kein Blog-Artikel, keine Ansage, taucht
-             oben in "Song-Momente" nicht auf). -->
-        <div class="card" style="margin-bottom:15px;">
-          <h2>🧪 Song-Engine testen</h2>
-          <div id="songTestPanel"></div>
+          <div style="margin-top:14px; padding-top:12px; border-top:1px solid #22304366;">
+            <div style="font-weight:700; margin-bottom:6px;">🧪 Song-Engine testen</div>
+            <div id="songTestPanel"></div>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
           <h2>🖼️ Meme-Einstellungen</h2>
           <div id="memeSettingsPanel"></div>
+          <div style="margin-top:12px;">
+            <div class="hint" style="font-size:0.85em; opacity:0.7;">🏆 Rekord-Momente erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore, Allzeit-/Turnier-Klatsche, Siegesserie) — kostenlos, kein API-Key nötig.</div>
+            <div id="recordMomentsPanel"></div>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
-          <h2>🏆 Rekord-Momente</h2>
-          <div id="recordMomentsPanel">
-            <div class="hint" style="font-size:0.85em; opacity:0.7;">
-              Erscheinen automatisch, sobald ein neuer Rekord fällt (Allzeit-Highscore,
-              Allzeit-/Turnier-Klatsche, Siegesserie) — komplett kostenlos, kein API-Key nötig.
-            </div>
+          <h2>🃏 Sammelkarten</h2>
+                        <button class="btn-secondary" style="margin-top:8px;" onclick="openAchievementTest()">🃏 Sammelkarten testen (alle Karten ansehen)</button>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+                <select id="grantCard" style="width:auto; display:inline-block;"></select>
+                <input id="grantPlayer" placeholder="Spielername" style="max-width:180px;">
+                <button class="btn-secondary" style="width:auto; margin:0;" onclick="grantCard()">🎁 Karte vergeben</button>
+                <button class="btn-secondary" style="width:auto; margin:0;" onclick="revokeCard()">🗑️ Karte entziehen</button>
+              </div>
+              <div class="hint" style="font-size:0.78em; opacity:0.65;">Z. B. „🛍️ Erster Kunde“, sobald die erste echte Shop-Bestellung bestätigt ist.</div>
+              <details style="margin-top:8px; font-size:0.8em; opacity:.8;"><summary style="cursor:pointer;">Reset/Entziehen funktioniert nicht? Einmalig diese SQL-Funktionen in Supabase anlegen (SQL Editor)</summary>
+<pre style="white-space:pre-wrap; font-size:0.9em; background:rgba(0,0,0,.3); padding:8px; border-radius:6px;">create or replace function public.mb_reset_achievements(pw_hash text)
+returns json language plpgsql security definer set search_path = public as $$
+declare a int; p int; f int;
+begin
+  if pw_hash is null or pw_hash &lt;&gt; (select value from app_config where key = 'admin_pw_hash') then
+    raise exception 'admin check failed';
+  end if;
+  delete from player_achievements where true; get diagnostics a = row_count;
+  delete from player_progress where true;     get diagnostics p = row_count;
+  delete from achievement_firsts where true;  get diagnostics f = row_count;
+  return json_build_object('player_achievements', a, 'player_progress', p, 'achievement_firsts', f);
+end $$;
+grant execute on function public.mb_reset_achievements(text) to anon, authenticated;
+
+-- Für „Karte entziehen“:
+create or replace function public.mb_revoke_achievement(pw_hash text, p_player text, p_id text)
+returns json language plpgsql security definer set search_path = public as $$
+declare a int; f int;
+begin
+  if pw_hash is null or pw_hash &lt;&gt; (select value from app_config where key = 'admin_pw_hash') then
+    raise exception 'admin check failed';
+  end if;
+  delete from player_achievements where lower(player_name) = lower(p_player) and achievement_id = p_id; get diagnostics a = row_count;
+  delete from achievement_firsts where lower(player_name) = lower(p_player) and achievement_id = p_id; get diagnostics f = row_count;
+  return json_build_object('removed', a, 'unique_freed', f);
+end $$;
+grant execute on function public.mb_revoke_achievement(text, text, text) to anon, authenticated;</pre></details>
+              <button class="btn-secondary" style="margin-top:8px; background:var(--nfl-red);" onclick="resetAllAchievements()">♻️ Alle Sammelkarten aller Spieler zurücksetzen</button>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="showAwardedCards(true)">📋 Vergebene Karten anzeigen</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="showAwardedCards(false)">🔓 Offene Karten anzeigen</button>
           </div>
+          <div id="awardedCards" style="margin-top:8px; font-size:.85em;"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>📊 Spurious Correlations</h2>
+          <button class="btn-secondary" style="width:auto;" onclick="testSpuriousCorrelation()">🧪 Testkandidat suchen</button>
+          <div class="hint" style="font-size:0.78em; opacity:0.65; margin-top:6px;">Sucht sofort nach der besten (noch nicht in diesem Turnier verwendeten) Schein-Korrelation – normalerweise läuft das automatisch bei jedem gespeicherten Ergebnis.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🤖 KI-Texte &amp; Blog</h2>
+          <div style="margin-bottom:10px;"><button class="btn-secondary" style="width:auto;" onclick="downloadReplay('blog')">📰 Testlauf: alle Blog-Beiträge des letzten Turniers</button></div>
+          <div id="llmCardBody"></div>
         </div>
       </div>
 
@@ -862,7 +917,10 @@ function isFinished(match) { return MB.isFinished(match); }
         return;
       }
 
-      localStorage.clear();
+      // Alles Turnierbezogene löschen, aber Zugangsdaten & Geräte-Einstellungen behalten
+      { const KEEP = /^mb_(tts_settings|imgflip_settings|openrouter_key|llm_blog_settings|admin_session|user_session|push_|studio_audio|song_auto|admin_alerts|fold_|tour_done|blog_read|teams_seen)/;
+        const keep = {}; Object.keys(localStorage).forEach(k => { if (KEEP.test(k)) keep[k] = localStorage.getItem(k); });
+        localStorage.clear(); Object.entries(keep).forEach(([k, v]) => localStorage.setItem(k, v)); }
       try {
         if (mode === 'archive') {
           const finalRanking = state.players.length ? MB.computeFinalRanking(state) : null;
@@ -1942,7 +2000,18 @@ document.querySelectorAll('.draft-row').forEach(row => {
       if (isAdmin) {
         await syncData(true); // Tournament-ID entsteht hier (siehe MB.pushCloudState)
         // Turnierblog: Kickoff-Artikel, sobald wir die frische Tournament-ID haben.
-        MB.Blog.pushArticle(MB.getCurrentTournamentId(), MB.Blog.buildKickoffArticle(state, history));
+        (async () => {
+          const art = MB.Blog.buildKickoffArticle(state, history);
+          try {
+            const pend = JSON.parse((await MB.getAppConfig('unique_pending')) || '[]');
+            if (pend.length && MB.Achievements && art) {
+              const lines = pend.map(x => { const d = MB.Achievements.DEFS.find(z => z.id === x.id); return d && !d.org ? `${d.emoji} „${d.title}“ – ${x.name}` : ''; }).filter(Boolean);
+              if (lines.length) art.body += `\n\nSchon vor dem ersten Kickoff wurden ${lines.length === 1 ? 'eine Unique-Karte' : lines.length + ' Unique-Karten'} vergeben – jede gibt es nur ein einziges Mal: ${lines.join(' · ')}.`;
+              await MB.setAppConfig('unique_pending', '[]');
+            }
+          } catch (e) { /* ohne Absatz */ }
+          MB.Blog.pushArticle(MB.getCurrentTournamentId(), art);
+        })();
         progressArticlesSoFar = 0; // neues Turnier -> Zähler zurücksetzen
         songMomentFlags = {}; // neues Turnier -> alte Song-Momente-Flags verwerfen
         // Willkommensansage läuft jetzt zu Beginn der Draft-Show (siehe
@@ -2223,13 +2292,6 @@ const ringsHtml = rings > 0
 
         // Ein frisches Interview wird nach der Ergebnis-Ansage in der Show vorgelesen (Ansage-Warteschlange)
         try { if (MB.Interview && MB.Announcer.announceInterview) MB.Interview.takeForShow(MB.getCurrentTournamentId()).then(iv => { if (iv) MB.Announcer.announceInterview(iv); }).catch(() => {}); } catch (e) { /* optional */ }
-        // Unique-Karten-Sammelbeitrag, sobald ein Spieltag abgeschlossen ist
-        try {
-          const days = MB.Tipp.getSpieltage(state) || [];
-          const doneDays = days.filter(st => st.matches.length && st.matches.every(m => m.finished));
-          const lastDone = doneDays[doneDays.length - 1];
-          if (lastDone) MB.UI.withAchievements(A => A.flushUniqueRoundup && A.flushUniqueRoundup(`st_${MB.getCurrentTournamentId()}_${lastDone.index}`, `Unique-Karten – Spieltag ${lastDone.index}`));
-        } catch (e) { /* optional */ }
         // Push: nächste Spieler aufrufen + Tipp-Erinnerungen (läuft im Hintergrund, Fehler egal)
         if (MB.Push && pushTriggersEnabled()) { MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {}); }
 
@@ -3680,7 +3742,7 @@ function renderRanking() {
     // Neues erreicht wurde) - wird von finishScoreUpdate VOR dem
     // Announcer-Aufruf für dasselbe Spiel awaited.
     // ---------- Song-Automatik (Einstellung lokal im Admin-Browser) ----------
-    function songAutoSettings() { try { return JSON.parse(localStorage.getItem('mb_song_auto') || '{}'); } catch (e) { return {}; } }
+    function songAutoSettings() { let a = {}; try { a = JSON.parse(localStorage.getItem('mb_song_auto') || '{}'); } catch (e) { a = {}; } if (a.enabled === undefined) a.enabled = true; return a; }
     function setSongAuto(patch) { localStorage.setItem('mb_song_auto', JSON.stringify({ ...songAutoSettings(), ...patch })); drawSongAutoBox(); }
     function drawSongAutoBox() {
       const el = document.getElementById('songAutoBox'); if (!el) return;
@@ -4340,6 +4402,16 @@ function renderRanking() {
         const cc = await getCommentContext();
         const article = MB.Blog.buildProgressArticle(state, history, finishedCount, { comments: cc.comments });
         cc.commit();
+        // Legendäre Karten seit dem letzten Power Ranking
+        let legPend = [];
+        try {
+          legPend = JSON.parse((await MB.getAppConfig('legendary_pending')) || '[]');
+          if (legPend.length && MB.Achievements) {
+            const lines = legPend.map(x => { const d = MB.Achievements.DEFS.find(z => z.id === x.id); return d ? `${d.emoji} ${x.name}: „${d.title}“` : ''; }).filter(Boolean);
+            if (lines.length) { const para = `🌟 Legendär: Seit dem letzten Ranking ${lines.length === 1 ? 'gab es eine legendäre Karte' : `gab es ${lines.length} legendäre Karten`} – ${lines.join(' · ')}. Wie man sie bekommt? Bleibt geheim.`;
+              article.body = article.body.includes('[[tabelle]]') ? article.body.replace('[[tabelle]]', para + '\n\n[[tabelle]]') : article.body + '\n\n' + para; }
+          }
+        } catch (e) { legPend = []; }
         // Interviews seit dem letzten Power Ranking (max. 2) als eigener Absatz
         let ivNames = [];
         try {
@@ -4397,10 +4469,13 @@ function renderRanking() {
               // Statistik, sonst neutrale Beschreibung — plus der obligatorische Disclaimer.
               const headline = MB.Spurious.buildSpuriousHeadline ? MB.Spurious.buildSpuriousHeadline(candidate) : null;
               const story = MB.Spurious.buildSpuriousStory ? MB.Spurious.buildSpuriousStory(candidate) : null;
-              const storyText = story && story.body ? String(story.body).replace(/<[^>]+>/g, '').trim() : '';
-              const teaser = `📊 Statistik-Ecke${headline ? ' – ' + headline.title : ''}: ` +
-                (storyText || `${candidate.mbLabel} und „${candidate.germanName}“ laufen über die Jahre verdächtig im Gleichschritt.`) +
-                ` Korrelationskoeffizient: ${candidate.r.toFixed(2)}. Ob das etwas zu bedeuten hat? Statistisch gesehen natürlich nicht.`;
+              // Nur die (augenzwinkernde) Geschichte des Zusammenhangs – keine Kennzahlen wie r, Koeffizient & Co.
+              const raw = story && story.body ? String(story.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+              const sentences = (raw.match(/[^.!?]+[.!?]+/g) || []).map(x => x.trim()).filter(x => !/korrel|koeffizient|\br\s*=|r-wert|signifikan|statistisch|p-wert|regression/i.test(x));
+              const storyText = sentences.join(' ');
+              const fallback = [`Immer wenn ${candidate.mbLabel} nach oben geht, steigt auch „${candidate.germanName}“. Zufall? Vielleicht trainieren ja einige heimlich mit genau diesem Zusammenhang.`,
+                `${candidate.mbLabel} und „${candidate.germanName}“ bewegen sich auffällig im Gleichschritt. Wer da wen beeinflusst, bleibt das Geheimnis des Altima Bowl.`];
+              const teaser = `📊 Statistik-Ecke${headline ? ' – ' + headline.title : ''}: ` + (storyText || fallback[Math.floor(Math.random() * fallback.length)]) + ' Ein Schelm, wer dabei an Zufall denkt.';
               const canvas = MB.Spurious.renderChartCanvas(candidate);
               images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
               article.body += '\n\n' + teaser + mark(images.length - 1);
@@ -4416,6 +4491,7 @@ function renderRanking() {
         }
         const savedRanking = await MB.Blog.pushArticle(tid, article);
         try { if (savedRanking && ivNames.length && MB.Interview) await MB.Interview.markUsed(tid, ivNames); } catch (e) { /* egal */ }
+        try { if (savedRanking && legPend.length) await MB.setAppConfig('legendary_pending', '[]'); } catch (e) { /* egal */ }
         if (savedRanking && queued.length) removeQueuedMemes(queued.map((q) => q.id));
       } catch (e) {
         console.warn('Power Ranking konnte nicht veröffentlicht werden:', e);
@@ -4631,65 +4707,10 @@ function renderRanking() {
               </div>
               <button class="btn-secondary" style="margin-top:8px;" onclick="saveImgflipSettings()">Speichern</button>
               <button style="margin-top:8px;" onclick="testImgflip()">Testen</button>
-              <button class="btn-secondary" style="margin-top:8px;" onclick="openAchievementTest()">🃏 Sammelkarten testen (alle Karten ansehen)</button>
-              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px;">
-                <select id="grantCard" style="width:auto; display:inline-block;"></select>
-                <input id="grantPlayer" placeholder="Spielername" style="max-width:180px;">
-                <button class="btn-secondary" style="width:auto; margin:0;" onclick="grantCard()">🎁 Karte vergeben</button>
-                <button class="btn-secondary" style="width:auto; margin:0;" onclick="revokeCard()">🗑️ Karte entziehen</button>
-              </div>
-              <div class="hint" style="font-size:0.78em; opacity:0.65;">Z. B. „🛍️ Erster Kunde“, sobald die erste echte Shop-Bestellung bestätigt ist.</div>
-              <details style="margin-top:8px; font-size:0.8em; opacity:.8;"><summary style="cursor:pointer;">Reset/Entziehen funktioniert nicht? Einmalig diese SQL-Funktionen in Supabase anlegen (SQL Editor)</summary>
-<pre style="white-space:pre-wrap; font-size:0.9em; background:rgba(0,0,0,.3); padding:8px; border-radius:6px;">create or replace function public.mb_reset_achievements(pw_hash text)
-returns json language plpgsql security definer set search_path = public as $$
-declare a int; p int; f int;
-begin
-  if pw_hash is null or pw_hash &lt;&gt; (select value from app_config where key = 'admin_pw_hash') then
-    raise exception 'admin check failed';
-  end if;
-  delete from player_achievements where true; get diagnostics a = row_count;
-  delete from player_progress where true;     get diagnostics p = row_count;
-  delete from achievement_firsts where true;  get diagnostics f = row_count;
-  return json_build_object('player_achievements', a, 'player_progress', p, 'achievement_firsts', f);
-end $$;
-grant execute on function public.mb_reset_achievements(text) to anon, authenticated;
-
--- Für „Karte entziehen“:
-create or replace function public.mb_revoke_achievement(pw_hash text, p_player text, p_id text)
-returns json language plpgsql security definer set search_path = public as $$
-declare a int; f int;
-begin
-  if pw_hash is null or pw_hash &lt;&gt; (select value from app_config where key = 'admin_pw_hash') then
-    raise exception 'admin check failed';
-  end if;
-  delete from player_achievements where lower(player_name) = lower(p_player) and achievement_id = p_id; get diagnostics a = row_count;
-  delete from achievement_firsts where lower(player_name) = lower(p_player) and achievement_id = p_id; get diagnostics f = row_count;
-  return json_build_object('removed', a, 'unique_freed', f);
-end $$;
-grant execute on function public.mb_revoke_achievement(text, text, text) to anon, authenticated;</pre></details>
-              <button class="btn-secondary" style="margin-top:8px; background:var(--nfl-red);" onclick="resetAllAchievements()">♻️ Alle Sammelkarten aller Spieler zurücksetzen</button>
           <button class="btn-secondary" style="margin-top:8px;" onclick="openMemeTest()">🧪 Memes testen (${MB.Records.getMemeTriggers().length} Auslöser, ${MB.Records.buildTestMemeJobs().length} Vorlagen)</button>
               <div id="imgflipTestResult" style="margin-top:8px;"></div>
             </div>`;
         }
-      }
-
-      // Spurious Correlations (spurious.js): manueller Testlauf, unabhängig
-      // vom Meme-Stil — sucht sofort nach dem besten (noch unveröffentlichten)
-      // Treffer über Saison-Kennzahlen UND Spieler-Turnierverlauf und zeigt
-      // ihn im selben Popup wie ein automatisch erkanntes Meme.
-      if (!ttsUnlocked) {
-        html += `<button class="btn-secondary" style="margin-top:10px;" onclick="unlockTtsSettings()">🔒 Entsperren, um Spurious Correlations zu testen</button>`;
-      } else {
-        html += `
-          <div style="margin-top:14px; padding-top:14px; border-top:1px solid #22304366;">
-            <label style="font-size:0.8em; opacity:0.75; display:block; margin-bottom:6px;">📊 Spurious Correlations</label>
-            <button class="btn-secondary" onclick="testSpuriousCorrelation()">🧪 Testkandidat suchen</button>
-            <div class="hint" style="font-size:0.75em; opacity:0.6; margin-top:6px;">
-              Sucht sofort nach der besten (noch nicht in diesem Turnier verwendeten) Schein-Korrelation
-              — normalerweise läuft das automatisch bei jedem gespeicherten Ergebnis.
-            </div>
-          </div>`;
       }
 
       el.innerHTML = html;
@@ -4842,7 +4863,7 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
       MB.UI.withAchievements(async function (A) {
         try {
           const r = await A.resetAll();
-          alert(`Zurückgesetzt: ${r.player_achievements} Karten, ${r.player_progress} Fortschritts-Einträge, ${r.achievement_firsts} Unique-Karten.\nLokale Kopien in anderen Browsern werden beim nächsten Seitenaufruf automatisch verworfen.`);
+          alert(`Zurückgesetzt: ${r.player_achievements} Karten, ${r.player_progress} Fortschritts-Einträge, ${r.achievement_firsts} Unique-/Sperr-Einträge.\nNoch in der Datenbank: ${r.rest_player_achievements ?? '?'} Karten, ${r.rest_player_progress ?? '?'} Zähler, ${r.rest_achievement_firsts ?? '?'} Unique-Einträge (alles 0 = sauber; Zähler > 0 = ein noch offener Tab hat neu geschrieben).\nLokale Kopien in anderen Browsern werden beim nächsten Seitenaufruf automatisch verworfen.`);
         } catch (e) { alert('Zurücksetzen fehlgeschlagen: ' + e.message); }
       });
     }
@@ -5045,9 +5066,7 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
 
           <label style="font-size:0.8em; opacity:0.75; display:block; margin:8px 0 4px;">Modell</label>
           <select id="elModel" style="width:100%;">
-            <option value="eleven_multilingual_v2" ${(!settings.modelId || settings.modelId === 'eleven_multilingual_v2') ? 'selected' : ''}>Multilingual v2 (ohne Emotions-Tags)</option>
-            <option value="eleven_flash_v2_5" ${settings.modelId === 'eleven_flash_v2_5' ? 'selected' : ''}>Flash v2.5 (schneller & günstiger, etwas weniger ausdrucksstark)</option>
-            <option value="eleven_v3" ${settings.modelId === 'eleven_v3' ? 'selected' : ''}>Eleven v3 (empfohlen — Emotions-Tags, Box-Ansager mit gezogenem Namen)</option>
+            <option value="eleven_v3" selected>Eleven v3 (empfohlen — Emotions-Tags, Box-Ansager mit gezogenem Namen)</option>
           </select>
 
           <div style="margin-top:10px;">
@@ -5394,6 +5413,83 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
       saveTextFile(out.join('\n'), `blog-ki-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
     }
 
+    // ---------- Zugangsdaten & Standards ----------
+    function fillCredentials() {
+      const t = MB.Announcer.getTtsSettings(), im = MB.Records.getImgflipSettings();
+      const set = (id, v) => { const e = document.getElementById(id); if (e && !e.value) e.value = v || ''; };
+      set('credEleven', t.apiKey); set('credOpenRouter', MB.LlmBlog ? MB.LlmBlog.getKey() : ''); set('credImgUser', im.username); set('credImgPass', im.password);
+      const cb = document.getElementById('credUseEleven'); if (cb) cb.checked = t.provider ? t.provider === 'elevenlabs' : true;
+    }
+    async function saveAllCredentials() {
+      const st = document.getElementById('credState'); st.textContent = 'Speichere …';
+      const v = (id) => (document.getElementById(id).value || '').trim();
+      const t = { ...MB.Announcer.getTtsSettings() };
+      t.apiKey = v('credEleven'); t.provider = document.getElementById('credUseEleven').checked && t.apiKey ? 'elevenlabs' : 'browser';
+      t.modelId = 'eleven_v3';
+      let voiceNote = '';
+      if (t.apiKey) {
+        try {
+          const voices = await MB.Announcer.fetchElevenLabsVoices(t.apiKey);
+          const byName = (n) => (voices.find(x => String(x.name).toLowerCase() === n.toLowerCase()) || {}).voice_id;
+          const defs = [['voiceIdResult', 'MaddenBowl_Kommentator'], ['voiceIdPreview', 'MaddenBowl_Kommentatorin'], ['voiceIdAnnouncer', 'MaddenBowl_Ansager']];
+          defs.forEach(([k, n]) => { const id = byName(n); if (id && (!t[k] || !voices.some(x => x.voice_id === t[k]))) t[k] = id; });
+          const miss = defs.filter(([k]) => !t[k]).map(([, n]) => n);
+          voiceNote = miss.length ? ` · Stimmen nicht gefunden: ${miss.join(', ')}` : ' · Stimmen zugewiesen';
+        } catch (e) { voiceNote = ' · ElevenLabs-Key prüfen: ' + e.message; }
+      }
+      MB.Announcer.setTtsSettings(t);
+      if (MB.LlmBlog) MB.LlmBlog.setKey(v('credOpenRouter'));
+      MB.Records.setImgflipSettings({ ...MB.Records.getImgflipSettings(), username: v('credImgUser'), password: v('credImgPass') });
+      if (songAutoSettings().enabled === undefined) setSongAuto({ enabled: true });
+      try { renderTtsSettingsPanel(); renderMemeSettingsPanel(); drawSongAutoBox(); } catch (e) { /* egal */ }
+      st.textContent = 'Gespeichert' + voiceNote + '.';
+    }
+    setTimeout(fillCredentials, 1200);
+
+    // KI-Panel (liegt technisch in der Ansage-Engine) in die eigene Karte umhängen; Gaststimmen dort ergänzen
+    const _renderTtsOrig = renderTtsSettingsPanel;
+    renderTtsSettingsPanel = function () {
+      _renderTtsOrig.apply(this, arguments);
+      const llm = document.getElementById('llmPanel'), box = document.getElementById('llmCardBody');
+      if (llm && box) { llm.style.marginTop = '0'; llm.style.borderTop = 'none'; box.innerHTML = ''; box.appendChild(llm); }
+      drawGuestVoices();
+    };
+    let guestVoiceCache = null;
+    async function drawGuestVoices() {
+      const panel = document.getElementById('ttsSettingsPanel'); if (!panel) return;
+      let box = document.getElementById('guestVoiceBox');
+      if (!box) { box = document.createElement('div'); box.id = 'guestVoiceBox'; box.style.cssText = 'margin-top:16px; padding-top:14px; border-top:1px solid #22304333;'; panel.appendChild(box); }
+      const t = MB.Announcer.getTtsSettings();
+      if (!t.apiKey) { box.innerHTML = '<div style="font-weight:bold;">🎤 Stimmen für Spieler</div><div class="hint">Erst den ElevenLabs-Key eintragen.</div>'; return; }
+      if (!guestVoiceCache) { try { guestVoiceCache = await MB.Announcer.fetchElevenLabsVoices(t.apiKey); } catch (e) { box.innerHTML = '<div class="hint">Stimmen konnten nicht geladen werden.</div>'; return; } }
+      let map = {}; try { map = JSON.parse((await MB.getAppConfig('guest_voice_map')) || '{}'); } catch (e) { map = {}; }
+      const names = new Set(); try { (await MB.loadHistorySeasons()).forEach(se => (se.players || []).forEach(p => names.add(p.name))); } catch (e) { /* egal */ }
+      (state.players || []).forEach(p => names.add(p.name));
+      const opts = (sel) => `<option value="">— Moderationsstimme —</option>` + guestVoiceCache.map(v => `<option value="${v.voice_id}" ${sel === v.voice_id ? 'selected' : ''}>${v.name}</option>`).join('');
+      box.innerHTML = `<div style="font-weight:bold; margin-bottom:4px;">🎤 Stimmen für Spieler (Interviews in der Show)</div>
+        <div class="hint" style="font-size:0.78em; opacity:0.65; margin-bottom:8px;">Mit dieser Stimme antwortet der Spieler, wenn Rudi sein Interview in der Live-Show vorliest.</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:6px 12px;">${[...names].sort((a, b) => a.localeCompare(b, 'de')).map(n => `<label style="font-size:.85em;">${n}<select data-gv="${n}" style="width:100%;">${opts(map[n])}</select></label>`).join('')}</div>
+        <button class="btn-secondary" style="width:auto; margin-top:8px;" onclick="saveGuestVoiceMap()">💾 Stimmen speichern</button> <span id="gvState" class="hint"></span>`;
+    }
+    async function saveGuestVoiceMap() {
+      const map = {}; document.querySelectorAll('[data-gv]').forEach(s => { if (s.value) map[s.dataset.gv] = s.value; });
+      try { await MB.setAppConfig('guest_voice_map', JSON.stringify(map)); document.getElementById('gvState').textContent = 'Gespeichert.'; } catch (e) { alert(e.message); }
+    }
+
+    // ---------- Sammelkarten: vergebene / offene anzeigen ----------
+    async function showAwardedCards(awarded) {
+      const el = document.getElementById('awardedCards'); el.textContent = 'Lade …';
+      MB.UI.withAchievements(async (A) => {
+        const c = MB.getSupabaseClient();
+        const { data, error } = await c.from('player_achievements').select('player_name, achievement_id, unlocked_at');
+        if (error) { el.textContent = 'Fehler: ' + error.message; return; }
+        const by = new Map(); (data || []).forEach(r => { if (!by.has(r.achievement_id)) by.set(r.achievement_id, []); by.get(r.achievement_id).push(r.player_name); });
+        const ORDER = ['common', 'rare', 'epic', 'legendary', 'limited', 'unique'];
+        const list = A.DEFS.filter(d => awarded ? by.has(d.id) : !by.has(d.id)).sort((a, b) => ORDER.indexOf(a.rarity) - ORDER.indexOf(b.rarity));
+        el.innerHTML = list.length ? `<table style="width:100%;"><tr><th style="text-align:left;">Karte</th><th>Seltenheit</th><th style="text-align:left;">${awarded ? 'Spieler' : ''}</th></tr>${list.map(d => `<tr><td>${d.emoji} ${d.title}</td><td style="text-align:center;">${d.rarity}</td><td>${awarded ? by.get(d.id).join(', ') : ''}</td></tr>`).join('')}</table><div class="hint">${list.length} Karten</div>` : '<div class="hint">Keine.</div>';
+      });
+    }
+
     // ---------- Systemcheck ----------
     async function runSystemCheck() {
       const el = document.getElementById('sysCheck');
@@ -5419,6 +5515,22 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
         const body = new URLSearchParams({ template_id: '61579', username: c.username, password: c.password, text0: 'Systemcheck', text1: 'OK' });
         const d = await (await fetch('https://api.imgflip.com/caption_image', { method: 'POST', body })).json(); if (!d.success) throw new Error(d.error_message || 'abgelehnt');
         return 'Anmeldung OK';
+      });
+      await check('Teamwerte & Kader', async () => {
+        const year = document.getElementById('maddenYear')?.value || (state.config && (state.config.maddenYear || state.config.year)) || String(new Date().getFullYear());
+        const r = await MB.loadTeamRatings(year); const n = Object.keys(r || {}).filter(k => Number(r[k]) > 0).length;
+        const ros = MB.Rosters && MB.Rosters.loadRostersForYear ? await MB.Rosters.loadRostersForYear(year) : null;
+        const rn = ros ? Object.values(ros).filter(x => x && (x.players || []).length).length : 0;
+        if (n < 32 || rn < 32) throw new Error(`Madden ${year}: ${n}/32 Teamwerte, ${rn}/32 Kader`);
+        return `Madden ${year}: 32/32 Teamwerte, 32/32 Kader`;
+      });
+      await check('KI-Modelle', async () => {
+        if (!MB.LlmBlog) throw new Error('nicht geladen');
+        const s = MB.LlmBlog.getSettings();
+        const per = Object.entries(s.kinds || {}).filter(([, v]) => v && v.model).map(([k, v]) => `${k}: ${v.model}`);
+        if (s.modelMode === 'manual') return `Manuell: ${s.primaryModel || '–'} (Fallback ${s.fallbackModel || '–'})${per.length ? ' · eigene je Art: ' + per.join(', ') : ''}`;
+        let auto = []; try { auto = MB.LlmBlog.pickAutoModels(await MB.LlmBlog.fetchModels(), s) || []; } catch (e) { /* egal */ }
+        return `Automatisch: ${auto.slice(0, 2).map(m => m.id || m).join(' → ') || 'Modellliste nicht ladbar'}${per.length ? ' · eigene je Art: ' + per.join(', ') : ''}`;
       });
       await check('TV-Studio', async () => { if (!MB.Announcer.studioConnected()) throw new Error('nicht verbunden – Studio-Fenster öffnen und einmal hineinklicken'); return 'verbunden · Ton: ' + (MB.Announcer.studioAudioMode() === 'studio' ? 'im Studio' : 'auf diesem Laptop'); });
       await check('Push (Testnachrichten an Tim)', async () => {
