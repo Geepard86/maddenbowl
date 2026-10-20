@@ -336,6 +336,8 @@
     if (onChange) _onChange = onChange;
     if (_state) MB.ensureWettbuero(_state);
     renderAuthArea();
+    // Turnier beendet/zurückgesetzt -> offene Tipp-Zahl am App-Icon entfernen
+    try { if (!(_state && (_state.players || []).length) && navigator.clearAppBadge) navigator.clearAppBadge(); } catch (e) { /* egal */ }
     withAchievements((A) => A.init(_state));
     verifySession();
   }

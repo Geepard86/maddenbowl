@@ -114,6 +114,7 @@
   .hof-full th, .hof-full td { white-space: nowrap; }
   .hof-row { cursor: pointer; }
   .hof-row:hover td { background: rgba(201,151,0,.08); }
+  @media (max-width: 640px) { .season-stats .wide { display: none; } .season-stats th, .season-stats td { padding: 6px 4px; } }
 </style>
 <!-- Vorschau beim Teilen des Seitenlinks (Messenger lesen nur statisches HTML) -->
 <meta property="og:title" content="Altima Bowl – Hall of Fame">
@@ -816,28 +817,36 @@
         return;
       }
 
-      let html = `<table>
+      let html = `<div style="overflow-x:auto;"><table class="season-stats">
         <tr>
-          <th>Name</th><th>G</th><th>W-L</th><th>Win%</th><th>PF</th><th>PA</th><th>Diff</th><th>Group</th><th>PO</th>
+          <th>Name</th><th>S-N</th><th>Quote</th><th>PF</th><th>PA</th><th>Diff</th><th class="wide">Gruppe</th><th class="wide">PO</th>
         </tr>`;
       arr.forEach(a=>{
         const diffCls = a.diff>0 ? "ok" : (a.diff<0 ? "bad" : "");
         html += `<tr>
           <td class="name">${a.name}</td>
-          <td>${a.games}</td>
-          <td>${a.wins}-${a.losses}</td>
+          <td style="white-space:nowrap;">${a.wins}-${a.losses}</td>
           <td>${fmtPct(a.winPct)}</td>
           <td>${a.pf}</td>
           <td>${a.pa}</td>
           <td class="${diffCls}">${fmtSigned(a.diff)}</td>
-          <td>${a.group.wins}-${a.group.losses}</td>
-          <td>${a.playoff.wins}-${a.playoff.losses}</td>
+          <td class="wide" style="white-space:nowrap;">${a.group.wins}-${a.group.losses}</td>
+          <td class="wide" style="white-space:nowrap;">${a.playoff.wins}-${a.playoff.losses}</td>
         </tr>`;
       });
-      html += `</table>`;
+      html += `</table></div>`;
       $("tab-stats").innerHTML = html;
     }
 
+    // Icon vor jedem Rekord (falls der Rekordname noch keins hat)
+    function recIcon(k) {
+      const t = String(k || '');
+      if (/^\p{Extended_Pictographic}/u.test(t)) return '';
+      const map = [[/highscore|meiste punkte|punkte in einem/i, '🔥'], [/klatsche|höchste niederlage/i, '💥'], [/höchster sieg|deutlich/i, '💪'], [/serie/i, '🏆'],
+        [/wenigste|defense|zugelassen/i, '🛡️'], [/knapp|eng/i, '😬'], [/shutout|zu null/i, '🚫'], [/punktreich|gesamtpunkte|shootout/i, '🎯'], [/quote|prozent/i, '📈'], [/titel|champion/i, '👑'], [/spiele|einsätze/i, '🧱']];
+      const hit = map.find(([re]) => re.test(t));
+      return (hit ? hit[1] : '⭐') + ' ';
+    }
     function renderSeasonRecords() {
       const s = hof.seasonMap.get(hof.currentSeason);
       const map = seasonPlayerStats(s);
@@ -850,7 +859,7 @@
 
       $("tab-records").innerHTML = rec.map(r => `
         <div class="row">
-          <div><b>${r.k}</b><div class="muted" style="margin-top:4px;">${r.v}</div></div>
+          <div><b>${recIcon(r.k)}${r.k}</b><div class="muted" style="margin-top:4px;">${r.v}</div></div>
           <div>${r.tag ? `<span class="pill">${r.tag.toUpperCase()}</span>` : ""}</div>
         </div>
       `).join("");
@@ -1150,7 +1159,7 @@
       } else {
         $("tab2-allrecords").innerHTML = at.records.map(r => `
           <div class="row">
-            <div><b>${r.k}</b><div class="muted" style="margin-top:4px;">${r.v}</div></div>
+            <div><b>${recIcon(r.k)}${r.k}</b><div class="muted" style="margin-top:4px;">${r.v}</div></div>
             <div>${r.tag ? `<span class="pill">${r.tag.toUpperCase()}</span>` : ""}</div>
           </div>
         `).join("");

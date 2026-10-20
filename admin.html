@@ -21,6 +21,7 @@
   <script src="llm-test.js"></script>
   <script src="llm-blog.js"></script>
   <script src="comments.js"></script>
+  <script src="tipp.js"></script>
   <script src="push.js"></script>
   <script src="interview.js"></script>
 
@@ -197,6 +198,21 @@
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="exportAllSeasonsJson(this)">🗄️ Gesamtexport (alle Saisons)</button>
           <button class="btn-secondary" style="background:var(--nfl-blue)" onclick="location.href='seasons.html'">🗂️ Saisons verwalten</button>
           <button class="btn-secondary" style="background:var(--nfl-red)" onclick="resetTournament()">Full Reset</button>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🩺 Systemcheck vor der Show</h2>
+          <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">Prüft alle Anbindungen ohne Ton und ohne Blog-Beitrag. Push-Tests gehen nur an „Tim“.</div>
+          <button class="btn-secondary" style="width:auto;" onclick="runSystemCheck()">▶ Alle Anbindungen prüfen</button>
+          <div id="sysCheck" style="margin-top:10px; font-size:0.88em;"></div>
+          <label style="display:flex; gap:8px; align-items:center; margin-top:10px; font-size:.9em;"><input type="checkbox" id="adminAlerts" style="width:auto;" onchange="localStorage.setItem('mb_admin_alerts', this.checked ? '1' : '0')"> Während des Turniers Fehler (KI-Text, Meme, Song, Karten …) per Push an Tim melden</label>
+        </div>
+
+        <div class="card" style="margin-bottom:15px;">
+          <h2>🎤 Stimmen für Spieler (Interviews in der Show)</h2>
+          <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">ElevenLabs-Voice-IDs, aus denen jeder Spieler fest eine Stimme bekommt (eine pro Zeile, optional „ID = Name“). Leer = Stimme des Moderators.</div>
+          <textarea id="guestVoices" rows="5" style="width:100%; font-family:monospace; font-size:.85em;" placeholder="pNInz6obpgDQGcFmaJgB = Adam"></textarea>
+          <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="saveGuestVoices()">💾 Speichern</button> <span id="guestVoicesState" class="hint"></span>
         </div>
 
         <div class="card" style="margin-bottom:15px;">
@@ -1238,6 +1254,7 @@ function isFinished(match) { return MB.isFinished(match); }
       // versteckten Fallback-Board) — Datenlogik bleibt dieselbe.
       document.getElementById('nextPlayerName').value = name;
       renderDraftShowStage({ drawing: name });
+      await sleep(550); // Bühne erst einblenden lassen, sonst läuft die Ziehung unsichtbar ab
       await performSlotDrawForShow(name);
       renderDraftShowStage({ drawn: { name, slot: lastDrawnPlayer.slot } });
       await sleep(3800); // "Slot steht fest" bewusst lang stehen lassen
@@ -1255,21 +1272,31 @@ function isFinished(match) { return MB.isFinished(match); }
     function performSlotDrawForShow(name) {
       return new Promise((resolve) => {
         getDrawAudioCtx();
-        let counter = 0;
-        const maxSpins = 18;
-        const spinInterval = setInterval(() => {
-          const tempSlot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
-          document.querySelectorAll('#showSlotSpin, #dsSlotSpin').forEach(spinEl => { spinEl.textContent = `P${tempSlot + 1}`; });
+        // Anzeige läuft über ALLE Slots (auch wenn nur noch wenige frei sind), wird gegen Ende langsamer
+        const totalSlots = Math.max(availableSlots.length, (document.querySelectorAll('[id^="pTeam"]').length) || 8);
+        const show = (txt) => {
+          document.querySelectorAll('#showSlotSpin, #dsSlotSpin').forEach(el => { el.textContent = txt; });
+          try { if (MB.Announcer.studioConnected && MB.Announcer.studioConnected()) MB.Announcer.studioPost({ type: 'ds-spin', text: txt }); } catch (e) { /* egal */ }
+        };
+        const maxSpins = 22;
+        let counter = 0, last = -1;
+        const tick = () => {
+          let tempSlot;
+          do { tempSlot = Math.floor(Math.random() * totalSlots); } while (tempSlot === last && totalSlots > 1);
+          last = tempSlot;
+          show(`P${tempSlot + 1}`);
           playDrawTick(counter / maxSpins);
           counter++;
           if (counter >= maxSpins) {
-            clearInterval(spinInterval);
             finalizeDraw(name);
             buildPlayerDatalist();
-            document.querySelectorAll('#showSlotSpin, #dsSlotSpin').forEach(finalEl => { finalEl.textContent = `P${lastDrawnPlayer.slot + 1}`; });
-            setTimeout(resolve, 400);
+            show(`P${lastDrawnPlayer.slot + 1}`);
+            setTimeout(resolve, 450);
+            return;
           }
-        }, 90);
+          setTimeout(tick, 70 + Math.pow(counter / maxSpins, 2.2) * 260); // langsames Ausrollen
+        };
+        tick();
       });
     }
 
@@ -1860,6 +1887,11 @@ document.querySelectorAll('.draft-row').forEach(row => {
 
       // die drei Organisatoren sind immer dabei, der Rest zufällig aus der Historie
       const fixed = ['Tim', 'Alex', 'Markus'].slice(0, count);
+      // Lieblingsteams setzen, wo noch keins im Profil steht (für Draft-Karten/-Ansagen)
+      try {
+        const FAV = { 'tim': 'SF', 'alex': 'GB', 'markus': 'LAR', 'lasse': 'MIN', 'tobi f.': 'NE', 'tobi w.': 'SEA', 'micha': 'MIA' };
+        if (MB.Avatar) { await MB.Avatar.load(true); for (const [n, t] of Object.entries(FAV)) { const name = real.find(r => r.toLowerCase() === n) || fixed.find(f => f.toLowerCase() === n); if (!name) continue; const cfg = MB.Avatar.get(name); if (!MB.Avatar.hasOwn(name) || !cfg.team) await MB.Avatar.save(name, { ...cfg, team: t, random: undefined }); } }
+      } catch (e) { console.warn('Lieblingsteams:', e); }
       const names = [...fixed, ...shuffleArray(real.filter(n => !fixed.some(f => f.toLowerCase() === n.toLowerCase()))).slice(0, Math.max(0, count - fixed.length))];
       shuffleArray(RANDOM_TEST_NAMES).forEach(n => { if (names.length < count && !names.includes(n)) names.push(n); });
       while (names.length < count) names.push(`Testspieler ${names.length + 1}`);
@@ -2017,10 +2049,10 @@ const ringsHtml = rings > 0
                 <span>${p2.name}</span> ${getLogoHtml(p2.team)}
               </div>
               <div class="score-area">
-                <input type="number" class="score-input" id="score-group-${gIdx}-away" value="${m.s2 !== null ? m.s2 : ''}"
+                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" oninput="this.value=this.value.replace(/[^0-9]/g,'')" class="score-input" id="score-group-${gIdx}-away" value="${m.s2 !== null ? m.s2 : ''}"
                        oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
                 <span style="color:var(--accent)">:</span>
-                <input type="number" class="score-input" id="score-group-${gIdx}-home" value="${m.s1 !== null ? m.s1 : ''}"
+                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" oninput="this.value=this.value.replace(/[^0-9]/g,'')" class="score-input" id="score-group-${gIdx}-home" value="${m.s1 !== null ? m.s1 : ''}"
                        oninput="markScoreDirty('group',${gIdx})" onkeydown="handleScoreKeydown(event,'group',${gIdx})" ${!isAdmin ? 'disabled' : ''}>
                 ${isAdmin ? `<button type="button" id="score-group-${gIdx}-save" class="score-save-btn" onclick="commitScore('group',${gIdx})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
                 ${(isAdmin && isFinished(m)) ? `<button type="button" class="score-save-btn" onclick="openResultActionChooser('group',${gIdx})" title="Meme oder Spurious Correlation erstellen">✨</button>` : ''}
@@ -2189,6 +2221,15 @@ const ringsHtml = rings > 0
         // gerade ein Song entstanden ist.
         const songMoment = await maybeHandleSongMoment();
 
+        // Ein frisches Interview wird nach der Ergebnis-Ansage in der Show vorgelesen (Ansage-Warteschlange)
+        try { if (MB.Interview && MB.Announcer.announceInterview) MB.Interview.takeForShow(MB.getCurrentTournamentId()).then(iv => { if (iv) MB.Announcer.announceInterview(iv); }).catch(() => {}); } catch (e) { /* optional */ }
+        // Unique-Karten-Sammelbeitrag, sobald ein Spieltag abgeschlossen ist
+        try {
+          const days = MB.Tipp.getSpieltage(state) || [];
+          const doneDays = days.filter(st => st.matches.length && st.matches.every(m => m.finished));
+          const lastDone = doneDays[doneDays.length - 1];
+          if (lastDone) MB.UI.withAchievements(A => A.flushUniqueRoundup && A.flushUniqueRoundup(`st_${MB.getCurrentTournamentId()}_${lastDone.index}`, `Unique-Karten – Spieltag ${lastDone.index}`));
+        } catch (e) { /* optional */ }
         // Push: nächste Spieler aufrufen + Tipp-Erinnerungen (läuft im Hintergrund, Fehler egal)
         if (MB.Push && pushTriggersEnabled()) { MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {}); }
 
@@ -2742,11 +2783,11 @@ if (tb && tb.s1 === null && tb.s2 === null) {
              </div>`
           : `<div class="score-area">
                ${(match.id === 'gf' && isAdmin && match.p1 && match.p2 && !isFinished(match)) ? `<button type="button" class="score-save-btn" onclick="announceFinaleIntro()" title="Finalisten per Ring-Ansager vorstellen">📣</button>` : ''}
-               <input type="number" class="score-input" id="score-playoff-${index}-away" value="${match.s2 !== null ? match.s2 : ''}"
+               <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" oninput="this.value=this.value.replace(/[^0-9]/g,'')" class="score-input" id="score-playoff-${index}-away" value="${match.s2 !== null ? match.s2 : ''}"
                       oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
                <span style="color:var(--accent)">:</span>
-               <input type="number" class="score-input" id="score-playoff-${index}-home" value="${match.s1 !== null ? match.s1 : ''}"
+               <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" oninput="this.value=this.value.replace(/[^0-9]/g,'')" class="score-input" id="score-playoff-${index}-home" value="${match.s1 !== null ? match.s1 : ''}"
                       oninput="markScoreDirty('playoff',${index})" onkeydown="handleScoreKeydown(event,'playoff',${index})"
                       ${(!isAdmin || !isGroupPhaseComplete()) ? 'disabled' : ''}>
                ${(isAdmin && isGroupPhaseComplete()) ? `<button type="button" id="score-playoff-${index}-save" class="score-save-btn" onclick="commitScore('playoff',${index})" title="Ergebnis speichern (oder Enter drücken)">💾</button>` : ''}
@@ -3676,7 +3717,7 @@ function renderRanking() {
         } catch (e) {
           console.warn('Auto-Song', key, 'Versuch', attempt, e);
           if (attempt === 1) { songAutoLog(`${label}: Fehler (${e.message}) – neuer Versuch in 20 s.`); await new Promise(r => setTimeout(r, 20000)); }
-          else songAutoLog(`${label}: ausgelassen (${e.message}).`);
+          else { songAutoLog(`${label}: ausgelassen (${e.message}).`); adminAlert('Song ausgelassen', `${label}: ${e.message}`); }
         }
       }
     }
@@ -4341,7 +4382,7 @@ function renderRanking() {
                 const result = await MB.Records.generateImgflipMeme(record, { ...MB.Records.getImgflipSettings(), templateId: pool[n].id });
                 images.push(result.url);
                 article.body += mark(images.length - 1);
-              } catch (e) { console.warn('Saison-Meme fehlgeschlagen:', e); }
+              } catch (e) { console.warn('Saison-Meme fehlgeschlagen:', e); adminAlert('Meme fehlgeschlagen', e.message); }
             }
           }
         }
@@ -5352,6 +5393,82 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
       });
       saveTextFile(out.join('\n'), `blog-ki-test-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`);
     }
+
+    // ---------- Systemcheck ----------
+    async function runSystemCheck() {
+      const el = document.getElementById('sysCheck');
+      const rows = [];
+      const draw = () => { el.innerHTML = rows.map(r => `<div style="padding:4px 0; border-top:1px solid #22304355;">${r.ok === true ? '✅' : r.ok === false ? '❌' : '⏳'} <b>${r.name}</b> <span style="opacity:.75;">${r.info || ''}</span></div>`).join(''); };
+      const check = async (name, fn) => { const r = { name, ok: null }; rows.push(r); draw(); try { const info = await fn(); r.ok = true; r.info = info || 'OK'; } catch (e) { r.ok = false; r.info = e.message || String(e); } draw(); };
+      await check('Datenbank (Supabase)', async () => { const st = await MB.fetchCloudState(); return st && (st.players || []).length ? `Turnier mit ${st.players.length} Spielern geladen` : 'erreichbar, kein laufendes Turnier'; });
+      await check('Admin-Nachweis (für Push & Reset)', async () => { const h = localStorage.getItem('mb_admin_session') || ''; if (h.length < 32) throw new Error('fehlt – einmal ab- und wieder als Admin anmelden'); return 'vorhanden'; });
+      await check('ElevenLabs (Stimmen)', async () => {
+        const t = MB.Announcer.getTtsSettings(); if (!t.apiKey) throw new Error('kein API-Key');
+        const voices = await MB.Announcer.fetchElevenLabsVoices(t.apiKey); const nm = (id) => (voices.find(v => v.voice_id === id) || {}).name || (id ? 'unbekannte ID!' : '—');
+        const names = MB.Announcer.getSpeakerNames ? MB.Announcer.getSpeakerNames() : {};
+        return `Modell ${t.modelId || 'Standard'} · ${names.commentator || 'Kommentator'}: ${nm(t.voiceIdResult)} · ${names.moderator || 'Moderation'}: ${nm(t.voiceIdPreview || t.voiceIdResult)} · ${names.announcer || 'Ring-Ansager'}: ${nm(t.voiceIdAnnouncer || t.voiceIdResult)}`;
+      });
+      await check('OpenRouter (KI-Texte)', async () => {
+        const k = MB.LlmBlog && MB.LlmBlog.getKey(); if (!k) throw new Error('kein API-Key in diesem Browser');
+        const r = await fetch('https://openrouter.ai/api/v1/key', { headers: { Authorization: 'Bearer ' + k } }); if (!r.ok) throw new Error('Key abgelehnt (HTTP ' + r.status + ')');
+        const d = (await r.json()).data || {}; const on = MB.LlmBlog.getSettings ? Object.entries(MB.LlmBlog.getSettings().kinds || {}).filter(([, v]) => v.enabled).length : 0;
+        return `Key gültig${d.limit_remaining != null ? ' · Restguthaben ' + d.limit_remaining : ''} · ${on} Beitragsarten aktiv`;
+      });
+      await check('Imgflip (Memes)', async () => {
+        const c = MB.Records.getImgflipSettings ? MB.Records.getImgflipSettings() : {}; if (!c.username || !c.password) throw new Error('Zugangsdaten fehlen');
+        const body = new URLSearchParams({ template_id: '61579', username: c.username, password: c.password, text0: 'Systemcheck', text1: 'OK' });
+        const d = await (await fetch('https://api.imgflip.com/caption_image', { method: 'POST', body })).json(); if (!d.success) throw new Error(d.error_message || 'abgelehnt');
+        return 'Anmeldung OK';
+      });
+      await check('TV-Studio', async () => { if (!MB.Announcer.studioConnected()) throw new Error('nicht verbunden – Studio-Fenster öffnen und einmal hineinklicken'); return 'verbunden · Ton: ' + (MB.Announcer.studioAudioMode() === 'studio' ? 'im Studio' : 'auf diesem Laptop'); });
+      await check('Push (Testnachrichten an Tim)', async () => {
+        if (!(await MB.getAppConfig('push_vapid_public'))) throw new Error('öffentlicher Schlüssel fehlt');
+        const res = [];
+        for (const [type, title] of [['match', '🏈 Systemcheck: Spielaufruf'], ['tips', '🎯 Systemcheck: Tipp-Erinnerung'], ['interview', '🎙️ Systemcheck: Allgemeines']]) {
+          const d = await MB.Push.notifyAdmin({ type, players: ['Tim'], title, body: 'Test vor der Show', url: 'index.html', tag: 'syscheck-' + type });
+          res.push(`${type}: ${d ? d.sent + '×' : 'Fehler'}`);
+        }
+        if (res.some(x => /Fehler|: 0×/.test(x))) throw new Error(res.join(' · ') + ' (0× = Tim hat auf keinem Gerät Benachrichtigungen aktiviert)');
+        return res.join(' · ');
+      });
+    }
+
+    // ---------- Fehler während des Turniers per Push an Tim ----------
+    let lastAlertAt = {};
+    function adminAlert(what, detail) {
+      try {
+        if (localStorage.getItem('mb_admin_alerts') === '0' || !MB.Push) return;
+        if (!(state && (state.players || []).length)) return;                 // nur im Turnier
+        if (Date.now() - (lastAlertAt[what] || 0) < 120000) return;          // je Art max. alle 2 Min.
+        lastAlertAt[what] = Date.now();
+        MB.Push.notifyAdmin({ type: 'interview', players: ['Tim'], tag: 'alert-' + what, url: 'admin.html', title: '⚠️ ' + what, body: String(detail || '').slice(0, 150) });
+      } catch (e) { /* nie selbst Fehler werfen */ }
+    }
+    window.addEventListener('unhandledrejection', (e) => adminAlert('Fehler in der Admin-Seite', e.reason && (e.reason.message || e.reason)));
+    window.addEventListener('mb-llm-log', () => { try { const l = MB.LlmBlog.getLog()[0]; if (l && /Baustein|Fehler|kein Key/.test(l.status)) adminAlert('KI-Text nicht verwendet', `${l.label}: ${l.detail || l.status}`); } catch (e) { /* egal */ } });
+
+    // ---------- Gaststimmen ----------
+    async function saveGuestVoices() {
+      const v = document.getElementById('guestVoices').value;
+      try { await MB.setAppConfig('guest_voices', v); document.getElementById('guestVoicesState').textContent = 'Gespeichert.'; } catch (e) { alert(e.message); }
+    }
+    setTimeout(async () => {
+      const cb = document.getElementById('adminAlerts'); if (cb) cb.checked = localStorage.getItem('mb_admin_alerts') !== '0';
+      const gv = document.getElementById('guestVoices'); if (gv) { try { gv.value = (await MB.getAppConfig('guest_voices')) || ''; } catch (e) { /* egal */ } }
+    }, 1400);
+
+    // ---------- Einstellungen übersichtlicher: Karten auf-/zuklappbar ----------
+    setTimeout(() => {
+      document.querySelectorAll('#adminTab-settings > .card, #adminTab-settings .card').forEach((card, i) => {
+        const h = card.querySelector(':scope > h2'); if (!h || card.dataset.fold) return;
+        card.dataset.fold = '1'; h.style.cursor = 'pointer'; h.insertAdjacentHTML('beforeend', ' <span class="fold-ind" style="float:right; opacity:.6;">▾</span>');
+        const kids = [...card.children].filter(c => c !== h);
+        const set = (open) => { kids.forEach(c => { c.style.display = open ? '' : 'none'; }); h.querySelector('.fold-ind').textContent = open ? '▾' : '▸'; };
+        const key = 'mb_fold_' + h.textContent.trim().slice(0, 30);
+        set(localStorage.getItem(key) === '1' || i === 0);
+        h.addEventListener('click', () => { const open = kids[0] && kids[0].style.display === 'none'; set(open); localStorage.setItem(key, open ? '1' : '0'); });
+      });
+    }, 1500);
 
     // ---------- Push ----------
     function pushTriggersEnabled() { return localStorage.getItem('mb_push_triggers') !== '0'; }

@@ -563,7 +563,7 @@
     const status = MB.Tipp.getSpieltagStatus(st);
     return `
       <div class="v2-card">
-        <div class="v2-card-title">📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : 'läuft'}</span></div>
+        <div class="v2-card-title">📅 Spieltag ${st.index}<span class="spieltag-badge ${status}">${status === 'done' ? 'abgeschlossen' : (cache.spieltage.find(x => MB.Tipp.getSpieltagStatus(x) !== 'done') === st ? 'läuft' : 'kommt noch')}</span></div>
         ${renderSpieltagSection(st, status)}
       </div>`;
   }

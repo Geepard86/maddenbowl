@@ -286,7 +286,7 @@
 
   function renderArticle(a) {
     const meta = catMeta(a.kind, a);
-    const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio>` : '';
+    const audio = (a.media_type === 'audio' && a.media_url) ? `<audio controls src="${a.media_url}"></audio><div style="margin-top:4px;"><a href="${a.media_url}" download target="_blank" rel="noopener" style="font-size:.82em; color:var(--v2-gold);">⬇ Song herunterladen</a></div>` : '';
     const imageUrls = [];
     if (a.media_type === 'image' && a.media_url) imageUrls.push(a.media_url);
     // Weitere Bilder (z.B. Memes + Spurious-Correlation-Chart im Power Ranking)

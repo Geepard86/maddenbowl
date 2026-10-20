@@ -43,7 +43,7 @@
   // term: kurz | mittel | lang | unique   ·   secret: Text erst nach Freischaltung lesbar
   const DEFS = [
     // ---- Einstieg (kurzfristig)
-    { id: "welcome", emoji: "👋", title: "Willkommen im Büro", desc: "Du hast dich zum ersten Mal ins Wettbüro eingeloggt.", rarity: "common", term: "kurz" },
+    { id: "welcome", emoji: "👋", title: "Willkommen im Büro", desc: "Du hast dich zum ersten Mal angemeldet.", rarity: "common", term: "kurz" },
     { id: "tipp_first", emoji: "🎟️", title: "Erster Tipp", desc: "Du hast deinen allerersten Tipp abgegeben.", rarity: "common", term: "kurz" },
     { id: "tipp_self", emoji: "🪞", title: "Eigener Fan", desc: "Du hast in einem Spiel auf dich selbst getippt.", rarity: "common", term: "kurz" },
     { id: "shop_first", emoji: "🧢", title: "Merch-Neuling", desc: "Du hast dir dein erstes Produkt im Shop angeschaut.", rarity: "common", term: "kurz" },
@@ -118,7 +118,8 @@
     // ---- Die drei Organisatoren (werden beim Login automatisch vergeben)
     { id: "u_org_tim", emoji: "🛠️", title: "Der Architekt", desc: "Hat sich diesen ganzen Wahnsinn ausgedacht und Zeile für Zeile gebaut.", rarity: "unique", term: "unique", unique: true, org: "tim" },
     { id: "u_org_alex", emoji: "🧪", title: "Der Testpilot", desc: "Testet, berät, findet jeden Fehler – und war früher der Gastgeber des Altima Bowl.", rarity: "unique", term: "unique", unique: true, org: "alex" },
-    { id: "u_org_markus", emoji: "🤝", title: "Der Mitorganisator", desc: "Sorgt dafür, dass der Altima Bowl jedes Jahr wirklich stattfindet.", rarity: "unique", term: "unique", unique: true, org: "markus" },
+    { id: "u_org_markus", emoji: "🎩", title: "Der Commissioner", desc: "Mitorganisator – sorgt dafür, dass der Altima Bowl jedes Jahr wirklich stattfindet.", rarity: "unique", term: "unique", unique: true, org: "markus" },
+    { id: "u_org_tobif", emoji: "🏛️", title: "Der Urvater", desc: "Allererster Champion des Altima Bowl – und neben den drei Gastgebern das einzige Gründungsmitglied.", rarity: "unique", term: "unique", unique: true, org: "tobi f." },
     { id: "u_early_starter", emoji: "⏰", title: "Frühstarter", desc: "Hat sich als Allererster eingeloggt – noch vor dem 1. Januar 2027.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_avatar", emoji: "🖌️", title: "Erster Entwurf", desc: "Hat als Erster seine eigene Spielerfigur gestaltet.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_perfect_day", emoji: "🎰", title: "Jackpot", desc: "Hat als Erster einen kompletten Spieltag richtig getippt.", rarity: "unique", term: "unique", unique: true },
@@ -287,9 +288,11 @@
       // Admin-Nachweis: der gespeicherte Admin-Passwort-Hash (die Funktion vergleicht mit app_config)
       const pw = (localStorage.getItem("mb_admin_session") || "");
       const { data, error } = await c.rpc("mb_reset_achievements", { pw_hash: pw });
-      if (error && /admin/i.test(error.message || "")) throw new Error("Admin-Nachweis abgelehnt – bitte einmal neu als Admin anmelden.");
-      if (!error && data) { Object.assign(out, data, { via: "rpc" }); }
-    } catch (e) { /* Funktion fehlt -> direkt löschen */ }
+      if (error) out.rpcError = error.message || String(error);
+      else if (data) Object.assign(out, data, { via: "rpc" });
+    } catch (e) { out.rpcError = e.message; }
+    // Admin-Prüfung der Funktion fehlgeschlagen -> klar melden statt still auf direktes Löschen auszuweichen
+    if (out.rpcError && /admin/i.test(out.rpcError)) throw new Error("Admin-Nachweis abgelehnt – bitte in der Admin-Seite einmal ab- und wieder anmelden (dann ist der Passwort-Hash im Browser gespeichert).");
     if (out.via === "rpc") { await afterReset(); return out; }
     for (const [table, col] of [["player_achievements", "player_name"], ["player_progress", "player_name"], ["achievement_firsts", "achievement_id"]]) {
       const { error, count } = await c.from(table).delete({ count: "exact" }).neq(col, "");
@@ -299,7 +302,7 @@
     // Prüfen, ob wirklich gelöscht wurde (RLS löscht sonst stillschweigend 0 Zeilen)
     const { count: left } = await c.from("player_achievements").select("*", { count: "exact", head: true });
     const { count: leftProg } = await c.from("player_progress").select("*", { count: "exact", head: true });
-    if (leftProg > 0) throw new Error(`Die Datenbank hat das Löschen des Fortschritts verweigert (noch ${leftProg} Einträge – z. B. besuchte Seiten). Ohne die SQL-Funktion mb_reset_achievements kämen Karten sofort zurück – Anleitung im Admin-Bereich.`);
+    if (leftProg > 0) throw new Error(`${out.rpcError ? "SQL-Funktion meldet: " + out.rpcError + " (falls „Could not find the function“: im SQL Editor zusätzlich  notify pgrst, 'reload schema';  ausführen). " : ""}Die Datenbank hat das Löschen des Fortschritts verweigert (noch ${leftProg} Einträge – z. B. besuchte Seiten). Ohne die SQL-Funktion mb_reset_achievements kämen Karten sofort zurück – Anleitung im Admin-Bereich.`);
     if (left > 0) throw new Error(`Die Datenbank hat das Löschen verweigert (noch ${left} Karten vorhanden). Bitte einmalig die SQL-Funktion mb_reset_achievements anlegen – Anleitung im Admin-Bereich.`);
     await afterReset();
     return out;
@@ -446,6 +449,7 @@
     if (PAGE_KEYS.every((k) => (progress.pages || []).includes(k))) unlock("pages_all");
     checkSeenAll();
     if (key === "hall_of_fame") unlock("hof_visit");
+    if (key === "shop") unlock("shop_first");
     if (key === "blog") { const d = addSet("blogDays", new Date().toISOString().slice(0, 10)); if (d >= 5) unlock("blog_reader"); if (d >= 20) unlock("blog_reader_20"); }
     const h = new Date().getHours(); if (h >= 0 && h < 5) unlock("night_owl");
   }
@@ -641,7 +645,7 @@
     const locked = !st.at && !st.demo;
     // Galerie (hideHow): gesperrte Karten ab Rare zeigen den Titel, verraten aber nicht, wie man sie bekommt.
     // Ohne hideHow (z.B. Popup, eigene Karten) bleiben geheime Karten komplett verdeckt.
-    const howHidden = locked && st.hideHow && (def.rarity !== "common" || def.secret);
+    const howHidden = locked && st.hideHow && def.rarity !== "limited" && (def.rarity !== "common" || def.secret);
     const hidden = locked && def.secret && !st.hideHow;
     const idx = String(DEFS.indexOf(def) + 1).padStart(2, "0");
     let foot;
@@ -670,7 +674,15 @@
         card.style.setProperty("--ry", ((x - 0.5) * 22).toFixed(1) + "deg"); card.style.setProperty("--rx", ((0.5 - y) * 22).toFixed(1) + "deg");
         card.style.setProperty("--sx", (x * 100).toFixed(0) + "%"); card.style.setProperty("--sy", (y * 100).toFixed(0) + "%"); card.style.setProperty("--shine", "0.9");
       });
-      card.addEventListener("pointerleave", () => { card.style.setProperty("--rx", "0deg"); card.style.setProperty("--ry", "0deg"); card.style.setProperty("--shine", "0"); });
+      const reset = () => { card.style.setProperty("--rx", "0deg"); card.style.setProperty("--ry", "0deg"); card.style.setProperty("--shine", "0"); };
+      card.addEventListener("pointerleave", reset);
+      // Touch: pointermove kommt nicht zuverlässig (Scrollen) -> eigene Touch-Auswertung, kurz nachleuchten
+      const touchTilt = (e) => { const t = e.touches[0]; if (!t) return; const b = card.getBoundingClientRect(), x = Math.min(1, Math.max(0, (t.clientX - b.left) / b.width)), y = Math.min(1, Math.max(0, (t.clientY - b.top) / b.height));
+        card.style.setProperty("--ry", ((x - 0.5) * 22).toFixed(1) + "deg"); card.style.setProperty("--rx", ((0.5 - y) * 22).toFixed(1) + "deg");
+        card.style.setProperty("--sx", (x * 100).toFixed(0) + "%"); card.style.setProperty("--sy", (y * 100).toFixed(0) + "%"); card.style.setProperty("--shine", "0.9"); };
+      card.addEventListener("touchstart", touchTilt, { passive: true });
+      card.addEventListener("touchmove", touchTilt, { passive: true });
+      card.addEventListener("touchend", () => setTimeout(reset, 700), { passive: true });
     });
   }
 

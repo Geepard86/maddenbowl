@@ -330,9 +330,9 @@
     const role = evt.role || 'commentator';
     if (evt.type === 'start') {
       speaking = true; clearTimeout(backTimer);
-      setCam(camForRole(role)); setTalking(role, true);
+      setCam(camForRole(role === 'guest' ? 'commentator' : role)); setTalking(role === 'guest' ? '' : role, true);
       clearTimeout(capTimer);
-      $('stCapName').innerHTML = `${esc(names[role] || role)}<small>${role === 'announcer' ? 'RING-ANSAGER' : role === 'moderator' ? 'MODERATION' : 'KOMMENTAR'}</small>`;
+      $('stCapName').innerHTML = role === 'guest' ? `${esc(evt.name || 'Gast')}<small>INTERVIEW</small>` : `${esc(names[role] || role)}<small>${role === 'announcer' ? 'RING-ANSAGER' : role === 'moderator' ? 'MODERATION' : 'KOMMENTAR'}</small>`;
       $('stCapText').textContent = plain(evt.text);
       $('stCaption').classList.remove('off'); $('stTicker').classList.add('hide');
     } else if (evt.type === 'end') {
@@ -355,8 +355,9 @@
       else if (m.type === 'song-go' && songGo.has(m.id)) { songGo.get(m.id)(); songGo.delete(m.id); }
       else if (m.type === 'audio' && m.blob) playAudio(m);
       else if (m.type === 'show' && m.view) showOverlay(m.view, m.ms || 15000);
-      else if (m.type === 'gag') runGag(m.which);
+      else if (m.type === 'gag') { m_name = m.name || null; runGag(m.which); }
       else if (m.type === 'ds') applyDraft(m);
+      else if (m.type === 'ds-spin') { const el = document.getElementById('dsSlotSpin'); if (el) el.textContent = m.text; }
       else if (m.type === 'ds-roster') { rosterCache.set(m.teamId, m.row); (rosterWait.get(m.teamId) || []).forEach(fn => fn(m.row)); rosterWait.delete(m.teamId); }
     };
     setInterval(() => { try { ch.postMessage({ type: 'studio-hello' }); } catch (e) { /* egal */ } }, 2000);
@@ -802,8 +803,20 @@
     else if (which === 'halftime') { gagHalftime(); showOverlay('gag', 11000); }
     else if (which === 'fancam') { gagFanCam(); showOverlay('gag', 10000); }
     else if (which === 'home') { overlayUntil = 0; setView(baseView); }
+    else if (which === 'interview' && m_name) { gagInterview(m_name); showOverlay('gag', 120000); }
   }
   let lastGag = '';
+  let m_name = null;
+  // Interview-Szene: Rudi links, Spielerfigur rechts, darüber die Untertitel
+  function gagInterview(name) {
+    const rudi = MB.DraftStage && MB.DraftStage.charSVG ? MB.DraftStage.charSVG('commentator') : '';
+    $('vGag').innerHTML = `<div class="st-gag"><div style="position:relative;width:1000px;height:520px;border:6px solid #c99700;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 30%,#2b3c66,#0b1328);">
+      <div style="position:absolute;left:24px;top:16px;background:#d50a0a;color:#fff;font:900 26px/1 Impact;letter-spacing:3px;padding:8px 14px;">● MIXED ZONE</div>
+      <div style="position:absolute;left:60px;bottom:0;width:360px;height:440px;" class="iv-rudi">${rudi}</div>
+      <div style="position:absolute;right:80px;bottom:-20px;width:300px;height:460px;" class="iv-guest">${MB.Avatar ? MB.Avatar.svg(MB.Avatar.get(name), { outfit: 'casual' }) : ''}</div>
+      <div style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font:900 34px/1 Impact;letter-spacing:2px;color:#fff;text-shadow:3px 3px 0 #000;">RUDI · ${esc(name).toUpperCase()}</div></div></div>`;
+    const sv = $('vGag').querySelector('.iv-rudi svg'); if (sv) { sv.setAttribute('width', '100%'); sv.setAttribute('height', '100%'); }
+  }
   function maybeGag() {
     if (busy() || speaking || !state || !(state.players || []).length) return;
     // gewichtet: Daten-Szenen (Duell, Wusstest-du-schon, Tippspiel) öfter als reine Gags

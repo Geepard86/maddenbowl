@@ -563,6 +563,38 @@
   }
 
   // speakerIndex: 0 = Kommentator, 1 = Moderator (im Wechsel von admin.html gesteuert)
+  // Interview in der Live-Show: Mona moderiert an, Rudi stellt die Fragen, der Spieler
+  // antwortet mit "seiner" Gaststimme (feste Zuordnung aus der Liste in den Admin-Einstellungen).
+  async function guestVoiceFor(name) {
+    let list = [];
+    try { list = String((global.MB.getAppConfig && await global.MB.getAppConfig("guest_voices")) || "").split(/\n/).map((l) => l.split("=")[0].trim()).filter((x) => /^[A-Za-z0-9]{10,}$/.test(x)); } catch (e) { list = []; }
+    if (!list.length) return null;
+    let h = 7; for (const ch of String(name).toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return list[h % list.length];
+  }
+  function announceInterview(iv) {
+    return _enqueue(async () => {
+      const settings = getTtsSettings();
+      const v3 = isV3Model(settings.modelId);
+      const tag = (t) => (v3 ? t + " " : "");
+      const eleven = settings.provider === "elevenlabs";
+      const modVoice = eleven ? (settings.voiceIdPreview || settings.voiceIdResult) : null;
+      const comVoice = eleven ? settings.voiceIdResult : null;
+      const guest = eleven ? ((await guestVoiceFor(iv.name)) || modVoice) : null;
+      const n = speechName(iv.name);
+      studioPost({ type: "gag", which: "interview", name: iv.name });
+      const segs = [{ text: tag("[cheerful]") + pick([`Rudi hat sich in der Mixed Zone ${n} geschnappt – hören wir rein!`, `Kurzer Besuch in der Mixed Zone: Rudi und ${n}.`, `Mikro an, Rudi ist bei ${n}!`]), voiceId: modVoice, role: "moderator" }];
+      (iv.questions || []).forEach((q, i) => {
+        const a = iv.answers && iv.answers[i];
+        segs.push({ text: tag("[curious]") + q, voiceId: comVoice, role: "commentator" });
+        segs.push({ text: a ? tag("[casual]") + a : tag("[sighs]") + "Kein Kommentar.", display: a || "Kein Kommentar.", voiceId: guest, role: "guest", name: iv.name });
+      });
+      segs.push({ text: tag("[warm]") + pick([`Danke, ${n}! Zurück zu dir, Mona.`, `Das war ${n} – vielen Dank!`]), voiceId: comVoice, role: "commentator" });
+      await speakSequence(segs);
+      studioPost({ type: "gag", which: "home" });
+    });
+  }
+
   async function announceTeamPick(text, speakerIndex, gate) {
     if (!text) return;
     const settings = getTtsSettings();
@@ -1306,7 +1338,7 @@
     return () => _speakListeners.delete(fn);
   }
   function _emitSpeak(evt) {
-    studioPost({ type: "speak", evt: { type: evt.type, role: evt.role || null, text: evt.text || "" } });
+    studioPost({ type: "speak", evt: { type: evt.type, role: evt.role || null, text: evt.text || "", name: evt.name || null } });
     _speakListeners.forEach((fn) => { try { fn(evt); } catch (e) { /* Bühne darf nie die Ansage stören */ } });
   }
   function _roleForVoice(voiceId, settings) {
@@ -1356,7 +1388,7 @@
         if (url) {
           if (!gateWaited && opts && opts.gate) { gateWaited = true; try { await opts.gate; } catch (e) {} }
           const role = seg.role || _roleForVoice(seg.voiceId, settings);
-          _emitSpeak({ type: "start", role, text: seg.display || seg.text });
+          _emitSpeak({ type: "start", role, text: seg.display || seg.text, name: seg.name || null });
           await playAudioUrl(url);
           _emitSpeak({ type: "end", role });
         }
@@ -1801,6 +1833,6 @@
     setNicknames, getNickname,
     onSpeak,
     prepareRingIntro,
-    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal,
+    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview,
   };
 })(window);

@@ -220,6 +220,14 @@
     return Object.entries(done).filter(([, v]) => !v.used).sort((a, b) => String(a[1].at).localeCompare(String(b[1].at)))
       .slice(0, max || 2).map(([name, v]) => ({ name, questions: v.questions || [], answers: v.answers || [], record: v.record || "" }));
   }
+  // Für die Live-Show: nächstes noch nicht vorgelesenes Interview (und als vorgelesen markieren)
+  async function takeForShow(tid) {
+    const st = await load(tid); const done = st.done || {};
+    const e = Object.entries(done).filter(([, v]) => !v.shown).sort((a, b) => String(a[1].at).localeCompare(String(b[1].at)))[0];
+    if (!e) return null;
+    st.done[e[0]].shown = true; await save(tid, st);
+    return { name: e[0], questions: e[1].questions || [], answers: e[1].answers || [] };
+  }
   async function markUsed(tid, names) {
     const st = await load(tid); st.done = st.done || {};
     names.forEach((n) => { if (st.done[n]) st.done[n].used = true; });
@@ -242,5 +250,5 @@
   }
 
   global.MB = global.MB || {};
-  global.MB.Interview = { check, decline, start, answer, buildQuestions, takeUnused, markUsed, paragraph, adminPick };
+  global.MB.Interview = { check, decline, start, answer, buildQuestions, takeUnused, markUsed, paragraph, adminPick, takeForShow };
 })(window);
