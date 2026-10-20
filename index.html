@@ -752,6 +752,10 @@
 
     await render();
 
+    const refreshNow = async () => {
+      try { state = await MB.fetchCloudState(); MB.UI.setState(state); articles = await MB.Blog.fetchAllArticles(40); await render({ keepScroll: true }); } catch (e) { /* nächster Versuch */ }
+    };
+    window.addEventListener('mb-refresh', refreshNow);
     setInterval(async () => {
       try {
         const hadPlayers = !!(state.players && state.players.length);

@@ -455,15 +455,15 @@
         const byHighSingle = [...done].sort((a,b)=>Math.max(b.homeScore,b.awayScore) - Math.max(a.homeScore,a.awayScore));
 
         const t = byTotal[0];
-        records.push({ k:"Höchste Gesamtpunkte", v:`${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore} (${t.homeScore+t.awayScore})`, tag:t.stage });
+        records.push({ k:"🎆 Höchste Gesamtpunkte", v:`${t.homePlayer} vs ${t.awayPlayer} – ${t.homeScore}:${t.awayScore} (${t.homeScore+t.awayScore})`, tag:t.stage });
 
         const d = byDiff[0];
-        records.push({ k:"Größter Blowout", v:`${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore} (Diff ${Math.abs(d.homeScore-d.awayScore)})`, tag:d.stage });
+        records.push({ k:"🧱 Größter Blowout", v:`${d.homePlayer} vs ${d.awayPlayer} – ${d.homeScore}:${d.awayScore} (Diff ${Math.abs(d.homeScore-d.awayScore)})`, tag:d.stage });
 
         const hs = byHighSingle[0];
         const maxTeam = hs.homeScore >= hs.awayScore ? hs.homePlayer : hs.awayPlayer;
         const maxVal  = Math.max(hs.homeScore, hs.awayScore);
-        records.push({ k:"Höchster Team-Score", v:`${maxTeam} – ${maxVal} Punkte`, tag:hs.stage });
+        records.push({ k:"🚀 Höchster Team-Score", v:`${maxTeam} – ${maxVal} Punkte`, tag:hs.stage });
       }
 
       // Spieler-Rekorde (Saison)
@@ -471,16 +471,16 @@
       const bestBy = (keyFn) => arr.length ? arr.reduce((a,b)=> keyFn(b) > keyFn(a) ? b : a) : null;
 
       const mostWins = bestBy(x=>x.wins);
-      if (mostWins) records.push({ k:"Most Wins", v:`${mostWins.name} – ${mostWins.wins} Wins`, tag:"spieler" });
+      if (mostWins) records.push({ k:"✅ Most Wins", v:`${mostWins.name} – ${mostWins.wins} Wins`, tag:"spieler" });
 
       const bestDiff = bestBy(x=>x.diff);
-      if (bestDiff) records.push({ k:"Best Diff", v:`${bestDiff.name} – ${bestDiff.diff > 0 ? "+" : ""}${bestDiff.diff}`, tag:"spieler" });
+      if (bestDiff) records.push({ k:"🧨 Best Diff", v:`${bestDiff.name} – ${bestDiff.diff > 0 ? "+" : ""}${bestDiff.diff}`, tag:"spieler" });
 
       const bestOff = bestBy(x=>x.pf);
-      if (bestOff) records.push({ k:"Most Points For", v:`${bestOff.name} – ${bestOff.pf} PF`, tag:"spieler" });
+      if (bestOff) records.push({ k:"🏈 Most Points For", v:`${bestOff.name} – ${bestOff.pf} PF`, tag:"spieler" });
 
       const bestDef = arr.length ? arr.reduce((a,b)=> (b.pa < a.pa ? b : a)) : null;
-      if (bestDef) records.push({ k:"Fewest Points Allowed", v:`${bestDef.name} – ${bestDef.pa} PA`, tag:"spieler" });
+      if (bestDef) records.push({ k:"🛡️ Fewest Points Allowed", v:`${bestDef.name} – ${bestDef.pa} PA`, tag:"spieler" });
 
       return records;
     }
@@ -671,13 +671,13 @@
     if (!arr.length) return;
 
     const bestPPG = pickMax(arr.filter(x=>x.games>=3), x=> (x.pf/x.games));
-    if (bestPPG) seasonRecs.push({ k:"Best Season Offense (PPG, min 3)", v:`${s.season}: ${bestPPG.name} – ${(bestPPG.pf/bestPPG.games).toFixed(1)} PPG`, tag:"season" });
+    if (bestPPG) seasonRecs.push({ k:"🏈 Best Season Offense (PPG, min 3)", v:`${s.season}: ${bestPPG.name} – ${(bestPPG.pf/bestPPG.games).toFixed(1)} PPG`, tag:"season" });
 
     const bestWin = pickMax(arr.filter(x=>x.games>=3), x=> (x.wins/x.games));
-    if (bestWin) seasonRecs.push({ k:"Best Season Win% (min 3)", v:`${s.season}: ${bestWin.name} – ${((bestWin.wins/bestWin.games)*100).toFixed(1)}%`, tag:"season" });
+    if (bestWin) seasonRecs.push({ k:"📈 Best Season Win% (min 3)", v:`${s.season}: ${bestWin.name} – ${((bestWin.wins/bestWin.games)*100).toFixed(1)}%`, tag:"season" });
 
     const bestDiffS = pickMax(arr.filter(x=>x.games>=3), x=> (x.diff/x.games));
-    if (bestDiffS) seasonRecs.push({ k:"Best Season Avg Diff (min 3)", v:`${s.season}: ${bestDiffS.name} – ${(bestDiffS.diff/bestDiffS.games>0?"+":"")}${(bestDiffS.diff/bestDiffS.games).toFixed(1)}`, tag:"season" });
+    if (bestDiffS) seasonRecs.push({ k:"🧨 Best Season Avg Diff (min 3)", v:`${s.season}: ${bestDiffS.name} – ${(bestDiffS.diff/bestDiffS.games>0?"+":"")}${(bestDiffS.diff/bestDiffS.games).toFixed(1)}`, tag:"season" });
   });
 
   // pick top 3 most “impressive” season recs by value inside string? keep simple: append a few

@@ -59,7 +59,13 @@
       opacity: 0.25;
       cursor: default;
     }
-  </style>
+    .cred-grid { display: grid; grid-template-columns: 170px minmax(0,1fr); gap: 8px 12px; align-items: start; }
+  .cred-grid > label { font-size: .82em; opacity: .8; padding-top: 10px; }
+  .cred-grid input { margin: 0; }
+  .cred-row { display: flex; gap: 8px; } .cred-row input { flex: 1; min-width: 0; }
+  .cred-check { display: flex; gap: 8px; align-items: center; font-size: .82em; opacity: .85; margin-top: 4px; } .cred-check input { width: auto; }
+  @media (max-width: 560px) { .cred-grid { grid-template-columns: 1fr; } .cred-grid > label { padding-top: 4px; } }
+</style>
 </head>
 
 <body>
@@ -203,14 +209,12 @@
         <div class="card" style="margin-bottom:15px;">
           <h2>🔐 Zugangsdaten &amp; Schnellstart</h2>
           <div class="hint" style="font-size:0.85em; opacity:0.75; margin-bottom:8px;">Alle Schlüssel an einer Stelle (bleiben nur in diesem Browser). „Alles speichern“ übernimmt zugleich alle Standard-Einstellungen (Eleven v3, Stimmen MaddenBowl_Kommentator/-Kommentatorin/-Ansager, automatische Songs) – danach kann die Show direkt starten.</div>
-          <label style="font-size:.8em; opacity:.75;">ElevenLabs API-Key</label>
-          <input type="password" id="credEleven" placeholder="sk_…">
-          <label style="display:flex; gap:8px; align-items:center; margin:6px 0 10px; font-size:.9em;"><input type="checkbox" id="credUseEleven" style="width:auto;" checked> ElevenLabs verwenden (aus = kostenlose Browser-Stimme zum Testen, keine Credits)</label>
-          <label style="font-size:.8em; opacity:.75;">OpenRouter API-Key (KI-Texte)</label>
-          <input type="password" id="credOpenRouter" placeholder="sk-or-…">
-          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <div style="flex:1; min-width:160px;"><label style="font-size:.8em; opacity:.75;">Imgflip-Benutzername</label><input type="text" id="credImgUser"></div>
-            <div style="flex:1; min-width:160px;"><label style="font-size:.8em; opacity:.75;">Imgflip-Passwort</label><input type="password" id="credImgPass"></div>
+          <div class="cred-grid">
+            <label>ElevenLabs API-Key</label><div><input type="password" id="credEleven" placeholder="sk_…">
+              <label class="cred-check"><input type="checkbox" id="credUseEleven" checked> ElevenLabs verwenden (aus = kostenlose Browser-Stimme, spart Credits beim Testen)</label></div>
+            <label>OpenRouter API-Key</label><div><input type="password" id="credOpenRouter" placeholder="sk-or-…"></div>
+            <label>Imgflip</label><div class="cred-row"><input type="text" id="credImgUser" placeholder="Benutzername"><input type="password" id="credImgPass" placeholder="Passwort"></div>
+            <label>Push (öffentl. Schlüssel)</label><div><input type="text" id="credVapid" readonly placeholder="noch nicht erzeugt – siehe „Push-Benachrichtigungen“"></div>
           </div>
           <button style="margin-top:10px;" onclick="saveAllCredentials()">💾 Alles speichern</button>
           <span id="credState" class="hint" style="margin-left:8px;"></span>
@@ -4473,13 +4477,23 @@ function renderRanking() {
               const raw = story && story.body ? String(story.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '';
               const sentences = (raw.match(/[^.!?]+[.!?]+/g) || []).map(x => x.trim()).filter(x => !/korrel|koeffizient|\br\s*=|r-wert|signifikan|statistisch|p-wert|regression/i.test(x));
               const storyText = sentences.join(' ');
-              const fallback = [`Immer wenn ${candidate.mbLabel} nach oben geht, steigt auch „${candidate.germanName}“. Zufall? Vielleicht trainieren ja einige heimlich mit genau diesem Zusammenhang.`,
-                `${candidate.mbLabel} und „${candidate.germanName}“ bewegen sich auffällig im Gleichschritt. Wer da wen beeinflusst, bleibt das Geheimnis des Altima Bowl.`];
-              const teaser = `📊 Statistik-Ecke${headline ? ' – ' + headline.title : ''}: ` + (storyText || fallback[Math.floor(Math.random() * fallback.length)]) + ' Ein Schelm, wer dabei an Zufall denkt.';
+              const A = candidate.mbLabel, B = `„${candidate.germanName}“`;
+              const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
+              // ausführlichere, augenzwinkernde Herleitung (ohne Kennzahlen)
+              const derivation = [
+                pickOne([`Man muss nur lange genug in die Zahlen schauen, dann fällt es auf: Immer wenn bei uns ${A} nach oben geht, steigt draußen in der Welt auch ${B}.`,
+                  `Ein Zusammenhang, über den bisher niemand spricht: ${A} und ${B} entwickeln sich über die Jahre fast im Gleichschritt.`]),
+                pickOne([`Die naheliegende Erklärung: Wer am Controller über sich hinauswächst, setzt offenbar eine Kettenreaktion in Gang, die irgendwo am anderen Ende der Welt ankommt.`,
+                  `Vielleicht sitzt irgendwo jemand, der unsere Ergebnisse verfolgt und seine Entscheidungen danach richtet. Anders ist das kaum zu erklären.`,
+                  `Theorie der Redaktion: Die Energie eines Altima-Bowl-Abends verschwindet nicht einfach – sie muss ja irgendwohin.`]),
+                pickOne([`Bewiesen ist damit natürlich gar nichts. Aber die Verantwortung für ${B} trägt ab sofort jeder, der heute einen Controller in der Hand hält.`,
+                  `Ob man daraus Konsequenzen ziehen sollte? Wahrscheinlich nicht. Erwähnen wollten wir es trotzdem.`]),
+              ].join(' ');
+              const teaser = `📊 Aus der Statistik-Ecke: ` + (storyText ? storyText + ' ' : '') + derivation;
               const canvas = MB.Spurious.renderChartCanvas(candidate);
               images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
               article.body += '\n\n' + teaser + mark(images.length - 1);
-              article.data = { ...(article.data || {}), pairKey: candidate.pairKey };
+              article.data = { ...(article.data || {}), pairKey: candidate.pairKey, spurious: { a: candidate.mbLabel, b: candidate.germanName } };
             }
           }
         } catch (e) { console.warn('Spurious-Anteil im Power Ranking fehlgeschlagen:', e); }
@@ -5419,6 +5433,16 @@ function renderRanking() {
       const set = (id, v) => { const e = document.getElementById(id); if (e && !e.value) e.value = v || ''; };
       set('credEleven', t.apiKey); set('credOpenRouter', MB.LlmBlog ? MB.LlmBlog.getKey() : ''); set('credImgUser', im.username); set('credImgPass', im.password);
       const cb = document.getElementById('credUseEleven'); if (cb) cb.checked = t.provider ? t.provider === 'elevenlabs' : true;
+      MB.getAppConfig('push_vapid_public').then(k => { const e = document.getElementById('credVapid'); if (e) e.value = k || ''; }).catch(() => {});
+      lockCredentialFields();
+    }
+    // In den einzelnen Bereichen: Zugangsdaten nur anzeigen, Bearbeitung oben in „Zugangsdaten & Schnellstart“
+    function lockCredentialFields() {
+      ['llmKey', 'imgflipUser', 'imgflipPass', 'elApiKey'].forEach(id => {
+        const e = document.getElementById(id); if (!e || e.dataset.locked) return;
+        e.readOnly = true; e.dataset.locked = '1'; e.style.opacity = '.6'; e.title = 'Bearbeiten oben unter „Zugangsdaten & Schnellstart“';
+        e.insertAdjacentHTML('afterend', '<div class="hint" style="font-size:.75em; opacity:.6;">↑ Bearbeiten unter „🔐 Zugangsdaten &amp; Schnellstart“</div>');
+      });
     }
     async function saveAllCredentials() {
       const st = document.getElementById('credState'); st.textContent = 'Speichere …';
@@ -5434,14 +5458,17 @@ function renderRanking() {
           const defs = [['voiceIdResult', 'MaddenBowl_Kommentator'], ['voiceIdPreview', 'MaddenBowl_Kommentatorin'], ['voiceIdAnnouncer', 'MaddenBowl_Ansager']];
           defs.forEach(([k, n]) => { const id = byName(n); if (id && (!t[k] || !voices.some(x => x.voice_id === t[k]))) t[k] = id; });
           const miss = defs.filter(([k]) => !t[k]).map(([, n]) => n);
-          voiceNote = miss.length ? ` · Stimmen nicht gefunden: ${miss.join(', ')}` : ' · Stimmen zugewiesen';
+          const vn = (id) => (voices.find(x => x.voice_id === id) || {}).name || id;
+          voiceNote = (miss.length ? ` · nicht gefunden: ${miss.join(', ')}` : '') + ` · Ergebnis: ${vn(t.voiceIdResult)}, Vorschau: ${vn(t.voiceIdPreview)}, Ring: ${vn(t.voiceIdAnnouncer)}`;
+          window.__ttsVoicesCache = voices;
         } catch (e) { voiceNote = ' · ElevenLabs-Key prüfen: ' + e.message; }
       }
       MB.Announcer.setTtsSettings(t);
       if (MB.LlmBlog) MB.LlmBlog.setKey(v('credOpenRouter'));
       MB.Records.setImgflipSettings({ ...MB.Records.getImgflipSettings(), username: v('credImgUser'), password: v('credImgPass') });
       if (songAutoSettings().enabled === undefined) setSongAuto({ enabled: true });
-      try { renderTtsSettingsPanel(); renderMemeSettingsPanel(); drawSongAutoBox(); } catch (e) { /* egal */ }
+      try { renderTtsSettingsPanel(); renderMemeSettingsPanel(); drawSongAutoBox(); if (MB.Announcer.getTtsSettings().apiKey) loadElevenLabsVoices(); } catch (e) { /* egal */ }
+      setTimeout(lockCredentialFields, 300);
       st.textContent = 'Gespeichert' + voiceNote + '.';
     }
     setTimeout(fillCredentials, 1200);
@@ -5453,6 +5480,8 @@ function renderRanking() {
       const llm = document.getElementById('llmPanel'), box = document.getElementById('llmCardBody');
       if (llm && box) { llm.style.marginTop = '0'; llm.style.borderTop = 'none'; box.innerHTML = ''; box.appendChild(llm); }
       drawGuestVoices();
+      lockCredentialFields();
+      if (MB.Announcer.getTtsSettings().apiKey && document.getElementById('elVoiceResult')) loadElevenLabsVoices().catch(() => {});
     };
     let guestVoiceCache = null;
     async function drawGuestVoices() {
@@ -5698,10 +5727,11 @@ function renderRanking() {
       if (!key) { alert('Bitte zuerst API-Key eingeben.'); return; }
       try {
         const voices = await MB.Announcer.fetchElevenLabsVoices(key);
-        const opts = voices.map(v => `<option value="${v.voice_id}">${v.name}</option>`).join('');
-        document.getElementById('elVoiceResult').innerHTML = opts;
-        document.getElementById('elVoicePreview').innerHTML = opts;
-        document.getElementById('elVoiceAnnouncer').innerHTML = opts;
+        const cur = MB.Announcer.getTtsSettings();
+        const opts = (sel) => voices.map(v => `<option value="${v.voice_id}" ${v.voice_id === sel ? 'selected' : ''}>${v.name}</option>`).join('');
+        document.getElementById('elVoiceResult').innerHTML = opts(cur.voiceIdResult);
+        document.getElementById('elVoicePreview').innerHTML = opts(cur.voiceIdPreview);
+        document.getElementById('elVoiceAnnouncer').innerHTML = opts(cur.voiceIdAnnouncer);
       } catch (e) {
         alert('Stimmen laden fehlgeschlagen: ' + e.message);
       }

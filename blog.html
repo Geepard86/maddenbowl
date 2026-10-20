@@ -468,6 +468,20 @@
     setTimeout(() => el.classList.remove('v2-article-highlight'), 2500);
   }
 
+  // Neue Beiträge ohne Neuladen der Seite: alle 60 s und beim Zurückkehren in die App
+  async function softReload() {
+    try {
+      const fresh = await MB.Blog.fetchAllArticles(200);
+      if (fresh.length && (!articles.length || String(fresh[0].id) !== String(articles[0].id) || fresh.length !== articles.length)) {
+        articles = fresh;
+        try { (await MB.Comments.fetchForArticles(articles.map(a => a.id))).forEach((v, k) => commentsByArticle.set(k, v)); } catch (e) { /* optional */ }
+        renderList();
+      }
+    } catch (e) { /* nächster Versuch */ }
+  }
+  window.addEventListener('mb-refresh', softReload);
+  setInterval(softReload, 60000);
+
   async function reload() {
     articles = await MB.Blog.fetchAllArticles(200);
     try { (await MB.Comments.fetchForArticles(articles.map(a => a.id))).forEach((v, k) => commentsByArticle.set(k, v)); } catch (e) { /* Kommentare optional */ }

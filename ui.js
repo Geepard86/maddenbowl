@@ -317,6 +317,40 @@
     });
   }
 
+  // ---------------------------------------------------------------
+  // WIEDERAUFNAHME: App aus dem Hintergrund / nach Verbindungsabbruch
+  //  - länger als 3 Min. im Hintergrund oder zwischendurch offline -> Seite sauber neu laden
+  //  - sonst nur leise aktualisieren (Event "mb-refresh")
+  //  - offline: kleiner Hinweis oben; sobald wieder online -> neu laden
+  //  - nicht neu laden, solange ungespeicherte Eingaben offen sind (window.__mbDirty / fokussiertes Textfeld)
+  // ---------------------------------------------------------------
+  function setupResume() {
+    let hiddenAt = 0, wasOffline = !navigator.onLine;
+    const busy = () => {
+      if (global.__mbDirty) return true;
+      if (/(admin|studio|seasons)\.html/i.test(location.pathname)) return true; // Show-/Verwaltungsseiten nie automatisch neu laden
+      const a = document.activeElement;
+      return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value);
+    };
+    const hardRefresh = () => { if (busy()) { try { global.dispatchEvent(new CustomEvent("mb-refresh")); } catch (e) { /* egal */ } } else location.reload(); };
+    const banner = (on) => {
+      let b = document.getElementById("mbOffline");
+      if (on && !b) { b = document.createElement("div"); b.id = "mbOffline"; b.textContent = "Keine Verbindung – die Anzeige wird aktualisiert, sobald du wieder online bist."; b.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99999;background:#d50a0a;color:#fff;text-align:center;font-size:.85em;font-weight:700;padding:6px 10px;"; document.body.appendChild(b); }
+      if (!on && b) b.remove();
+    };
+    if (wasOffline) banner(true);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+      if (!navigator.onLine) { banner(true); wasOffline = true; return; }
+      if (wasOffline || (hiddenAt && Date.now() - hiddenAt > 3 * 60 * 1000)) { wasOffline = false; hardRefresh(); return; }
+      try { global.dispatchEvent(new CustomEvent("mb-refresh")); } catch (e) { /* egal */ }
+    });
+    global.addEventListener("offline", () => { wasOffline = true; banner(true); });
+    global.addEventListener("online", () => { banner(false); if (wasOffline) { wasOffline = false; setTimeout(hardRefresh, 800); } });
+    // iOS: Seite aus dem Zurück-Cache wiederhergestellt -> frisch laden
+    global.addEventListener("pageshow", (e) => { if (e.persisted) hardRefresh(); });
+  }
+
   function withAchievements(cb) {
     try {
       if (MB.Achievements) { cb(MB.Achievements); return; }
@@ -424,6 +458,14 @@
     verifyAdminSession();
     if ("serviceWorker" in navigator) setTimeout(() => withPush(() => {}), 2500);
     hookCrown();
+    // Sammelkarte "Panoramablick": Handy quer drehen
+    try {
+      const mq = global.matchMedia && matchMedia("(orientation: landscape) and (max-height: 520px)");
+      const onRot = () => { if (mq && mq.matches && currentUser()) withAchievements((A) => A.track("egg", { id: "egg_landscape" })); };
+      if (mq && mq.addEventListener) mq.addEventListener("change", onRot); onRot();
+    } catch (e) { /* egal */ }
+    // Beim Zurückkehren in die App/den Tab sofort aktualisieren (nicht erst beim nächsten Intervall)
+    if (!global.__mbVisHook) { global.__mbVisHook = true; setupResume(); }
     // Als App installiert (Home-Bildschirm)? -> Sammelkarte
     try { if ((global.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true) setTimeout(() => withAchievements((A) => A.track("pwa_installed", {})), 3000); } catch (e) { /* egal */ }
     // Erstbesuch: Einführung automatisch auf dem Dashboard starten

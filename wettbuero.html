@@ -396,7 +396,9 @@
   // Auswahlen auf einmal wegschreiben — Alternative zum einzelnen,
   // dezenten "Tipp speichern"-Button pro Spiel/O-U/Tiebreaker.
   function countPendingSaves() {
-    return Object.keys(pendingMatchPicks).length + Object.keys(pendingOuPicks).length + (pendingTiebreaker !== null ? 1 : 0);
+    const n = Object.keys(pendingMatchPicks).length + Object.keys(pendingOuPicks).length + (pendingTiebreaker !== null ? 1 : 0);
+    window.__mbDirty = n > 0; // nicht automatisch neu laden, solange Tipps ungespeichert sind
+    return n;
   }
 
   async function saveAllPending() {

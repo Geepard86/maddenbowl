@@ -103,6 +103,7 @@
     { id: "egg_konami", emoji: "🎮", title: "Old School", desc: "Den Konami-Code eingegeben: ↑ ↑ ↓ ↓ ← → ← → B A (am Handy als Wischgeste + 2× tippen).", rarity: "legendary", term: "kurz", secret: true },
     { id: "egg_roster", emoji: "🕵️‍♂️", title: "Maulwurf im Kader", desc: "Den Spieler gefunden, der in keinem echten Kader steht.", rarity: "legendary", term: "kurz", secret: true },
     { id: "egg_wrong_card", emoji: "🎴", title: "Die falsche Karte", desc: "Auf eine Karte getippt, die eigentlich gar keine ist.", rarity: "legendary", term: "kurz", secret: true, eggCard: true },
+    { id: "egg_landscape", emoji: "📱", title: "Panoramablick", desc: "Das Handy quer gedreht, um alles zu sehen.", rarity: "rare", term: "kurz", secret: true },
     { id: "egg_crown", emoji: "👑", title: "Kronprinz", desc: "So lange auf die Krone getippt, bis sie heruntergefallen ist.", rarity: "epic", term: "kurz", secret: true },
     { id: "egg_bullseye", emoji: "🎯", title: "Bullseye", desc: "Die Zielscheibe eines Blog-Beitrags genau in der Mitte getroffen.", rarity: "legendary", term: "kurz", secret: true },
     // ---- Interview & Community
@@ -666,7 +667,8 @@
     const locked = !st.at && !st.demo;
     // Galerie (hideHow): gesperrte Karten ab Rare zeigen den Titel, verraten aber nicht, wie man sie bekommt.
     // Ohne hideHow (z.B. Popup, eigene Karten) bleiben geheime Karten komplett verdeckt.
-    const howHidden = locked && st.hideHow && def.rarity !== "limited" && (def.rarity !== "common" || def.secret);
+    // geheim wie alle Karten ab Rare – nur verpasste (abgelaufene) Limited-Karten verraten ihre Bedingung
+    const howHidden = locked && st.hideHow && (def.rarity !== "common" || def.secret) && !(def.rarity === "limited" && limitedState(def) === "over");
     const hidden = locked && def.secret && !st.hideHow;
     const idx = String(DEFS.indexOf(def) + 1).padStart(2, "0");
     let foot;
@@ -753,6 +755,17 @@
         }).join("")}</div>`;
       }).join("");
     attachTilt(el);
+    try {
+      const missedLim = DEFS.filter((d) => d.rarity === "limited" && !unlocked.has(d.id) && limitedState(d) === "over");
+      const fmM = new Map(); const c = sb();
+      if (c) { const { data } = await c.from("achievement_firsts").select("achievement_id, player_name"); (data || []).forEach((r) => fmM.set(r.achievement_id, r.player_name)); }
+      const takenU = DEFS.filter((d) => d.unique && !unlocked.has(d.id) && fmM.has(d.id));
+      if (missedLim.length || takenU.length) {
+        el.insertAdjacentHTML("beforeend", `<div class="ach-section" style="color:#ff8a8a">😢 Verpasst <span style="opacity:.6;font-weight:600;">· ${missedLim.length + takenU.length}</span></div>
+          <div class="ach-gallery">${missedLim.map((d) => cardHtml(d, { hideHow: true })).join("")}${takenU.map((d) => cardHtml(d, { holder: fmM.get(d.id), foreign: true, at: new Date().toISOString() })).join("")}</div>`);
+        attachTilt(el);
+      }
+    } catch (e) { /* optional */ }
     const egg = el.querySelector('.ach-card[data-id="egg_wrong_card"].locked');
     if (egg) egg.addEventListener("click", () => { if (!player) return; unlock("egg_wrong_card"); setTimeout(() => renderGallery(el), 400); }, { once: true });
   }
@@ -782,7 +795,7 @@
         const mine = player && unlocked.get(d.id);
         const open = limitedState(d) === "open";
         const n = limCount.get(d.id);
-        const html = cardHtml(d, mine ? { ...mine } : {});
+        const html = cardHtml(d, mine ? { ...mine } : { hideHow: true });
         const note = mine ? "✓ Gesammelt" : open ? "Noch erhältlich" : "Leider verpasst";
         return `<div style="display:flex; flex-direction:column; align-items:center; gap:6px;">${html}<div style="font-size:.8em; opacity:.8;">${note}${n != null ? ` · ${n}× vergeben` : ""}</div></div>`;
       }).join("")}</div>`;

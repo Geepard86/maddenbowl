@@ -353,6 +353,9 @@
         // kickoff, retrospective, progress, ...
         if (state) L.push(...tournamentFacts(state, history));
         if (kind === "progress" && (ctx.finishedCount || d.finishedCount)) L.push(`Stand: nach ${ctx.finishedCount || d.finishedCount} gespielten Partien`);
+        if (d.spurious && d.spurious.a) {
+          L.push("", `STATISTIK-ECKE (Schein-Korrelation): „${d.spurious.a}“ (Altima Bowl) hängt angeblich mit „${d.spurious.b}“ (echte Welt) zusammen. Diesen Abschnitt mit „Aus der Statistik-Ecke:“ beginnen und den (natürlich absurden) Zusammenhang humorvoll und ruhig ausführlicher herleiten – mit einer erfundenen, augenzwinkernden Kausalkette, KEINE Kennzahlen (kein r, kein Koeffizient, keine Prozentwerte).`);
+        }
         if (Array.isArray(d.interviews) && d.interviews.length) {
           L.push("", "INTERVIEWS (Rudi hat Spieler befragt – Antworten WÖRTLICH in Anführungszeichen zitieren, nichts hinzudichten, nichts umformulieren; leere Antwort = „Kein Kommentar“):");
           d.interviews.forEach((iv) => (iv.questions || []).forEach((q, i) => L.push(`  ${iv.name} – Frage: ${q} | Antwort: ${iv.answers && iv.answers[i] ? iv.answers[i] : "(kein Kommentar)"}`)));

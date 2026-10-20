@@ -491,7 +491,9 @@
   }
 
   function isPlayoffPhaseStarted(state) {
-    return (state.playoffMatches || []).some((m) => m.p1 && m.p2 && m.p2.id !== -1 && MB.isFinished(m));
+    // erst wenn die Gruppenphase komplett gespielt ist UND ein Playoff-Spiel ein Ergebnis hat
+    const groupDone = (state.matches || []).length > 0 && (state.matches || []).every((m) => m.s1 != null && m.s2 != null);
+    return groupDone && (state.playoffMatches || []).some((m) => m.p1 && m.p2 && m.p2.id !== -1 && m.s1 != null && m.s2 != null);
   }
 
   function buildPlayoffProgressArticle(state, history, finishedCount, opts) {
@@ -629,6 +631,17 @@
       );
     }
 
+    // Späte Gruppenphase: Blick auf die Setzliste für die Playoffs
+    try {
+      const total = (state.matches || []).length, played = (state.matches || []).filter((m) => m.s1 != null && m.s2 != null).length;
+      if (total && played / total >= 0.5 && sorted.length >= 4) {
+        const top = sorted.slice(0, 2).map((p) => p.name), bottom = sorted.slice(-2).map((p) => p.name);
+        parts.push(pick([
+          `Ein Blick auf die Setzliste: Wäre jetzt Schluss, gingen ${joinNames(top)} als Top-Seeds in die Playoffs. Für ${joinNames(bottom)} geht es dagegen schon darum, nicht ganz unten einzusteigen.`,
+          `Langsam zählt jeder Platz für die Playoff-Seeds. Aktuell hätten ${joinNames(top)} die beste Ausgangslage, ${joinNames(bottom)} müssten den beschwerlicheren Weg gehen.`,
+        ]));
+      }
+    } catch (e) { /* optional */ }
     const commentPara = buildCommentParagraph(opts && opts.comments);
     if (commentPara) parts.push(commentPara);
     parts.push(style.closer);
