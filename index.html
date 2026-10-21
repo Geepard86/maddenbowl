@@ -44,6 +44,8 @@
   .cd-u b { display: block; font-size: 1.9em; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
   .cd-u span { font-size: .62em; color: var(--v2-silver); letter-spacing: 1px; text-transform: uppercase; }
   .cd-cal { width:auto; margin:10px auto 0; padding:6px 14px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); font-weight:700; font-size:.8em; cursor:pointer; }
+  .v2-logo-slot { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
+  .v2-logo-slot img, .v2-logo-slot svg { max-width: 22px; max-height: 22px; }
   .tm-nav { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
   .tm-nav button { width:auto; margin:0; padding:4px 10px; border-radius:8px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); cursor:pointer; }
   .tm-head { display:flex; align-items:center; gap:12px; margin:6px 0 8px; }
@@ -90,7 +92,7 @@
   .v2-tabbar.v2-tabbar-compact { margin-bottom: 8px; }
   .v2-game-compact {
     display: grid;
-    grid-template-columns: 44px minmax(0,1fr) auto auto auto minmax(0,1fr) 6.6em;
+    grid-template-columns: 44px minmax(0,1fr) 24px 14px 24px minmax(0,1fr) 7.6em;
     align-items: center;
     gap: 5px;
     padding: 7px 0;
@@ -226,9 +228,9 @@
               ? `<span class="v2-live-tag"><span class="v2-live-dot"></span>LIVE</span>`
               : `<span class="v2-game-status">${m.time || '?'}</span>`}
             <span class="v2-name-away">${m.p2.name}</span>
-            ${MB.getLogoHtml(m.p2.team)}
+            <span class="v2-logo-slot">${m.p2.team ? MB.getLogoHtml(m.p2.team) : ''}</span>
             <span class="v2-at">@</span>
-            ${MB.getLogoHtml(m.p1.team)}
+            <span class="v2-logo-slot">${m.p1.team ? MB.getLogoHtml(m.p1.team) : ''}</span>
             <span class="v2-name-home">${m.p1.name}</span>
             <span class="v2-stadium">${m.stadium || ''}</span>
           </div>`).join('')

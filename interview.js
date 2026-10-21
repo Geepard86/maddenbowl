@@ -40,7 +40,7 @@
     const hist = H.filter((m) => m.homeScore != null && (m.homePlayer === name || m.awayPlayer === name)).map((m) => {
       const home = m.homePlayer === name; return { opp: home ? m.awayPlayer : m.homePlayer, own: home ? m.homeScore : m.awayScore, other: home ? m.awayScore : m.homeScore, season: m.season };
     });
-    const titles = (history && history.ringsByPlayer && history.ringsByPlayer.get && (history.ringsByPlayer.get(name) || []).length) || 0;
+    const titles = (history && history.ringsByPlayer && history.ringsByPlayer.get && Number(history.ringsByPlayer.get(name))) || 0;
     const seasons = new Set(hist.map((x) => x.season)).size;
     const Q = [];
     // Letztes Spiel

@@ -591,6 +591,11 @@
         segs.push({ text: a ? tag("[casual]") + a : tag("[sighs]") + "Kein Kommentar.", display: a || "Kein Kommentar.", voiceId: guest, role: "guest", name: iv.name });
       });
       segs.push({ text: tag("[warm]") + pick([`Danke, ${n}! Zurück zu dir, Mona.`, `Das war ${n} – vielen Dank!`]), voiceId: comVoice, role: "commentator" });
+      // Monas Kommentar zu den Antworten (KI-formuliert, sonst Baustein)
+      const allNo = (iv.answers || []).every((a) => !a);
+      const monaLine = iv.monaComment || (allNo ? pick([`Kein Kommentar – manchmal sagt das ja mehr als tausend Worte.`, `Da hat jemand offenbar einen Medientrainer.`])
+        : pick([`Klare Worte von ${n}. Mal sehen, ob den Worten auch Taten folgen.`, `Selbstbewusst – das gefällt mir. Jetzt muss es nur noch am Controller klappen.`, `Das nehmen wir mal so mit, ${n}.`]));
+      segs.push({ text: tag("[amused]") + monaLine, display: monaLine, voiceId: modVoice, role: "moderator" });
       await speakSequence(segs);
       studioPost({ type: "gag", which: "home" });
     });

@@ -89,6 +89,8 @@
       padding: 6px 10px; background: rgba(255,255,255,0.04); border-radius: 8px;
     }
   }
+  .mb-match-time { flex: 0 0 56px; }
+  .mb-match-row > .mb-match-stadium, .mb-match-row > .mb-stadium { flex: 0 0 7.6em; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 <!-- Vorschau beim Teilen des Seitenlinks (Messenger lesen nur statisches HTML) -->
 <meta property="og:title" content="Altima Bowl – Spielplan">
@@ -163,9 +165,9 @@
       if ((b.wins||0) !== (a.wins||0)) return (b.wins||0) - (a.wins||0);
       return (b.diff||0) - (a.diff||0);
     });
-    let html = `<table><tr><th>#</th><th>Name</th><th>W-L</th><th>Diff</th></tr>`;
+    let html = `<table><tr><th>#</th><th style="text-align:left;">Name</th><th>W-L</th><th>Diff</th></tr>`;
     sorted.forEach((p, i) => {
-      html += `<tr><td>${i+1}</td><td style="text-align:left;font-weight:bold;">${p.name}</td><td>${p.wins||0}-${(p.played||0)-(p.wins||0)}</td><td style="color:${(p.diff||0)>0?'var(--accent)':(p.diff||0)<0?'var(--v2-red)':'#eee'}">${(p.diff||0)>0?'+':''}${p.diff||0}</td></tr>`;
+      html += `<tr><td>${i+1}</td><td style="text-align:left;font-weight:bold;"><span style="display:inline-flex;align-items:center;gap:6px;">${p.team ? MB.getLogoHtml(p.team) : ''}${p.name}</span></td><td>${p.wins||0}-${(p.played||0)-(p.wins||0)}</td><td style="color:${(p.diff||0)>0?'var(--accent)':(p.diff||0)<0?'var(--v2-red)':'#eee'}">${(p.diff||0)>0?'+':''}${p.diff||0}</td></tr>`;
     });
     return html + `</table>`;
   }
@@ -188,7 +190,7 @@
           <span class="mb-score-or-vs">${middle}</span>
           <span class="mb-team away">${logo2}<span class="name">${p2Name}</span></span>
         </div>
-        ${stadium ? `<div class="mb-match-stadium">${stadium}</div>` : ''}
+        <div class="mb-match-stadium">${stadium || ''}</div>
       </div>`;
   }
 
