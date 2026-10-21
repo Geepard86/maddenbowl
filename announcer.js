@@ -583,12 +583,11 @@
       const comVoice = eleven ? settings.voiceIdResult : null;
       const guest = eleven ? ((await guestVoiceFor(iv.name)) || modVoice) : null;
       const n = speechName(iv.name);
-      studioPost({ type: "gag", which: "interview", name: iv.name });
       const segs = [{ text: tag("[cheerful]") + pick([`Rudi hat sich in der Mixed Zone ${n} geschnappt – hören wir rein!`, `Kurzer Besuch in der Mixed Zone: Rudi und ${n}.`, `Mikro an, Rudi ist bei ${n}!`]), voiceId: modVoice, role: "moderator" }];
       (iv.questions || []).forEach((q, i) => {
         const a = iv.answers && iv.answers[i];
         segs.push({ text: tag("[curious]") + q, voiceId: comVoice, role: "commentator" });
-        segs.push({ text: a ? tag("[casual]") + a : tag("[sighs]") + "Kein Kommentar.", display: a || "Kein Kommentar.", voiceId: guest, role: "guest", name: iv.name });
+        segs.push({ text: a ? tag("[casual]") + a : tag("[sighs]") + "Kein Kommentar.", display: a || "Kein Kommentar.", voiceId: guest, fallbackVoiceId: modVoice, role: "guest", name: iv.name });
       });
       segs.push({ text: tag("[warm]") + pick([`Danke, ${n}! Zurück zu dir, Mona.`, `Das war ${n} – vielen Dank!`]), voiceId: comVoice, role: "commentator" });
       // Monas Kommentar zu den Antworten (KI-formuliert, sonst Baustein)
@@ -596,7 +595,8 @@
       const monaLine = iv.monaComment || (allNo ? pick([`Kein Kommentar – manchmal sagt das ja mehr als tausend Worte.`, `Da hat jemand offenbar einen Medientrainer.`])
         : pick([`Klare Worte von ${n}. Mal sehen, ob den Worten auch Taten folgen.`, `Selbstbewusst – das gefällt mir. Jetzt muss es nur noch am Controller klappen.`, `Das nehmen wir mal so mit, ${n}.`]));
       segs.push({ text: tag("[amused]") + monaLine, display: monaLine, voiceId: modVoice, role: "moderator" });
-      await speakSequence(segs);
+      // alle Zeilen werden vorab erzeugt; die Mixed Zone geht erst auf, wenn die erste Zeile startet
+      await speakSequence(segs, { waitAll: true, onStart: () => studioPost({ type: "gag", which: "interview", name: iv.name }) });
       studioPost({ type: "gag", which: "home" });
     });
   }
@@ -1258,12 +1258,20 @@
       _studioCh = new BroadcastChannel("mb-studio");
       _studioCh.onmessage = (ev) => {
         const m = ev.data || {};
-        if (m.type === "studio-hello") _studioSeen = Date.now();
+        if (/^(studio-hello|audio-ack|audio-done|song-ack|song-done)$/.test(m.type)) _studioSeen = Date.now();
         if ((m.type === "audio-ack" || m.type === "audio-done" || m.type === "song-ack" || m.type === "song-done") && _studioWait.has(m.id)) _studioWait.get(m.id)(m.type, m);
       };
     }
   } catch (e) { _studioCh = null; }
-  function studioConnected() { return !!_studioCh && Date.now() - _studioSeen < 6000; }
+  function studioConnected() { return !!_studioCh && Date.now() - _studioSeen < 20000; }
+  // Takt aus einem Web Worker: Browser bremsen Timer in nicht fokussierten/verdeckten Fenstern stark,
+  // Worker-Timer laufen weiter -> Herzschlag bleibt stabil, auch wenn man im anderen Fenster arbeitet.
+  function workerTicker(ms, fn) {
+    try {
+      const w = new Worker(URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${ms});`], { type: "text/javascript" })));
+      w.onmessage = fn; return w;
+    } catch (e) { return setInterval(fn, ms); }
+  }
   function studioAudioMode() { try { return localStorage.getItem(STUDIO_AUDIO_KEY) || "admin"; } catch (e) { return "admin"; } }
   function setStudioAudioMode(v) { try { localStorage.setItem(STUDIO_AUDIO_KEY, v === "studio" ? "studio" : "admin"); } catch (e) { /* egal */ } }
   function studioPost(msg) { try { if (_studioCh) _studioCh.postMessage(msg); } catch (e) { /* egal */ } }
@@ -1273,13 +1281,19 @@
     if (studioAudioMode() !== "studio" || !studioConnected()) return false;
     let blob;
     try { blob = await (await fetch(url)).blob(); } catch (e) { return false; }
+    // Clip-Länge vorab bestimmen (Fallback, falls die "fertig"-Meldung des Studios hängt)
+    let dur = 0;
+    try { dur = await new Promise((res) => { const a = new Audio(); a.preload = "metadata"; a.onloadedmetadata = () => res(isFinite(a.duration) ? a.duration : 0); a.onerror = () => res(0); a.src = url; setTimeout(() => res(0), 2500); }); } catch (e) { dur = 0; }
     const id = "a" + Date.now() + Math.random().toString(36).slice(2, 7);
     return await new Promise((resolve) => {
-      let acked = false;
-      const done = (ok) => { _studioWait.delete(id); clearTimeout(t1); clearTimeout(t2); resolve(ok); };
-      const t1 = setTimeout(() => { if (!acked) done(false); }, 1500);        // keine Antwort -> lokal spielen
+      let acked = false, tDur = null;
+      const done = (ok) => { _studioWait.delete(id); clearTimeout(t1); clearTimeout(t2); clearTimeout(tDur); resolve(ok); };
+      const t1 = setTimeout(() => { if (!acked) done(false); }, 6000);       // Studio antwortet gar nicht -> lokal spielen
       const t2 = setTimeout(() => done(true), 120000);                       // Sicherheitsnetz
-      _studioWait.set(id, (type) => { if (type === "audio-ack") acked = true; else done(true); });
+      _studioWait.set(id, (type) => {
+        if (type === "audio-ack") { acked = true; if (dur) tDur = setTimeout(() => done(true), (dur + 0.35) * 1000); }
+        else done(true);
+      });
       studioPost({ type: "audio", id, blob });
     });
   }
@@ -1379,6 +1393,10 @@
           audioPromise: fetchElevenLabsAudioUrl(seg.text, {
             apiKey: settings.apiKey, voiceId: seg.voiceId, modelId: settings.modelId,
           }).catch((e) => {
+            if (seg.fallbackVoiceId && seg.fallbackVoiceId !== seg.voiceId) {
+              console.warn("Stimme fehlgeschlagen, nehme Ersatzstimme:", e);
+              return fetchElevenLabsAudioUrl(seg.text, { apiKey: settings.apiKey, voiceId: seg.fallbackVoiceId, modelId: settings.modelId }).catch(() => null);
+            }
             console.warn("ElevenLabs-Vorgenerierung fehlgeschlagen, Zeile bleibt stumm:", e);
             return null;
           }),
@@ -1387,12 +1405,14 @@
       return { seg, audioPromise: null };
     });
 
+    if (opts && opts.waitAll) { try { await Promise.all(prepared.map((p) => p.audioPromise)); } catch (e) { /* einzelne Zeilen dürfen fehlen */ } }
     let gateWaited = false;
     for (const { seg, audioPromise } of prepared) {
       if (audioPromise) {
         const url = await audioPromise; // meist schon fertig, da parallel gestartet
         if (url) {
           if (!gateWaited && opts && opts.gate) { gateWaited = true; try { await opts.gate; } catch (e) {} }
+          if (opts && opts.onStart && !opts._started) { opts._started = true; try { opts.onStart(); } catch (e) { /* egal */ } }
           const role = seg.role || _roleForVoice(seg.voiceId, settings);
           _emitSpeak({ type: "start", role, text: seg.display || seg.text, name: seg.name || null });
           await playAudioUrl(url);
@@ -1839,6 +1859,6 @@
     setNicknames, getNickname,
     onSpeak,
     prepareRingIntro,
-    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview,
+    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview, workerTicker,
   };
 })(window);

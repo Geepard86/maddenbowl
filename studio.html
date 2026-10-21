@@ -369,7 +369,7 @@
       else if (m.type === 'ds-spin') { const el = document.getElementById('dsSlotSpin'); if (el) el.textContent = m.text; }
       else if (m.type === 'ds-roster') { rosterCache.set(m.teamId, m.row); (rosterWait.get(m.teamId) || []).forEach(fn => fn(m.row)); rosterWait.delete(m.teamId); }
     };
-    setInterval(() => { try { ch.postMessage({ type: 'studio-hello' }); } catch (e) { /* egal */ } }, 2000);
+    (MB.Announcer && MB.Announcer.workerTicker ? MB.Announcer.workerTicker : (ms, fn) => setInterval(fn, ms))(2000, () => { try { ch.postMessage({ type: 'studio-hello' }); } catch (e) { /* egal */ } });
     ch.postMessage({ type: 'studio-hello' });
   }
   // Musikvideo: die Song-Bühne läuft hier im Vollbild (Bild + Ton synchron).
@@ -414,17 +414,21 @@
     } catch (e) { console.warn('Draft-Spiegelung', m.fn, e); }
   }
 
+  // Audio-Warteschlange: Clips nie übereinander, sondern strikt nacheinander abspielen
+  let audioChain = Promise.resolve();
   function playAudio(m) {
     ch.postMessage({ type: 'audio-ack', id: m.id });
-    const url = URL.createObjectURL(m.blob);
-    const a = new Audio(url); lastAudio = a;
-    const done = () => { URL.revokeObjectURL(url); ch.postMessage({ type: 'audio-done', id: m.id }); };
-    a.onended = done; a.onerror = done;
-    a.play().catch(done);
+    audioChain = audioChain.then(() => new Promise((resolve) => {
+      const url = URL.createObjectURL(m.blob);
+      const a = new Audio(url); lastAudio = a;
+      const done = () => { URL.revokeObjectURL(url); ch.postMessage({ type: 'audio-done', id: m.id }); resolve(); };
+      a.onended = done; a.onerror = done;
+      a.play().catch(done);
+    }));
   }
   function drawStatus() {
     const audio = (() => { try { return localStorage.getItem('mb_studio_audio') || 'admin'; } catch (e) { return 'admin'; } })();
-    $('stStatus').innerHTML = (Date.now() - lastAdmin < 7000 ? '<b>● Admin verbunden</b>' : '○ Admin-Seite nicht verbunden') + `<br>Ton der Ansagen: ${audio === 'studio' ? 'hier' : 'Admin-Laptop'}`;
+    $('stStatus').innerHTML = (Date.now() - lastAdmin < 20000 ? '<b>● Admin verbunden</b>' : '○ Admin-Seite nicht verbunden') + `<br>Ton der Ansagen: ${audio === 'studio' ? 'hier' : 'Admin-Laptop'}`;
     const d = new Date(); $('stClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
   setInterval(drawStatus, 1000); drawStatus();
