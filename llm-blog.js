@@ -93,11 +93,65 @@
   //   modelMode: "auto"   -> geeignetstes verfügbares Modell + zweitgeeignetstes als Fallback
   //              "manual" -> primaryModel + fallbackModel
   //   allowPaid / maxCentPerArticle: ob (und bis zu welchen geschätzten Kosten) Auto auch Bezahl-Modelle nimmt
+  // Prompt 2: nur Daten, kein Ausgangstext. Aufbau je Beitragsart vorgegeben, damit kein Roman entsteht.
+  const DEFAULT_DATA_PROMPT = [
+    "Du bekommst KEINEN Ausgangstext, sondern nur Daten. Schreibe den Beitrag selbst – lebendig, pointiert, mit eigenen Ideen, aber ausschließlich auf Basis der Daten.",
+    "Wähle die spannendsten Fakten aus, du musst nicht alles verwenden. Keine Aufzählungen, kein Tabellen-Nachbeten.",
+  ].join("\n");
+  const STRUCTURE = {
+    portrait: "Aufbau: 1 kurzer Einleitungsabsatz, dann genau 1 Absatz pro vorgestelltem Spieler (2–4 Sätze), zum Schluss 1 kurzer Ausblick-Absatz.",
+    progress: "Aufbau: 1 Einleitungsabsatz zur Lage, 2–3 Absätze zu den spannendsten Spielern/Duellen, 1 kurzer Ausblick. Platzhalter wie [[tabelle]] unverändert ans Ende.",
+    kickoff: "Aufbau: 1 Einleitung, 1 Absatz zum Teilnehmerfeld und Favoriten, 1 kurzer Schlussabsatz.",
+    record: "Aufbau: 2–3 kurze Absätze: was passiert ist, warum es besonders ist, eine Pointe zum Schluss.",
+    finals: "Aufbau: 1 Einleitung, je 1 Absatz zu beiden Finalisten, 1 Ausblick.",
+    champion: "Aufbau: 1 Einleitung mit dem Ergebnis, 1–2 Absätze zum Weg des Champions, 1 Schlussabsatz.",
+    wrapup: "Aufbau: 1 Einleitung, 2–3 Absätze zu den Geschichten des Turniers, 1 Schlussabsatz.",
+    retrospective: "Aufbau: 1 Einleitung, 3–5 Absätze zur Saison (Verlauf, Playoffs, Champion, Rekorde), 1 Schlussabsatz.",
+  };
+  // Alle relevanten Daten zu den beteiligten Spielern (komplette Historie + laufendes Turnier)
+  function richFacts(article, ctx) {
+    try {
+      const st = (ctx && ctx.state) || {}, H = (ctx && ctx.history) || {};
+      const d = article.data || {};
+      let names = [].concat(d.players || [], (d.standings || []).map((x) => x.name), d.player || [], d.opponent || [], article._names || []).filter(Boolean);
+      if (!names.length) names = (st.players || []).map((p) => p.name);
+      names = [...new Set(names)].slice(0, 12);
+      const M = (H.matches || []).filter((m) => m.homeScore != null);
+      const L = ["", "DATEN ZU DEN SPIELERN (komplette Historie vor diesem Turnier + aktuelles Turnier):"];
+      names.forEach((n) => {
+        const g = M.filter((m) => m.homePlayer === n || m.awayPlayer === n).map((m) => { const h = m.homePlayer === n; return { opp: h ? m.awayPlayer : m.homePlayer, own: h ? m.homeScore : m.awayScore, other: h ? m.awayScore : m.homeScore, season: m.season, stage: m.stage }; });
+        const w = g.filter((x) => x.own > x.other).length, l = g.length - w;
+        const seasons = [...new Set(g.map((x) => x.season))].sort();
+        const titles = Number(H.ringsByPlayer && H.ringsByPlayer.get && H.ringsByPlayer.get(n)) || 0;
+        const best = g.slice().sort((a, b) => (b.own - b.other) - (a.own - a.other))[0];
+        const worst = g.slice().sort((a, b) => (a.own - a.other) - (b.own - b.other))[0];
+        const high = g.slice().sort((a, b) => b.own - a.own)[0];
+        const cur = (st.players || []).find((p) => p.name === n);
+        L.push(`- ${n}: ${seasons.length ? `Saisons ${seasons.join(", ")}; Bilanz ${w}-${l}; Ø ${(g.reduce((a, x) => a + x.own, 0) / Math.max(1, g.length)).toFixed(1)} Punkte; Titel ${titles}` : "Rookie (keine Historie)"}` +
+          (best ? `; höchster Sieg ${best.own}:${best.other} gegen ${best.opp} (${best.season})` : "") +
+          (worst && worst.own < worst.other ? `; bitterste Niederlage ${worst.own}:${worst.other} gegen ${worst.opp} (${worst.season})` : "") +
+          (high ? `; meiste Punkte ${high.own} gegen ${high.opp} (${high.season})` : "") +
+          (cur ? `; aktuelles Turnier: Team ${cur.team || "?"}, ${cur.wins || 0}-${Math.max(0, (cur.played || 0) - (cur.wins || 0))}, Differenz ${cur.diff || 0}` : ""));
+      });
+      // direkter Vergleich unter den beteiligten Spielern
+      const pairs = [];
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+        const a = names[i], b = names[j];
+        const g = M.filter((m) => (m.homePlayer === a && m.awayPlayer === b) || (m.homePlayer === b && m.awayPlayer === a));
+        if (g.length >= 2) { const wa = g.filter((m) => (m.homePlayer === a ? m.homeScore > m.awayScore : m.awayScore > m.homeScore)).length; pairs.push(`${a} vs. ${b}: ${wa}-${g.length - wa} (${g.length} Duelle)`); }
+      }
+      if (pairs.length) L.push("DIREKTE DUELLE:", ...pairs.slice(0, 12).map((x) => "  " + x));
+      return L.join("\n");
+    } catch (e) { return ""; }
+  }
+
   function defaultSettings() {
     const kinds = {};
     Object.keys(KINDS).forEach((k) => { kinds[k] = { enabled: false, model: "" }; });
     return { modelMode: "auto", primaryModel: "", fallbackModel: "", allowPaid: false, maxCentPerArticle: 2,
-      temperature: 0.8, timeoutSec: 120, kinds, prompts: {} };
+      temperature: 0.8, timeoutSec: 120, kinds, prompts: {},
+      promptMode: "base",            // "base" = Standard (Fakten + Ausgangstext), "data" = Prompt 2 (nur Daten, freier geschrieben)
+      dataPrompt: DEFAULT_DATA_PROMPT };
   }
   function mergeSettings(s) {
     const d = defaultSettings();
@@ -407,6 +461,17 @@
     }
     const meta = KINDS[article.kind] || { label: article.kind, words: "100 bis 200" };
     const facts = article.facts || factsFor(article, ctx);
+    const s0 = settings || getSettings();
+    if (article._promptMode === "data" || (!article._promptMode && s0.promptMode === "data")) {
+      const user = [
+        `BEITRAGSART: ${meta.label}`, `LÄNGE: etwa ${meta.words} Wörter`, STRUCTURE[article.kind] || "", "",
+        s0.dataPrompt || DEFAULT_DATA_PROMPT, "",
+        "FAKTEN (nur diese darfst du verwenden):", facts || "(keine weiteren Fakten)",
+        richFacts(article, ctx || article._ctx), article._extraFacts ? "\nZUSÄTZLICHE FAKTEN:\n" + article._extraFacts : "",
+        "", "Format wie gewohnt: erste Zeile „TITEL: …“, dann der Text.",
+      ].filter((x) => x !== null).join("\n") + markerHint(article);
+      return { messages: [{ role: "system", content: sys }, { role: "user", content: user }], facts: facts + "\n" + richFacts(article, ctx || article._ctx) + (article._extraFacts || "") };
+    }
     const user = [
       `BEITRAGSART: ${meta.label}`,
       `LÄNGE: etwa ${meta.words} Wörter`,
@@ -537,7 +602,7 @@
       for (let tryNo = 0; tryNo < 2; tryNo++) {
         const t0 = Date.now();
         try {
-          const out = await generate({ key, model, article, ctx, temperature: s.temperature, timeoutSec: s.timeoutSec, settings: s });
+          const out = await generate({ key, model, article, ctx, temperature: article._temperature != null ? article._temperature : s.temperature, timeoutSec: s.timeoutSec, settings: s });
           const a = { model: out.model, seconds: (Date.now() - t0) / 1000, problems: out.problems, usage: out.usage };
           attempts.push(a); if (onAttempt) onAttempt(a, out);
           if (!out.problems.length) return { out, attempts, chain };
@@ -597,7 +662,7 @@
 
   global.MB.LlmBlog = {
     KINDS, SYSTEM_PROMPT, defaultPrompt, getPrompt,
-    getSettings, loadSettings, saveSettings, defaultSettings,
+    getSettings, loadSettings, saveSettings, defaultSettings, richFacts, DEFAULT_DATA_PROMPT,
     getKey, setKey, getLog, clearLog,
     fetchModels, pickAutoModels, resolveModels, costCents, fmtCost, scoreModel, EST_IN_TOKENS, EST_OUT_TOKENS,
     factsFor, buildMessages, buildPolishMessages, generate, generateWithFallback, maybeRewrite, validate, cleanOutput,

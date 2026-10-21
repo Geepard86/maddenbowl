@@ -64,7 +64,7 @@
     const article = (a, when) => {
       if (!a) return;
       stats.articles++;
-      articlesList.push({ kind: a.kind, title: a.title, body: a.body, facts: a.facts, _names: a._names, media_url: a.media_url, data: a.data, when });
+      articlesList.push({ kind: a.kind, title: a.title, body: a.body, facts: a.facts, _names: a._names, media_url: a.media_url, data: a.data, when, _record: a._record || null });
       blog.push("", "=".repeat(72), `${a.title || "(ohne Titel)"}`, `   Art: ${a.kind || "?"}  ·  erschienen: ${when}`, "=".repeat(72), strip(a.body));
       if (a.media_url) blog.push(`   [Medium eingebettet: ${a.media_type || "?"}]`);
       const issues = A.lintText(strip(a.body), { names: playerList, speech: false });
@@ -260,7 +260,7 @@
       // ---- Blog: Rekorde, Meilenstein-Rekorde, Power Ranking, Porträts, Abschluss ----
       try {
         (R.detectRecords(work, history, { homeName, awayName, homeScore: orig.s1, awayScore: orig.s2 }) || []).forEach((rec) => {
-          article(B.buildRecordArticle(rec, { state: work, history }), `nach Spiel ${n}`);
+          { const ra = B.buildRecordArticle(rec, { state: work, history }); if (ra) ra._record = rec; article(ra, `nach Spiel ${n}`); }
         });
         (R.detectMilestoneRecords(work, flags) || []).forEach((rec) => {
           flags[rec.type] = true;

@@ -66,7 +66,8 @@
   }
   .mb-match-teams { flex: 1; display: grid; grid-template-columns: minmax(0,1fr) 3.4em minmax(0,1fr); align-items: center; gap: 6px; min-width: 0; font-size: 0.86em; font-weight: 700; }
   .mb-team { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
-  .mb-team.away { flex-direction: row-reverse; text-align: right; }
+  .mb-team.home { flex-direction: row-reverse; justify-content: flex-start; text-align: right; }
+  .mb-team.away { flex-direction: row; justify-content: flex-start; text-align: left; }
   .mb-team .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mb-team img.logo-img { width: 16px; height: 16px; flex: 0 0 auto; }
   .mb-score-or-vs { text-align: center; opacity: 0.5; font-size: 0.82em; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }

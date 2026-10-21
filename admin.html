@@ -380,6 +380,34 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
         <div class="card" style="margin-bottom:15px;">
           <h2>🤖 KI-Texte &amp; Blog</h2>
           <div style="margin-bottom:10px;"><button class="btn-secondary" style="width:auto;" onclick="downloadReplay('blog')">📰 Testlauf: alle Blog-Beiträge des letzten Turniers</button></div>
+          <div style="padding:10px; border-radius:8px; background:rgba(0,0,0,.18); margin-bottom:12px;">
+            <div style="font-weight:700; margin-bottom:6px;">✍️ Prompt-Variante</div>
+            <label style="display:flex; gap:8px; align-items:center; font-size:.9em;"><input type="radio" name="llmPromptMode" value="base" style="width:auto;" onchange="setLlmPromptMode(this.value)"> Prompt 1 (Standard): Fakten + Ausgangstext</label>
+            <label style="display:flex; gap:8px; align-items:center; font-size:.9em;"><input type="radio" name="llmPromptMode" value="data" style="width:auto;" onchange="setLlmPromptMode(this.value)"> Prompt 2 (Test): nur Daten, komplette Historie der beteiligten Spieler, vorgegebener Aufbau</label>
+            <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Zusatz-Anweisung für Prompt 2 (die Grundregeln/Stile der Beitragsarten gelten weiter):</div>
+            <textarea id="llmDataPrompt" rows="3" style="width:100%; font-size:.85em;"></textarea>
+            <button class="btn-secondary" style="width:auto; margin-top:6px;" onclick="saveLlmDataPrompt()">💾 Prompt 2 speichern</button>
+          </div>
+          <div style="padding:10px; border-radius:8px; background:rgba(0,0,0,.18); margin-bottom:12px;">
+            <div style="font-weight:700; margin-bottom:6px;">🧪 KI-Vergleichstest (schreibt in den Blog des laufenden Turniers)</div>
+            <div class="hint" style="font-size:.8em; opacity:.75; margin-bottom:6px;">Spielt das letzte Turnier nach (Original-Zeitplan) und schreibt je Beitragsart einen Beitrag in 4 Varianten: Prompt 1, Prompt 1 kreativ, Prompt 2, Prompt 2 kreativ – mit Imgflip-Memes zu den Rekorden, Memes + Statistik-Ecke samt Grafik im Power Ranking und simulierten Unique-Karten im Turnierstart. Dauert einige Minuten (ca. 4 KI-Aufrufe pro Beitragsart).</div>
+            <button class="btn-secondary" style="width:auto;" onclick="runLlmCompareTest()">▶ Vergleichstest starten</button>
+            <div id="llmCompareState" class="hint" style="margin-top:6px; font-size:.85em;"></div>
+          </div>
+          <div style="padding:10px; border-radius:8px; background:rgba(0,0,0,.18); margin-bottom:12px;">
+            <div style="font-weight:700; margin-bottom:6px;">📚 Turnier-Rückblick per KI</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;"><select id="retroSeason" style="width:auto;"></select>
+              <button class="btn-secondary" style="width:auto; margin:0;" onclick="buildRetroFacts()">Daten laden</button></div>
+            <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Auftrag (bearbeitbar):</div>
+            <textarea id="retroPrompt" rows="3" style="width:100%; font-size:.85em;">Schreibe einen unterhaltsamen Rückblick auf diese Saison des Altima Bowl: Verlauf, Überraschungen, Playoffs und Champion. Erwähne Rekorde, die bis heute gelten.</textarea>
+            <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Ergänzende Fakten (optional, z. B. Anekdoten vom Abend):</div>
+            <textarea id="retroExtra" rows="2" style="width:100%; font-size:.85em;"></textarea>
+            <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Daten, die die KI bekommt:</div>
+            <textarea id="retroFacts" rows="5" style="width:100%; font-size:.78em; font-family:monospace;" readonly></textarea>
+            <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;"><button class="btn-secondary" style="width:auto; margin:0;" onclick="generateRetro()">✍️ Rückblick schreiben</button>
+              <button class="btn-secondary" style="width:auto; margin:0;" id="retroPublishBtn" onclick="publishRetro()" disabled>📰 Im Blog veröffentlichen</button></div>
+            <div id="retroOut" style="margin-top:8px; font-size:.88em; white-space:pre-wrap;"></div>
+          </div>
           <div id="llmCardBody"></div>
         </div>
       </div>
@@ -5556,6 +5584,141 @@ function renderRanking() {
         const clean = t.replace(/^["„“]+|["„“]+$/g, '').replace(/\s+/g, ' ').trim();
         return clean && clean.length < 260 ? clean : null;
       } catch (e) { return null; }
+    }
+
+    // ---------- KI: Prompt-Variante ----------
+    async function setLlmPromptMode(v) { const s = { ...MB.LlmBlog.getSettings(), promptMode: v }; await MB.LlmBlog.saveSettings(s); }
+    async function saveLlmDataPrompt() { const s = { ...MB.LlmBlog.getSettings(), dataPrompt: document.getElementById('llmDataPrompt').value }; await MB.LlmBlog.saveSettings(s); alert('Prompt 2 gespeichert.'); }
+    setTimeout(async () => {
+      try { await MB.LlmBlog.loadSettings(); } catch (e) { /* egal */ }
+      const s = MB.LlmBlog ? MB.LlmBlog.getSettings() : {};
+      document.querySelectorAll('input[name="llmPromptMode"]').forEach(r => { r.checked = r.value === (s.promptMode || 'base'); });
+      const t = document.getElementById('llmDataPrompt'); if (t) t.value = s.dataPrompt || (MB.LlmBlog && MB.LlmBlog.DEFAULT_DATA_PROMPT) || '';
+      fillRetroSeasons();
+    }, 1600);
+
+    // ---------- KI-Vergleichstest ----------
+    async function runLlmCompareTest() {
+      const st = document.getElementById('llmCompareState'); const say = (t) => { st.textContent = t; };
+      const tid = MB.getCurrentTournamentId(); if (!tid) { say('Kein laufendes Turnier – bitte erst ein (Test-)Turnier starten.'); return; }
+      if (!MB.LlmBlog.getKey()) { say('Kein OpenRouter-Key.'); return; }
+      say('Spiele das letzte Turnier nach …');
+      const lt = await loadLastTournament(true); if (!lt || !lt.state) { say('Kein abgeschlossenes Turnier gefunden.'); return; }
+      const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
+      // je Beitragsart der erste Beitrag (Rekorde: bis zu 2 verschiedene)
+      const pickList = []; const seen = {};
+      res.articles.forEach(a => { const k = a.kind; seen[k] = (seen[k] || 0) + 1; if (seen[k] <= (k === 'record' ? 2 : 1) && MB.LlmBlog.KINDS[k]) pickList.push(a); });
+      // simulierte Unique-Karten eines ersten Turniers (für den Turnierstart)
+      const ps = (lt.state.players || []).map(p => p.name);
+      const simUnique = `Simulation – vor dem Turnierstart vergebene Unique-Karten: „Frühstarter“ (${ps[0]}), „Pionier“ (${ps[1]}, allererster Tipp), „Chefscout“ (${ps[2]}, als Erster alle 32 Kader angesehen), „Erster Entwurf“ (${ps[3]}, erste eigene Spielerfigur).`;
+      const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]];
+      const s0 = MB.LlmBlog.getSettings(); let done = 0, fail = 0;
+      // Memes wie im echten Ablauf: je Rekord-Beitrag ein Imgflip-Meme (für alle 4 Varianten dasselbe);
+      // das Power Ranking bekommt die Memes der Rekorde davor + die Statistik-Ecke mit Grafik
+      const memeOf = new Map(); const memesSoFar = [];
+      const imgOk = MB.Records.hasImgflipSettings && MB.Records.hasImgflipSettings();
+      for (const a of pickList) {
+        if (a.kind === 'record' && a._record && imgOk) {
+          say(`Erzeuge Meme für „${a.title}“ …`);
+          try { const r = await MB.Records.generateImgflipMeme(a._record, MB.Records.getImgflipSettings()); if (r && r.url) { memeOf.set(a, r.url); memesSoFar.push(r.url); } } catch (e) { console.warn('Test-Meme', e); }
+        }
+        if (a.kind === 'progress') {
+          a._memes = memesSoFar.slice(0, 2);
+          try {
+            say('Suche eine Schein-Korrelation für das Power Ranking …');
+            const cands = await MB.Spurious.findAllOverallCandidates(lt.state, new Set(), { limit: 1 });
+            const c = cands && cands[0];
+            if (c) {
+              const story = MB.Spurious.buildSpuriousStory ? MB.Spurious.buildSpuriousStory(c) : null;
+              const paras = story && story.body ? String(story.body).split(/\n{2,}/).map(p => p.replace(/<[^>]+>/g, ' ').replace(/\[\[[^\]]+\]\]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean) : [];
+              const bad = (x) => /korrel|koeffizient|\br\s*=|r-wert|signifikan|statistisch|\d+[,.]\d+/i.test(x);
+              const txt = paras.slice(1, 3).map(p => (p.match(/[^.!?]+[.!?]+/g) || []).filter(x => !bad(x)).slice(0, 2).join(' ')).filter(Boolean).join(' ');
+              a._spurious = { c, teaser: '📊 Aus der Statistik-Ecke: ' + (txt || `${c.mbLabel} und „${c.germanName}“ bewegen sich auffällig im Gleichschritt.`) };
+              try { a._spurious.url = await MB.Records.uploadMemeToStorage(MB.Spurious.renderChartCanvas(c), tid, 'spurious'); } catch (e) { /* ohne Grafik */ }
+            }
+          } catch (e) { console.warn('Test-Spurious', e); }
+        }
+      }
+      for (const a of pickList) {
+        for (const [label, mode, temp] of variants) {
+          say(`Schreibe ${MB.LlmBlog.KINDS[a.kind].label} (${label}) … ${done + fail + 1}/${pickList.length * variants.length}`);
+          const art = { ...a, _promptMode: mode, _temperature: temp, _ctx: { state: lt.state, history: lt.history }, _extraFacts: a.kind === 'kickoff' ? simUnique : '' };
+          // Power Ranking: Statistik-Ecke + Bild-Platzhalter wie im echten Ablauf
+          const imgs = a.kind === 'record' ? (memeOf.get(a) ? [memeOf.get(a)] : []) : a.kind === 'progress' ? [...(a._memes || []), ...(a._spurious && a._spurious.url ? [a._spurious.url] : [])] : [];
+          if (a.kind === 'progress') {
+            const extra = [];
+            (a._memes || []).forEach((u, k) => extra.push(`[[bild:${k}]]`));
+            if (a._spurious) { extra.push(a._spurious.teaser); if (a._spurious.url) extra.push(`[[bild:${(a._memes || []).length}]]`); art.data = { ...(art.data || {}), spurious: { a: a._spurious.c.mbLabel, b: a._spurious.c.germanName } }; }
+            art.body = String(a.body || '').replace('[[tabelle]]', extra.join('\n\n') + '\n\n[[tabelle]]');
+          }
+          try {
+            const { out } = await MB.LlmBlog.generateWithFallback({ article: art, ctx: art._ctx, settings: { ...s0, kinds: { ...s0.kinds, [a.kind]: { ...(s0.kinds[a.kind] || {}), enabled: true } } } });
+            if (!out) { fail++; continue; }
+            await MB.Blog.pushArticle(tid, { kind: a.kind, title: `[Test ${label}] ${out.title || a.title}`, body: out.body, media_url: imgs[0] || a.media_url || null, media_type: (imgs[0] || a.media_url) ? 'image' : null,
+              data: { ...(art.data || {}), ...(imgs.length > 1 ? { extra_media: imgs.slice(1) } : {}), llmTest: label, writer: out.model } });
+            done++;
+          } catch (e) { fail++; console.warn('KI-Test', e); }
+        }
+      }
+      say(`Fertig: ${done} Test-Beiträge im Blog${fail ? `, ${fail} fehlgeschlagen` : ''}. Titel beginnen mit „[Test …]“.`);
+    }
+
+    // ---------- Turnier-Rückblick per KI ----------
+    let retroSeasons = [], retroResult = null;
+    async function fillRetroSeasons() {
+      try { retroSeasons = await MB.loadHistorySeasons(); } catch (e) { retroSeasons = []; }
+      const sel = document.getElementById('retroSeason'); if (!sel) return;
+      sel.innerHTML = retroSeasons.map((x, i) => `<option value="${i}">Saison ${x.season} (${i + 1}. Altima Bowl)</option>`).join('');
+    }
+    async function buildRetroFacts() {
+      const i = Number(document.getElementById('retroSeason').value); const se = retroSeasons[i]; if (!se) return;
+      let H = null; try { H = await MB.loadAndBuildHistory(); } catch (e) { H = null; }
+      const L = [`Saison ${se.season} – der ${i + 1}. Altima Bowl, ${(se.players || []).length} Teilnehmer.`];
+      L.push('TEILNEHMER & TEAMS: ' + (se.players || []).map(p => `${p.name} (${((MB.nflTeams || []).find(t => t.id === p.team) || {}).n || p.team || '?'})`).join(', '));
+      L.push('ABSCHLUSSTABELLE: ' + (se.standings || []).map(r => `${r.rank}. ${r.name}`).join(', '));
+      const nameOf = (team) => ((se.players || []).find(p => p.team === team) || {}).name || team;
+      L.push('ALLE SPIELE:');
+      (se.matches || []).filter(m => m.homeScore != null).forEach(m => L.push(`  ${m.stage === 'playoff' ? 'Playoff' : 'Gruppe'}: ${m.homePlayer || nameOf(m.homeTeam)} ${m.homeScore}:${m.awayScore} ${m.awayPlayer || nameOf(m.awayTeam)}`));
+      // Rekorde dieser Saison, die bis heute gelten
+      try {
+        const all = (H && H.matches || []).filter(m => m.homeScore != null);
+        const mine = all.filter(m => String(m.season) === String(se.season));
+        const maxScore = Math.max(...all.map(m => Math.max(m.homeScore, m.awayScore)));
+        const maxDiff = Math.max(...all.map(m => Math.abs(m.homeScore - m.awayScore)));
+        const maxTot = Math.max(...all.map(m => m.homeScore + m.awayScore));
+        mine.forEach(m => {
+          const hi = Math.max(m.homeScore, m.awayScore), df = Math.abs(m.homeScore - m.awayScore), tot = m.homeScore + m.awayScore;
+          const tag = `${m.homePlayer} ${m.homeScore}:${m.awayScore} ${m.awayPlayer}`;
+          if (hi === maxScore) L.push(`REKORD BIS HEUTE – meiste Punkte eines Spielers in einem Spiel: ${tag}`);
+          if (df === maxDiff) L.push(`REKORD BIS HEUTE – höchster Sieg: ${tag}`);
+          if (tot === maxTot) L.push(`REKORD BIS HEUTE – meiste Gesamtpunkte: ${tag}`);
+        });
+      } catch (e) { /* ohne Rekorde */ }
+      document.getElementById('retroFacts').value = L.join('\n');
+    }
+    async function generateRetro() {
+      const out = document.getElementById('retroOut'); out.textContent = 'KI schreibt …';
+      if (!document.getElementById('retroFacts').value) await buildRetroFacts();
+      const i = Number(document.getElementById('retroSeason').value); const se = retroSeasons[i];
+      const art = { kind: 'retrospective', title: `Rückblick: Altima Bowl ${se ? se.season : ''}`, body: '', _promptMode: 'data',
+        facts: document.getElementById('retroFacts').value, _extraFacts: [document.getElementById('retroPrompt').value, document.getElementById('retroExtra').value].filter(Boolean).join('\n'),
+        data: { season: se && se.season } };
+      try {
+        const s0 = MB.LlmBlog.getSettings();
+        const { out: r } = await MB.LlmBlog.generateWithFallback({ article: art, ctx: {}, settings: { ...s0, kinds: { ...s0.kinds, retrospective: { ...(s0.kinds.retrospective || {}), enabled: true } } } });
+        if (!r) { out.textContent = 'Kein brauchbarer Text (siehe KI-Protokoll).'; return; }
+        retroResult = { kind: 'retrospective', title: r.title || art.title, body: r.body, data: { season: art.data.season, writer: r.model } };
+        out.innerHTML = `<b>${retroResult.title}</b>\n\n${retroResult.body.replace(/</g, '&lt;')}`;
+        document.getElementById('retroPublishBtn').disabled = false;
+      } catch (e) { out.textContent = 'Fehler: ' + e.message; }
+    }
+    async function publishRetro() {
+      if (!retroResult) return;
+      const btn = document.getElementById('retroPublishBtn'); btn.disabled = true; btn.textContent = '✍️ Wird veröffentlicht …';
+      let tid = MB.getCurrentTournamentId();
+      if (!tid) { try { const lt = await MB.fetchLastCompletedTournament(); tid = lt && (lt.tournamentId || lt.id); } catch (e) { tid = null; } }
+      const ok = await MB.Blog.pushArticle(tid, retroResult);
+      btn.textContent = ok ? '✅ Veröffentlicht' : '📰 Im Blog veröffentlichen'; if (!ok) btn.disabled = false;
     }
 
     // ---------- Systemcheck ----------

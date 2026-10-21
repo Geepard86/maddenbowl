@@ -44,6 +44,7 @@
   .cd-u b { display: block; font-size: 1.9em; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
   .cd-u span { font-size: .62em; color: var(--v2-silver); letter-spacing: 1px; text-transform: uppercase; }
   .cd-cal { width:auto; margin:10px auto 0; padding:6px 14px; border-radius:999px; border:1px solid var(--v2-border); background:transparent; color:var(--v2-silver); font-weight:700; font-size:.8em; cursor:pointer; }
+  .v2-game-compact .v2-name-away { text-align: right; justify-self: end; }
   .v2-logo-slot { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
   .v2-logo-slot img, .v2-logo-slot svg { max-width: 22px; max-height: 22px; }
   .tm-nav { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
@@ -67,7 +68,7 @@
   @media (max-width: 640px) { .hof-pts .hof-p { display:none; } }
   /* Blog-Karte im Dashboard: Höhe = Nachbarkarte (Tippspiel), Inhalt passt sich an */
   .dash-blog-fit { position: relative; overflow: hidden; }
-  .dbf-list { position: absolute; left: 14px; right: 14px; top: 46px; bottom: 10px; overflow: hidden; }
+  .dbf-list { position: absolute; left: 14px; right: 14px; top: 46px; bottom: 6px; overflow: hidden; }
   .dbf-item { display: block; padding: 7px 0; border-top: 1px solid rgba(255,255,255,.06); color: inherit; text-decoration: none; min-width: 0; }
   .dbf-item:first-child { border-top: none; padding-top: 0; }
   .dbf-title { font-weight: 800; font-size: .88em; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -92,7 +93,7 @@
   .v2-tabbar.v2-tabbar-compact { margin-bottom: 8px; }
   .v2-game-compact {
     display: grid;
-    grid-template-columns: 44px minmax(0,1fr) 24px 14px 24px minmax(0,1fr) 7.6em;
+    grid-template-columns: 44px minmax(0,1fr) 24px 14px 24px minmax(0,1fr) var(--stad-w, 7.6em);
     align-items: center;
     gap: 5px;
     padding: 7px 0;
@@ -355,11 +356,19 @@
     items.forEach(el => { el.style.display = ''; });
     card.style.minHeight = '';
     const top = list.offsetTop, need2 = items.slice(0, 2).reduce((h, el) => h + el.offsetHeight, 0);
-    card.style.minHeight = (top + need2 + 14) + 'px';
+    card.style.minHeight = (top + need2 + 8) + 'px';
     for (let i = items.length - 1; i >= 2; i--) {
       if (list.scrollHeight <= list.clientHeight + 1) break;
       items[i].style.display = 'none';
     }
+  }
+  // Stadionspalte exakt so breit wie der längste Stadionname
+  function fitStadiumColumn() {
+    const cells = [...document.querySelectorAll('.v2-game-compact .v2-stadium')]; if (!cells.length) return;
+    const probe = document.createElement('span'); probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;';
+    const cs = getComputedStyle(cells[0]); probe.style.font = cs.font; probe.style.fontSize = cs.fontSize; document.body.appendChild(probe);
+    let w = 0; cells.forEach(c => { probe.textContent = c.textContent; w = Math.max(w, probe.getBoundingClientRect().width); }); probe.remove();
+    cells[0].closest('.v2-card').style.setProperty('--stad-w', Math.ceil(w + 10) + 'px');
   }
   window.addEventListener('resize', () => { clearTimeout(window.__dbfT); window.__dbfT = setTimeout(fitBlogCard, 150); });
 
@@ -730,6 +739,7 @@
       </div>
     `;
     requestAnimationFrame(fitBlogCard);
+    requestAnimationFrame(fitStadiumColumn);
     // Rudi bittet ggf. zum Interview (nur Turnierteilnehmer, nach Regeln in interview.js)
     try { if (MB.Interview) MB.Interview.check(state, history); } catch (e) { /* optional */ }
   }
