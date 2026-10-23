@@ -307,18 +307,25 @@
   // Name wie ein Box-Ansager ziehen: Vokal der ersten Silbe etwas, letzter Vokal stark
   // gedehnt ("Markus" -> "Maarkuuuuus", "Tim" -> "Tiiiiim"). Spitzname bleibt normal,
   // nur der eigentliche Name (letztes Wort) wird gedehnt.
-  function stretchName(full) {
-    const parts = String(full || "").trim().split(/\s+/);
-    const last = parts.pop() || "";
-    const vowels = [...last.matchAll(/[aeiouäöüyAEIOUÄÖÜ]+/g)];
-    let out = last;
-    if (vowels.length === 1) {
-      const v = vowels[0]; out = last.slice(0, v.index) + v[0] + v[0].slice(-1).toLowerCase().repeat(5) + last.slice(v.index + v[0].length);
-    } else if (vowels.length >= 2) {
-      const a = vowels[0], z = vowels[vowels.length - 1];
-      out = last.slice(0, a.index) + a[0] + a[0].slice(-1).toLowerCase().repeat(2) + last.slice(a.index + a[0].length, z.index) + z[0] + z[0].slice(-1).toLowerCase().repeat(5) + last.slice(z.index + z[0].length);
+  // Wie ein Ring-Ansager: "Aaaaaleeeeeeeex", "Tiiiiiiiiiiiihiiiiiim", "Maaaaarkuuuuuuuus", "Tooooooobi Eeeeeeefff"
+  function stretchWord(w) {
+    const vs = [...w.matchAll(/[aeiouäöüyAEIOUÄÖÜ]+/g)];
+    if (!vs.length) return w;
+    const rep = (v, n) => v + v.slice(-1).toLowerCase().repeat(n);
+    if (vs.length === 1) {
+      const v = vs[0], before = w.slice(0, v.index), after = w.slice(v.index + v[0].length);
+      if (!before) return rep(v[0], 7) + (after ? after + after.slice(-1).repeat(2) : "");          // Eff -> Eeeeeeeefff
+      if (after.length === 1 && !/h/i.test(after)) return before + rep(v[0], 11) + "h" + v[0].toLowerCase().repeat(6) + after; // Tim -> Tiiiiiiiiiiiihiiiiiim
+      return before + rep(v[0], 8) + after;
     }
-    return [...parts, out].join(" ");
+    const first = vs[0], last = vs[vs.length - 1];
+    if (vs.length === 2 && last.index + last[0].length === w.length) {                            // Tobi -> Tooooooobi
+      return w.slice(0, first.index) + rep(first[0], 7) + w.slice(first.index + first[0].length);
+    }
+    return w.slice(0, first.index) + rep(first[0], 5) + w.slice(first.index + first[0].length, last.index) + rep(last[0], 7) + w.slice(last.index + last[0].length);
+  }
+  function stretchName(full) {
+    return String(full || "").trim().split(/\s+/).map(stretchWord).join(" ");
   }
 
   // Eleven v3: Zeilen OHNE eigene Tags bekommen dezente Emotions-Tags passend zum Inhalt
@@ -1224,17 +1231,21 @@
   // für mehrere Zeilen VORAB parallel generieren (siehe speakSequence unten),
   // während die vorherige Zeile noch läuft — keine Wartezeit mehr bei der
   // Übergabe zwischen zwei Sprechern.
+  let _langCodeOk = true; // Deutsch erzwingen (Namen wie "Alex" deutsch aussprechen); wird abgeschaltet, falls das Modell es ablehnt
   async function fetchElevenLabsAudioUrl(text, { apiKey, voiceId, modelId }) {
     if (!apiKey || !voiceId) throw new Error("ElevenLabs: API-Key oder Stimme fehlt.");
-    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    const send = (withLang) => fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: "POST",
       headers: { "xi-api-key": apiKey, "Content-Type": "application/json", "Accept": "audio/mpeg" },
       body: JSON.stringify({
         text: formatPacingForModel(isV3Model(modelId) ? v3Decorate(sanitizeForSpeech(text)) : sanitizeForSpeech(text), modelId),
         model_id: modelId || "eleven_multilingual_v2",
+        ...(withLang ? { language_code: "de" } : {}),
         voice_settings: { stability: (isV3Model(modelId) && /\[(booming|roaring|shouting|deep, theatrical|announcer)/i.test(text)) ? 0.0 : 0.5, similarity_boost: 0.75 },
       }),
     });
+    let res = await send(_langCodeOk);
+    if (!res.ok && _langCodeOk && (res.status === 400 || res.status === 422)) { _langCodeOk = false; res = await send(false); }
     if (!res.ok) {
       let detail = "";
       try { detail = (await res.json())?.detail?.message || ""; } catch (e) {}

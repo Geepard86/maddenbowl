@@ -152,7 +152,7 @@
   function showQuestion(i) {
     modal(`<div style="font-size:.75em;opacity:.6;margin-bottom:4px;">Frage ${i + 1} von ${current.questions.length}</div>
       <p style="margin:0 0 10px;font-weight:700;">„${esc(current.questions[i])}“</p>
-      <textarea id="mbIvAnswer" rows="3" maxlength="280" placeholder="Deine Antwort …" style="width:100%;box-sizing:border-box;"></textarea>
+      <textarea id="mbIvAnswer" rows="3" maxlength="280" placeholder="Deine Antwort …" style="width:100%;box-sizing:border-box;font-size:16px;"></textarea>
       <div id="mbIvErr" style="font-size:.8em;color:#ff8a8a;min-height:1em;"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
         <button class="v2-btn-ghost" style="width:auto;margin:0;" onclick="MB.Interview.answer(${i}, true)">Kein Kommentar</button>

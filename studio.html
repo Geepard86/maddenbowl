@@ -449,6 +449,7 @@
   function setView(v) { document.querySelectorAll('#stPanel .st-view').forEach(x => x.classList.toggle('on', x.dataset.view === v)); }
   let overlayTimer = null;
   function showOverlay(v, ms) {
+    if (interviewActive && v !== 'gag') return; // Mixed Zone nicht überblenden
     overlayUntil = Date.now() + ms; setView(v);
     // Animationen neu starten
     const el = document.querySelector(`#stPanel .st-view[data-view="${v}"]`); if (el) { el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); }
@@ -815,11 +816,14 @@
     else if (which === 'mascot') { gagMascot(); showOverlay('gag', 10000); }
     else if (which === 'halftime') { gagHalftime(); showOverlay('gag', 11000); }
     else if (which === 'fancam') { gagFanCam(); showOverlay('gag', 10000); }
-    else if (which === 'home') { overlayUntil = 0; setView(baseView); }
-    else if (which === 'interview' && m_name) { gagInterview(m_name); showOverlay('gag', 120000); }
+    else if (which === 'home') {
+      overlayUntil = 0; setView(baseView);
+      if (interviewActive) { interviewActive = false; if (resultPending) { resultPending = false; const m = lastResult(); if (m) { drawResult(m); showOverlay('result', 14000); } } }
+    }
+    else if (which === 'interview' && m_name) { interviewActive = true; gagInterview(m_name); showOverlay('gag', 180000); }
   }
   let lastGag = '';
-  let m_name = null;
+  let m_name = null, interviewActive = false, resultPending = false;
   // Interview-Szene: Rudi links, Spielerfigur rechts, darüber die Untertitel
   function gagInterview(name) {
     const rudi = MB.DraftStage && MB.DraftStage.charSVG ? MB.DraftStage.charSVG('commentator') : '';
@@ -831,6 +835,7 @@
     const sv = $('vGag').querySelector('.iv-rudi svg'); if (sv) { sv.setAttribute('width', '100%'); sv.setAttribute('height', '100%'); }
   }
   function maybeGag() {
+    if (interviewActive) return;
     if (busy() || speaking || !state || !(state.players || []).length) return;
     // gewichtet: Daten-Szenen (Duell, Wusstest-du-schon, Tippspiel) öfter als reine Gags
     const pool = ['kiss', 'vip', 'result', 'defence', 'wave', 'tailgate', 'celeb', 'duel', 'duel', 'fact', 'fact', 'fact', 'tipp', 'tipp', 'review', 'challenge', 'weather', 'mascot', 'halftime', 'fancam'];
@@ -857,7 +862,8 @@
     drawGames(); drawOverview(); drawTicker();
     checkRivalryKickoff();
     const fin = finishedMatches().length;
-    if (lastFinished >= 0 && fin > lastFinished) { const m = lastResult(); if (m) { drawResult(m); showOverlay('result', 14000); } }
+    // Während eines Interviews hat die Mixed Zone Vorrang – Ergebnis-Karte danach zeigen
+    if (lastFinished >= 0 && fin > lastFinished) { const m = lastResult(); if (m) { if (interviewActive) resultPending = true; else { drawResult(m); showOverlay('result', 14000); } } }
     lastFinished = fin;
     if (!busy()) setView(baseView);
   }

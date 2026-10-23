@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Altima Bowl – Mein Profil</title>
+<link rel="icon" type="image/png" href="maddenbowl.ico" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B162A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="shared.js"></script>
+<script src="avatar.js"></script>
+<script src="ui.js"></script>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  .av-row { margin-bottom: 10px; }
+  .av-row > label { font-size: .74em; font-weight: 800; letter-spacing: .5px; color: var(--v2-silver, #9fb0c8); display: block; margin-bottom: 4px; text-transform: uppercase; }
+  .av-strip { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .av-chip { flex: 0 0 auto; scroll-snap-align: start; width: auto; margin: 0; padding: 4px 10px; min-width: 64px; border-radius: 10px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.04); color: inherit; font-size: .78em; font-weight: 700; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+  .av-chip.on { border-color: var(--v2-gold, #c99700); background: rgba(201,151,0,.16); }
+  .av-chip .av-pv { width: 46px; height: 58px; display: block; }
+  .av-chip .av-pv svg { width: 100%; height: 100%; }
+  .av-chip.team img { width: 34px; height: 34px; object-fit: contain; }
+  .av-chip .av-none { font-size: 1.6em; line-height: 34px; opacity: .5; }
+  .av-range { width: 100%; height: 34px; touch-action: pan-y; accent-color: var(--v2-gold, #c99700); }
+  .av-wrap > div { min-width: 0; }
+  .av-wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 14px; }
+  .av-fig { width: 200px; height: 300px; background: radial-gradient(circle at 50% 30%, rgba(201,151,0,.18), transparent 70%); border-radius: 12px; }
+  .av-fig svg { width: 100%; height: 100%; }
+  .av-ed { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
+  .av-ed label { font-size: .78em; font-weight: 800; letter-spacing: .5px; color: var(--v2-silver, #9fb0c8); display: block; margin-bottom: 4px; text-transform: uppercase; }
+  .av-sw { display: flex; flex-wrap: wrap; gap: 5px; }
+  .av-sw button { width: 26px; height: 26px; margin: 0; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); cursor: pointer; }
+  .av-sw button.on { border-color: #fff; box-shadow: 0 0 0 2px var(--v2-gold, #c99700); }
+  .av-ed select, .av-ed input[type=range] { width: 100%; }
+  @media (max-width: 640px) { .av-wrap { grid-template-columns: 1fr; } .av-fig { margin: 0 auto; } }
+  .av-range, .av-row input[type=color] { box-sizing: border-box; max-width: 100%; }
+  #pfPane-figur .av-wrap > div { min-width: 0; }
+  .pf-tabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
+  .pf-tabs button { width: auto; margin: 0; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--v2-border); background: transparent; color: inherit; font-weight: 700; }
+  .pf-tabs button.on { background: var(--v2-gold, #c99700); color: #0b1328; border-color: transparent; }
+</style>
+</head>
+<body class="v2">
+<div class="v2-wrap wide">
+  <div id="mbHeader"></div>
+  <div class="pf-tabs"><button id="pfT-figur" onclick="pfTab('figur')">🎨 Eigene Figur</button><button id="pfT-karten" onclick="pfTab('karten')">🃏 Meine Karten</button></div>
+  <div id="pfLogin" class="card hidden"><h2>👤 Mein Profil</h2><p>Bitte melde dich an, um deine Figur zu gestalten und deine Sammelkarten zu sehen.</p><button style="width:auto;" onclick="MB.UI.openLogin()">Anmelden</button></div>
+  <div id="pfPane-figur" class="card hidden">
+    <h2>🎨 Eigene Figur</h2>
+    <div class="hint" style="opacity:.7; margin-bottom:10px;">Deine Figur wird im Turnierverlauf verwendet.</div>
+    <div class="av-wrap"><div class="av-fig" id="avFig"></div><div><div id="avEditor"></div></div></div>
+  </div>
+  <div id="pfPane-karten" class="card hidden">
+    <h2>🃏 Meine Karten</h2>
+    <div class="hint" style="opacity:.7; margin-bottom:8px;">Unique-Karten findest du in der Hall of Fame.</div>
+    <div id="pfCards"></div>
+  </div>
+</div>
+<script>
+  MB.UI.mountHeader({ active: 'profile' });
+  let state = null;
+  function pfTab(t) {
+    if (!['figur', 'karten'].includes(t)) t = 'figur';
+    ['figur', 'karten'].forEach(k => { document.getElementById('pfPane-' + k).classList.toggle('hidden', k !== t || !me()); document.getElementById('pfT-' + k).classList.toggle('on', k === t); });
+    history.replaceState && history.replaceState(null, '', '#' + t);
+    if (!me()) return;
+    if (t === 'karten') MB.UI.withAchievements(A => A.renderGallery(document.getElementById('pfCards'), { noUnique: true }));
+    else { if (!avDraft) { avName = me(); avDraft = { ...MB.Avatar.get(avName) }; avDraft.chainS = avDraft.chain ? '1' : '0'; } drawAvatarEditor(); drawAvatarFig(avName); }
+  }
+  const me = () => (MB.UI.currentUser && MB.UI.currentUser()) || null;
+    // ---------- Figur-Editor (avatar.js) ----------
+    let avDraft = null, avName = null;
+    async function drawAvatarFig(name) {
+      const el = document.getElementById('avFig'); if (!el || !MB.Avatar) return;
+      await MB.Avatar.load();
+      el.innerHTML = MB.Avatar.svg(avName === name && avDraft ? avDraft : MB.Avatar.get(name));
+    }
+    function toggleAvatarEditor(name) {
+      const ed = document.getElementById('avEditor'); if (!ed) return;
+      if (ed.style.display === 'none') { avName = name; avDraft = { ...MB.Avatar.get(name) }; avDraft.chainS = avDraft.chain ? '1' : '0'; ed.style.display = ''; drawAvatarEditor(); }
+      else { ed.style.display = 'none'; avDraft = null; drawAvatarFig(name); }
+    }
+    // redraw=false: nur die Figur aktualisieren (Slider/Farbwähler), damit nichts ruckelt
+    function avSet(k, v, redraw) { if (k === 'chainS') { avDraft.chain = v === '1'; avDraft.chainS = v; } else avDraft[k] = v; if (redraw !== false) drawAvatarEditor(); scheduleFig(); }
+    let figRaf = 0;
+    function scheduleFig() { if (figRaf) return; figRaf = requestAnimationFrame(() => { figRaf = 0; drawAvatarFig(avName); }); }
+    // Optionen als waagerecht wischbare Kachel-Leisten (mit Mini-Vorschau des Kopfes)
+    function avStrip(k, list, preview) {
+      return `<div class="av-strip">${list.map(([v, l]) => {
+        const on = avDraft[k] === v || (v === 'none' && !avDraft[k]);
+        const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, [k]: v })}</span>` : '';
+        return `<button type="button" class="av-chip ${on ? 'on' : ''}" onclick="avSet('${k}', '${v}')">${pv}<span>${l}</span></button>`;
+      }).join('')}</div>`;
+    }
+    function drawAvatarEditor() {
+      const ed = document.getElementById('avEditor'); if (!ed || !avDraft) return;
+      const O = MB.Avatar.OPTIONS, d = avDraft;
+      const sw = (k, list) => `<div class="av-sw">${list.map(c => `<button type="button" class="${d[k] === c ? 'on' : ''}" style="background:${c}" onclick="avSet('${k}', '${c}')" aria-label="${c}"></button>`).join('')}</div>`;
+      const teams = (MB.nflTeams || []).slice().sort((a, b) => a.n.localeCompare(b.n));
+      const keep = [...ed.querySelectorAll('.av-strip')].map(x => x.scrollLeft); // Wischposition merken
+      ed.innerHTML = `
+        <div class="av-row"><label>Körperform</label>${avStrip('body', O.body)}</div>
+        <div class="av-row"><label>Größe</label><input type="range" class="av-range" min="0.88" max="1.12" step="0.01" value="${d.height || 1}" oninput="avSet('height', parseFloat(this.value), false)"></div>
+        <div class="av-row"><label>Hautton</label>${sw('skin', O.skin)}</div>
+        <div class="av-row"><label>Frisur</label>${avStrip('hair', O.hair, true)}</div>
+        <div class="av-row"><label>Haarfarbe</label>${sw('hairColor', O.hairColor)}</div>
+        <div class="av-row"><label>Bart</label>${avStrip('beard', O.beard, true)}</div>
+        <div class="av-row"><label>Brille</label>${avStrip('glasses', O.glasses, true)}</div>
+        ${d.glasses && d.glasses !== 'none' ? `<div class="av-row"><label>Farbe der Brille</label>${sw('glassesColor', O.glassesColor)}</div>` : ''}
+        <div class="av-row"><label>Kopfbedeckung</label>${avStrip('hat', O.hat, true)}</div>
+        ${d.hat && d.hat !== 'none' ? `<div class="av-row"><label>Farbe der Kopfbedeckung</label>${sw('hatColor', O.hatColor)}</div>` : ''}
+        <div class="av-row"><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value, false)" style="width:100%; height:38px;"></div>
+        <div class="av-row"><label>Lieblingsteam</label><div class="av-strip">${[{ id: '', n: 'Keins' }, ...teams].map(t => `<button type="button" class="av-chip team ${(d.team || '') === t.id ? 'on' : ''}" onclick="avSet('team', '${t.id}')">${t.id ? `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt="">` : '<span class="av-none">—</span>'}<span>${t.n}</span></button>`).join('')}</div></div>
+        <div class="av-row"><label>Goldkette</label>${avStrip('chainS', [['0', 'Nein'], ['1', 'Ja']])}</div>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button style="width:auto;" onclick="saveAvatar()">💾 Figur speichern</button>
+          <button class="btn-secondary" style="width:auto;" onclick="avDraft = { ...MB.Avatar.randomFor(Math.random()), random: false }; drawAvatarEditor(); scheduleFig();">🎲 Zufall</button>
+          <span id="avStatus" class="hint" style="align-self:center;"></span>
+        </div>`;
+      ed.querySelectorAll('.av-strip').forEach((x, i) => { if (keep[i]) x.scrollLeft = keep[i]; });
+    }
+    async function saveAvatar() {
+      const st = document.getElementById('avStatus');
+      try {
+        const { chainS, ...clean } = avDraft;
+        await MB.Avatar.save(avName, clean);
+        st.textContent = 'Gespeichert – deine Figur wird im Turnierverlauf verwendet.';
+        if (MB.UI.currentUser && MB.UI.currentUser() === avName) MB.UI.withAchievements(A => A.track('avatar_saved', {}));
+      } catch (e) { st.textContent = 'Speichern fehlgeschlagen: ' + e.message; }
+    }
+
+
+  (async () => {
+    try { state = await MB.fetchCloudState(); MB.UI.setState(state); } catch (e) { /* ohne Turnier */ }
+    try { await MB.Avatar.load(); } catch (e) { /* Zufallsfiguren */ }
+    document.getElementById('pfLogin').classList.toggle('hidden', !!me());
+    pfTab((location.hash || '').slice(1));
+    MB.UI.onUserChange && MB.UI.onUserChange(() => location.reload());
+  })();
+</script>
+</body>
+</html>

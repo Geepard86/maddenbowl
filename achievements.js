@@ -735,7 +735,8 @@
   // ------------------------------------------------------------ Galerie (Spieler) + Katalog (Admin)
   const SECTION_ORDER = ["kurz", "mittel", "lang", "unique"];
   const RARITY_ORDER = ["common", "rare", "epic", "legendary", "limited", "unique"];
-  async function renderGallery(el) {
+  async function renderGallery(el, gopts) {
+    const noUnique = !!(gopts && gopts.noUnique);
     if (!el) return; injectStyle();
     if (!player) { el.innerHTML = `<div class="ach-gal-head">Logge dich ein, um deine Sammelkarten zu sehen.</div>`; return; }
     el.innerHTML = `<div class="ach-gal-head">Lade deine Karten …</div>`;
@@ -743,7 +744,7 @@
     const have = DEFS.filter((d) => unlocked.has(d.id)).length, uniq = DEFS.filter((d) => d.unique);
     const warn = [!tables.ach && "Karten", !tables.firsts && "einzigartige Karten"].filter(Boolean);
     el.innerHTML = `<div class="ach-gal-head"><b>${have}</b> von <b>${DEFS.length}</b> Karten gesammelt${warn.length ? `<br><span style="opacity:.6;font-size:.85em;">(${warn.join(" & ")}: Datenbank-Migration steht noch aus${!tables.firsts ? " — einzigartige Karten werden erst danach vergeben" : ""})</span>` : ""}</div>` +
-      RARITY_ORDER.map((rar) => {
+      RARITY_ORDER.filter((r) => !(noUnique && r === "unique")).map((rar) => {
         const list = DEFS.filter((d) => d.rarity === rar); if (!list.length) return "";
         const got = list.filter((d) => unlocked.has(d.id)).length;
         return `<div class="ach-section" style="color:${RARITIES[rar].color}">${RARITIES[rar].label} <span style="opacity:.6;font-weight:600;">· ${got}/${list.length}</span></div><div class="ach-gallery">${list.map((d) => {
@@ -759,7 +760,7 @@
       const missedLim = DEFS.filter((d) => d.rarity === "limited" && !unlocked.has(d.id) && limitedState(d) === "over");
       const fmM = new Map(); const c = sb();
       if (c) { const { data } = await c.from("achievement_firsts").select("achievement_id, player_name"); (data || []).forEach((r) => fmM.set(r.achievement_id, r.player_name)); }
-      const takenU = DEFS.filter((d) => d.unique && !unlocked.has(d.id) && fmM.has(d.id));
+      const takenU = noUnique ? [] : DEFS.filter((d) => d.unique && !unlocked.has(d.id) && fmM.has(d.id));
       if (missedLim.length || takenU.length) {
         el.insertAdjacentHTML("beforeend", `<div class="ach-section" style="color:#ff8a8a">😢 Verpasst <span style="opacity:.6;font-weight:600;">· ${missedLim.length + takenU.length}</span></div>
           <div class="ach-gallery">${missedLim.map((d) => cardHtml(d, { hideHow: true })).join("")}${takenU.map((d) => cardHtml(d, { holder: fmM.get(d.id), foreign: true, at: new Date().toISOString() })).join("")}</div>`);
@@ -767,7 +768,7 @@
       }
     } catch (e) { /* optional */ }
     const egg = el.querySelector('.ach-card[data-id="egg_wrong_card"].locked');
-    if (egg) egg.addEventListener("click", () => { if (!player) return; unlock("egg_wrong_card"); setTimeout(() => renderGallery(el), 400); }, { once: true });
+    if (egg) egg.addEventListener("click", () => { if (!player) return; unlock("egg_wrong_card"); setTimeout(() => renderGallery(el, gopts), 400); }, { once: true });
   }
 
   // Öffentliche Übersicht aller Unique-Karten mit Besitzer (Hall of Fame, ohne Login)

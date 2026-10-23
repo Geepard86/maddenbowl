@@ -23,6 +23,7 @@
     { key: "blog", label: "Blog", href: "blog.html", icon: "assets/icons/blog.svg" },
     { key: "hallOfFame", label: "Hall of Fame", href: "hall_of_fame.html", icon: "assets/icons/crown.svg" },
     { key: "shop", label: "Shop", href: "shop.html", icon: "assets/icons/cart.svg" },
+    { key: "profile", label: "Mein Profil", href: "profil.html", icon: "assets/icons/user.svg" },
   ];
 
   // ---------------------------------------------------------------
@@ -612,7 +613,7 @@
     } else {
       el.innerHTML = `
         <a href="wettbuero.html">🎯 Zum Tippspiel</a>
-        <a href="hall_of_fame.html#player=${encodeURIComponent(currentUser() || "")}">👤 Mein Profil</a>
+        <a href="profil.html#figur">👤 Mein Profil</a>
         <button onclick="MB.UI.doLogout()">Abmelden</button>`;
     }
   }

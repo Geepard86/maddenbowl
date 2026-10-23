@@ -706,3 +706,9 @@
 @media (min-width: 700px) {
   .v2-wrap.wide { max-width: 900px; }
 }
+
+/* iPhone zoomt bei Eingabefeldern unter 16px automatisch heran -> auf Mobilgeräten 16px */
+@media (max-width: 820px) {
+  textarea, input[type="text"], input[type="password"], input[type="email"], input[type="search"], input:not([type]), select { font-size: 16px; }
+  .score-input { font-size: 1rem; }
+}

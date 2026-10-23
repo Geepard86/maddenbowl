@@ -149,10 +149,11 @@
     // Reiter: Saisons/Ewige Tabelle · Meine Karten · Unique-Karten
     let hofMainTab = ((location.hash || '').slice(1).split('=')[0]) || 'history';
     function setMainTab(t) {
-      if (!['history', 'seasons', 'player', 'cards', 'unique'].includes(t)) t = 'history';
+      if (t === 'cards') { location.href = 'profil.html#karten'; return; }
+      if (!['history', 'seasons', 'player', 'unique'].includes(t)) t = 'history';
       hofMainTab = t;
       document.querySelectorAll('.hof-mt').forEach(b => b.classList.toggle('active', b.dataset.mt === t));
-      ['history', 'seasons', 'player', 'cards', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
+      ['history', 'seasons', 'player', 'unique'].forEach(k => { const p = document.getElementById('hofPane-' + k); if (p) p.classList.toggle('hidden', k !== t); });
       if (!(t === 'player' && /^#player/.test(location.hash))) history.replaceState && history.replaceState(null, '', '#' + t);
       try { MB.UI.withAchievements(A => A.track('hof_tab', { tab: t })); } catch (e) { /* egal */ }
       if (t === 'cards') renderMyCards();
@@ -166,8 +167,7 @@
     <div class="hof-maintabs">
       <button class="hof-mt active" data-mt="history" onclick="setMainTab('history')">🏆 Ewige Tabelle</button>
       <button class="hof-mt" data-mt="seasons" onclick="setMainTab('seasons')">📅 Saisons</button>
-      <button class="hof-mt" data-mt="player" onclick="setMainTab('player')">👤 Spieler</button>
-      <button class="hof-mt" data-mt="cards" onclick="setMainTab('cards')">🃏 Meine Karten</button>
+      <button class="hof-mt" data-mt="player" onclick="setMainTab('player')">👤 Teilnehmer</button>
       <button class="hof-mt" data-mt="unique" onclick="setMainTab('unique')">💎 Unique &amp; Limited</button>
     </div>
 
@@ -182,7 +182,7 @@
     <div id="hofPane-player" class="hidden">
       <div class="card" style="margin-bottom:12px;">
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-          <h2 style="margin:0;">👤 Spielerprofil</h2>
+          <h2 style="margin:0;">👤 Teilnehmer</h2>
           <select id="playerSelect" onchange="renderPlayerProfile(this.value)" style="width:auto;"></select>
         </div>
         <div id="playerProfile"></div>
@@ -1007,7 +1007,7 @@
       try { MB.UI.withAchievements(A => A.track('profile_view', { name, total: at.length })); } catch (e) { /* ohne Login egal */ }
       el.innerHTML = `
         <div class="av-wrap"><div class="av-fig" id="avFig"></div>
-          <div>${canEdit ? `<button class="btn-secondary" style="width:auto;" onclick="toggleAvatarEditor('${name.replace(/'/g, "\\'")}')">🎨 Figur gestalten</button><div id="avEditor" style="display:none; margin-top:10px;"></div>`
+          <div>${canEdit ? `<a class="btn-secondary" style="width:auto; display:inline-block; text-decoration:none;" href="profil.html#figur">🎨 Figur im Profil gestalten</a>`
             : `<div class="hint" style="opacity:.7;">Diese Figur wird im Turnierverlauf verwendet.${MB.Avatar && !MB.Avatar.hasOwn(name) ? ' (Noch nicht selbst gestaltet.)' : ''}</div>`}</div></div>
         <div class="kpis" style="margin-bottom:12px;">
           ${kpi('Ewige Tabelle', '#' + rank)}${kpi('Titel', String(me.championships))}${kpi('Teilnahmen', String(me.seasons))}

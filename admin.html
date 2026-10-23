@@ -2324,7 +2324,7 @@ const ringsHtml = rings > 0
         const songMoment = await maybeHandleSongMoment();
 
         // Ein frisches Interview wird nach der Ergebnis-Ansage in der Show vorgelesen (Ansage-Warteschlange)
-        try { if (MB.Interview && MB.Announcer.announceInterview) MB.Interview.takeForShow(MB.getCurrentTournamentId()).then(async iv => { if (!iv) return; iv.monaComment = await monaInterviewComment(iv); MB.Announcer.announceInterview(iv); }).catch(() => {}); } catch (e) { /* optional */ }
+
         // Push: nächste Spieler aufrufen + Tipp-Erinnerungen (läuft im Hintergrund, Fehler egal)
         if (MB.Push && pushTriggersEnabled()) { MB.Push.notifyUpcoming(state).catch(() => {}); MB.Push.notifyOpenTips(state).catch(() => {}); }
 
@@ -5562,6 +5562,22 @@ function renderRanking() {
         el.innerHTML = list.length ? `<table style="width:100%;"><tr><th style="text-align:left;">Karte</th><th>Seltenheit</th><th style="text-align:left;">${awarded ? 'Spieler' : ''}</th></tr>${list.map(d => `<tr><td>${d.emoji} ${d.title}</td><td style="text-align:center;">${d.rarity}</td><td>${awarded ? by.get(d.id).join(', ') : ''}</td></tr>`).join('')}</table><div class="hint">${list.length} Karten</div>` : '<div class="hint">Keine.</div>';
       });
     }
+
+    // Interviews sofort nach dem Abschicken in die Show: alle 8 s prüfen, ob ein neues Interview
+    // fertig ist; dann Monas Kommentar erzeugen und das Interview in die Ansage-Warteschlange stellen
+    // (läuft gerade etwas, kommt es direkt danach; spätere Ergebnisse stellen sich hinten an).
+    let interviewBusy = false;
+    async function pollInterviews() {
+      if (interviewBusy || !MB.Interview || !MB.Announcer.announceInterview) return;
+      if (!(state && (state.players || []).length)) return;
+      interviewBusy = true;
+      try {
+        const iv = await MB.Interview.takeForShow(MB.getCurrentTournamentId());
+        if (iv) { iv.monaComment = await monaInterviewComment(iv); await MB.Announcer.announceInterview(iv); }
+      } catch (e) { console.warn('Interview in der Show:', e); }
+      interviewBusy = false;
+    }
+    (MB.Announcer.workerTicker || ((ms, fn) => setInterval(fn, ms)))(8000, () => { pollInterviews(); });
 
     // Mona kommentiert die Interview-Antworten (OpenRouter; ohne Key/Fehler -> null = Baustein im Announcer)
     async function monaInterviewComment(iv) {
