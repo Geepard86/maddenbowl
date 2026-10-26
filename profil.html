@@ -37,6 +37,7 @@
   @media (max-width: 640px) { .av-wrap { grid-template-columns: 1fr; } .av-fig { margin: 0 auto; } }
   .av-range, .av-row input[type=color] { box-sizing: border-box; max-width: 100%; }
   #pfPane-figur .av-wrap > div { min-width: 0; }
+  .av-chip.locked { opacity: .45; filter: grayscale(1); }
   .pf-tabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
   .pf-tabs button { width: auto; margin: 0; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--v2-border); background: transparent; color: inherit; font-weight: 700; }
   .pf-tabs button.on { background: var(--v2-gold, #c99700); color: #0b1328; border-color: transparent; }
@@ -67,7 +68,7 @@
     history.replaceState && history.replaceState(null, '', '#' + t);
     if (!me()) return;
     if (t === 'karten') MB.UI.withAchievements(A => A.renderGallery(document.getElementById('pfCards'), { noUnique: true }));
-    else { if (!avDraft) { avName = me(); avDraft = { ...MB.Avatar.get(avName) }; avDraft.chainS = avDraft.chain ? '1' : '0'; } drawAvatarEditor(); drawAvatarFig(avName); }
+    else { if (!avDraft) { avName = me(); avDraft = { ...MB.Avatar.get(avName) }; if (!avDraft.neck) avDraft.neck = avDraft.chain ? 'chain' : 'none'; } drawAvatarEditor(); drawAvatarFig(avName); }
   }
   const me = () => (MB.UI.currentUser && MB.UI.currentUser()) || null;
     // ---------- Figur-Editor (avatar.js) ----------
@@ -83,14 +84,16 @@
       else { ed.style.display = 'none'; avDraft = null; drawAvatarFig(name); }
     }
     // redraw=false: nur die Figur aktualisieren (Slider/Farbwähler), damit nichts ruckelt
-    function avSet(k, v, redraw) { if (k === 'chainS') { avDraft.chain = v === '1'; avDraft.chainS = v; } else avDraft[k] = v; if (redraw !== false) drawAvatarEditor(); scheduleFig(); }
+    function avSet(k, v, redraw) { if (k === 'chainS') { avDraft.chain = v === '1'; avDraft.chainS = v; } else { avDraft[k] = v; if (k === 'neck') avDraft.chain = v === 'chain'; } if (redraw !== false) drawAvatarEditor(); scheduleFig(); }
     let figRaf = 0;
     function scheduleFig() { if (figRaf) return; figRaf = requestAnimationFrame(() => { figRaf = 0; drawAvatarFig(avName); }); }
     // Optionen als waagerecht wischbare Kachel-Leisten (mit Mini-Vorschau des Kopfes)
     function avStrip(k, list, preview) {
       return `<div class="av-strip">${list.map(([v, l]) => {
         const on = avDraft[k] === v || (v === 'none' && !avDraft[k]);
+        const lock = MB.Avatar.lockInfo ? MB.Avatar.lockInfo(k, v, window.__ownedCards || [], window.__cardDefs || [], avName) : null;
         const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, [k]: v })}</span>` : '';
+        if (lock) return `<button type="button" class="av-chip locked" title="Freischalten: ${lock}" onclick="alert('🔒 ${l} wird freigeschaltet mit: ${lock}')">${pv}<span>🔒 ${l}</span></button>`;
         return `<button type="button" class="av-chip ${on ? 'on' : ''}" onclick="avSet('${k}', '${v}')">${pv}<span>${l}</span></button>`;
       }).join('')}</div>`;
     }
@@ -113,7 +116,21 @@
         ${d.hat && d.hat !== 'none' ? `<div class="av-row"><label>Farbe der Kopfbedeckung</label>${sw('hatColor', O.hatColor)}</div>` : ''}
         <div class="av-row"><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value, false)" style="width:100%; height:38px;"></div>
         <div class="av-row"><label>Lieblingsteam</label><div class="av-strip">${[{ id: '', n: 'Keins' }, ...teams].map(t => `<button type="button" class="av-chip team ${(d.team || '') === t.id ? 'on' : ''}" onclick="avSet('team', '${t.id}')">${t.id ? `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt="">` : '<span class="av-none">—</span>'}<span>${t.n}</span></button>`).join('')}</div></div>
-        <div class="av-row"><label>Goldkette</label>${avStrip('chainS', [['0', 'Nein'], ['1', 'Ja']])}</div>
+        <div class="av-row"><label>Über dem Kopf</label>${avStrip('above', O.above)}</div>
+        <div class="av-row"><label>Gesicht</label>${avStrip('face', O.face, true)}</div>
+        <div class="av-row"><label>Mund</label>${avStrip('mouth', O.mouth, true)}</div>
+        <div class="av-row"><label>Oberteil</label>${avStrip('top', O.top)}</div>
+        ${(d.top === 'champshirt' || d.hat === 'champcap') && (MB.Avatar.championsOf ? MB.Avatar.championsOf(avName) : []).length > 1 ? `<div class="av-row"><label>Champion-Jahr</label><select onchange="avSet('champYear', this.value)">${MB.Avatar.championsOf(avName).map(x => `<option value="${x.year}" ${String(d.champYear || '') === String(x.year) ? 'selected' : ''}>${x.year} (${x.team || '?'})</option>`).join('')}</select></div>` : ''}
+        ${d.top === 'jersey' ? `<div class="av-row"><label>Rückennummer</label><input type="text" inputmode="numeric" maxlength="2" value="${d.number || ''}" oninput="this.value=this.value.replace(/[^0-9]/g,''); avSet('number', this.value, false)" style="width:80px;"></div>` : ''}
+        <div class="av-row"><label>Rücken</label>${avStrip('back', O.back)}</div>
+        <div class="av-row"><label>Gürtel</label>${avStrip('waist', O.waist)}</div>
+        <div class="av-row"><label>Schulter</label>${avStrip('shoulder', O.shoulder)}</div>
+        <div class="av-row"><label>Kette &amp; Anhänger</label>${avStrip('neck', O.neck)}</div>
+        <div class="av-row"><label>Anstecker</label>${avStrip('badge', O.badge)}</div>
+        ${d.badge === 'ribbon' ? `<div class="av-row"><label>Crucial-Catch-Farbe</label>${sw('ccColor', O.ccColor)}</div>` : ''}
+        <div class="av-row"><label>In der Hand</label>${avStrip('hand', O.hand)}</div>
+        <div class="av-row"><label>Aura</label>${avStrip('aura', O.aura)}</div>
+        <div class="av-row"><label>Ringe</label><div class="hint" style="font-size:.85em;">💍 ${d._rings || 0} – kommen automatisch dazu, einer pro gewonnenem Titel.</div></div>
         <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
           <button style="width:auto;" onclick="saveAvatar()">💾 Figur speichern</button>
           <button class="btn-secondary" style="width:auto;" onclick="avDraft = { ...MB.Avatar.randomFor(Math.random()), random: false }; drawAvatarEditor(); scheduleFig();">🎲 Zufall</button>
@@ -124,7 +141,9 @@
     async function saveAvatar() {
       const st = document.getElementById('avStatus');
       try {
-        const { chainS, ...clean } = avDraft;
+        const { chainS, _rings, _champ, ...clean } = avDraft;
+        // Goldene Umrandung für „Komplette Garderobe“ / „Modeikone“
+        clean.outline = (window.__ownedCards || []).some(id => id === 'u_wardrobe' || id === 'set_fashion');
         await MB.Avatar.save(avName, clean);
         st.textContent = 'Gespeichert – deine Figur wird im Turnierverlauf verwendet.';
         if (MB.UI.currentUser && MB.UI.currentUser() === avName) MB.UI.withAchievements(A => A.track('avatar_saved', {}));
@@ -135,6 +154,17 @@
   (async () => {
     try { state = await MB.fetchCloudState(); MB.UI.setState(state); } catch (e) { /* ohne Turnier */ }
     try { await MB.Avatar.load(); } catch (e) { /* Zufallsfiguren */ }
+    // eigene Karten für die Freischaltungen (Helme, Anhänger, Abzeichen)
+    await new Promise(res => { MB.UI.withAchievements(async (A) => { try { await A.init(state); } catch (e) { /* egal */ } window.__ownedCards = A.unlockedIds ? A.unlockedIds() : []; window.__cardDefs = A.DEFS || [];
+      // Sets prüfen: komplett freigeschaltete Sets bringen eine eigene Karte
+      try {
+        if (me() && MB.Avatar.setStatus) {
+          const stt = MB.Avatar.setStatus(me(), window.__ownedCards, window.__cardDefs);
+          Object.entries(stt).forEach(([id, ok]) => { if (ok) A.track('set_done', { id }); });
+          if (stt.set_fashion) A.track('set_done', { id: 'u_wardrobe' });
+        }
+      } catch (e) { /* optional */ }
+      res(); }); setTimeout(res, 4000); });
     document.getElementById('pfLogin').classList.toggle('hidden', !!me());
     pfTab((location.hash || '').slice(1));
     MB.UI.onUserChange && MB.UI.onUserChange(() => location.reload());

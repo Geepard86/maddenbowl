@@ -106,6 +106,37 @@
     { id: "egg_landscape", emoji: "📱", title: "Panoramablick", desc: "Das Handy quer gedreht, um alles zu sehen.", rarity: "rare", term: "kurz", secret: true },
     { id: "egg_crown", emoji: "👑", title: "Kronprinz", desc: "So lange auf die Krone getippt, bis sie heruntergefallen ist.", rarity: "epic", term: "kurz", secret: true },
     { id: "egg_bullseye", emoji: "🎯", title: "Bullseye", desc: "Die Zielscheibe eines Blog-Beitrags genau in der Mitte getroffen.", rarity: "legendary", term: "kurz", secret: true },
+    // ---- Spiel-Momente (zählen über die komplette Historie)
+    { id: "ref_victim", emoji: "🦓", title: "Schiri-Opfer", desc: "Über den Schiri beschwert – und prompt ein Meme dazu bekommen.", rarity: "rare", term: "mittel", secret: true },
+    { id: "controller_throw", emoji: "🎮", title: "Controller-Wurf", desc: "So sauer gewesen, dass es ein Meme dazu gab.", rarity: "rare", term: "mittel", secret: true },
+    { id: "ice_cold", emoji: "🧊", title: "Eiskalt", desc: "Drei Siege in Folge, jeweils mit höchstens 3 Punkten Vorsprung.", rarity: "epic", term: "lang" },
+    { id: "on_fire", emoji: "🔥", title: "On Fire", desc: "Fünf Siege in Folge.", rarity: "epic", term: "lang" },
+    { id: "lucky_loser", emoji: "🍀", title: "Lucky Loser", desc: "Mit negativer Bilanz aus der Gruppenphase trotzdem ein Playoff-Spiel gewonnen.", rarity: "rare", term: "lang" },
+    { id: "shutout", emoji: "🥶", title: "Shutout", desc: "Den Gegner ohne einen einzigen Punkt gelassen.", rarity: "rare", term: "lang" },
+    // ---- Kollektionen & Spaß (schalten Outfits frei)
+    { id: "col_crucial", emoji: "🎗️", title: "Crucial Catch", desc: "Im Oktober vorbeigeschaut.", rarity: "rare", term: "mittel" },
+    { id: "col_peace", emoji: "☮️", title: "Peace & Love", desc: "Im November vorbeigeschaut.", rarity: "rare", term: "mittel" },
+    { id: "col_halloween", emoji: "🎃", title: "Halloween", desc: "An Halloween vorbeigeschaut.", rarity: "rare", term: "mittel", secret: true },
+    { id: "col_thanksgiving", emoji: "🦃", title: "Thanksgiving", desc: "An Thanksgiving vorbeigeschaut.", rarity: "rare", term: "mittel", secret: true },
+    { id: "col_christmas", emoji: "🎄", title: "Christmas Game", desc: "An Weihnachten vorbeigeschaut.", rarity: "rare", term: "mittel", secret: true },
+    { id: "col_throwback", emoji: "📼", title: "Throwback", desc: "Bei drei Altima Bowls dabei gewesen.", rarity: "epic", term: "lang" },
+    { id: "col_probowl", emoji: "🌺", title: "Pro Bowler", desc: "Eine Saison unter den besten Vier beendet.", rarity: "rare", term: "lang" },
+    { id: "fun_couch", emoji: "🛋️", title: "Couch-Potato", desc: "An zehn Tagen ohne laufendes Turnier vorbeigeschaut.", rarity: "rare", term: "lang", secret: true },
+    { id: "fun_grill", emoji: "🍖", title: "Grill-Meister", desc: "Am Turniertag mehr als zwei Stunden vor dem Kickoff schon da gewesen.", rarity: "rare", term: "mittel", secret: true },
+    { id: "fun_beer", emoji: "🍺", title: "Stammtisch", desc: "Zehn Kommentare während eines einzigen Turniers.", rarity: "rare", term: "mittel", secret: true },
+    { id: "fun_sofa", emoji: "📋", title: "Sofa-Coach", desc: "25 Tipps auf Spiele, in denen man selbst gar nicht spielt.", rarity: "rare", term: "lang", secret: true },
+    { id: "fun_bear", emoji: "🧸", title: "Maskottchen", desc: "Alle Easter Eggs gefunden.", rarity: "legendary", term: "lang", secret: true },
+    // ---- Sets (Figur): komplette Sets besitzen
+    { id: "set_gameday", emoji: "🏈", title: "Ready to Play", desc: "Das komplette Gameday-Set freigeschaltet.", rarity: "rare", term: "lang" },
+    { id: "set_sideline", emoji: "📋", title: "Head Coach", desc: "Das komplette Sideline-Boss-Set freigeschaltet.", rarity: "epic", term: "lang" },
+    { id: "set_tailgate", emoji: "🍖", title: "Parkplatz-Legende", desc: "Das komplette Tailgate-Set freigeschaltet.", rarity: "epic", term: "lang" },
+    { id: "set_royal", emoji: "👑", title: "Thronfolger", desc: "Das komplette Royal-Set freigeschaltet.", rarity: "legendary", term: "lang" },
+    { id: "set_holidays", emoji: "📅", title: "Durchs Jahr", desc: "Halloween, Thanksgiving und Weihnachten gesammelt.", rarity: "rare", term: "lang" },
+    { id: "set_division", emoji: "🗺️", title: "Divisionssieger", desc: "Die Team-Teile aller vier Teams einer Division freigeschaltet.", rarity: "epic", term: "lang" },
+    { id: "set_conference", emoji: "🏟️", title: "Conference-Champion", desc: "Die Team-Teile aller 16 Teams einer Conference freigeschaltet.", rarity: "legendary", term: "lang" },
+    { id: "set_league", emoji: "🌍", title: "Commissioner’s Trophy", desc: "Die Team-Teile aller 32 Teams freigeschaltet.", rarity: "legendary", term: "lang" },
+    { id: "set_dynasty", emoji: "💍", title: "Dynastie", desc: "Mindestens zwei Altima-Bowl-Titel geholt.", rarity: "legendary", term: "lang" },
+    { id: "set_fashion", emoji: "🌟", title: "Modeikone", desc: "Wirklich jedes Teil für die eigene Figur freigeschaltet.", rarity: "legendary", term: "lang" },
     // ---- Interview & Community
     { id: "interview_1", emoji: "🎙️", title: "Gesprächspartner", desc: "Rudi ein Interview gegeben.", rarity: "rare", term: "mittel" },
     { id: "praise", emoji: "💌", title: "Fanpost", desc: "In einem Kommentar die Orga, das Turnier oder die Seite gelobt.", rarity: "legendary", term: "lang", secret: true },
@@ -127,6 +158,7 @@
     { id: "u_pioneer", emoji: "🚀", title: "Pionier", desc: "Hat den allerersten Tipp der Geschichte abgegeben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_sole_oracle", emoji: "🔮", title: "Das Orakel", desc: "Als Einziger im ganzen Turnier den späteren Champion vorhergesagt – und das als Erster in der Geschichte des Altima Bowl.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_interview", emoji: "📼", title: "Exklusiv", desc: "Hat Rudi das allererste Interview gegeben.", rarity: "unique", term: "unique", unique: true },
+    { id: "u_wardrobe", emoji: "👗", title: "Komplette Garderobe", desc: "Hat als Erster wirklich jedes Teil für die eigene Figur freigeschaltet.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_comment", emoji: "🎙️", title: "Erste Stimme", desc: "Hat den allerersten Blog-Kommentar geschrieben.", rarity: "unique", term: "unique", unique: true },
     { id: "u_first_merch", emoji: "🛍️", title: "Erster Kunde", desc: "Hat als Erster wirklich etwas im Fan-Shop bestellt.", rarity: "unique", term: "unique", unique: true, manual: true },
     { id: "u_all_teams", emoji: "🔭", title: "Chefscout", desc: "Hat sich als Erster alle 32 Teams samt Kader angeschaut.", rarity: "unique", term: "unique", unique: true },
@@ -486,6 +518,10 @@
     if (!player) return; data = data || {};
     if (event === "tipp_saved") {
       unlock("tipp_first"); unlock("u_pioneer");
+      if (data.homeName && data.awayName && data.homeName !== player && data.awayName !== player) {
+        const tid = global.MB.getCurrentTournamentId && global.MB.getCurrentTournamentId();
+        if (addSet("sofaTips", `${tid}:${data.homeName}:${data.awayName}`) >= 25) unlock("fun_sofa");
+      }
       if (data.pick && data.pick === player) { unlock("tipp_self"); }
       else if (data.pick && (data.homeName === player || data.awayName === player)) { unlock("tipp_against_self"); addSet("misc", "against_self"); }
       refreshTippTotal();
@@ -515,10 +551,14 @@
     } else if (event === "pwa_installed") {
       unlock("app_installed");
     } else if (event === "egg" && data.id && BY_ID.has(data.id) && /^egg_/.test(data.id)) {
+      unlock(data.id).then(checkAllEggs);
+    } else if (event === "set_done" && data.id && BY_ID.has(data.id) && /^(set_|u_wardrobe)/.test(data.id)) {
       unlock(data.id);
     } else if (event === "interview_done") {
       unlock("interview_1"); unlock("u_first_interview");
     } else if (event === "comment_text" && data.text) {
+      const tid = global.MB.getCurrentTournamentId && global.MB.getCurrentTournamentId();
+      if (tid && addSet("cmt_" + tid, String(Date.now())) >= 10) unlock("fun_beer");
       if (isPraise(data.text)) unlock("praise");
     } else if (event === "push_on") {
       unlock("push_on");
@@ -744,8 +784,9 @@
     const have = DEFS.filter((d) => unlocked.has(d.id)).length, uniq = DEFS.filter((d) => d.unique);
     const warn = [!tables.ach && "Karten", !tables.firsts && "einzigartige Karten"].filter(Boolean);
     el.innerHTML = `<div class="ach-gal-head"><b>${have}</b> von <b>${DEFS.length}</b> Karten gesammelt${warn.length ? `<br><span style="opacity:.6;font-size:.85em;">(${warn.join(" & ")}: Datenbank-Migration steht noch aus${!tables.firsts ? " — einzigartige Karten werden erst danach vergeben" : ""})</span>` : ""}</div>` +
-      RARITY_ORDER.filter((r) => !(noUnique && r === "unique")).map((rar) => {
-        const list = DEFS.filter((d) => d.rarity === rar); if (!list.length) return "";
+      RARITY_ORDER.map((rar) => {
+        // Profil: Unique-Karten nur zeigen, wenn man sie selbst besitzt
+        const list = DEFS.filter((d) => d.rarity === rar && !(noUnique && rar === "unique" && !unlocked.has(d.id))); if (!list.length) return "";
         const got = list.filter((d) => unlocked.has(d.id)).length;
         return `<div class="ach-section" style="color:${RARITIES[rar].color}">${RARITIES[rar].label} <span style="opacity:.6;font-weight:600;">· ${got}/${list.length}</span></div><div class="ach-gallery">${list.map((d) => {
           const f = firsts.get(d.id); const mine = unlocked.get(d.id);
@@ -831,6 +872,7 @@
     await loadFor(player);
     unlock("welcome");
     checkLimitedLogin();
+    checkCalendarAndFun();
     checkOrganizer();
     const now = new Date(); addSet("loginYears", String(now.getFullYear()));
     if (addSet("loginDays", now.toISOString().slice(0, 10)) >= 7) unlock("login_days_7");
@@ -849,6 +891,24 @@
   function checkOrganizer() {
     const me = String(player || "").trim().toLowerCase();
     DEFS.filter((d) => d.org && d.org === me).forEach((d) => unlock(d.id));
+  }
+  function checkCalendarAndFun() {
+    const now = new Date(), m = now.getMonth(), d = now.getDate(), day = now.toISOString().slice(0, 10);
+    if (m === 9) unlock("col_crucial");
+    if (m === 9 && d === 31) unlock("col_halloween");
+    if (m === 10) unlock("col_peace");
+    if (m === 11 && d >= 24 && d <= 26) unlock("col_christmas");
+    // Thanksgiving: 4. Donnerstag im November
+    if (m === 10) { const first = new Date(now.getFullYear(), 10, 1).getDay(); const tg = 1 + ((4 - first + 7) % 7) + 21; if (d === tg) unlock("col_thanksgiving"); }
+    const st = stateRef || {}, cfg = st.config || {};
+    if (!(st.players || []).length) { if (addSet("offDays", day) >= 10) unlock("fun_couch"); }
+    // Grill-Meister: Turniertag, mehr als 2 h vor dem Kickoff
+    const k = cfg.nextTournamentAt ? new Date(cfg.nextTournamentAt) : null;
+    if (k && !isNaN(k) && k.toDateString() === now.toDateString() && now < new Date(k.getTime() - 2 * 3600 * 1000)) unlock("fun_grill");
+  }
+  function checkAllEggs() {
+    const eggs = DEFS.filter((x) => /^egg_/.test(x.id));
+    if (eggs.length && eggs.every((x) => unlocked.has(x.id))) unlock("fun_bear");
   }
   function checkLimitedLogin() {
     const now = new Date(), early = new Date(EARLY_DEADLINE);
@@ -883,14 +943,53 @@
   }
   async function onLogin(name) { await setPlayer(name); if (stateRef) evaluateTipps(stateRef); }
   function onLogout() { setPlayer(null); }
+  let _histForPlay = null;
+  async function evaluatePlay(state) {
+    try {
+      if (!player) return;
+      const me = String(player).toLowerCase();
+      if (!_histForPlay && global.MB.loadAndBuildHistory) { try { _histForPlay = await global.MB.loadAndBuildHistory(); } catch (e) { _histForPlay = { matches: [] }; } }
+      // Spiele je Turnier in Reihenfolge: Historie (Saisons) + laufendes Turnier
+      const bySeason = new Map();
+      ((_histForPlay && _histForPlay.matches) || []).forEach((m) => {
+        if (m.homeScore == null) return;
+        const h = String(m.homePlayer).toLowerCase() === me, a = String(m.awayPlayer).toLowerCase() === me; if (!h && !a) return;
+        const k = "h" + m.season; if (!bySeason.has(k)) bySeason.set(k, []);
+        bySeason.get(k).push({ own: h ? m.homeScore : m.awayScore, opp: h ? m.awayScore : m.homeScore, po: m.stage === "playoff" });
+      });
+      const cur = [];
+      ((state && state.matches) || []).forEach((m) => { if (m.s1 == null || m.s2 == null) return; const P = state.players || []; const h = P[m.p1], a = P[m.p2]; if (!h || !a) return;
+        if (String(h.name).toLowerCase() === me) cur.push({ own: m.s1, opp: m.s2, po: false, at: m.finishedAt || "" }); else if (String(a.name).toLowerCase() === me) cur.push({ own: m.s2, opp: m.s1, po: false, at: m.finishedAt || "" }); });
+      ((state && state.playoffMatches) || []).forEach((m) => { if (m.s1 == null || m.s2 == null || !m.p1 || !m.p2) return;
+        if (String(m.p1.name).toLowerCase() === me) cur.push({ own: m.s1, opp: m.s2, po: true, at: m.finishedAt || "z" }); else if (String(m.p2.name).toLowerCase() === me) cur.push({ own: m.s2, opp: m.s1, po: true, at: m.finishedAt || "z" }); });
+      cur.sort((x, y) => (x.po - y.po) || String(x.at).localeCompare(String(y.at)));
+      if (cur.length) bySeason.set("current", cur);
+      if ([...bySeason.keys()].filter((k) => k.startsWith("h")).length >= 3) unlock("col_throwback");
+      try {
+        const seasons = global.MB.loadHistorySeasons ? await global.MB.loadHistorySeasons() : [];
+        if (seasons.some((se) => (se.standings || []).some((r) => String(r.name).toLowerCase() === me && Number(r.rank) <= 4))) unlock("col_probowl");
+      } catch (e) { /* egal */ }
+      for (const games of bySeason.values()) {
+        let streak = 0, close = 0;
+        games.forEach((g) => {
+          if (g.own > g.opp) { streak++; close = g.own - g.opp <= 3 ? close + 1 : 0; } else { streak = 0; close = 0; }
+          if (streak >= 5) unlock("on_fire");
+          if (close >= 3) unlock("ice_cold");
+          if (g.own > g.opp && g.opp === 0) unlock("shutout");
+        });
+        const grp = games.filter((g) => !g.po), w = grp.filter((g) => g.own > g.opp).length;
+        if (grp.length && w < grp.length - w && games.some((g) => g.po && g.own > g.opp)) unlock("lucky_loser");
+      }
+    } catch (e) { console.warn("Spiel-Karten:", e); }
+  }
   async function init(state) {
     stateRef = state || stateRef;
     const name = global.MB.UI && global.MB.UI.currentUser ? global.MB.UI.currentUser() : null;
     if (name !== player) { pageTracked = false; await setPlayer(name); }
-    if (player && stateRef) evaluateTipps(stateRef);
+    if (player && stateRef) { evaluateTipps(stateRef); evaluatePlay(stateRef); }
   }
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, flushUniqueRoundup, checkPreTournamentRoundup, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, unlockedIds: () => [...unlocked.keys()], flushUniqueRoundup, checkPreTournamentRoundup, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

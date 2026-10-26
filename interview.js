@@ -101,13 +101,14 @@
     busy = true;
     try {
       const fin = finishedGames(state), finished = fin.length;
-      if (gamesOf(fin, me).length < 2) return;
       let st = await load(tid);
       st.done = st.done || {}; st.declined = st.declined || {};
-      if (st.done[me]) return;
+      const forced = st.offer && st.offer.forced && st.offer.player === me;   // Test-Anfrage aus der Admin-Seite
+      if (!forced && gamesOf(fin, me).length < 2) return;
+      if (!forced && st.done[me]) return;
       if (st.declined[me] != null && finished < st.declined[me] + GAP_GAMES) return;
       const offer = st.offer;
-      const offerValid = offer && Date.now() - Date.parse(offer.at) < OFFER_TTL_MS && finished < (offer.finished || 0) + GAP_GAMES;
+      const offerValid = offer && Date.now() - Date.parse(offer.at) < OFFER_TTL_MS && (offer.forced || finished < (offer.finished || 0) + GAP_GAMES);
       if (offerValid && offer.player !== me) return;               // gerade ist jemand anderes dran
       if (!offerValid) {
         if (finished < (st.lastDoneFinished || 0) + GAP_GAMES && st.lastDoneFinished != null) return;  // Pause nach dem letzten Interview
@@ -213,6 +214,16 @@
     return who;
   }
 
+  // Admin-Test: Anfrage sofort für einen bestimmten Spieler reservieren (alle Regeln übersprungen)
+  async function forceOffer(name) {
+    const tid = global.MB.getCurrentTournamentId && global.MB.getCurrentTournamentId(); if (!tid) throw new Error("Kein laufendes Turnier.");
+    const st = await load(tid); st.done = st.done || {}; st.declined = st.declined || {};
+    delete st.done[name]; delete st.declined[name];
+    st.offer = { player: name, at: new Date().toISOString(), finished: 0, forced: true, by: "admin-test" };
+    await save(tid, st);
+    return true;
+  }
+
   // ------------------------------------------------------------ Verwertung im Blog (Admin-Seite)
   // Liefert bis zu max unverbrauchte Interviews: [{ name, questions, answers, record }]
   async function takeUnused(tid, max) {
@@ -250,5 +261,5 @@
   }
 
   global.MB = global.MB || {};
-  global.MB.Interview = { check, decline, start, answer, buildQuestions, takeUnused, markUsed, paragraph, adminPick, takeForShow };
+  global.MB.Interview = { check, decline, start, answer, buildQuestions, takeUnused, markUsed, paragraph, adminPick, takeForShow, forceOffer };
 })(window);

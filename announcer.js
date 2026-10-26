@@ -603,7 +603,7 @@
         : pick([`Klare Worte von ${n}. Mal sehen, ob den Worten auch Taten folgen.`, `Selbstbewusst – das gefällt mir. Jetzt muss es nur noch am Controller klappen.`, `Das nehmen wir mal so mit, ${n}.`]));
       segs.push({ text: tag("[amused]") + monaLine, display: monaLine, voiceId: modVoice, role: "moderator" });
       // alle Zeilen werden vorab erzeugt; die Mixed Zone geht erst auf, wenn die erste Zeile startet
-      await speakSequence(segs, { waitAll: true, onStart: () => studioPost({ type: "gag", which: "interview", name: iv.name }) });
+      await speakSequence(segs, { waitAll: true, silentFallback: true, onStart: () => studioPost({ type: "gag", which: "interview", name: iv.name }) });
       studioPost({ type: "gag", which: "home" });
     });
   }
@@ -1395,10 +1395,10 @@
   async function speakSequence(segments, opts) {
     const settings = getTtsSettings();
     const useElevenLabs = settings.provider === "elevenlabs" && !!settings.apiKey;
-    if (!useElevenLabs) return;
+    if (!useElevenLabs && !(opts && opts.silentFallback)) return;
 
     const prepared = segments.map((seg) => {
-      if (seg.voiceId) {
+      if (useElevenLabs && seg.voiceId) {
         return {
           seg,
           audioPromise: fetchElevenLabsAudioUrl(seg.text, {
@@ -1428,7 +1428,18 @@
           _emitSpeak({ type: "start", role, text: seg.display || seg.text, name: seg.name || null });
           await playAudioUrl(url);
           _emitSpeak({ type: "end", role });
+          continue;
         }
+      }
+      // Kein Ton erzeugbar (Fehler/keine Credits): mit opts.silentFallback trotzdem zeigen –
+      // Untertitel im Studio für eine plausible Sprechdauer
+      if (opts && opts.silentFallback) {
+        if (opts.onStart && !opts._started) { opts._started = true; try { opts.onStart(); } catch (e) { /* egal */ } }
+        const role = seg.role || _roleForVoice(seg.voiceId, settings);
+        const txt = String(seg.display || seg.text || "").replace(/\[[^\]]*\]/g, "").trim();
+        _emitSpeak({ type: "start", role, text: txt, name: seg.name || null });
+        await new Promise((r) => setTimeout(r, Math.max(2200, Math.min(12000, txt.length * 70))));
+        _emitSpeak({ type: "end", role });
       }
     }
   }

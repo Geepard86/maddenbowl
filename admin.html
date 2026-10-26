@@ -265,6 +265,7 @@
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'result'})">🏈 Letztes Ergebnis</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'duel'})">⚔️ Nächstes Duell</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'rivalry'})">🔥 Rivalitäts-Barometer</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="testInterviewOffer()">🎙️ Test: Interview-Anfrage an Tim</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'defence'})">🚧 D-Fence</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'wave'})">🌊 La Ola</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'tailgate'})">🍺 Tailgating</button>
@@ -4722,6 +4723,12 @@ function renderRanking() {
       try {
         const result = await MB.Records.generateImgflipMeme(entry.record, MB.Records.getImgflipSettings());
         entry.imageUrl = result.url;
+        // Sammelkarte für den Betroffenen, wenn das Meme wirklich erzeugt wurde
+        try {
+          const rec = entry.record || {}, victim = rec.loser || rec.opponent;
+          const card = rec.type === 'storyMeme' ? ({ ref: 'ref_victim', ragequit: 'controller_throw' })[rec.storyKey] : null;
+          if (card && victim && result.url) MB.UI.withAchievements(A => A.grant(card, typeof victim === 'string' ? victim : victim.name).catch(() => {}));
+        } catch (e) { /* optional */ }
       } catch (e) {
         entry.error = 'Imgflip-Fehler: ' + e.message;
       }
@@ -5578,6 +5585,17 @@ function renderRanking() {
       interviewBusy = false;
     }
     (MB.Announcer.workerTicker || ((ms, fn) => setInterval(fn, ms)))(8000, () => { pollInterviews(); });
+
+    // Test: Interview-Anfrage sofort an Tim (Regeln übersprungen) + Push-Einladung
+    async function testInterviewOffer() {
+      try {
+        if (!MB.Interview) throw new Error('Interview-Modul nicht geladen.');
+        await MB.Interview.forceOffer('Tim');
+        let pushInfo = '';
+        if (MB.Push) { const d = await MB.Push.notifyAdmin({ type: 'interview', players: ['Tim'], tag: 'interview', url: 'index.html', title: '🎙️ Rudi hat ein paar Fragen an dich', body: 'Test-Interview: einfach antippen und Dashboard öffnen.' }); pushInfo = d ? ` Push: ${d.sent || 0}× zugestellt.` : ' Push fehlgeschlagen (siehe Protokoll).'; }
+        alert('Interview-Anfrage für Tim ist reserviert (20 Min. gültig). Dashboard als Tim öffnen – Rudi fragt dann nach.' + pushInfo + '\nNach dem Abschicken läuft das Interview automatisch im Studio.');
+      } catch (e) { alert('Test fehlgeschlagen: ' + e.message); }
+    }
 
     // Mona kommentiert die Interview-Antworten (OpenRouter; ohne Key/Fehler -> null = Baustein im Announcer)
     async function monaInterviewComment(iv) {
