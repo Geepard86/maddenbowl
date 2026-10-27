@@ -93,6 +93,15 @@
     else { if (!avDraft) { avName = me(); avDraft = { ...MB.Avatar.get(avName) }; if (!avDraft.neck) avDraft.neck = avDraft.chain ? 'chain' : 'none'; } drawAvatarEditor(); drawAvatarFig(avName); }
   }
   function pfOpenPack() { MB.UI.withAchievements(async A => { const el = document.querySelector('.pf-pack'); if (el) { el.classList.add('opening'); setTimeout(() => el.remove(), 600); } await A.openPack(); }); }
+  // Vorschau exakt unter der Kopfzeile andocken (ohne Spalt)
+  function dockPreview() {
+    const fig = document.getElementById('avFig'); if (!fig) return;
+    const els = [...document.querySelectorAll('header.v2-header, #mbHeader, #mbHeader *')].filter(e => /fixed|sticky/.test(getComputedStyle(e).position) && e.getBoundingClientRect().top <= 1);
+    const bottom = els.length ? Math.max(...els.map(e => e.getBoundingClientRect().bottom)) : 0;
+    if (bottom > 0) fig.style.top = Math.floor(bottom - 1) + 'px';
+  }
+  window.addEventListener('resize', dockPreview);
+  setTimeout(dockPreview, 300); setTimeout(dockPreview, 1500);
   const me = () => (MB.UI.currentUser && MB.UI.currentUser()) || null;
     // ---------- Figur-Editor (avatar.js) ----------
     let avDraft = null, avName = null;
