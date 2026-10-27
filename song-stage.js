@@ -209,7 +209,7 @@
         <div class="sg-mv" id="sgMv" style="--c1:${perfs[0].c1};--c2:${perfs[0].c2}">
           <div class="sg-beam b1"></div><div class="sg-beam b2"></div><div class="sg-beam b3"></div>
           <div class="sg-led"><div class="txt" id="sgLedTxt" style="--fs:${(() => { const n = perfs.map((p) => p.name).join(" × ").length; return n <= 7 ? 200 : n <= 10 ? 160 : n <= 16 ? 112 : 80; })()}px">${esc(perfs.map((p) => p.name).join(" × "))}</div><div class="sub">${esc(label)} · LIVE</div></div>
-          <div class="sg-field"></div><div class="sg-floor"></div><div class="sg-fx"></div><div class="sg-press"><div class="pw"></div><div class="pdesk"><i></i><i></i><i></i><i></i><i></i></div><div class="pflash"></div></div>
+          <div class="sg-field"></div><div class="sg-floor"></div><div class="sg-fx"></div><div class="sg-press"><div class="pw"></div><div class="pdesk"><i></i><i></i><i></i><i></i><i></i></div><div class="pflash"></div></div><div class="sg-restroom"><div class="rt-tiles"></div><div class="rt-throne"></div><div class="rt-rolls"></div><div class="rt-sign">TOILET BOWL · LIVE</div></div>
           <div id="sgRaps" class="sg-raps"></div>
           <div class="sg-crowd"></div><div class="sg-flash"></div><div class="sg-fx2"></div>
           <div class="sg-pip">${DS.sceneHTML("booth", names).replace('class="ds-scene ', 'class="ds-scene on ')}<div class="pt">STUDIO</div></div>
@@ -314,6 +314,17 @@
       const nameEl = $("#sgName");
       mv.classList.add("on"); lyr.style.display = "flex"; $("#sgMain").style.visibility = "hidden";
       if (look) mv.classList.add("look-" + look);
+      // Eigene Videoformate: Erstes Ausscheiden = Pressekonferenz, Toilet Bowl = Toiletten-Konzert
+      if (!recap && o.milestone === "firstElimination") { mv.classList.add("press", "presser"); }
+      if (!recap && o.milestone === "toiletBowl") {
+        mv.classList.add("restroom");
+        const thr = $(".sg-restroom .rt-throne");
+        if (thr) thr.innerHTML = `<svg viewBox="0 0 400 420"><rect x="120" y="20" width="160" height="150" rx="16" fill="#ffd23f" stroke="#a07a00" stroke-width="8"/><circle cx="250" cy="56" r="14" fill="#fff3b8"/>` +
+          `<path d="M60 200 Q60 170 90 170 H310 Q340 170 340 200 Q340 300 250 330 L240 410 H160 L150 330 Q60 300 60 200Z" fill="#ffd23f" stroke="#a07a00" stroke-width="8"/><ellipse cx="200" cy="196" rx="120" ry="26" fill="#a07a00"/>` +
+          `<path d="M120 60 L140 20 L160 60 L200 10 L240 60 L260 20 L280 60" fill="none" stroke="#d50a0a" stroke-width="10" stroke-linejoin="round"/></svg>`;
+        const rolls = $(".sg-restroom .rt-rolls");
+        if (rolls) rolls.innerHTML = Array.from({ length: 14 }, (_, i) => `<i style="left:${(i * 137) % 96}%;animation-delay:${(i * 0.37) % 3}s;animation-duration:${3 + (i % 4) * 0.6}s"></i>`).join("");
+      }
       const pw = $(".sg-press .pw"); if (pw) pw.innerHTML = Array.from({ length: 7 }, (_, i) => `<div style="margin-left:${(i % 2) * -120}px">${"ALTIMA BOWL ◆ ALTIMA ◆ ".repeat(8)}</div>`).join("");
       if (finalsOpen) { // Finals: VS-Screen + Tunnel-Einlauf während der ersten Sekunden des Songs
         const pr = (p) => plist.find((x) => x.name === p.name) || p;
@@ -375,7 +386,7 @@
           rapsBox.classList.add("cam-chest"); active.classList.add("flexing", "pose-pump"); blingEl.classList.add("on");
           setTimeout(() => { rapsBox.classList.remove("cam-chest"); active.classList.remove("flexing", "pose-pump"); blingEl.classList.remove("on"); setTimeout(() => { rapsBox.style.transformOrigin = ""; }, 800); }, m.dur * 1000);
         } else if (m.kind === "press") { // Pressekonferenz: Rapper am Pult, Blitzlichter
-          mv.classList.add("press"); setTimeout(() => mv.classList.remove("press"), m.dur * 1000);
+          mv.classList.add("press"); setTimeout(() => { if (!mv.classList.contains("presser")) mv.classList.remove("press"); }, m.dur * 1000);
         } else if (m.kind === "walk") {
           mv.classList.add("walk"); active.classList.add("walkx");
           setTimeout(() => { mv.classList.remove("walk"); active.classList.remove("walkx"); }, m.dur * 1000);
@@ -466,7 +477,7 @@
 
     // ---- Phase 3: Abbinder ----
     if (!skipped) {
-      mv.classList.remove("on"); lyr.style.display = "none"; $("#sgMain").style.visibility = "visible";
+      mv.classList.remove("on", "press", "presser", "restroom"); lyr.style.display = "none"; $("#sgMain").style.visibility = "visible";
       $("#sgCenter").innerHTML = `<div class="sg-outro"><div class="ds-kicker">Und das war's</div><div class="sg-premiere" style="font-size:90px">Was für ein Track!</div><div class="sg-title">${esc(label)}</div></div>`;
       root.querySelectorAll(".sg-main .ds-char").forEach((c) => c.classList.add("hype"));
       await sleep(2600);

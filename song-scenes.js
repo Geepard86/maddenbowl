@@ -21,8 +21,19 @@
   const fitSize = (s, max, per) => Math.max(34, Math.min(max, (per || 1500) / Math.max(4, String(s).length * 0.62)));
   const SKINS = ["#e0ac82", "#7a4a2b", "#f0c4a0", "#a5683a", "#5b3720", "#d9a074"];
 
+  // Detaillierte Figur (avatar.js) im Koordinatensystem der alten Strichfiguren:
+  // Füße bei y=0, Kopf um y=-156, erhobene Hände um (±46, -178)
   function person(x, y, s, o) {
     o = o || {};
+    if (global.MB && global.MB.Avatar && !o.legacy) {
+      const A = global.MB.Avatar;
+      const cfg = { ...A.randomFor("crowd" + (o.k || 0) + (o.top || "") + (o.cap || "")), shirt: o.top || "#c00", top: o.jersey ? "jersey" : "tshirt", number: o.number || "",
+        hat: o.hat || (o.cap ? "cap" : (o.k || 0) % 4 === 0 ? "none" : "none"), hatColor: o.cap || undefined, glasses: (o.k || 0) % 5 === 3 ? "shades" : "none", neck: "none", hand: "none", badge: "none", aura: "none", back: "none", _rings: 0, ...(o.cfg || {}) };
+      if (o.skin) cfg.skin = o.skin;
+      const inner = A.svg(cfg, { outfit: "casual", armsUp: !!o.up, open: !!o.up || !!o.shout }).replace('<svg viewBox="0 0 260 440"', '<svg x="-60" y="-210" width="120" height="203" viewBox="0 0 260 440"');
+      const skirt = o.skirt ? `<path d="M-32 -18 L32 -18 L44 8 L-44 8Z" fill="${o.skirt}"/>` : "";
+      return `<g transform="translate(${x} ${y}) scale(${s})"><g class="${o.cls || ""}" style="animation-delay:${o.d || 0}s">${inner}${skirt}${o.extra || ""}</g></g>`;
+    }
     const skin = o.skin || SKINS[(o.k || 0) % SKINS.length], top = o.top || "#c00", bot = o.bot || "#222", hair = o.hair || "#2a1a10";
     const arms = o.up
       ? `<path d="M-22 -122 L-48 -176 M22 -122 L48 -176" stroke="${skin}" stroke-width="13" stroke-linecap="round" fill="none"/>`
@@ -89,13 +100,26 @@
     `<rect x="1230" y="480" width="200" height="110" rx="10" fill="#1d5fa8"/><rect x="1230" y="480" width="200" height="30" rx="8" fill="#fff"/>` +
     `<rect x="1640" y="200" width="12" height="400" fill="#bbb"/><g class="a-wave"><path d="M1652 210 H1860 V330 H1652Z" fill="${p.c1}"/><path d="M1652 260 H1860 V290 H1652Z" fill="${p.c2}"/></g>` +
     person(880, 640, 2.6, { up: 1, top: p.c1, cls: "a-bounce", k: 1 }) + person(1130, 650, 2.4, { up: 1, top: p.c2, cls: "a-bounce2", k: 4 }), grad("#ff9a4a", "#3a2438"));
-  S.mascot = (p) => svg(bgRect + `<g opacity=".5">${[0, 1, 2].map((i) => `<path d="M${400 + i * 560} 0 L${160 + i * 560} 780 L${640 + i * 560} 780Z" fill="rgba(255,255,255,.12)"/>`).join("")}</g>` +
-    `<g transform="translate(700 60) scale(1.12)"><g class="a-sway" style="transform-origin:200px 560px">${mascotSVG(p.type, p.c1, p.c2).replace(/^<svg[^>]*>|<\/svg>$/g, "")}</g></g>` + confetti(24, [p.c1, p.c2, "#fff"]) +
-    txt(960, 740, p.label, fitSize(p.label, 110, 1500), p.c2), grad("#12182e", "#05060d"));
+  S.mascot = (p) => {
+    const A = global.MB && global.MB.Avatar;
+    let figure = "";
+    if (A && p.team) {
+      const item = (A.TEAM_ITEMS || []).find((t) => t[2] === p.team);
+      const cfg = { hat: "none", neck: "none", face: "none", back: "none", hand: "foamfinger", waist: "none", above: "none" };
+      if (item) cfg[item[0]] = item[1];
+      figure = `<g transform="translate(960 760) scale(3)"><g class="a-sway" style="transform-origin:0 -100px">${person(0, 0, 1, { up: 1, top: p.c1, k: 7, cfg: { ...cfg, team: p.team, top: "jersey", number: "", glasses: "none", beard: "none", hairColor: p.c2 } })}</g></g>`;
+    } else {
+      figure = `<g transform="translate(700 60) scale(1.12)"><g class="a-sway" style="transform-origin:200px 560px">${mascotSVG(p.type, p.c1, p.c2).replace(/^<svg[^>]*>|<\/svg>$/g, "")}</g></g>`;
+    }
+    return svg(bgRect + `<g opacity=".5">${[0, 1, 2].map((i) => `<path d="M${400 + i * 560} 0 L${160 + i * 560} 780 L${640 + i * 560} 780Z" fill="rgba(255,255,255,.12)"/>`).join("")}</g>` +
+      figure + confetti(24, [p.c1, p.c2, "#fff"]) + txt(960, 110, p.label, fitSize(p.label, 110, 1500), p.c2), grad("#12182e", "#05060d"));
+  };
   S.fans = (p) => { const names = (p.names && p.names.length ? p.names : ["ALTIMA"]).slice(0, 4), n = names.length, step = 1500 / n;
-    return svg(bgRect + `<rect y="640" width="1920" height="140" fill="#10131f"/>` + names.map((nm, i) => { const x = 210 + step * i + step / 2 - 100; const cx = x + 0;
-      return `<g class="${i % 2 ? "a-bounce" : "a-bounce2"}"><rect x="${cx - 6}" y="250" width="12" height="260" fill="#8a6a3a"/><rect x="${cx - 190}" y="130" width="380" height="170" rx="10" fill="${i % 2 ? p.c2 : p.c1}" stroke="#fff" stroke-width="6"/>${txt(cx, 232, String(nm).toUpperCase().slice(0, 12), fitSize(nm, 90, 330), "#fff")}</g>` +
-        person(cx, 700, 2.7, { up: 1, top: i % 2 ? p.c1 : p.c2, k: i + 1, extra: "" }); }).join("") + txt(960, 66, "DIE FANS FLIPPEN AUS", 52, "#ffd23f"), grad("#1a2347", "#05060d")); };
+    return svg(bgRect + `<rect y="640" width="1920" height="140" fill="#10131f"/>` + names.map((nm, i) => { const cx = 210 + step * i + step / 2;
+      const sw = Math.min(380, step - 40), sh = 150, sy = 700 - 178 * 2.7 - sh + 30; // Unterkante zwischen den erhobenen Händen
+      return `<g class="${i % 2 ? "a-bounce" : "a-bounce2"}">` + person(cx, 700, 2.7, { up: 1, top: i % 2 ? p.c1 : p.c2, k: i + 1 }) +
+        `<rect x="${cx - sw / 2}" y="${sy}" width="${sw}" height="${sh}" rx="10" fill="#fff" stroke="${i % 2 ? p.c2 : p.c1}" stroke-width="10"/>` +
+        txt(cx, sy + sh / 2 + 22, String(nm).toUpperCase().slice(0, 12), fitSize(nm, 70, sw * 2.2), i % 2 ? p.c1 : p.c2, "#fff") + `</g>`; }).join("") + txt(960, 66, "DIE FANS FLIPPEN AUS", 52, "#ffd23f"), grad("#1a2347", "#05060d")); };
   S.trash = (p) => svg(bgRect + `<g stroke="rgba(0,0,0,.35)" stroke-width="4">${Array.from({ length: 9 }, (_, i) => `<path d="M0 ${i * 90} H1920"/>`).join("")}</g><rect y="600" width="1920" height="180" fill="#1a1a1f"/>` +
     person(520, 700, 2.5, { up: 1, top: p.c1, bot: "#223", k: 2, cls: "a-bounce2" }) +
     `<g transform="translate(1260 690)"><rect x="-130" y="-300" width="260" height="300" rx="14" fill="#6c7380"/><path d="M-90 -290 V-10 M-30 -290 V-10 M30 -290 V-10 M90 -290 V-10" stroke="#555d69" stroke-width="10"/>` +
@@ -245,7 +269,7 @@
           const c = col(team), chant = chantFor(nick, r);
           const useChant = chant && r() < 0.65;
           if (recap) hl.push({ t: w.s, name: (pl.find((p) => p.team === team) || {}).name });
-          cands.push({ player: pl.find((p) => p.team === team), t: w.s, key: "team:" + nick, scene: useChant ? "chant" : (gag ? TEAM_GAG[gag] : "mascot"), params: { type: mascotType(nick), c1: c[0], c2: c[1], label: useChant ? chant : nick.toUpperCase() } });
+          cands.push({ player: pl.find((p) => p.team === team), t: w.s, key: "team:" + nick, scene: useChant ? "chant" : (gag ? TEAM_GAG[gag] : "mascot"), params: { type: mascotType(nick), c1: c[0], c2: c[1], label: useChant ? chant : nick.toUpperCase(), team: (pl.find((p) => p.team === team) || {}).id || null } });
         }
       });
       // andere Spielernamen -> Fans mit Schild (nicht beim Performer/Ziel)

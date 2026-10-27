@@ -443,7 +443,7 @@
         <div class="v2-nav-divider"></div>
         ${adminMenu ? adminSecondaryHtml : `${isAdminUnlocked() ? `<a class="v2-nav-link" href="admin.html">${emoji("🛡️")} Admin-Bereich</a><a class="v2-nav-link" href="seasons.html">${emoji("🗂️")} Saisons &amp; Vorbereitung</a><div class="v2-nav-divider"></div>` : ""}<button class="v2-nav-secondary" onclick="MB.UI.openRules()">Regeln &amp; Settings</button>
         <button class="v2-nav-secondary" onclick="MB.UI.closeNav(); MB.UI.startTour()">Einführung (Tour)</button>
-        <button class="v2-nav-secondary" onclick="MB.UI.closeNav(); MB.UI.openPush()">🔔 Benachrichtigungen</button>
+        <button class="v2-nav-secondary" onclick="MB.UI.closeNav(); MB.UI.openPush()">Benachrichtigungen</button>
         <button class="v2-nav-secondary" id="mbInstallItem" onclick="MB.UI.installApp()" style="${isStandalone() ? "display:none;" : ""}">Zum Home-Bildschirm</button>`}
       </nav>
       <div class="v2-user-pill-menu" id="mbUserMenu"></div>

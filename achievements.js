@@ -387,14 +387,15 @@
     if (data) firsts.set(id, { player: data.player_name, at: data.claimed_at });
     return !!(data && data.player_name === player);
   }
-  async function unlock(id, meta) {
+  async function unlock(id, meta, uopts) {
     const def = BY_ID.get(id); if (!def || !player) return false;
     await loadFor(player);
     if (unlocked.has(id)) return false;
     if (def.unique && !(await claimUnique(id))) return false;
     const v = { at: new Date().toISOString(), seen: false, meta: meta || null };
     unlocked.set(id, v); await persistUnlock(player, id, v);
-    queue.push(id); scheduleShow();
+    if (uopts && uopts.pack) addSet("pack", id); // erst beim „Pack öffnen“ im Profil zeigen
+    else { queue.push(id); scheduleShow(); }
     if (def.unique) postUniqueArticle(def, player);
     else if (def.rarity === "legendary") noteLegendary(def, player);
     const regular = DEFS.filter((d) => !d.unique && d.rarity !== "limited" && d.id !== "cards_all");
@@ -553,7 +554,9 @@
     } else if (event === "egg" && data.id && BY_ID.has(data.id) && /^egg_/.test(data.id)) {
       unlock(data.id).then(checkAllEggs);
     } else if (event === "set_done" && data.id && BY_ID.has(data.id) && /^(set_|u_wardrobe)/.test(data.id)) {
-      unlock(data.id);
+      unlock(data.id, null, (progress.flags || []).includes("setsV1") ? null : { pack: true });
+    } else if (event === "sets_checked") {
+      addSet("flags", "setsV1");
     } else if (event === "interview_done") {
       unlock("interview_1"); unlock("u_first_interview");
     } else if (event === "comment_text" && data.text) {
@@ -777,19 +780,22 @@
   const RARITY_ORDER = ["common", "rare", "epic", "legendary", "limited", "unique"];
   async function renderGallery(el, gopts) {
     const noUnique = !!(gopts && gopts.noUnique);
+    // Karten im ungeöffneten Pack bleiben bis zum Öffnen verdeckt
+    const packed = new Set(progress.pack || []);
+    const has = (id) => unlocked.has(id) && !packed.has(id);
     if (!el) return; injectStyle();
     if (!player) { el.innerHTML = `<div class="ach-gal-head">Logge dich ein, um deine Sammelkarten zu sehen.</div>`; return; }
     el.innerHTML = `<div class="ach-gal-head">Lade deine Karten …</div>`;
     await loadFor(player);
-    const have = DEFS.filter((d) => unlocked.has(d.id)).length, uniq = DEFS.filter((d) => d.unique);
+    const have = DEFS.filter((d) => has(d.id)).length, uniq = DEFS.filter((d) => d.unique);
     const warn = [!tables.ach && "Karten", !tables.firsts && "einzigartige Karten"].filter(Boolean);
     el.innerHTML = `<div class="ach-gal-head"><b>${have}</b> von <b>${DEFS.length}</b> Karten gesammelt${warn.length ? `<br><span style="opacity:.6;font-size:.85em;">(${warn.join(" & ")}: Datenbank-Migration steht noch aus${!tables.firsts ? " — einzigartige Karten werden erst danach vergeben" : ""})</span>` : ""}</div>` +
       RARITY_ORDER.map((rar) => {
         // Profil: Unique-Karten nur zeigen, wenn man sie selbst besitzt
-        const list = DEFS.filter((d) => d.rarity === rar && !(noUnique && rar === "unique" && !unlocked.has(d.id))); if (!list.length) return "";
-        const got = list.filter((d) => unlocked.has(d.id)).length;
+        const list = DEFS.filter((d) => d.rarity === rar && !(noUnique && rar === "unique" && !has(d.id))); if (!list.length) return "";
+        const got = list.filter((d) => has(d.id)).length;
         return `<div class="ach-section" style="color:${RARITIES[rar].color}">${RARITIES[rar].label} <span style="opacity:.6;font-weight:600;">· ${got}/${list.length}</span></div><div class="ach-gallery">${list.map((d) => {
-          const f = firsts.get(d.id); const mine = unlocked.get(d.id);
+          const f = firsts.get(d.id); const mine = has(d.id) ? unlocked.get(d.id) : null;
           if (mine) return cardHtml(d, { ...mine, holder: d.unique ? player : null });
           // Unique-Karten anderer Spieler aufgedeckt zeigen (mit Besitzer)
           if (d.unique && f) return cardHtml(d, { at: f.at || new Date().toISOString(), holder: f.player, foreign: true });
@@ -906,6 +912,22 @@
     const k = cfg.nextTournamentAt ? new Date(cfg.nextTournamentAt) : null;
     if (k && !isNaN(k) && k.toDateString() === now.toDateString() && now < new Date(k.getTime() - 2 * 3600 * 1000)) unlock("fun_grill");
   }
+  function packNotice() {
+    if (sessionStorage.getItem("mb_pack_notice")) return; sessionStorage.setItem("mb_pack_notice", "1");
+    const n = (progress.pack || []).length; if (!n) return;
+    const t = document.createElement("div");
+    t.innerHTML = `🎁 <b>Du hast dir in der Vergangenheit schon ${n} weitere Karte${n === 1 ? "" : "n"} verdient!</b><br>Öffne dein Pack in deinem Profil. <a href="profil.html#karten" style="color:#ffd23f;font-weight:800;">Pack öffnen</a>`;
+    t.style.cssText = "position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:99990;background:#13203a;border:2px solid #c99700;color:#fff;padding:12px 16px;border-radius:12px;font-size:.92em;max-width:92vw;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);";
+    document.body.appendChild(t); setTimeout(() => t.remove(), 12000);
+  }
+  function packCount() { return (progress.pack || []).length; }
+  // Pack öffnen: alle gesammelten Karten nacheinander präsentieren
+  async function openPack() {
+    const ids = (progress.pack || []).filter((id) => unlocked.has(id));
+    progress.pack = []; saveProgress();
+    ids.forEach((id) => queue.push(id)); interacted = true; scheduleShow();
+    return ids.length;
+  }
   function checkAllEggs() {
     const eggs = DEFS.filter((x) => /^egg_/.test(x.id));
     if (eggs.length && eggs.every((x) => unlocked.has(x.id))) unlock("fun_bear");
@@ -948,6 +970,9 @@
     try {
       if (!player) return;
       const me = String(player).toLowerCase();
+      const packMode = !(progress.flags || []).includes("packV1");
+      const packJobs = [];
+      const U = (id) => { packJobs.push(unlock(id, null, packMode ? { pack: true } : null)); };
       if (!_histForPlay && global.MB.loadAndBuildHistory) { try { _histForPlay = await global.MB.loadAndBuildHistory(); } catch (e) { _histForPlay = { matches: [] }; } }
       // Spiele je Turnier in Reihenfolge: Historie (Saisons) + laufendes Turnier
       const bySeason = new Map();
@@ -964,22 +989,28 @@
         if (String(m.p1.name).toLowerCase() === me) cur.push({ own: m.s1, opp: m.s2, po: true, at: m.finishedAt || "z" }); else if (String(m.p2.name).toLowerCase() === me) cur.push({ own: m.s2, opp: m.s1, po: true, at: m.finishedAt || "z" }); });
       cur.sort((x, y) => (x.po - y.po) || String(x.at).localeCompare(String(y.at)));
       if (cur.length) bySeason.set("current", cur);
-      if ([...bySeason.keys()].filter((k) => k.startsWith("h")).length >= 3) unlock("col_throwback");
+      // Throwback: Turniere seit Karten-Start (archivierte ab 2026 + laufendes)
+      const tid = global.MB.getCurrentTournamentId && global.MB.getCurrentTournamentId();
+      if (cur.length && tid) addSet("tournamentsPlayed", String(tid));
+      const playedSince = new Set([...bySeason.keys()].filter((k) => k.startsWith("h")).map((k) => k.slice(1)));
+      if (playedSince.size + (cur.length ? 1 : 0) >= 3) U("col_throwback");
       try {
         const seasons = global.MB.loadHistorySeasons ? await global.MB.loadHistorySeasons() : [];
-        if (seasons.some((se) => (se.standings || []).some((r) => String(r.name).toLowerCase() === me && Number(r.rank) <= 4))) unlock("col_probowl");
+        if (seasons.some((se) => (se.standings || []).some((r) => String(r.name).toLowerCase() === me && Number(r.rank) <= 4))) U("col_probowl");
       } catch (e) { /* egal */ }
       for (const games of bySeason.values()) {
         let streak = 0, close = 0;
         games.forEach((g) => {
           if (g.own > g.opp) { streak++; close = g.own - g.opp <= 3 ? close + 1 : 0; } else { streak = 0; close = 0; }
-          if (streak >= 5) unlock("on_fire");
-          if (close >= 3) unlock("ice_cold");
-          if (g.own > g.opp && g.opp === 0) unlock("shutout");
+          if (streak >= 5) U("on_fire");
+          if (close >= 3) U("ice_cold");
+          if (g.own > g.opp && g.opp === 0) U("shutout");
         });
         const grp = games.filter((g) => !g.po), w = grp.filter((g) => g.own > g.opp).length;
-        if (grp.length && w < grp.length - w && games.some((g) => g.po && g.own > g.opp)) unlock("lucky_loser");
+        if (grp.length && w < grp.length - w && games.some((g) => g.po && g.own > g.opp)) U("lucky_loser");
       }
+      await Promise.all(packJobs);
+      if (packMode) { addSet("flags", "packV1"); if ((progress.pack || []).length) packNotice(); }
     } catch (e) { console.warn("Spiel-Karten:", e); }
   }
   async function init(state) {
@@ -991,5 +1022,5 @@
 
   armInteraction();
   try { global.addEventListener("appinstalled", () => unlock("app_installed")); } catch (e) { /* optional */ }
-  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, unlockedIds: () => [...unlocked.keys()], flushUniqueRoundup, checkPreTournamentRoundup, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
+  global.MB.Achievements = { DEFS, RARITIES, TERMS, setPage, init, onLogin, onLogout, track, unlock, evaluateTipps, trackPage, renderGallery, renderUniqueBoard, renderCatalog, resetAll, grant, revoke, evaluateDraftPick, openPack, packCount, unlockedIds: () => [...unlocked.keys()], flushUniqueRoundup, checkPreTournamentRoundup, count: () => unlocked.size, previewPopup, isTableMissing: () => !tables.ach };
 })(window);

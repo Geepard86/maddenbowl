@@ -257,6 +257,12 @@
   .st-start div { text-align: center; font: 800 34px/1.4 'Segoe UI'; }
   .st-start small { display: block; font: 500 20px/1.4 'Segoe UI'; color: #9fb0c8; margin-top: 10px; }
   @media (prefers-reduced-motion: reduce) { .st-view, .st-view * { animation-duration: .01s !important; transition: none !important; } }
+  .iv-boards { position: absolute; left: 0; right: 0; top: 150px; height: 120px; display: grid; grid-template-columns: repeat(8, 1fr); grid-auto-rows: 60px; opacity: .9; }
+  .iv-boards span { display: flex; align-items: center; justify-content: center; font: 900 24px/1 Impact, sans-serif; letter-spacing: 3px; color: #fff; background: #0b1328; border: 2px solid #c99700; }
+  .iv-boards span.g { background: #c99700; color: #0b1328; } .iv-boards span.r { background: #d50a0a; }
+  .iv-guest .av-mouth { transform-box: fill-box; transform-origin: 50% 50%; }
+  .iv-guest.talking .av-mouth { animation: avTalk .2s ease-in-out infinite alternate; }
+  @keyframes avTalk { from { transform: scaleY(.4); } to { transform: scaleY(2.4); } }
 </style>
 </head>
 <body>
@@ -339,13 +345,14 @@
     const role = evt.role || 'commentator';
     if (evt.type === 'start') {
       speaking = true; clearTimeout(backTimer);
-      setCam(camForRole(role === 'guest' ? 'commentator' : role)); setTalking(role === 'guest' ? '' : role, true);
+      if (interviewActive) { setCam(camForRole('moderator')); setTalking(role === 'moderator' ? 'moderator' : '', true); ivTalk(role, true); } // Nahaufnahme links: Mona; Lippen bewegen sich in der Mixed Zone
+      else { setCam(camForRole(role === 'guest' ? 'commentator' : role)); setTalking(role === 'guest' ? '' : role, true); }
       clearTimeout(capTimer);
       $('stCapName').innerHTML = role === 'guest' ? `${esc(evt.name || 'Gast')}<small>INTERVIEW</small>` : `${esc(names[role] || role)}<small>${role === 'announcer' ? 'RING-ANSAGER' : role === 'moderator' ? 'MODERATION' : 'KOMMENTAR'}</small>`;
       $('stCapText').textContent = plain(evt.text);
       $('stCaption').classList.remove('off'); $('stTicker').classList.add('hide');
     } else if (evt.type === 'end') {
-      speaking = false; setTalking(role, false);
+      speaking = false; setTalking(role, false); ivTalk(role, false);
       capTimer = setTimeout(() => { $('stCaption').classList.add('off'); $('stTicker').classList.remove('hide'); }, 1600);
       backTimer = setTimeout(() => { if (!speaking) setCam('booth'); }, 2600); // zurück in die Totale
     }
@@ -824,12 +831,18 @@
   }
   let lastGag = '';
   let m_name = null, interviewActive = false, resultPending = false;
+  function ivTalk(role, on) {
+    const r = document.querySelector('#vGag .iv-rudi'), g = document.querySelector('#vGag .iv-guest');
+    if (r) r.classList.toggle('talking', !!on && role === 'commentator');
+    if (g) g.classList.toggle('talking', !!on && role === 'guest');
+  }
   // Interview-Szene: Rudi links, Spielerfigur rechts, darüber die Untertitel
   function gagInterview(name) {
     const rudi = MB.DraftStage && MB.DraftStage.charSVG ? MB.DraftStage.charSVG('commentator') : '';
     $('vGag').innerHTML = `<div class="st-gag"><div style="position:relative;width:1000px;height:520px;border:6px solid #c99700;border-radius:12px;overflow:hidden;background:radial-gradient(circle at 50% 30%,#2b3c66,#0b1328);">
       <div style="position:absolute;left:24px;top:16px;background:#d50a0a;color:#fff;font:900 26px/1 Impact;letter-spacing:3px;padding:8px 14px;">● MIXED ZONE</div>
-      <div style="position:absolute;left:60px;bottom:0;width:360px;height:440px;" class="iv-rudi">${rudi}</div>
+      <div class="iv-boards">${Array.from({ length: 4 }, () => '<span>ALTIMA BOWL</span><span class="g">MIXED ZONE</span><span>ALTIMA BOWL</span><span class="r">LIVE</span>').join('')}</div>
+      <div style="position:absolute;left:60px;bottom:0;width:360px;height:440px;" class="iv-rudi ds-char">${rudi}</div>
       <div style="position:absolute;right:80px;bottom:-20px;width:300px;height:460px;" class="iv-guest">${MB.Avatar ? MB.Avatar.svg(MB.Avatar.get(name), { outfit: 'casual' }) : ''}</div>
       <div style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font:900 34px/1 Impact;letter-spacing:2px;color:#fff;text-shadow:3px 3px 0 #000;">RUDI · ${esc(name).toUpperCase()}</div></div></div>`;
     const sv = $('vGag').querySelector('.iv-rudi svg'); if (sv) { sv.setAttribute('width', '100%'); sv.setAttribute('height', '100%'); }

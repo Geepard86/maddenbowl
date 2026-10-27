@@ -26,8 +26,14 @@
   .av-range { width: 100%; height: 34px; touch-action: pan-y; accent-color: var(--v2-gold, #c99700); }
   .av-wrap > div { min-width: 0; }
   .av-wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 14px; }
-  .av-fig { width: 200px; height: 300px; background: radial-gradient(circle at 50% 30%, rgba(201,151,0,.18), transparent 70%); border-radius: 12px; }
+  .av-fig { position: relative; width: 200px; height: 300px; background: radial-gradient(circle at 50% 30%, rgba(201,151,0,.18), transparent 70%); border-radius: 12px; }
   .av-fig svg { width: 100%; height: 100%; }
+  .av-fig { position: sticky; top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 5; }
+  .av-turn { position: absolute; right: 6px; bottom: 6px; width: auto; margin: 0; padding: 5px 10px; font-size: .78em; border-radius: 999px; background: rgba(11,19,40,.85); color: #ffd23f; border: 1px solid #c99700; }
+  @media (max-width: 640px) { .av-fig { width: 160px; height: 240px; background-color: var(--v2-surface, #13203a); box-shadow: 0 8px 20px rgba(0,0,0,.35); } }
+  .av-pv.body { width: 46px; height: 64px; } .av-pv.body svg { width: 100%; height: 100%; }
+  .av-sw .plus { position: relative; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; color: #fff; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red) !important; overflow: hidden; }
+  .av-sw .plus input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
   .av-ed { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
   .av-ed label { font-size: .78em; font-weight: 800; letter-spacing: .5px; color: var(--v2-silver, #9fb0c8); display: block; margin-bottom: 4px; text-transform: uppercase; }
   .av-sw { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -38,6 +44,13 @@
   .av-range, .av-row input[type=color] { box-sizing: border-box; max-width: 100%; }
   #pfPane-figur .av-wrap > div { min-width: 0; }
   .av-chip.locked { opacity: .45; filter: grayscale(1); }
+  .pf-pack { display: flex; align-items: center; gap: 14px; padding: 14px; margin-bottom: 14px; border-radius: 14px; background: linear-gradient(135deg, #2a1d05, #13203a); border: 2px solid #c99700; box-shadow: 0 0 24px rgba(201,151,0,.35); }
+  .pf-pack .pk { font-size: 44px; animation: pkWiggle 1.4s ease-in-out infinite; }
+  .pf-pack span { opacity: .75; font-size: .88em; }
+  .pf-pack button { width: auto; margin: 0 0 0 auto; white-space: nowrap; }
+  .pf-pack.opening { animation: pkOpen .6s ease-in forwards; }
+  @keyframes pkWiggle { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-12deg) scale(1.08); } 40% { transform: rotate(10deg); } 60% { transform: rotate(-6deg); } }
+  @keyframes pkOpen { to { transform: scale(1.2); opacity: 0; } }
   .pf-tabs { display: flex; gap: 8px; margin: 4px 0 14px; flex-wrap: wrap; }
   .pf-tabs button { width: auto; margin: 0; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--v2-border); background: transparent; color: inherit; font-weight: 700; }
   .pf-tabs button.on { background: var(--v2-gold, #c99700); color: #0b1328; border-color: transparent; }
@@ -67,16 +80,23 @@
     ['figur', 'karten'].forEach(k => { document.getElementById('pfPane-' + k).classList.toggle('hidden', k !== t || !me()); document.getElementById('pfT-' + k).classList.toggle('on', k === t); });
     history.replaceState && history.replaceState(null, '', '#' + t);
     if (!me()) return;
-    if (t === 'karten') MB.UI.withAchievements(A => A.renderGallery(document.getElementById('pfCards'), { noUnique: true }));
+    if (t === 'karten') MB.UI.withAchievements(async A => {
+      const box = document.getElementById('pfCards');
+      await A.renderGallery(box, { noUnique: true });
+      const n = A.packCount ? A.packCount() : 0;
+      if (n) box.insertAdjacentHTML('afterbegin', `<div class="pf-pack"><div class="pk">🎁</div><div><b>Dein Pack: ${n} Karte${n === 1 ? '' : 'n'}</b><br><span>Diese Karten hast du dir schon vor deinem ersten Besuch verdient.</span></div><button onclick="pfOpenPack()">Pack öffnen</button></div>`);
+    });
     else { if (!avDraft) { avName = me(); avDraft = { ...MB.Avatar.get(avName) }; if (!avDraft.neck) avDraft.neck = avDraft.chain ? 'chain' : 'none'; } drawAvatarEditor(); drawAvatarFig(avName); }
   }
+  function pfOpenPack() { MB.UI.withAchievements(async A => { const el = document.querySelector('.pf-pack'); if (el) { el.classList.add('opening'); setTimeout(() => el.remove(), 600); } await A.openPack(); }); }
   const me = () => (MB.UI.currentUser && MB.UI.currentUser()) || null;
     // ---------- Figur-Editor (avatar.js) ----------
     let avDraft = null, avName = null;
     async function drawAvatarFig(name) {
       const el = document.getElementById('avFig'); if (!el || !MB.Avatar) return;
       await MB.Avatar.load();
-      el.innerHTML = MB.Avatar.svg(avName === name && avDraft ? avDraft : MB.Avatar.get(name));
+      el.innerHTML = MB.Avatar.svg(avName === name && avDraft ? avDraft : MB.Avatar.get(name), { view: window.__avView || 'front' }) +
+        `<button type="button" class="av-turn" onclick="window.__avView = window.__avView === 'back' ? 'front' : 'back'; drawAvatarFig(avName)">↻ ${window.__avView === 'back' ? 'Vorderseite' : 'Rückseite'}</button>`;
     }
     function toggleAvatarEditor(name) {
       const ed = document.getElementById('avEditor'); if (!ed) return;
@@ -92,7 +112,9 @@
       return `<div class="av-strip">${list.map(([v, l]) => {
         const on = avDraft[k] === v || (v === 'none' && !avDraft[k]);
         const lock = MB.Avatar.lockInfo ? MB.Avatar.lockInfo(k, v, window.__ownedCards || [], window.__cardDefs || [], avName) : null;
-        const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, [k]: v })}</span>` : '';
+        const bodySlot = /^(top|back|waist|shoulder|neck|badge|hand|aura|above)$/.test(k);
+        const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, [k]: v })}</span>`
+          : bodySlot ? `<span class="av-pv body">${MB.Avatar.svg({ ...avDraft, [k]: v, outline: false }, { view: /^(back|shoulder)$/.test(k) && v !== 'bird' ? 'back' : 'front' })}</span>` : '';
         if (lock) return `<button type="button" class="av-chip locked" title="Freischalten: ${lock}" onclick="alert('🔒 ${l} wird freigeschaltet mit: ${lock}')">${pv}<span>🔒 ${l}</span></button>`;
         return `<button type="button" class="av-chip ${on ? 'on' : ''}" onclick="avSet('${k}', '${v}')">${pv}<span>${l}</span></button>`;
       }).join('')}</div>`;
@@ -100,7 +122,9 @@
     function drawAvatarEditor() {
       const ed = document.getElementById('avEditor'); if (!ed || !avDraft) return;
       const O = MB.Avatar.OPTIONS, d = avDraft;
-      const sw = (k, list) => `<div class="av-sw">${list.map(c => `<button type="button" class="${d[k] === c ? 'on' : ''}" style="background:${c}" onclick="avSet('${k}', '${c}')" aria-label="${c}"></button>`).join('')}</div>`;
+      const sw = (k, list) => `<div class="av-sw">${list.map(c => `<button type="button" class="${d[k] === c ? 'on' : ''}" style="background:${c}" onclick="avSet('${k}', '${c}')" aria-label="${c}"></button>`).join('')}` +
+        `<label class="plus ${d[k] && !list.includes(d[k]) ? 'on' : ''}" title="Eigene Farbe" style="${d[k] && !list.includes(d[k]) ? `background:${d[k]} !important;` : ''}">＋<input type="color" value="${/^#[0-9a-f]{6}$/i.test(d[k] || '') ? d[k] : '#888888'}" oninput="avSet('${k}', this.value, false)" onchange="drawAvatarEditor()"></label></div>`;
+      const CLOTH = ['#d50a0a', '#0b2265', '#203731', '#4f2683', '#fb4f14', '#ffb612', '#111111', '#f4f4f4', '#008e97', '#a71930'];
       const teams = (MB.nflTeams || []).slice().sort((a, b) => a.n.localeCompare(b.n));
       const keep = [...ed.querySelectorAll('.av-strip')].map(x => x.scrollLeft); // Wischposition merken
       ed.innerHTML = `
@@ -114,15 +138,18 @@
         ${d.glasses && d.glasses !== 'none' ? `<div class="av-row"><label>Farbe der Brille</label>${sw('glassesColor', O.glassesColor)}</div>` : ''}
         <div class="av-row"><label>Kopfbedeckung</label>${avStrip('hat', O.hat, true)}</div>
         ${d.hat && d.hat !== 'none' ? `<div class="av-row"><label>Farbe der Kopfbedeckung</label>${sw('hatColor', O.hatColor)}</div>` : ''}
-        <div class="av-row"><label>Kleidungsfarbe</label><input type="color" value="${d.shirt || '#2a2f3a'}" oninput="avSet('shirt', this.value, false)" style="width:100%; height:38px;"></div>
+
         <div class="av-row"><label>Lieblingsteam</label><div class="av-strip">${[{ id: '', n: 'Keins' }, ...teams].map(t => `<button type="button" class="av-chip team ${(d.team || '') === t.id ? 'on' : ''}" onclick="avSet('team', '${t.id}')">${t.id ? `<img src="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${t.id}.png" alt="">` : '<span class="av-none">—</span>'}<span>${t.n}</span></button>`).join('')}</div></div>
         <div class="av-row"><label>Über dem Kopf</label>${avStrip('above', O.above)}</div>
         <div class="av-row"><label>Gesicht</label>${avStrip('face', O.face, true)}</div>
         <div class="av-row"><label>Mund</label>${avStrip('mouth', O.mouth, true)}</div>
         <div class="av-row"><label>Oberteil</label>${avStrip('top', O.top)}</div>
+        <div class="av-row"><label>Farbe Oberteil</label>${sw('shirt', CLOTH)}</div>
         ${(d.top === 'champshirt' || d.hat === 'champcap') && (MB.Avatar.championsOf ? MB.Avatar.championsOf(avName) : []).length > 1 ? `<div class="av-row"><label>Champion-Jahr</label><select onchange="avSet('champYear', this.value)">${MB.Avatar.championsOf(avName).map(x => `<option value="${x.year}" ${String(d.champYear || '') === String(x.year) ? 'selected' : ''}>${x.year} (${x.team || '?'})</option>`).join('')}</select></div>` : ''}
         ${d.top === 'jersey' ? `<div class="av-row"><label>Rückennummer</label><input type="text" inputmode="numeric" maxlength="2" value="${d.number || ''}" oninput="this.value=this.value.replace(/[^0-9]/g,''); avSet('number', this.value, false)" style="width:80px;"></div>` : ''}
         <div class="av-row"><label>Rücken</label>${avStrip('back', O.back)}</div>
+        ${d.back === 'cape' ? `<div class="av-row"><label>Farbe Umhang</label>${sw('backColor', CLOTH)}</div>` : ''}
+        ${/^(foamfinger|flag)$/.test(d.hand || '') ? `<div class="av-row"><label>Farbe ${d.hand === 'flag' ? 'Fahne' : 'Schaumstoff-Finger'}</label>${sw('accentColor', CLOTH)}</div>` : ''}
         <div class="av-row"><label>Gürtel</label>${avStrip('waist', O.waist)}</div>
         <div class="av-row"><label>Schulter</label>${avStrip('shoulder', O.shoulder)}</div>
         <div class="av-row"><label>Kette &amp; Anhänger</label>${avStrip('neck', O.neck)}</div>
@@ -162,6 +189,7 @@
           const stt = MB.Avatar.setStatus(me(), window.__ownedCards, window.__cardDefs);
           Object.entries(stt).forEach(([id, ok]) => { if (ok) A.track('set_done', { id }); });
           if (stt.set_fashion) A.track('set_done', { id: 'u_wardrobe' });
+          setTimeout(() => A.track('sets_checked', {}), 1500);
         }
       } catch (e) { /* optional */ }
       res(); }); setTimeout(res, 4000); });

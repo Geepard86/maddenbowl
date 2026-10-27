@@ -371,3 +371,20 @@
 /* Gruppen mit transform-Attribut (Personen, Maskottchen …) brauchen den Nutzer-Koordinaten-Ursprung,
    sonst verschiebt transform-box:fill-box das scale() und die Figuren rutschen nach unten. */
 .sg-cut svg g[transform], .sg-cut svg path[transform], .sg-cut svg circle[transform], .sg-cut svg rect[transform] { transform-box: view-box; transform-origin: 0 0; }
+
+/* Erstes Ausscheiden: komplette Pressekonferenz, Blitzlicht seltener, Namensschild am Pult */
+.sg-mv.presser .sg-press .pflash { animation-duration: 3.4s; }
+.sg-mv.presser .sg-press .pdesk::after { content: 'ABSCHIEDS-PRESSEKONFERENZ'; position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); font: 900 30px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 4px; color: #e2b466; }
+/* Toilet Bowl: Toiletten-Konzert */
+.sg-restroom { position: absolute; inset: 0; z-index: 1; opacity: 0; transition: opacity .4s; overflow: hidden; background: #cfe8f2; }
+.sg-mv.restroom .sg-restroom { opacity: 1; }
+.sg-mv.restroom .sg-led, .sg-mv.restroom .sg-floor, .sg-mv.restroom .sg-crowd { opacity: 0; }
+.rt-tiles { position: absolute; inset: 0; background:
+  linear-gradient(90deg, rgba(0,0,0,.12) 2px, transparent 2px) 0 0 / 90px 90px,
+  linear-gradient(180deg, rgba(0,0,0,.12) 2px, transparent 2px) 0 0 / 90px 90px,
+  linear-gradient(180deg, #e8f5fa 0 62%, #8cb7c9 62%); }
+.rt-throne { position: absolute; left: 50%; bottom: 40px; width: 520px; height: 546px; margin-left: -260px; z-index: 1; filter: drop-shadow(0 0 30px rgba(255,210,63,.6)); }
+.rt-throne svg { width: 100%; height: 100%; }
+.rt-rolls i { position: absolute; top: -80px; width: 60px; height: 60px; border-radius: 50%; background: radial-gradient(circle, #ccc 0 22%, #fff 23%); box-shadow: 0 0 0 4px #e3e3e3; animation: rtFall 3.4s linear infinite; }
+@keyframes rtFall { to { transform: translateY(980px) rotate(720deg); } }
+.rt-sign { position: absolute; left: 50%; top: 26px; transform: translateX(-50%); font: 900 64px/1 Impact, 'Arial Black', sans-serif; letter-spacing: 8px; color: #8a6400; text-shadow: 4px 4px 0 #fff3b8; }

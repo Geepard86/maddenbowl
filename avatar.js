@@ -144,6 +144,16 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
     DAL: ["#041E42", "#869397"], DEN: ["#FB4F14", "#002244"], DET: ["#0076B6", "#B0B7BC"], GB: ["#203731", "#FFB612"], HOU: ["#03202F", "#A71930"], IND: ["#002C5F", "#A2AAAD"], JAX: ["#006778", "#D7A22A"], KC: ["#E31837", "#FFB81C"],
     LV: ["#000000", "#A5ACAF"], LAC: ["#0080C6", "#FFC20E"], LAR: ["#003594", "#FFA300"], MIA: ["#008E97", "#FC4C02"], MIN: ["#4F2683", "#FFC62F"], NE: ["#002244", "#C60C30"], NO: ["#101820", "#D3BC8D"], NYG: ["#0B2265", "#A71930"],
     NYJ: ["#125740", "#FFFFFF"], PHI: ["#004C54", "#A5ACAF"], PIT: ["#101820", "#FFB612"], SF: ["#AA0000", "#B3995D"], SEA: ["#002244", "#69BE28"], TB: ["#D50A0A", "#34302B"], TEN: ["#0C2340", "#4B92DB"], WAS: ["#5A1414", "#FFB612"] };
+  // Kontrastfarbe zur Kleidung: Accessoires (Schaumstoff-Finger, Fahne, Umhang …) sollen sich abheben
+  function contrastOf(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "")); if (!m) return "#ffd23f";
+    const n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 510;
+    let h = 0; if (mx !== mn) { const d = mx - mn; h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
+    if (l > 0.55 || (h >= 30 && h <= 70 && l > 0.35)) return "#0b1328"; // helle/gelbe Kleidung -> Navy
+    if (h < 20 || h > 340) return "#ffd23f";                              // rote Kleidung -> Gold
+    return "#d50a0a";                                                      // sonst Rot
+  }
   const BODY_W = { slim: 0.86, normal: 1, athletic: 1.08, strong: 1.18, round: 1.24 };
   const esc = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   function hash(str) { let h = 7; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; }
@@ -392,7 +402,7 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
       grillzSilver: `<rect x="116" y="153" width="28" height="7" rx="2" fill="#e6e9ee" stroke="#8a919c" stroke-width="1.5"/><path d="M123 153 V160 M130 153 V160 M137 153 V160" stroke="#8a919c" stroke-width="1"/>`,
       mouthguard: `<path d="M114 152 Q130 166 146 152 L146 158 Q130 170 114 158Z" fill="${c.hatColor || c.shirt || "#1e50c8"}"/>`,
     }[c.mouth] || "");
-    return ears + face + beardSVG(c) + brows + eyes + eyeblack + nose + mouth + mouthItem + faceItem;
+    return ears + face + beardSVG(c) + brows + eyes + eyeblack + nose + `<g class="av-mouth">${mouth}</g>` + mouthItem + faceItem;
   }
 
   // ------------------------------------------------------------ Ganze Figur (Brustbild bis Hüfte)
@@ -420,6 +430,13 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
     const longSleeve = outfit === "coach" || outfit === "suit" || /^(hoodie|trackjacket|hofjacket|armor|pyjama|trench|labcoat|suit|peacehoodie|bearcostume)$/.test(topKind || "");
     const sleeveCol = outfit === "suit" || topKind === "suit" ? "#1f2738" : topKind === "referee" ? "#111" : topKind === "champshirt" ? champCol[0] : ({ peacehoodie: "#7a3cff", retrojersey: "#8b2a1e", bearcostume: "#c99700" })[topKind] || ({ hofjacket: "#d4a017", glitter: "#b388ff", armor: "#a9b1bc", pyjama: "#9ec5ff", trench: "#b08d5b", labcoat: "#f4f6f8", altimashirt: "#0b1328" })[topKind] || c1;
     const arm = (side) => {
+      if (o.armsUp) { // jubelnd: Arme nach oben, Hände über dem Kopf
+        const sx = tx(side === "l" ? 58 - wide : 202 + wide), ux = side === "l" ? tx(30) : tx(230);
+        const col = longSleeve ? sleeveCol : skin;
+        return `<path d="M${sx} 214 L${side === "l" ? tx(40) : tx(220)} 150 L${ux} 78" stroke="${col}" stroke-width="${22 * Math.min(bw, 1.12)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>` +
+          (longSleeve ? "" : `<path d="M${sx} 214 L${side === "l" ? tx(46) : tx(214)} 176" stroke="${sleeveCol}" stroke-width="${30 * Math.min(bw, 1.12)}" stroke-linecap="round"/>`) +
+          `<circle cx="${ux}" cy="70" r="13" fill="${skin}"/>`;
+      }
       const s = side === "l" ? -1 : 1, X = (x) => 130 + s * (x - 130) * 1; // spiegeln
       const sx = tx(side === "l" ? 58 - wide : 202 + wide), sy = 210;
       const ex = side === "l" ? tx(46) : tx(214), ey = 300;     // Ellbogen
@@ -462,12 +479,14 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
     const whistle = neckItem === "whistle" && outfit !== "suit" ? `<path d="M104 196 Q130 250 156 196" fill="none" stroke="#d50a0a" stroke-width="4"/><rect x="118" y="244" width="26" height="14" rx="6" fill="#c9ced6" stroke="#6b7280" stroke-width="2"/><circle cx="140" cy="251" r="4" fill="#6b7280"/>` : "";
     const dfence = neckItem === "dfence" && outfit !== "suit" ? `<path d="M100 196 Q130 250 160 196" fill="none" stroke="#ffd23f" stroke-width="5"/><path d="M112 240 H148 V256 Q148 272 130 280 Q112 272 112 256Z" fill="#0b1328" stroke="#ffd23f" stroke-width="3"/><text x="122" y="262" font-family="Impact,'Arial Black'" font-size="16" fill="#ffd23f">D</text><path d="M133 250 V268 M139 250 V268 M131 255 H143 M131 263 H143" stroke="#ffd23f" stroke-width="2"/>` : "";
     const casualOnly = outfit !== "suit";
+    const acc = c.accentColor || contrastOf(c1);
     const medal = neckItem === "medal" && casualOnly ? `<path d="M110 192 L126 246 M150 192 L134 246" stroke="#d50a0a" stroke-width="7"/><circle cx="130" cy="256" r="15" fill="#ffd23f" stroke="#a07a00" stroke-width="3"/><text x="130" y="262" text-anchor="middle" font-family="Impact" font-size="14" fill="#a07a00">1</text>` : "";
     const towel = neckItem === "towel" && casualOnly ? `<path d="M${tx(70)} 196 Q${tx(96)} 188 ${tx(104)} 196 L${tx(96)} 290 L${tx(74)} 290 Z" fill="#f4f4f4" stroke="#cfd5dc" stroke-width="3"/><path d="M${tx(78)} 276 H${tx(94)}" stroke="${c1}" stroke-width="4"/>` : "";
     const phones = neckItem === "headphones" && casualOnly ? `<path d="M100 200 Q130 226 160 200" fill="none" stroke="#1f2430" stroke-width="7"/><rect x="88" y="194" width="20" height="26" rx="8" fill="#1f2430"/><rect x="152" y="194" width="20" height="26" rx="8" fill="#1f2430"/>` : "";
     const patch = !casualOnly ? "" : c.badge === "captain" ? `<g transform="translate(${tx(170)} 252)"><rect x="-14" y="-14" width="28" height="28" rx="5" fill="#fff" stroke="#d50a0a" stroke-width="2"/><text y="8" text-anchor="middle" font-family="Impact" font-size="22" fill="#d50a0a">C</text></g>`
       : c.badge === "est2027" ? `<g transform="translate(${tx(170)} 252)"><circle r="17" fill="#0b1328" stroke="#ffd23f" stroke-width="3"/><text y="-2" text-anchor="middle" font-family="Impact" font-size="9" fill="#ffd23f">EST.</text><text y="9" text-anchor="middle" font-family="Impact" font-size="10" fill="#ffd23f">2027</text></g>` : "";
-    const cape = c.back === "cape" ? `<path d="M${tx(66)} 204 Q${tx(40)} 330 ${tx(28)} 440 L${tx(232)} 440 Q${tx(220)} 330 ${tx(194)} 204 Z" fill="#b5121b"/><path d="M${tx(66)} 204 Q130 236 ${tx(194)} 204" fill="none" stroke="#ffd23f" stroke-width="6"/><text x="${tx(206)}" y="420" font-family="Impact" font-size="34" fill="#ffd23f" opacity=".85">A</text>` : "";
+    const capeCol = c.backColor || (contrastOf(c1) === "#ffd23f" ? "#0b1328" : "#b5121b");
+    const cape = c.back === "cape" ? `<path d="M${tx(66)} 204 Q${tx(40)} 330 ${tx(28)} 440 L${tx(232)} 440 Q${tx(220)} 330 ${tx(194)} 204 Z" fill="${capeCol}"/><path d="M${tx(66)} 204 Q130 236 ${tx(194)} 204" fill="none" stroke="#ffd23f" stroke-width="6"/><text x="${tx(206)}" y="420" font-family="Impact" font-size="34" fill="#ffd23f" opacity=".85">A</text>` : "";
     const royal = c.back === "royalcape" ? `<path d="M${tx(66)} 204 Q${tx(36)} 330 ${tx(24)} 440 L${tx(236)} 440 Q${tx(224)} 330 ${tx(194)} 204 Z" fill="#9b111e"/><path d="M${tx(60)} 198 Q130 240 ${tx(200)} 198 L${tx(200)} 214 Q130 254 ${tx(60)} 214Z" fill="#fff"/>${[80, 100, 120, 140, 160, 180].map((x) => `<circle cx="${tx(x)}" cy="${212 + Math.abs(130 - x) * -0.15 + 10}" r="3" fill="#111"/>`).join("")}` : "";
     const bell = neckItem === "bell" && casualOnly ? `<path d="M104 196 Q130 232 156 196" fill="none" stroke="#d50a0a" stroke-width="5"/><path d="M120 226 Q120 212 130 212 Q140 212 140 226 L144 234 H116Z" fill="#ffd23f" stroke="#a07a00" stroke-width="2"/><circle cx="130" cy="238" r="3.5" fill="#a07a00"/>` : "";
     const pin = !casualOnly ? "" : c.badge === "apppin" ? `<rect x="${tx(158)}" y="238" width="26" height="26" rx="7" fill="#0b1328" stroke="#ffd23f" stroke-width="2"/><text x="${tx(171)}" y="257" text-anchor="middle" font-family="Impact" font-size="13" fill="#ffd23f">AB</text>`
@@ -490,7 +509,9 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
       bbqbib: `<path d="M106 196 Q130 210 154 196 L150 320 Q130 334 110 320Z" fill="#fff" stroke="#e31837" stroke-width="3"/>${[0, 1, 2].map((i) => `<path d="M${116 + i * 6} ${246 + i * 14} q14 -6 28 0" stroke="#7a3a1a" stroke-width="7" fill="none" stroke-linecap="round"/>`).join("")}`,
       epaulettes: `<g fill="#ffb612" stroke="#5a1414" stroke-width="2"><rect x="${tx(54)}" y="196" width="40" height="14" rx="6"/><rect x="${tx(166)}" y="196" width="40" height="14" rx="6"/></g><g stroke="#ffb612" stroke-width="2">${[0, 1, 2, 3].map((i) => `<path d="M${tx(58) + i * 10} 210 V222 M${tx(170) + i * 10} 210 V222"/>`).join("")}</g>`,
     })[neckItem] || "";
-    const tWaist = c.waist === "swimring" ? `<ellipse cx="130" cy="388" rx="${86 * bw}" ry="26" fill="none" stroke="#008e97" stroke-width="22"/><ellipse cx="130" cy="388" rx="${86 * bw}" ry="26" fill="none" stroke="#fc4c02" stroke-width="22" stroke-dasharray="30 30"/>` : "";
+    const rw = 92 * bw, ringArc = (top) => `<path d="M${130 - rw} 388 A${rw} 26 0 0 ${top ? 1 : 0} ${130 + rw} 388" fill="none" stroke="#008e97" stroke-width="24" stroke-linecap="round"/><path d="M${130 - rw} 388 A${rw} 26 0 0 ${top ? 1 : 0} ${130 + rw} 388" fill="none" stroke="#fc4c02" stroke-width="24" stroke-dasharray="28 34"/>`;
+    const ringBack = c.waist === "swimring" ? ringArc(true) : "";
+    const tWaist = c.waist === "swimring" ? ringArc(false) : "";
     const wings = c.back === "eaglewings" ? `<path d="M${tx(70)} 220 Q-10 180 10 320 Q40 270 ${tx(70)} 300Z M${tx(190)} 220 Q270 180 250 320 Q220 270 ${tx(190)} 300Z" fill="#004c54" stroke="#a5acaf" stroke-width="4"/>` : "";
     const fleur = c.above === "fleurhalo" ? `<g transform="translate(0 14)"><ellipse cx="130" cy="30" rx="44" ry="10" fill="none" stroke="#d3bc8d" stroke-width="6"/><path d="M130 6 Q120 18 126 28 M130 6 Q140 18 134 28 M130 6 V30" stroke="#d3bc8d" stroke-width="3" fill="none"/></g>` : "";
     const wearing = (st) => st.items.every(([slot, v]) => (slot === "neck" ? neckItem : c[slot]) === v);
@@ -506,11 +527,11 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
     // Gegenstand in der rechten Hand
     const hx = tx(208), hy = 386;
     const handItem = !casualOnly ? "" : ({
-      foamfinger: `<g transform="translate(${hx} ${hy - 16}) scale(1.45)"><rect x="-16" y="-10" width="32" height="34" rx="8" fill="${c1}"/><rect x="-6" y="-62" width="14" height="56" rx="7" fill="${c1}"/><text y="18" text-anchor="middle" font-family="Impact" font-size="14" fill="#fff">#1</text></g>`,
+      foamfinger: `<g transform="translate(${hx} ${hy - 16}) scale(1.45)"><rect x="-16" y="-10" width="32" height="34" rx="8" fill="${acc}"/><rect x="-6" y="-62" width="14" height="56" rx="7" fill="${acc}"/><text y="18" text-anchor="middle" font-family="Impact" font-size="14" fill="#fff">#1</text></g>`,
       controller: `<g transform="translate(${hx - 4} ${hy - 4})"><path d="M-26 -8 Q-30 14 -18 16 L-8 6 H8 L18 16 Q30 14 26 -8 Q20 -16 0 -14 Q-20 -16 -26 -8Z" fill="#2a2f3a" stroke="#111" stroke-width="2"/><circle cx="12" cy="-4" r="3" fill="#3ddc84"/><circle cx="-12" cy="-4" r="4" fill="#555"/></g>`,
       beer: `<g transform="translate(${hx} ${hy - 20})"><rect x="-11" y="-22" width="22" height="40" rx="4" fill="#c0c7d0" stroke="#7a8592" stroke-width="2"/><rect x="-11" y="-12" width="22" height="14" fill="#d50a0a"/></g>`,
       popcorn: `<g transform="translate(${hx} ${hy - 24})"><path d="M-16 -10 L16 -10 L11 26 L-11 26Z" fill="#fff" stroke="#d50a0a" stroke-width="2"/><path d="M-8 -10 L-6 26 M0 -10 V26 M8 -10 L6 26" stroke="#d50a0a" stroke-width="3"/>${[-12, -4, 4, 12, -8, 0, 8].map((x, i) => `<circle cx="${x}" cy="${i < 4 ? -14 : -21}" r="6" fill="#fff4c2" stroke="#e7c97a" stroke-width="1"/>`).join("")}</g>`,
-      flag: `<g transform="translate(${hx} ${hy})"><path d="M0 0 V-110" stroke="#6b4c2a" stroke-width="4"/><path d="M0 -110 L56 -96 L0 -78Z" fill="${c1}"/>${team ? `<image href="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${esc(team)}.png" x="8" y="-106" width="22" height="22"/>` : ""}</g>`,
+      flag: `<g transform="translate(${hx} ${hy})"><path d="M0 0 V-110" stroke="#6b4c2a" stroke-width="4"/><path d="M0 -110 L56 -96 L0 -78Z" fill="${acc}"/>${team ? `<image href="https://static.www.nfl.com/t_q-best/league/api/clubs/logos/${esc(team)}.png" x="8" y="-106" width="22" height="22"/>` : ""}</g>`,
       minitrophy: `<g transform="translate(${hx} ${hy - 30})"><path d="M-12 -24 H12 V-8 Q12 6 0 8 Q-12 6 -12 -8Z" fill="#ffd23f" stroke="#a07a00" stroke-width="2"/><path d="M-12 -18 Q-22 -16 -18 -6 Q-14 0 -10 -2 M12 -18 Q22 -16 18 -6 Q14 0 10 -2" stroke="#ffd23f" stroke-width="3" fill="none"/><rect x="-4" y="8" width="8" height="10" fill="#ffd23f"/><rect x="-12" y="18" width="24" height="6" rx="2" fill="#a07a00"/></g>`,
       ccgloves: `<circle cx="${tx(52)}" cy="${hy}" r="15" fill="#ff8fc7"/><circle cx="${hx}" cy="${hy}" r="15" fill="#ff8fc7"/>`,
       turkeyleg: `<g transform="translate(${hx} ${hy - 22}) rotate(-30)"><ellipse cx="0" cy="-12" rx="14" ry="20" fill="#a0521d"/><rect x="-4" y="6" width="8" height="18" fill="#f2ead6"/><circle cx="-4" cy="26" r="5" fill="#f2ead6"/><circle cx="4" cy="26" r="5" fill="#f2ead6"/></g>`,
@@ -528,14 +549,25 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
       binoculars: `<g transform="translate(${hx - 6} ${hy - 22})"><rect x="-18" y="-10" width="16" height="24" rx="5" fill="#2a2f3a"/><rect x="2" y="-10" width="16" height="24" rx="5" fill="#2a2f3a"/><rect x="-4" y="-4" width="8" height="8" fill="#444"/><circle cx="-10" cy="16" r="5" fill="#7ab8ff"/><circle cx="10" cy="16" r="5" fill="#7ab8ff"/></g>`,
       scepter: `<g transform="translate(${hx} ${hy})"><path d="M0 20 V-96" stroke="#ffd23f" stroke-width="7" stroke-linecap="round"/><circle cy="-104" r="12" fill="#d50a0a" stroke="#ffd23f" stroke-width="4"/><path d="M-10 -116 L0 -132 L10 -116" fill="#ffd23f"/></g>`,
     }[c.hand] || "");
+    const gripped = /^(controller|fixedcontroller|beer|popcorn|flag|scepter|crystal|phone|mic|binoculars|yellowflag|turkeyleg|remote|tongs|clipboard|minitrophy)$/.test(c.hand || "");
+    const gripHand = casualOnly && gripped && !o.armsUp ? `<circle cx="${hx}" cy="${hy}" r="13" fill="${c.hand === "ccgloves" ? "#ff8fc7" : skin}"/>` : "";
     // Ringe: einer pro tatsächlichem Titel (automatisch)
     const nRings = Math.min(5, Number(c._rings || o.rings || 0));
     const rings = nRings ? [...Array(nRings)].map((_, i) => { const side = i % 2 ? -1 : 1, cx = side > 0 ? tx(208) : tx(52); return `<rect x="${cx - 9}" y="${380 + Math.floor(i / 2) * 6}" width="18" height="5" rx="2.5" fill="#ffd23f" stroke="#a07a00" stroke-width="1.5"/><circle cx="${cx}" cy="${382 + Math.floor(i / 2) * 6}" r="2.6" fill="#7afcff"/>` + (nRings >= 2 ? `<path d="M${cx + 10} ${372 + Math.floor(i / 2) * 6} l2 -6 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2z" fill="#fff"><animate attributeName="opacity" values="0;1;0" dur="1.6s" begin="${i * 0.3}s" repeatCount="indefinite"/></path>` : ""); }).join("") : "";
     const chain = neckItem === "chain" && outfit !== "suit" ? `<path d="M102 196 Q130 248 158 196" fill="none" stroke="#ffd23f" stroke-width="5"/><rect x="120" y="234" width="20" height="20" rx="4" fill="#ffd23f" stroke="#a07a00" stroke-width="2"/>` : "";
     const neck = `<rect x="110" y="158" width="40" height="40" rx="10" fill="${skin}" style="filter:brightness(.88)"/>`;
     const h = Math.max(0.88, Math.min(1.12, Number(c.height) || 1));
+    // Rückansicht (Profil-Vorschau „drehen“): Rücken-Teile vorne, Gesicht/Front-Teile weg, Rückennummer
+    if (o.view === "back") {
+      const num = (topKind === "jersey" || topKind === "retrojersey") ? `<text x="130" y="350" text-anchor="middle" font-family="Impact,'Arial Black'" font-size="110" fill="#fff" stroke="rgba(0,0,0,.5)" stroke-width="3" paint-order="stroke">${esc(c.number || "")}</text>` : "";
+      const backOf = `<path d="${torso}" fill="${sleeveCol}"/>${num}`;
+      const capeFront = (cape + confcape + royal + wings + blanket).replace(/<text[^>]*>[^<]*<\/text>/g, "");
+      const headBack = `<g class="head">${hairBack(c)}<circle cx="130" cy="118" r="54" fill="${skin}"/>${c.hair === "bald" || c.hair === "shaved" ? "" : `<path d="M76 118 Q76 58 130 56 Q184 58 184 118 Q184 160 130 166 Q76 160 76 118Z" fill="${c.hairColor}"/>`}${hairTop(c, c1, c2)}</g>`;
+      return `<svg viewBox="0 0 260 440" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet"><g transform="translate(0 ${440 * (1 - h)}) scale(1 ${h})">` +
+        aura + pants + arm("l") + arm("r") + neck + backOf + tWaist + belt + capeFront + headBack + `</g></svg>`;
+    }
     return `<svg viewBox="0 0 260 440" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMax meet"${c.outline ? ' style="filter:drop-shadow(0 0 3px #ffd23f) drop-shadow(0 0 8px rgba(255,210,63,.7))"' : ""}><g transform="translate(0 ${440 * (1 - h)}) scale(1 ${h})">` +
-      throne + aura + above + fleur + cape + confcape + royal + wings + blanket + pants + arm("l") + arm("r") + neck + top + tWaist + belt + tNeck + xNeck + founderPin + bird + badgeSvg + patch + pin + towel + chain + whistle + dfence + medal + phones + bell + grass + redcard + divBanner + rings + handItem + arrows + smoke + `<g class="head">${hairBack(c)}${faceSVG(c, o)}${hairTop(c, c1, c2)}</g></g></svg>`;
+      throne + aura + above + fleur + cape + confcape + royal + wings + blanket + ringBack + pants + arm("l") + arm("r") + neck + top + tWaist + belt + tNeck + xNeck + founderPin + bird + badgeSvg + patch + pin + towel + chain + whistle + dfence + medal + phones + bell + grass + redcard + divBanner + (o.armsUp ? "" : handItem) + gripHand + rings + arrows + smoke + `<g class="head">${hairBack(c)}${faceSVG(c, o)}${hairTop(c, c1, c2)}</g></g></svg>`;
   }
 
   // Nur der Kopf (für die Auswahl-Kacheln im Editor)
