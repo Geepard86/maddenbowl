@@ -612,8 +612,8 @@
       el.innerHTML = `<a href="admin.html">🛡️ Admin-Bereich</a><a href="seasons.html">🗂️ Saisons</a><button onclick="MB.UI.doAdminLogout()">Admin abmelden</button>`;
     } else {
       el.innerHTML = `
-        <a href="wettbuero.html">🎯 Zum Tippspiel</a>
-        <a href="profil.html#figur">👤 Mein Profil</a>
+        <a href="wettbuero.html"><img src="assets/icons/trophy.svg" alt="" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px;">Zum Tippspiel</a>
+        <a href="profil.html#figur"><img src="assets/icons/user.svg" alt="" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px;">Mein Profil</a>
         <button onclick="MB.UI.doLogout()">Abmelden</button>`;
     }
   }

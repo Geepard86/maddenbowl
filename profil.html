@@ -30,7 +30,11 @@
   .av-fig svg { width: 100%; height: 100%; }
   .av-fig { position: sticky; top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 5; }
   .av-turn { position: absolute; right: 6px; bottom: 6px; width: auto; margin: 0; padding: 5px 10px; font-size: .78em; border-radius: 999px; background: rgba(11,19,40,.85); color: #ffd23f; border: 1px solid #c99700; }
-  @media (max-width: 640px) { .av-fig { width: 160px; height: 240px; background-color: var(--v2-surface, #13203a); box-shadow: 0 8px 20px rgba(0,0,0,.35); } }
+  @media (max-width: 640px) {
+    #pfPane-figur .av-fig { width: auto; justify-self: stretch; height: 210px; margin: 0 -16px 12px; border-radius: 0; background: radial-gradient(circle at 50% 35%, rgba(201,151,0,.22), transparent 65%), var(--v2-surface, #13203a);
+      border-top: 1px solid var(--v2-border, #2a3a55); border-bottom: 1px solid var(--v2-border, #2a3a55); box-shadow: 0 10px 14px -12px rgba(0,0,0,.9); }
+  }
+  @media (min-width: 641px) { .av-wrap { align-items: start; } }
   .av-pv.body { width: 46px; height: 64px; } .av-pv.body svg { width: 100%; height: 100%; }
   .av-sw .plus { position: relative; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; color: #fff; background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red) !important; overflow: hidden; }
   .av-sw .plus input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
@@ -113,8 +117,10 @@
         const on = avDraft[k] === v || (v === 'none' && !avDraft[k]);
         const lock = MB.Avatar.lockInfo ? MB.Avatar.lockInfo(k, v, window.__ownedCards || [], window.__cardDefs || [], avName) : null;
         const bodySlot = /^(top|back|waist|shoulder|neck|badge|hand|aura|above)$/.test(k);
-        const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, [k]: v })}</span>`
-          : bodySlot ? `<span class="av-pv body">${MB.Avatar.svg({ ...avDraft, [k]: v, outline: false }, { view: /^(back|shoulder)$/.test(k) && v !== 'bird' ? 'back' : 'front' })}</span>` : '';
+        // nur das Wählbare zeigen: z. B. Frisur ohne Kappe/Brille, Anstecker/Kette nur als Teil
+        const focus = ({ hair: { hat: 'none', glasses: 'none' }, hairColor: { hat: 'none', glasses: 'none' }, beard: { hat: 'none', glasses: 'none' }, glasses: { hat: 'none' }, face: { hat: 'none', glasses: 'none' }, mouth: { hat: 'none', glasses: 'none' } })[k] || {};
+        const pv = preview ? `<span class="av-pv">${MB.Avatar.headSVG({ ...avDraft, ...focus, [k]: v })}</span>`
+          : bodySlot ? `<span class="av-pv body">${v === 'none' ? '<span style="opacity:.5;">–</span>' : MB.Avatar.svg({ ...avDraft, [k]: v, outline: false }, { only: k })}</span>` : '';
         if (lock) return `<button type="button" class="av-chip locked" title="Freischalten: ${lock}" onclick="alert('🔒 ${l} wird freigeschaltet mit: ${lock}')">${pv}<span>🔒 ${l}</span></button>`;
         return `<button type="button" class="av-chip ${on ? 'on' : ''}" onclick="avSet('${k}', '${v}')">${pv}<span>${l}</span></button>`;
       }).join('')}</div>`;

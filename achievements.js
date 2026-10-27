@@ -249,7 +249,8 @@
         if (f.error) { if (missing(f.error)) tables.firsts = false; } else { tables.firsts = true; firsts = new Map((f.data || []).map((r) => [r.achievement_id, { player: r.player_name, at: r.claimed_at }])); }
       }
       loadedFor = name;
-      unlocked.forEach((v, id) => { if (!v.seen && BY_ID.has(id)) queue.push(id); });
+      const inPack = new Set(progress.pack || []);
+      unlocked.forEach((v, id) => { if (!v.seen && BY_ID.has(id) && !inPack.has(id)) queue.push(id); });
     })().finally(() => { loading = null; });
     return loading;
   }
@@ -913,19 +914,24 @@
     if (k && !isNaN(k) && k.toDateString() === now.toDateString() && now < new Date(k.getTime() - 2 * 3600 * 1000)) unlock("fun_grill");
   }
   function packNotice() {
+    // erst wenn alle einzelnen Karten gezeigt wurden
+    if (queue.length || popupBusy || document.querySelector(".ach-overlay")) { setTimeout(packNotice, 700); return; }
+    if (/profil\.html/.test(location.pathname)) return; // im Profil steht das Pack ohnehin oben
     if (sessionStorage.getItem("mb_pack_notice")) return; sessionStorage.setItem("mb_pack_notice", "1");
     const n = (progress.pack || []).length; if (!n) return;
     const t = document.createElement("div");
     t.innerHTML = `🎁 <b>Du hast dir in der Vergangenheit schon ${n} weitere Karte${n === 1 ? "" : "n"} verdient!</b><br>Öffne dein Pack in deinem Profil. <a href="profil.html#karten" style="color:#ffd23f;font-weight:800;">Pack öffnen</a>`;
     t.style.cssText = "position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:99990;background:#13203a;border:2px solid #c99700;color:#fff;padding:12px 16px;border-radius:12px;font-size:.92em;max-width:92vw;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);";
-    document.body.appendChild(t); setTimeout(() => t.remove(), 12000);
+    t.insertAdjacentHTML("beforeend", ` <button style="margin-left:8px;width:auto;padding:2px 8px;background:none;border:1px solid #c99700;color:#fff;border-radius:6px;" onclick="this.parentNode.remove()">OK</button>`);
+    document.body.appendChild(t); setTimeout(() => t.remove(), 30000);
   }
   function packCount() { return (progress.pack || []).length; }
   // Pack öffnen: alle gesammelten Karten nacheinander präsentieren
   async function openPack() {
     const ids = (progress.pack || []).filter((id) => unlocked.has(id));
     progress.pack = []; saveProgress();
-    ids.forEach((id) => queue.push(id)); interacted = true; scheduleShow();
+    const already = new Set(queue); // nichts doppelt einreihen
+    ids.forEach((id) => { if (!already.has(id)) queue.push(id); }); interacted = true; scheduleShow();
     return ids.length;
   }
   function checkAllEggs() {

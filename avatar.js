@@ -557,6 +557,21 @@ crown: { need: "uniqueLeader", label: "allein die meisten Unique-Karten" } },
     const chain = neckItem === "chain" && outfit !== "suit" ? `<path d="M102 196 Q130 248 158 196" fill="none" stroke="#ffd23f" stroke-width="5"/><rect x="120" y="234" width="20" height="20" rx="4" fill="#ffd23f" stroke="#a07a00" stroke-width="2"/>` : "";
     const neck = `<rect x="110" y="158" width="40" height="40" rx="10" fill="${skin}" style="filter:brightness(.88)"/>`;
     const h = Math.max(0.88, Math.min(1.12, Number(c.height) || 1));
+    // Nur ein einzelnes Teil zeigen (Vorschaubilder im Editor), passend zugeschnitten
+    if (o.only) {
+      const parts = {
+        neck: [tNeck + xNeck + towel + chain + whistle + dfence + medal + phones + bell, "70 180 120 110"],
+        badge: [badgeSvg + patch + pin + founderPin + divBanner, `${tx(170) - 26} 226 52 52`],
+        hand: [handItem, `${tx(208) - 50} 290 100 130`],
+        above: [above + fleur, "60 -6 140 80"],
+        back: [cape + confcape + royal + wings + blanket, "0 180 260 260"],
+        waist: [ringBack + tWaist + belt, "20 350 220 90"],
+        shoulder: [bird, `${tx(196) - 34} 156 68 60`],
+        aura: [aura, "0 0 260 440"],
+        top: [arm("l") + arm("r") + neck + top, "10 170 240 250"],
+      }[o.only];
+      if (parts) return `<svg viewBox="${parts[1]}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">${parts[0] || `<text x="50%" y="55%" text-anchor="middle" font-size="40" fill="#8892a6">–</text>`}</svg>`;
+    }
     // Rückansicht (Profil-Vorschau „drehen“): Rücken-Teile vorne, Gesicht/Front-Teile weg, Rückennummer
     if (o.view === "back") {
       const num = (topKind === "jersey" || topKind === "retrojersey") ? `<text x="130" y="350" text-anchor="middle" font-family="Impact,'Arial Black'" font-size="110" fill="#fff" stroke="rgba(0,0,0,.5)" stroke-width="3" paint-order="stroke">${esc(c.number || "")}</text>` : "";
