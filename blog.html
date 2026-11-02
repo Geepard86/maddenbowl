@@ -208,10 +208,11 @@
     // Bildhöhen vorgeben, damit beim Neuaufbau nichts zusammenfällt
     renderList();
     document.querySelectorAll('.v2-article img').forEach(im => { const h = imgH.get(im.src); if (h && !im.complete) { im.style.minHeight = h + 'px'; im.addEventListener('load', () => { im.style.minHeight = ''; }, { once: true }); } });
-    if (top0 == null) return;
     const fix = () => {
       const el = document.getElementById('post-' + id); if (!el) return;
-      const target = collapsing && top0 < 0 ? 70 : top0; // beim Zuklappen eines weit oben begonnenen Beitrags zu dessen Anfang
+      // Beitrag beginnt nach dem Auf-/Zuklappen direkt unter der Kopfzeile
+      const hdr = document.querySelector('header.v2-header');
+      const target = (hdr ? hdr.getBoundingClientRect().bottom : 0) + 10;
       const d = el.getBoundingClientRect().top - target;
       if (Math.abs(d) > 1) window.scrollBy({ top: d, behavior: 'instant' });
     };
