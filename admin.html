@@ -1302,6 +1302,7 @@ function isFinished(match) { return MB.isFinished(match); }
     async function advanceDraftShow() {
       if (draftShowIndex >= showOrderList.length) {
         renderDraftShowStage({ done: true });
+        try { stopStall(false); grantDelayOfGame(); } catch (e) { /* optional */ }
         return;
       }
       const name = showOrderList[draftShowIndex].name;
@@ -1354,6 +1355,7 @@ function isFinished(match) { return MB.isFinished(match); }
       renderDraftShowStage({ prompt: name });
       await sleep(1000);
       renderDraftShowStage({ picking: { name, slot: lastDrawnPlayer.slot } });
+      startStall(name); // Warte-Szenen, falls der Pick dauert
     }
 
     // Sichtbare Zufalls-Ziehung DIREKT in der Bühnen-Box (statt nur im
@@ -1433,11 +1435,214 @@ function isFinished(match) { return MB.isFinished(match); }
     }
 
     let draftAvailableBeforePick = [];
+    // =====================================================================
+    // DRAFT: Warte-Szenen, solange ein Spieler pickt (ab 2 Min., ab 5 Min. dramatischer)
+    // Feste Texte; Szenen wiederholen sich an einem Draft-Abend nicht.
+    // Pickt der Spieler mitten in einer Szene, wird sie sofort abgebrochen.
+    // =====================================================================
+    const TEAM_TRIVIA = {
+      ARI: 'Die Cardinals sind das älteste durchgehend bestehende Profi-Footballteam der USA – gegründet schon 1898 in Chicago.',
+      ATL: 'Das Stadion der Falcons hat ein Dach, das sich wie eine Kamerablende öffnet. Football mit Fotografen-Flair.',
+      BAL: 'Die Ravens sind nach einem Gedicht benannt: „Der Rabe“ von Edgar Allan Poe, der in Baltimore begraben liegt.',
+      BUF: 'Die Bills standen Anfang der Neunziger viermal in Folge im Super Bowl. Viermal. In Folge.',
+      CAR: 'Die Panthers sind ein junges Team, gegründet erst 1995 – und standen trotzdem schon zweimal im Super Bowl.',
+      CHI: 'Die Bears tragen seit Jahrzehnten den Spitznamen „Monsters of the Midway“ – wegen ihrer gefürchteten Defense.',
+      CIN: 'Die Bengals tragen die Tigerstreifen sogar auf dem Helm. Da weiß man sofort, wer da kommt.',
+      CLE: 'Die Browns sind nach ihrem ersten Trainer benannt: Paul Brown. Wer kann das schon von sich sagen?',
+      DAL: 'Die Cowboys werden „America’s Team“ genannt – und ihr Stadion hat einen der größten Videowürfel der Welt.',
+      DEN: 'In Denver spielt man auf über 1.600 Metern Höhe. Gäste-Teams bekommen da schon beim Aufwärmen kaum Luft.',
+      DET: 'Die Lions spielen seit 1934 an Thanksgiving. Truthahn und Football – eine Tradition.',
+      GB: 'Die Packers gehören keinem Milliardär, sondern ihren Fans. Tausende Anteilseigner aus einer Kleinstadt.',
+      HOU: 'Die Texans sind das jüngste Team der Liga, erst seit 2002 dabei.',
+      IND: 'Die Colts sind 1984 nachts mit Umzugswagen von Baltimore nach Indianapolis gezogen. Heimlich.',
+      JAX: 'Im Stadion der Jaguars gibt es Pools. Man kann Football gucken und dabei planschen.',
+      KC: 'Das Arrowhead Stadium der Chiefs hielt einmal den Weltrekord für das lauteste Stadion.',
+      LV: 'Die Raiders sind von Oakland nach Los Angeles, zurück nach Oakland und dann nach Las Vegas gezogen. Umzugsweltmeister.',
+      LAC: 'Die Chargers haben lange in San Diego gespielt, bevor sie nach Los Angeles gezogen sind. Der Blitz ist geblieben.',
+      LAR: 'Die Rams waren in Los Angeles, dann in St. Louis und sind wieder zurück nach Los Angeles. Einmal hin, einmal zurück.',
+      MIA: 'Die Dolphins haben 1972 die einzige perfekte Saison der NFL-Geschichte gespielt – ohne eine einzige Niederlage.',
+      MIN: 'Die Vikings und ihr legendärer Wikinger-Schlachtruf – bei Heimspielen bebt das ganze Stadion.',
+      NE: 'Die Patriots haben mit Tom Brady eine ganze Ära geprägt. Sechs Super-Bowl-Ringe in dieser Zeit.',
+      NO: 'In New Orleans ruft das ganze Stadion „Who Dat!“. Fragt nicht, wer – es ist einfach so.',
+      NYG: 'Die Giants und die Jets teilen sich ein Stadion – und das steht nicht mal in New York, sondern in New Jersey.',
+      NYJ: 'Die Jets haben mit Joe Namath einen der berühmtesten Super-Bowl-Siege garantiert – vorher angekündigt und dann geliefert.',
+      PHI: 'Bei den Eagles singt das ganze Stadion „Fly, Eagles, Fly“. Gänsehaut garantiert.',
+      PIT: 'Steelers-Fans schwenken das „Terrible Towel“ – ein gelbes Handtuch, das sogar schon Weltreisen gemacht hat.',
+      SF: 'Die 49ers sind nach den Goldsuchern von 1849 benannt. Gold ist bis heute ihre Farbe.',
+      SEA: 'In Seattle gilt das Publikum als „12th Man“, als zwölfter Spieler – und das hört man auch.',
+      TB: 'Die Buccaneers spielten früher in orangenen „Creamsicle“-Trikots. Heute holen sie sie zu besonderen Anlässen wieder raus.',
+      TEN: 'Die Titans hießen früher Houston Oilers. Aus Öl wurden Titanen.',
+      WAS: 'Die Commanders haben schon drei Super Bowls gewonnen – allerdings noch unter anderem Namen.',
+    };
+    const MONA_TEAM = {
+      ARI: 'die Cardinals – ältestes Team der Liga, aber immer noch knallrot. Das gefällt mir.',
+      ATL: 'die Falcons – schnell, elegant und mit dem schönsten Dach der Liga.',
+      BAL: 'die Ravens – geheimnisvoll, ein bisschen düster und benannt nach einem Gedicht. Poesie und Power.',
+      BUF: 'die Bills – Fans, die bei minus zwanzig Grad im T-Shirt feiern. Diese Hingabe!',
+      CAR: 'die Panthers – leise, geschmeidig und plötzlich da, wenn keiner damit rechnet.',
+      CHI: 'die Bears – sieht kuschelig aus, aber man sollte sich nicht mit ihnen anlegen.',
+      CIN: 'die Bengals – Tigerstreifen sind einfach ein Statement.',
+      CLE: 'die Browns – treue Fans, die einfach nie aufgeben. Und Hundeohren!',
+      DAL: 'die Cowboys – Glitzer, Stern und ein riesiger Bildschirm. Ich bin halt fürs Fernsehen gemacht.',
+      DEN: 'die Broncos – wild, ungezähmt und immer ganz weit oben.',
+      DET: 'die Lions – stolz, mutig und an Thanksgiving immer im Rampenlicht.',
+      GB: 'die Packers – mit einem Käse auf dem Kopf kann man sich einfach nicht zu ernst nehmen.',
+      HOU: 'die Texans – jung, groß und laut. Passt doch.',
+      IND: 'die Colts – mit Hufeisen hat man immer ein bisschen Glück dabei.',
+      JAX: 'die Jaguars – mit eigenem Pool im Stadion. Endlich mal Wellness beim Football.',
+      KC: 'die Chiefs – laut, erfolgreich und mit dem besten Barbecue der Liga.',
+      LV: 'die Raiders – Augenklappe auf, ab nach Las Vegas, was soll schon schiefgehen?',
+      LAC: 'die Chargers – ich hab immer ein bisschen Strom drauf. Blitz inklusive.',
+      LAR: 'die Rams – stur wie ein Widder, aber mit Hollywood-Glanz.',
+      MIA: 'die Dolphins – Sonne, Strand und einmal eine perfekte Saison. Mehr braucht man nicht.',
+      MIN: 'die Vikings – wer will nicht einmal mit Hörnern auf dem Kopf ins Stadion stürmen?',
+      NE: 'die Patriots – klassisch, ehrgeizig und mit sehr vielen Ringen im Schrank.',
+      NO: 'die Saints – Jazz, gutes Essen und ein Stadion, das „Who Dat!“ ruft.',
+      NYG: 'die Giants – groß, traditionsreich und nicht unterzukriegen.',
+      NYJ: 'die Jets – Pilotenbrille auf und abheben!',
+      PHI: 'die Eagles – fliegen hoch, singen laut, geben nie auf.',
+      PIT: 'die Steelers – hart wie Stahl, und ich schwenke gern Handtücher.',
+      SF: 'die 49ers – Gold ist einfach meine Farbe.',
+      SEA: 'die Seahawks – mit dem lautesten Publikum der Welt im Rücken.',
+      TB: 'die Buccaneers – Piratenhut, Kanonen, Schatzsuche. Was will man mehr?',
+      TEN: 'die Titans – wie ein griechischer Held, nur mit Helm.',
+      WAS: 'die Commanders – Kommandieren liegt mir. Frag Rudi.',
+    };
+    const VIEWER_MAIL = [
+      ['Gerd aus Bochum fragt: Warum heißt es Touchdown, wenn man den Ball gar nicht auf den Boden legen muss?', 'Weil „Touch-in-the-Zone“ einfach nicht so gut klingt, Gerd.'],
+      ['Sabine aus Kassel fragt: Wie lange dauert eigentlich ein Draft?', 'Liebe Sabine, das fragen wir uns gerade auch.'],
+      ['Kevin aus Erfurt fragt: Kann man in Madden auch Elfmeter schießen?', 'Nein, Kevin. Aber ein Field Goal ist fast dasselbe. Nur ganz anders.'],
+      ['Ute aus Rostock fragt: Was macht eigentlich ein Kicker die restlichen 59 Minuten?', 'Er wartet, Ute. Genau wie wir gerade.'],
+      ['Jürgen aus Passau fragt: Ist Football nicht einfach Rugby mit Werbepausen?', 'Jürgen, das nehme ich persönlich.'],
+      ['Lena aus Münster fragt: Wer gewinnt heute?', 'Lena, das verraten wir nicht. Wir wissen es nämlich selbst nicht.'],
+    ];
+    let stall = null;                         // laufender Pick: { name, since, timer, running, abort, stage1, stage2 }
+    const stallUsed = new Set();              // pro Draft-Abend
+    const pickDurations = {};                 // name -> Sekunden
+    let lastPickedTeamId = null;
+    const teamName = (id) => (MB.nflTeams.find(t => t.id === id) || {}).n || id;
+    function freeTeamsWithRating() {
+      const taken = new Set([...document.querySelectorAll('[id^="pTeam"]')].map(el => el.value).filter(Boolean));
+      const excl = new Set((state.config && state.config.excludedTeams) || []);
+      const ratings = MB.getTeamRatingsSync(document.getElementById('maddenYear')?.value || (state.config && state.config.year) || String(new Date().getFullYear())) || {};
+      return MB.nflTeams.filter(t => !taken.has(t.id) && !excl.has(t.id)).map(t => ({ id: t.id, name: t.n, r: Number(ratings[t.id]) || 0 }));
+    }
+    // ---- Soundeffekte mit Bordmitteln (WebAudio -> WAV), laufen wie Sprache auch im Studio
+    const sfxCache = {};
+    async function sfx(kind) {
+      if (sfxCache[kind]) return sfxCache[kind];
+      const dur = { ring: 2.4, horn: 1.3, elevator: 8, knock: 0.9, slurp: 1.3, snore: 3.2, whistle: 0.9 }[kind] || 1;
+      const sr = 22050, ctx = new OfflineAudioContext(1, Math.ceil(sr * dur), sr);
+      const tone = (type, f, t0, t1, vol, f2) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.linearRampToValueAtTime(f2, t1); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.01); g.gain.setValueAtTime(vol, Math.max(t0 + 0.01, t1 - 0.03)); g.gain.linearRampToValueAtTime(0, t1); o.connect(g).connect(ctx.destination); o.start(t0); o.stop(t1); };
+      const noise = (t0, t1, vol, f0, f1, q) => { const n = ctx.createBuffer(1, Math.ceil(sr * (t1 - t0)), sr), d = n.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const s = ctx.createBufferSource(); s.buffer = n; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q || 2; bp.frequency.setValueAtTime(f0, t0); bp.frequency.linearRampToValueAtTime(f1, t1); const g = ctx.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.08); g.gain.linearRampToValueAtTime(0, t1); s.connect(bp).connect(g).connect(ctx.destination); s.start(t0); s.stop(t1); };
+      if (kind === 'ring') { for (let b = 0; b < 2; b++) for (let i = 0; i < 12; i++) tone('square', i % 2 ? 1320 : 1760, b * 1.2 + i * 0.05, b * 1.2 + i * 0.05 + 0.045, 0.18); }
+      else if (kind === 'horn') { tone('sawtooth', 233, 0, 1.25, 0.35, 220); tone('sawtooth', 294, 0, 1.25, 0.2, 277); }
+      else if (kind === 'elevator') { const mel = [523, 659, 784, 880, 784, 659, 587, 659, 523, 587, 659, 523, 494, 523, 587, 523]; mel.forEach((f, i) => tone('triangle', f, i * 0.5, i * 0.5 + 0.45, 0.16)); [131, 175, 196, 131].forEach((f, i) => tone('sine', f, i * 2, i * 2 + 1.9, 0.18)); }
+      else if (kind === 'knock') { [0, 0.25, 0.5].forEach(t => { tone('sine', 140, t, t + 0.12, 0.6, 70); noise(t, t + 0.06, 0.4, 900, 400, 1); }); }
+      else if (kind === 'slurp') { noise(0, 1.2, 0.5, 600, 2600, 6); }
+      else if (kind === 'snore') { [0, 1.6].forEach(t => { noise(t, t + 1.1, 0.6, 180, 120, 3); tone('sawtooth', 70, t, t + 1.1, 0.12, 60); }); }
+      else if (kind === 'whistle') { const o = ctx.createOscillator(), g = ctx.createGain(), l = ctx.createOscillator(), lg = ctx.createGain(); o.frequency.value = 2600; l.frequency.value = 28; lg.gain.value = 120; l.connect(lg).connect(o.frequency); g.gain.setValueAtTime(0.25, 0); g.gain.linearRampToValueAtTime(0, 0.85); o.connect(g).connect(ctx.destination); o.start(0); l.start(0); o.stop(0.85); l.stop(0.85); }
+      const buf = await ctx.startRendering(), data = buf.getChannelData(0);
+      const wav = new DataView(new ArrayBuffer(44 + data.length * 2)); const wstr = (o, s) => { for (let i = 0; i < s.length; i++) wav.setUint8(o + i, s.charCodeAt(i)); };
+      wstr(0, 'RIFF'); wav.setUint32(4, 36 + data.length * 2, true); wstr(8, 'WAVEfmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true); wav.setUint32(24, sr, true); wav.setUint32(28, sr * 2, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true); wstr(36, 'data'); wav.setUint32(40, data.length * 2, true);
+      for (let i = 0; i < data.length; i++) wav.setInt16(44 + i * 2, Math.max(-1, Math.min(1, data[i])) * 0x7fff, true);
+      const blob = new Blob([wav], { type: 'audio/wav' });
+      sfxCache[kind] = blob; return blob;
+    }
+    async function playSfx(kind) { try { const b = await sfx(kind); await MB.Announcer.playClip(URL.createObjectURL(b)); } catch (e) { /* ohne Sound */ } }
+    function fx(name, data) { try { MB.DraftStage.effect(name, data); MB.Announcer.studioPost({ type: 'ds-fx', name, data }); } catch (e) { /* egal */ } }
+    // ---- Szenen (feste Texte). R = Rudi (Kommentar), M = Mona (Moderation)
+    function stallScenes(name) {
+      const fav = MB.Avatar ? MB.Avatar.get(name).team : null, free = freeTeamsWithRating();
+      const elapsed = stall ? (Date.now() - stall.since) / 1000 : 0;
+      const top3 = free.slice().sort((a, b) => b.r - a.r).slice(0, 3);
+      const fastest = Object.entries(pickDurations).sort((a, b) => a[1] - b[1])[0];
+      const mail = VIEWER_MAIL.filter((_, i) => !stallUsed.has('mail' + i));
+      const pickTeam = Object.keys(MONA_TEAM)[Math.floor(Math.random() * 32)];
+      const S1 = {
+        trivia: (lastPickedTeamId || free[0]) && [{ R: 'Kleine Anekdote am Rande: ' + TEAM_TRIVIA[lastPickedTeamId || free[0].id] }, { M: 'Rudi, du bist ein wandelndes Lexikon.' }, { R: 'Ein wandelndes Lexikon mit sehr viel Zeit gerade.' }],
+        coffee: [{ sfx: 'slurp' }, { M: 'Rudi … du weißt schon, dass wir live sind?' }, { R: 'Live heißt nicht koffeinfrei, Mona.' }],
+        bigq: [{ R: 'Mona, mal ehrlich: Wenn du ein NFL-Team wärst – welches wärst du?' }, { M: 'Ganz klar ' + MONA_TEAM[pickTeam] }, { R: 'Hätte ich mir denken können.' }],
+        mail: mail.length && [{ M: 'Wir haben Zuschauerpost! ' + mail[0][0] }, { R: mail[0][1] }, { _mark: 'mail' + VIEWER_MAIL.indexOf(mail[0]) }],
+        knock: [{ fx: 'knock' }, { sfx: 'knock' }, { R: `${name}, hallo? Ist da jemand?` }, { M: 'Vielleicht ist das Bild eingefroren.' }, { R: 'Nein, er blinzelt. Ganz langsam.' }],
+        tactic: [{ R: `Ich sag’s dir, Mona: Das ist Taktik! ${name} will uns mürbe machen.` }, { M: 'Funktioniert.' }],
+        phone: [{ sfx: 'ring' }, { R: fav && free.some(t => t.id === fav) ? `Hallo, ${name}? Hier ist dein Gewissen. Nimm die ${teamName(fav)}!` : fav ? `Hallo, ${name}? Hier ist dein Gewissen. Deine ${teamName(fav)} sind leider weg – aber irgendwas musst du nehmen!` : `Hallo, ${name}? Hier ist dein Gewissen. Nimm einfach das Team mit dem schönsten Logo!` }, { M: 'Und? Hat er aufgelegt?' }, { R: 'Er hat mich weggedrückt.' }],
+        elevator: [{ sfx: 'elevator' }, { M: 'Hach, ich liebe dieses Lied.' }, { R: 'Mona. Das ist die Warteschleife.' }],
+        math: [{ R: `Ich hab mal nachgerechnet: In der Zeit, die ${name} jetzt überlegt, hätte man ${Math.max(3, Math.round(elapsed / 25))} Spielzüge spielen können.` }, { M: 'Inklusive Challenge?' }, { R: 'Inklusive zwei Challenges.' }],
+        chant: [{ M: `Alle mal zusammen: ${name}! ${name}! ${name}!` }, { R: 'Ich glaube nicht, dass das hilft.' }, { M: 'Aber es macht Spaß.' }],
+        experts: top3.length >= 3 && top3[0].r && [{ R: `Für alle, die mitfiebern: Die stärksten freien Teams sind ${top3[0].name} mit ${top3[0].r}, ${top3[1].name} mit ${top3[1].r} und ${top3[2].name} mit ${top3[2].r}.` }, { M: `Nur so als kleine Entscheidungshilfe, ${name}.` }],
+        fastest: fastest && fastest[0] !== name && [{ M: `${fastest[0]} hat für seine Wahl übrigens nur ${Math.max(1, Math.round(fastest[1]))} Sekunden gebraucht.` }, { R: `Nur so als Inspiration, ${name}.` }],
+      };
+      const S2 = {
+        snore: [{ fx: 'zzz', data: { side: 'left' } }, { sfx: 'snore' }, { sfx: 'horn' }, { M: 'Rudi! Aufwachen!' }, { R: 'Ich hab nur die Augen ausgeruht!' }],
+        missing: [{ M: `Eine Durchsage: Gesucht wird ${name}. Zuletzt gesehen vor der Teamauswahl.` }, { R: 'Ich setze eine Belohnung aus: ein Lieblingsteam nach Wahl.' }],
+        emergency: [{ R: 'Moment, ich hab hier das Handbuch … Kapitel sieben: Was tun, wenn der Draft nie endet.' }, { M: 'Und? Was steht da?' }, { R: 'Ruhe bewahren. Snacks holen. Weiter warten.' }],
+        news: [{ fx: 'ticker', data: { text: `EILMELDUNG: ${name} denkt noch nach` } }, { M: `Wir unterbrechen für eine Eilmeldung: ${name} denkt noch nach.` }, { R: 'Experten rechnen mit weiteren Entwicklungen. Irgendwann.' }],
+        flag: [{ fx: 'flag' }, { sfx: 'whistle' }, { R: `Gelbe Flagge! Delay of Game, ${name}! Fünf Yards Strafe!` }, { M: 'Zieht man im Draft Yards ab?' }, { R: 'Ab heute schon.' }],
+      };
+      return { S1, S2 };
+    }
+    async function runStallScene(steps) {
+      const t = MB.Announcer.getTtsSettings(), rv = t.voiceIdResult, mv = t.voiceIdPreview || t.voiceIdResult;
+      stall.running = true; stall.abort = false;
+      try {
+        for (const st of steps) {
+          if (!stall || stall.abort) break;
+          if (st._mark) { stallUsed.add(st._mark); continue; }
+          if (st.fx) { fx(st.fx, st.data); continue; }
+          if (st.sfx) { await playSfx(st.sfx); continue; }
+          const role = st.R ? 'commentator' : 'moderator', text = st.R || st.M;
+          await MB.Announcer.speakDirect([{ text, voiceId: role === 'commentator' ? rv : mv, role }], { silentFallback: true, abort: () => !stall || stall.abort });
+        }
+      } catch (e) { console.warn('Warte-Szene:', e); }
+      if (stall) stall.running = false;
+    }
+    function stallTick() {
+      if (!stall || stall.running) return;
+      const el = (Date.now() - stall.since) / 1000;
+      const { S1, S2 } = stallScenes(stall.name);
+      const pickFrom = (S) => { const keys = Object.keys(S).filter(k => S[k] && !stallUsed.has(k)); if (!keys.length) return null; const k = keys[Math.floor(Math.random() * keys.length)]; if (k !== 'mail') stallUsed.add(k); return S[k]; };
+      let due = null;
+      if (el >= 300 && !stall.clock) { stall.clock = true; fx('clock-start', { since: stall.since }); }
+      if (el >= 120 && stall.count === 0) due = pickFrom(S1);
+      else if (el >= 240 && el < 300 && stall.count === 1) due = pickFrom(S1);
+      else if (el >= 300 && el >= stall.next) due = pickFrom(S2) || pickFrom(S1);
+      if (!due) return;
+      stall.count++; stall.next = el + 120;
+      runStallScene(due);
+    }
+    function startStall(name) {
+      stopStall(false);
+      stall = { name, since: Date.now(), count: 0, next: 300, running: false, abort: false, clock: false };
+      stall.timer = setInterval(stallTick, 3000);
+    }
+    // Pick bestätigt: Szene sofort abbrechen; lief gerade eine, kommentiert Mona kurz
+    function stopStall(picked) {
+      if (!stall) return;
+      clearInterval(stall.timer);
+      const wasRunning = stall.running, name = stall.name;
+      pickDurations[name] = (Date.now() - stall.since) / 1000;
+      stall.abort = true;
+      if (wasRunning) { try { MB.Announcer.stopAll(); } catch (e) { /* egal */ } }
+      fx('clock-stop'); fx('clear');
+      stall = null;
+      if (picked && wasRunning) {
+        const t = MB.Announcer.getTtsSettings();
+        MB.Announcer.speakDirect([{ text: `Oh! ${name} hat’s getan!`, voiceId: t.voiceIdPreview || t.voiceIdResult, role: 'moderator' }], { silentFallback: true });
+      }
+    }
+    // Langsamster Pick des Drafts -> Sammelkarte "Delay of Game"
+    function grantDelayOfGame() {
+      const slow = Object.entries(pickDurations).sort((a, b) => b[1] - a[1])[0];
+      if (slow && slow[1] >= 60) MB.UI.withAchievements(A => A.grant('delay_of_game', slow[0]).catch(() => {}));
+    }
+
     async function confirmShowTeamPick() {
       const teamId = showPickedTeamId;
       if (!teamId) return;
       const slot = lastDrawnPlayer.slot;
       const name = lastDrawnPlayer.name;
+      stopStall(true); lastPickedTeamId = teamId;
 
       // Draft-Sammelkarten (Fanliebe, Verräter, Prinzipientreu): freie Teams VOR dem Pick
       try {
@@ -3688,7 +3893,7 @@ function renderRanking() {
       try {
         const result = await generateAndRecordSong(milestone, { promptOverride, seconds });
         alert('Song generiert.');
-        MB.Announcer.announceSong(milestone, result.url, { voiceId: settings.voiceIdResult });
+        runSongShow(milestone, result.url, { test: true }); // Musikvideo (im Studio, falls verbunden)
       } catch (e) {
         alert('Song-Generierung fehlgeschlagen: ' + e.message);
       }
@@ -5686,13 +5891,15 @@ function renderRanking() {
             art.body = String(a.body || '').replace('[[tabelle]]', extra.join('\n\n') + '\n\n[[tabelle]]');
           }
           try {
-            const { out } = await MB.LlmBlog.generateWithFallback({ article: art, ctx: art._ctx, settings: { ...s0, kinds: { ...s0.kinds, [a.kind]: { ...(s0.kinds[a.kind] || {}), enabled: true } } } });
-            if (!out) { fail++; continue; }
-            const info = `🧪 TEST · ${mode === 'data' ? 'Prompt 2 (nur Daten)' : 'Prompt 1 (Standard)'} · Kreativität ${temp}${temp > 0.9 ? ' (kreativ)' : ' (normal)'} · Modell ${out.model || '?'}`;
-            await MB.Blog.pushArticle(tid, { kind: a.kind, title: `[Test ${label}] ${out.title || a.title}`, body: `<em>${info}</em>\n\n` + out.body, media_url: imgs[0] || a.media_url || null, media_type: (imgs[0] || a.media_url) ? 'image' : null,
+            const gen = MB.LlmBlog.generateWithFallback({ article: art, ctx: art._ctx, settings: { ...s0, kinds: { ...s0.kinds, [a.kind]: { ...(s0.kinds[a.kind] || {}), enabled: true } } } });
+            const res = await Promise.race([gen, new Promise(r => setTimeout(() => r({ out: null, timeout: true }), 180000))]);
+            let out = res && res.out;
+            if (!out) { fail++; out = { title: a.title + ' (Baustein – KI fehlgeschlagen)', body: a.body, model: 'Baustein' }; }
+            const info = `🧪 TEST · ${mode === 'data' ? 'Prompt 2 (nur Daten)' : 'Prompt 1 (Standard)'} · Kreativität ${temp}${temp > 0.9 ? ' (kreativ)' : ' (normal)'} · Modell ${out.model || '?'}${a.kind === 'song' && !a.media_url ? ' · ohne Songdatei' : ''}`;
+            await MB.Blog.pushArticle(tid, { kind: a.kind, title: `[Test ${label}] ${out.title || a.title}`, body: `<em>${info}</em>\n\n` + out.body, media_url: imgs[0] || a.media_url || null, media_type: (imgs[0] || a.media_url) ? (a.kind === 'song' && !imgs[0] ? 'audio' : 'image') : null,
               data: { ...(art.data || {}), ...(imgs.length > 1 ? { extra_media: imgs.slice(1) } : {}), llmTest: label, writer: out.model } });
             done++;
-          } catch (e) { fail++; console.warn('KI-Test', e); }
+          } catch (e) { fail++; console.warn('KI-Test', e); say(`Fehler bei ${a.kind} (${label}): ${e.message} – mache weiter …`); }
         }
       }
       say(`Fertig: ${done} Test-Beiträge im Blog${fail ? `, ${fail} fehlgeschlagen` : ''}. Titel beginnen mit „[Test …]“.`);

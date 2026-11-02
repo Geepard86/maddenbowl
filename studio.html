@@ -373,6 +373,8 @@
       else if (m.type === 'show' && m.view) showOverlay(m.view, m.ms || 15000);
       else if (m.type === 'gag') { m_name = m.name || null; runGag(m.which); }
       else if (m.type === 'ds') applyDraft(m);
+      else if (m.type === 'audio-stop') { try { if (lastAudio) { lastAudio.pause(); lastAudio.dispatchEvent(new Event('ended')); } } catch (e) { /* egal */ } }
+      else if (m.type === 'ds-fx') { try { MB.DraftStage && MB.DraftStage.effect && MB.DraftStage.effect(m.name, m.data || {}); } catch (e) { /* egal */ } }
       else if (m.type === 'ds-spin') { const el = document.getElementById('dsSlotSpin'); if (el) el.textContent = m.text; }
       else if (m.type === 'ds-roster') { rosterCache.set(m.teamId, m.row); (rosterWait.get(m.teamId) || []).forEach(fn => fn(m.row)); rosterWait.delete(m.teamId); }
     };
@@ -430,8 +432,20 @@
       const a = new Audio(url); lastAudio = a;
       const done = () => { URL.revokeObjectURL(url); ch.postMessage({ type: 'audio-done', id: m.id }); resolve(); };
       a.onended = done; a.onerror = done;
-      a.play().catch(done);
+      a.play().catch(() => {
+        // Browser blockiert Ton, solange niemand ins Studio-Fenster geklickt hat -> Hinweis + kurz erneut versuchen
+        showSoundHint();
+        setTimeout(() => a.play().catch(done), 600);
+      });
     }));
+  }
+  function showSoundHint() {
+    if (document.getElementById('stSoundHint')) return;
+    const h = document.createElement('div'); h.id = 'stSoundHint';
+    h.textContent = '🔇 Einmal ins Studio klicken, damit der Ton läuft';
+    h.style.cssText = 'position:fixed;left:50%;top:90px;transform:translateX(-50%);z-index:9999;background:#d50a0a;color:#fff;font:800 28px/1 Segoe UI,sans-serif;padding:14px 24px;border-radius:12px;';
+    document.body.appendChild(h);
+    document.addEventListener('pointerdown', () => h.remove(), { once: true });
   }
   function drawStatus() {
     const audio = (() => { try { return localStorage.getItem('mb_studio_audio') || 'admin'; } catch (e) { return 'admin'; } })();

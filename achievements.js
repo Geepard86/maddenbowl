@@ -137,6 +137,7 @@
     { id: "set_league", emoji: "🌍", title: "Commissioner’s Trophy", desc: "Die Team-Teile aller 32 Teams freigeschaltet.", rarity: "legendary", term: "lang" },
     { id: "set_dynasty", emoji: "💍", title: "Dynastie", desc: "Mindestens zwei Altima-Bowl-Titel geholt.", rarity: "legendary", term: "lang" },
     { id: "set_fashion", emoji: "🌟", title: "Modeikone", desc: "Wirklich jedes Teil für die eigene Figur freigeschaltet.", rarity: "legendary", term: "lang" },
+    { id: "delay_of_game", emoji: "⏳", title: "Delay of Game", desc: "Den langsamsten Pick des ganzen Drafts hingelegt.", rarity: "rare", term: "mittel" },
     // ---- Interview & Community
     { id: "interview_1", emoji: "🎙️", title: "Gesprächspartner", desc: "Rudi ein Interview gegeben.", rarity: "rare", term: "mittel" },
     { id: "praise", emoji: "💌", title: "Fanpost", desc: "In einem Kommentar die Orga, das Turnier oder die Seite gelobt.", rarity: "legendary", term: "lang", secret: true },

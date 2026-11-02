@@ -1231,6 +1231,25 @@
   // für mehrere Zeilen VORAB parallel generieren (siehe speakSequence unten),
   // während die vorherige Zeile noch läuft — keine Wartezeit mehr bei der
   // Übergabe zwischen zwei Sprechern.
+  // ElevenLabs erlaubt je nach Tarif nur wenige gleichzeitige Anfragen. Werden alle Zeilen einer
+  // Sequenz gleichzeitig angefragt, lehnt der Dienst einzelne mit 429 ab – die Zeile fiel dann still weg
+  // (typisch: die erste Ansage beim Draft-Start). Daher: max. 2 parallel, in Reihenfolge, mit Wiederholung.
+  let _ttsActive = 0; const _ttsWaiting = [];
+  function _ttsSlot() { return new Promise((res) => { if (_ttsActive < 2) { _ttsActive++; res(); } else _ttsWaiting.push(res); }); }
+  function _ttsFree() { const n = _ttsWaiting.shift(); if (n) n(); else _ttsActive = Math.max(0, _ttsActive - 1); }
+  async function fetchTtsLimited(text, opts) {
+    await _ttsSlot();
+    try {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try { return await fetchElevenLabsAudioUrl(text, opts); }
+        catch (e) {
+          const retry = /429|too_many|concurrent|5\d\d|Failed to fetch|NetworkError/i.test(String(e && e.message));
+          if (!retry || attempt === 3) throw e;
+          await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+        }
+      }
+    } finally { _ttsFree(); }
+  }
   let _langCodeOk = true; // Deutsch erzwingen (Namen wie "Alex" deutsch aussprechen); wird abgeschaltet, falls das Modell es ablehnt
   async function fetchElevenLabsAudioUrl(text, { apiKey, voiceId, modelId }) {
     if (!apiKey || !voiceId) throw new Error("ElevenLabs: API-Key oder Stimme fehlt.");
@@ -1331,14 +1350,21 @@
   // Im Studio: über den Kanal empfangene Sprech-Events an die lokalen Zuhörer (z.B. Song-Bühne) weitergeben
   function emitSpeakLocal(evt) { _speakListeners.forEach((fn) => { try { fn(evt); } catch (e) { /* egal */ } }); }
 
+  let _curStop = null;
+  function stopAll() {
+    try { studioPost({ type: "audio-stop" }); } catch (e) { /* egal */ }
+    _studioWait.forEach((fn) => { try { fn("audio-done"); } catch (e) { /* egal */ } });
+    if (_curStop) { try { _curStop(); } catch (e) { /* egal */ } }
+  }
   function playAudioUrl(url) {
     return new Promise(async (resolve) => {
       if (await playViaStudio(url)) { try { URL.revokeObjectURL(url); } catch (e) { /* egal */ } resolve(); return; }
       const audio = new Audio(url);
-      const cleanup = () => { URL.revokeObjectURL(url); resolve(); };
+      const cleanup = () => { _curStop = null; try { URL.revokeObjectURL(url); } catch (e) { /* egal */ } resolve(); };
+      _curStop = () => { try { audio.pause(); } catch (e) { /* egal */ } cleanup(); };
       audio.onended = cleanup;
       audio.onerror = cleanup;
-      audio.play().catch(cleanup);
+      audio.play().catch(() => setTimeout(() => audio.play().catch(cleanup), 400));
     });
   }
 
@@ -1401,12 +1427,12 @@
       if (useElevenLabs && seg.voiceId) {
         return {
           seg,
-          audioPromise: fetchElevenLabsAudioUrl(seg.text, {
+          audioPromise: fetchTtsLimited(seg.text, {
             apiKey: settings.apiKey, voiceId: seg.voiceId, modelId: settings.modelId,
           }).catch((e) => {
             if (seg.fallbackVoiceId && seg.fallbackVoiceId !== seg.voiceId) {
               console.warn("Stimme fehlgeschlagen, nehme Ersatzstimme:", e);
-              return fetchElevenLabsAudioUrl(seg.text, { apiKey: settings.apiKey, voiceId: seg.fallbackVoiceId, modelId: settings.modelId }).catch(() => null);
+              return fetchTtsLimited(seg.text, { apiKey: settings.apiKey, voiceId: seg.fallbackVoiceId, modelId: settings.modelId }).catch(() => null);
             }
             console.warn("ElevenLabs-Vorgenerierung fehlgeschlagen, Zeile bleibt stumm:", e);
             return null;
@@ -1424,6 +1450,7 @@
         if (url) {
           if (!gateWaited && opts && opts.gate) { gateWaited = true; try { await opts.gate; } catch (e) {} }
           if (opts && opts.onStart && !opts._started) { opts._started = true; try { opts.onStart(); } catch (e) { /* egal */ } }
+      if (opts && opts.abort && opts.abort()) break;
           const role = seg.role || _roleForVoice(seg.voiceId, settings);
           _emitSpeak({ type: "start", role, text: seg.display || seg.text, name: seg.name || null });
           await playAudioUrl(url);
@@ -1881,6 +1908,6 @@
     setNicknames, getNickname,
     onSpeak,
     prepareRingIntro,
-    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview, workerTicker,
+    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview, workerTicker, stopAll, playClip: (url) => playAudioUrl(url), speakDirect: (segs, opts) => speakSequence(segs, opts),
   };
 })(window);

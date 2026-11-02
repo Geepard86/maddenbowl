@@ -748,7 +748,57 @@
   function showRoster(id) { const m = opts.onMirror; opts.onMirror = null; openRoster(id).finally(() => { opts.onMirror = m; }); }
   function hideRoster() { const m = opts.onMirror; opts.onMirror = null; closeRoster(); opts.onMirror = m; }
 
+  // ---- Effekte während langer Picks (Admin + gespiegelt im Studio)
+  let fxLayer = null, fxClock = null, fxClockT = null;
+  function fxRoot() {
+    if (fxLayer && document.body.contains(fxLayer)) return fxLayer;
+    fxLayer = document.createElement("div"); fxLayer.id = "dsFx";
+    fxLayer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9000;overflow:hidden;";
+    document.body.appendChild(fxLayer);
+    if (!document.getElementById("dsFxCss")) {
+      const st = document.createElement("style"); st.id = "dsFxCss";
+      st.textContent = `@keyframes dsZ{0%{opacity:0;transform:translate(0,0) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translate(60px,-220px) scale(1.4)}}
+        @keyframes dsShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-14px,6px)}40%{transform:translate(12px,-8px)}60%{transform:translate(-8px,4px)}80%{transform:translate(6px,-4px)}}
+        @keyframes dsTicker{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
+        @keyframes dsFlag{0%{transform:translate(-20vw,40vh) rotate(-40deg)}60%{transform:translate(45vw,30vh) rotate(260deg)}100%{transform:translate(48vw,62vh) rotate(380deg)}}
+        .ds-fx-shake{animation:dsShake .45s ease-in-out 3}`;
+      document.head.appendChild(st);
+    }
+    return fxLayer;
+  }
+  function effect(name, d) {
+    d = d || {};
+    const L = fxRoot();
+    if (name === "zzz") {
+      for (let i = 0; i < 6; i++) { const z = document.createElement("div"); z.textContent = i % 2 ? "z" : "Z";
+        z.style.cssText = `position:absolute;left:${d.side === "right" ? 78 : 14}%;top:58%;font:900 ${60 + i * 10}px/1 Impact,sans-serif;color:#9fd8ff;text-shadow:0 0 12px #3b82f6;animation:dsZ 2.4s ease-out ${i * 0.5}s forwards;opacity:0;`;
+        L.appendChild(z); setTimeout(() => z.remove(), 6000); }
+    } else if (name === "knock") {
+      const t = document.querySelector(".ds-stage, #dsStage, .ds-root") || document.body;
+      t.classList.remove("ds-fx-shake"); void t.offsetWidth; t.classList.add("ds-fx-shake"); setTimeout(() => t.classList.remove("ds-fx-shake"), 1500);
+    } else if (name === "clock-start") {
+      if (!fxClock) { fxClock = document.createElement("div"); fxClock.style.cssText = "position:absolute;right:28px;top:96px;background:rgba(11,19,40,.9);border:3px solid #d50a0a;border-radius:12px;padding:8px 16px;font:900 40px/1 Impact,sans-serif;color:#fff;letter-spacing:2px;"; L.appendChild(fxClock); }
+      const t0 = d.since || Date.now(); clearInterval(fxClockT);
+      const draw = () => { const sec = Math.floor((Date.now() - t0) / 1000); fxClock.textContent = "⏱ " + Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); };
+      draw(); fxClockT = setInterval(draw, 1000);
+    } else if (name === "clock-stop") {
+      clearInterval(fxClockT); if (fxClock) { fxClock.remove(); fxClock = null; }
+    } else if (name === "ticker") {
+      const b = document.createElement("div"); b.style.cssText = "position:absolute;left:0;right:0;bottom:60px;height:64px;background:#d50a0a;overflow:hidden;display:flex;align-items:center;";
+      b.innerHTML = `<div style="position:absolute;left:0;top:0;bottom:0;background:#0b1328;color:#ffd23f;font:900 30px/64px Impact,sans-serif;padding:0 18px;z-index:2;">EILMELDUNG</div><div style="white-space:nowrap;font:900 34px/64px Impact,sans-serif;color:#fff;letter-spacing:2px;animation:dsTicker 11s linear 1;padding-left:240px;">${String(d.text || "").replace(/</g, "&lt;")} +++ ${String(d.text || "").replace(/</g, "&lt;")} +++</div>`;
+      L.appendChild(b); setTimeout(() => b.remove(), 11500);
+    } else if (name === "flag") {
+      const f = document.createElement("div");
+      f.innerHTML = `<svg width="110" height="110" viewBox="-30 -30 60 60"><path d="M-14 -16 Q0 -30 14 -16 Q22 0 10 10 Q0 18 -12 8 Q-24 -4 -14 -16Z" fill="#ffd400" stroke="#c9a400" stroke-width="2"/></svg>`;
+      f.style.cssText = "position:absolute;left:0;top:0;animation:dsFlag 1.4s ease-out forwards;";
+      L.appendChild(f); setTimeout(() => f.remove(), 6000);
+    } else if (name === "clear") {
+      clearInterval(fxClockT); fxClock = null; L.innerHTML = "";
+    }
+  }
+
   global.MB.DraftStage = {
+    effect,
     init, isOpen, charSVG, sceneHTML, speakerNames, select: selectTeam, showRoster, hideRoster,
     open: wrap("open", open), close: wrap("close", close), phase: wrap("phase", phase), walkIn: wrap("walkIn", walkIn),
     endWalk: wrap("endWalk", endWalk), setStrip: wrap("setStrip", setStrip), refreshSide: wrap("refreshSide", refreshSide), boot: wrap("boot", boot),
