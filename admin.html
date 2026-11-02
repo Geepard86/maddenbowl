@@ -5896,13 +5896,14 @@ function renderRanking() {
             let out = res && res.out;
             if (!out) { fail++; out = { title: a.title + ' (Baustein – KI fehlgeschlagen)', body: a.body, model: 'Baustein' }; }
             const info = `🧪 TEST · ${mode === 'data' ? 'Prompt 2 (nur Daten)' : 'Prompt 1 (Standard)'} · Kreativität ${temp}${temp > 0.9 ? ' (kreativ)' : ' (normal)'} · Modell ${out.model || '?'}${a.kind === 'song' && !a.media_url ? ' · ohne Songdatei' : ''}`;
-            await MB.Blog.pushArticle(tid, { kind: a.kind, title: `[Test ${label}] ${out.title || a.title}`, body: `<em>${info}</em>\n\n` + out.body, media_url: imgs[0] || a.media_url || null, media_type: (imgs[0] || a.media_url) ? (a.kind === 'song' && !imgs[0] ? 'audio' : 'image') : null,
+            const saved = await MB.Blog.pushArticle(tid, { _noRewrite: true, kind: a.kind, title: `Test ${label} · ${out.title || a.title}`, body: `${info}\n\n` + out.body, media_url: imgs[0] || a.media_url || null, media_type: (imgs[0] || a.media_url) ? (a.kind === 'song' && !imgs[0] ? 'audio' : 'image') : null,
               data: { ...(art.data || {}), ...(imgs.length > 1 ? { extra_media: imgs.slice(1) } : {}), llmTest: label, writer: out.model } });
+            if (!saved) { fail++; say(`Speichern fehlgeschlagen: ${a.kind} (${label}) – siehe Browser-Konsole. Mache weiter …`); continue; }
             done++;
           } catch (e) { fail++; console.warn('KI-Test', e); say(`Fehler bei ${a.kind} (${label}): ${e.message} – mache weiter …`); }
         }
       }
-      say(`Fertig: ${done} Test-Beiträge im Blog${fail ? `, ${fail} fehlgeschlagen` : ''}. Titel beginnen mit „[Test …]“.`);
+      say(`Fertig: ${done} Test-Beiträge im Blog${fail ? `, ${fail} fehlgeschlagen` : ''}. Titel beginnen mit „Test P1 ·“, „Test P2 kreativ ·“ usw., die erste Zeile nennt Prompt, Kreativität und Modell.`);
     }
 
     // ---------- Turnier-Rückblick per KI ----------

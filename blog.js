@@ -1366,7 +1366,7 @@
   async function pushArticle(tournamentId, article) {
     // Optional: KI schreibt den Text (nur für in den Einstellungen aktivierte
     // Beitragsarten, mit Fallback auf den Baustein-Text; siehe llm-blog.js).
-    if (MB.LlmBlog && MB.LlmBlog.maybeRewrite) {
+    if (MB.LlmBlog && MB.LlmBlog.maybeRewrite && !article._noRewrite) {
       try { article = await MB.LlmBlog.maybeRewrite(article); } catch (e) { console.warn("KI-Rewrite übersprungen:", e); }
     }
     const sb = MB.getSupabaseClient();

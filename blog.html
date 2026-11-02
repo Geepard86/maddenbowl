@@ -197,9 +197,25 @@
     const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
     if (Math.hypot(dx, dy) <= Math.max(4, r.width * 0.05)) MB.UI.easterEgg('egg_bullseye', '🎯 Volltreffer!');
   }
+  // Auf-/Zuklappen ohne Springen: der Beitrag bleibt genau an seiner Bildschirmposition,
+  // nur nach unten hin ändert sich die Länge. Bilder, die neu laden, werden nachkorrigiert.
   function toggleArticle(id) {
-    if (expandedIds.has(id)) expandedIds.delete(id); else { expandedIds.add(id); markReadId(id); }
+    const collapsing = expandedIds.has(id);
+    const before = document.getElementById('post-' + id);
+    const top0 = before ? before.getBoundingClientRect().top : null;
+    const imgH = new Map([...document.querySelectorAll('.v2-article img')].map(im => [im.src, im.getBoundingClientRect().height]));
+    if (collapsing) expandedIds.delete(id); else { expandedIds.add(id); markReadId(id); }
+    // Bildhöhen vorgeben, damit beim Neuaufbau nichts zusammenfällt
     renderList();
+    document.querySelectorAll('.v2-article img').forEach(im => { const h = imgH.get(im.src); if (h && !im.complete) { im.style.minHeight = h + 'px'; im.addEventListener('load', () => { im.style.minHeight = ''; }, { once: true }); } });
+    if (top0 == null) return;
+    const fix = () => {
+      const el = document.getElementById('post-' + id); if (!el) return;
+      const target = collapsing && top0 < 0 ? 70 : top0; // beim Zuklappen eines weit oben begonnenen Beitrags zu dessen Anfang
+      const d = el.getBoundingClientRect().top - target;
+      if (Math.abs(d) > 1) window.scrollBy({ top: d, behavior: 'instant' });
+    };
+    fix(); requestAnimationFrame(fix); setTimeout(fix, 120); setTimeout(fix, 400);
   }
 
   let lightboxUrl = '';
