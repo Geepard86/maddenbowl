@@ -5844,9 +5844,9 @@ function renderRanking() {
       say('Spiele das letzte Turnier nach …');
       const lt = await loadLastTournament(true); if (!lt || !lt.state) { say('Kein abgeschlossenes Turnier gefunden.'); return; }
       const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
-      // je Beitragsart der erste Beitrag (Rekorde: bis zu 2 verschiedene)
-      const pickList = []; const seen = {};
-      res.articles.forEach(a => { const k = a.kind; seen[k] = (seen[k] || 0) + 1; if (seen[k] <= (k === 'record' ? 2 : 1) && MB.LlmBlog.KINDS[k]) pickList.push(a); });
+      // kompletter Durchlauf: alle Beiträge des nachgespielten Turniers in zeitlicher Reihenfolge
+      const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind]);
+      if (!confirm(`Der Vergleichstest schreibt ${pickList.length} Beiträge in je 4 Varianten = ${pickList.length * 4} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
       // simulierte Unique-Karten eines ersten Turniers (für den Turnierstart)
       const ps = (lt.state.players || []).map(p => p.name);
       const simUnique = `Simulation – vor dem Turnierstart vergebene Unique-Karten: „Frühstarter“ (${ps[0]}), „Pionier“ (${ps[1]}, allererster Tipp), „Chefscout“ (${ps[2]}, als Erster alle 32 Kader angesehen), „Erster Entwurf“ (${ps[3]}, erste eigene Spielerfigur).`;
@@ -5854,7 +5854,7 @@ function renderRanking() {
       const s0 = MB.LlmBlog.getSettings(); let done = 0, fail = 0;
       // Memes wie im echten Ablauf: je Rekord-Beitrag ein Imgflip-Meme (für alle 4 Varianten dasselbe);
       // das Power Ranking bekommt die Memes der Rekorde davor + die Statistik-Ecke mit Grafik
-      const memeOf = new Map(); const memesSoFar = [];
+      const memeOf = new Map(); let memesSoFar = []; const usedPairs = new Set();
       const imgOk = MB.Records.hasImgflipSettings && MB.Records.hasImgflipSettings();
       for (const a of pickList) {
         if (a.kind === 'record' && a._record && imgOk) {
@@ -5862,11 +5862,12 @@ function renderRanking() {
           try { const r = await MB.Records.generateImgflipMeme(a._record, MB.Records.getImgflipSettings()); if (r && r.url) { memeOf.set(a, r.url); memesSoFar.push(r.url); } } catch (e) { console.warn('Test-Meme', e); }
         }
         if (a.kind === 'progress') {
-          a._memes = memesSoFar.slice(0, 2);
+          a._memes = memesSoFar.slice(-2); memesSoFar = [];
           try {
             say('Suche eine Schein-Korrelation für das Power Ranking …');
-            const cands = await MB.Spurious.findAllOverallCandidates(lt.state, new Set(), { limit: 1 });
+            const cands = await MB.Spurious.findAllOverallCandidates(lt.state, usedPairs, { limit: 1 });
             const c = cands && cands[0];
+            if (c && c.pairKey) usedPairs.add(c.pairKey);
             if (c) {
               const story = MB.Spurious.buildSpuriousStory ? MB.Spurious.buildSpuriousStory(c) : null;
               const paras = story && story.body ? String(story.body).split(/\n{2,}/).map(p => p.replace(/<[^>]+>/g, ' ').replace(/\[\[[^\]]+\]\]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean) : [];
@@ -5878,9 +5879,11 @@ function renderRanking() {
           } catch (e) { console.warn('Test-Spurious', e); }
         }
       }
+      let step = 0; const total = pickList.length * variants.length;
       for (const a of pickList) {
         for (const [label, mode, temp] of variants) {
-          say(`Schreibe ${MB.LlmBlog.KINDS[a.kind].label} (${label}) … ${done + fail + 1}/${pickList.length * variants.length}`);
+          step++;
+          say(`Schreibe ${MB.LlmBlog.KINDS[a.kind].label} (${label}) … ${step}/${total}${fail ? ` · bisher ${fail}× ohne KI-Text` : ''}`);
           const art = { ...a, _promptMode: mode, _temperature: temp, _ctx: { state: lt.state, history: lt.history }, _extraFacts: a.kind === 'kickoff' ? simUnique : '' };
           // Power Ranking: Statistik-Ecke + Bild-Platzhalter wie im echten Ablauf
           const imgs = a.kind === 'record' ? (memeOf.get(a) ? [memeOf.get(a)] : []) : a.kind === 'progress' ? [...(a._memes || []), ...(a._spurious && a._spurious.url ? [a._spurious.url] : [])] : [];
@@ -5894,8 +5897,15 @@ function renderRanking() {
             const gen = MB.LlmBlog.generateWithFallback({ article: art, ctx: art._ctx, settings: { ...s0, kinds: { ...s0.kinds, [a.kind]: { ...(s0.kinds[a.kind] || {}), enabled: true } } } });
             const res = await Promise.race([gen, new Promise(r => setTimeout(() => r({ out: null, timeout: true }), 180000))]);
             let out = res && res.out;
-            if (!out) { fail++; out = { title: a.title + ' (Baustein – KI fehlgeschlagen)', body: a.body, model: 'Baustein' }; }
-            const info = `🧪 TEST · ${mode === 'data' ? 'Prompt 2 (nur Daten)' : 'Prompt 1 (Standard)'} · Kreativität ${temp}${temp > 0.9 ? ' (kreativ)' : ' (normal)'} · Modell ${out.model || '?'}${a.kind === 'song' && !a.media_url ? ' · ohne Songdatei' : ''}`;
+            let why = '';
+            if (!out) {
+              fail++;
+              const att = (res && res.attempts) || [];
+              why = res && res.timeout ? 'Zeitlimit überschritten' : att.length ? att.map(x => `${x.model}: ${x.error || (x.problems || []).slice(0, 2).join('; ') || 'verworfen'}`).slice(0, 3).join(' | ') : 'kein Modell verfügbar';
+              console.warn('KI-Test verworfen', a.kind, label, att);
+              out = { title: a.title + ' (Baustein – KI verworfen)', body: a.body, model: 'Baustein' };
+            }
+            const info = `🧪 TEST · ${mode === 'data' ? 'Prompt 2 (nur Daten)' : 'Prompt 1 (Standard)'} · Kreativität ${temp}${temp > 0.9 ? ' (kreativ)' : ' (normal)'} · Modell ${out.model || '?'}${a.kind === 'song' && !a.media_url ? ' · ohne Songdatei' : ''}${why ? ' · KI verworfen: ' + why : ''}`;
             const saved = await MB.Blog.pushArticle(tid, { _noRewrite: true, kind: a.kind, title: `Test ${label} · ${out.title || a.title}`, body: `${info}\n\n` + out.body, media_url: imgs[0] || a.media_url || null, media_type: (imgs[0] || a.media_url) ? (a.kind === 'song' && !imgs[0] ? 'audio' : 'image') : null,
               data: { ...(art.data || {}), ...(imgs.length > 1 ? { extra_media: imgs.slice(1) } : {}), llmTest: label, writer: out.model } });
             if (!saved) { fail++; say(`Speichern fehlgeschlagen: ${a.kind} (${label}) – siehe Browser-Konsole. Mache weiter …`); continue; }
