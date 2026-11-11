@@ -374,9 +374,8 @@
   // Auto-Auswahl: die zwei geeignetsten zulässigen Modelle.
   function pickAutoModels(list, s) {
     const ok = (list || []).filter((m) => m.free || (s.allowPaid && m.cents <= (Number(s.maxCentPerArticle) || 0)));
-    const out = ok.slice(0, 2).map((m) => m.id);
-    if (!out.length) out.push("openrouter/free");
-    else if (out.length < 2) out.push("openrouter/free");
+    const out = ok.slice(0, 3).map((m) => m.id);
+    out.push("openrouter/free");
     return out;
   }
   // Welche Modelle (in Reihenfolge) für eine Beitragsart probiert werden.
@@ -658,7 +657,15 @@
   // ------------------------------------------------------------ Aufruf
   // Hinweis: Reasoning-Modelle verbrauchen sonst ihr max_tokens-Budget fürs "Nachdenken"
   // und liefern dann eine LEERE Antwort -> großzügiges Budget + niedriger Reasoning-Aufwand.
-  async function callModel({ key, model, messages, temperature, maxTokens, signal }) {
+  async function callModel(args) {
+    try { return await callModelOnce(args, true); }
+    catch (e) {
+      // Manche (v. a. kostenlose) Modelle liefern mit Reasoning-Parameter eine leere Antwort -> einmal ohne versuchen
+      if (e.status === "empty") return await callModelOnce(args, false);
+      throw e;
+    }
+  }
+  async function callModelOnce({ key, model, messages, temperature, maxTokens, signal }, withReasoning) {
     const res = await fetch(`${ENDPOINT}/chat/completions`, {
       method: "POST", signal,
       headers: {
@@ -666,7 +673,7 @@
         "HTTP-Referer": (global.location && global.location.origin) || "https://maddenbowl.local", "X-Title": "Altima Bowl Blog",
       },
       body: JSON.stringify({ model, messages, temperature: temperature != null ? temperature : 0.8, max_tokens: maxTokens || 4000,
-        reasoning: { effort: "low", exclude: true } }),
+        ...(withReasoning ? { reasoning: { effort: "low", exclude: true } } : {}) }),
     });
     let json = null;
     try { json = await res.json(); } catch (e) { /* kein JSON */ }
@@ -675,7 +682,8 @@
       err.status = res.status; throw err;
     }
     if (json && json.error) { const err = new Error(`${model}: ${json.error.message || JSON.stringify(json.error)}`); err.status = json.error.code || 0; throw err; }
-    const raw = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+    let raw = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+    if (Array.isArray(raw)) raw = raw.map((p) => (typeof p === "string" ? p : p && p.text) || "").join("");
     if (!raw) { const err = new Error(`${model}: leere Antwort${json && json.choices && json.choices[0] && json.choices[0].finish_reason ? " (" + json.choices[0].finish_reason + ")" : ""}`); err.status = "empty"; throw err; }
     return { raw, model: (json && json.model) || model, usage: json && json.usage };
   }
