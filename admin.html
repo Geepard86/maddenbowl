@@ -2206,6 +2206,8 @@ document.querySelectorAll('.draft-row').forEach(row => {
     }
 
     async function startTournament() {
+      // Spielerstimmen für die Interviews verteilen (läuft im Hintergrund)
+      setTimeout(() => { try { autoAssignGuestVoices((state.players || []).map(p => p.name)).catch(() => {}); } catch (e) { /* optional */ } }, 4000);
       const count = parseInt(document.getElementById('playerCount').value);
 
       state.config = {
@@ -5765,6 +5767,26 @@ function renderRanking() {
         <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:6px 12px;">${[...names].sort((a, b) => a.localeCompare(b, 'de')).map(n => `<label style="font-size:.85em;">${n}<select data-gv="${n}" style="width:100%;">${opts(map[n])}</select></label>`).join('')}</div>
         <button class="btn-secondary" style="width:auto; margin-top:8px;" onclick="saveGuestVoiceMap()">💾 Stimmen speichern</button> <span id="gvState" class="hint"></span>`;
     }
+    // Spielerstimmen automatisch: offizielle (vorinstallierte) bzw. deutsche/mehrsprachige Stimmen
+    // auf alle Spieler ohne Stimme verteilen – ohne die drei Sprecher-Stimmen. Fallback bleibt die Moderationsstimme.
+    async function autoAssignGuestVoices(names) {
+      const t = MB.Announcer.getTtsSettings(); if (!t.apiKey) return { assigned: 0, reason: 'kein ElevenLabs-Key' };
+      const voices = await MB.Announcer.fetchElevenLabsVoices(t.apiKey);
+      const used = new Set([t.voiceIdResult, t.voiceIdPreview, t.voiceIdAnnouncer].filter(Boolean));
+      const score = (v) => { const l = v.labels || {}; const lang = String(l.language || v.language || '').toLowerCase();
+        return (v.category === 'premade' ? 3 : 0) + (/de|german|deutsch/.test(lang) ? 3 : /multi/.test(lang) || !lang ? 1 : 0) + (/^MaddenBowl_/i.test(v.name) ? -10 : 0); };
+      const pool = voices.filter(v => !used.has(v.voice_id) && score(v) > 0).sort((a, b) => score(b) - score(a));
+      if (!pool.length) return { assigned: 0, reason: 'keine passenden Stimmen im Konto' };
+      let map = {}; try { map = JSON.parse((await MB.getAppConfig('guest_voice_map')) || '{}'); } catch (e) { map = {}; }
+      const taken = new Set(Object.values(map)); let k = 0, assigned = 0;
+      (names || []).forEach(n => {
+        if (map[n] && voices.some(v => v.voice_id === map[n])) return;
+        let v = pool.find(x => !taken.has(x.voice_id)) || pool[k++ % pool.length];
+        map[n] = v.voice_id; taken.add(v.voice_id); assigned++;
+      });
+      if (assigned) await MB.setAppConfig('guest_voice_map', JSON.stringify(map));
+      return { assigned, map, names: Object.fromEntries(Object.entries(map).map(([n, id]) => [n, (voices.find(v => v.voice_id === id) || {}).name || id])) };
+    }
     async function saveGuestVoiceMap() {
       const map = {}; document.querySelectorAll('[data-gv]').forEach(s => { if (s.value) map[s.dataset.gv] = s.value; });
       try { await MB.setAppConfig('guest_voice_map', JSON.stringify(map)); document.getElementById('gvState').textContent = 'Gespeichert.'; } catch (e) { alert(e.message); }
@@ -5861,7 +5883,8 @@ function renderRanking() {
       const kindsOn = new Set([...document.querySelectorAll('.cmpKind:checked')].map(c => c.value));
       const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind] && kindsOn.has(a.kind));
       const perKind = {}; res.articles.forEach(a => { perKind[a.kind] = (perKind[a.kind] || 0) + 1; });
-      const replayInfo = `Nachgespielt: ${Object.entries(perKind).map(([k, n]) => `${(MB.LlmBlog.KINDS[k] || { label: k }).label} ${n}`).join(', ')}${(res.warnings || []).length ? ` · Probleme beim Nachspielen: ${res.warnings.slice(0, 3).join(' | ')}` : ''}`;
+      const poAll = (lt.state.playoffMatches || []).length, poDone = (lt.state.playoffMatches || []).filter(m => m.s1 != null && m.s2 != null && m.s1 !== '' && m.s2 !== '').length;
+      const replayInfo = `Spiele nachgespielt: ${res.stats.matches} (Playoffs mit Ergebnis im Datenstand: ${poDone}/${poAll}) · Beiträge: ${Object.entries(perKind).map(([k, n]) => `${(MB.LlmBlog.KINDS[k] || { label: k }).label} ${n}`).join(', ')}${(res.warnings || []).length ? ` · Probleme beim Nachspielen: ${res.warnings.slice(0, 3).join(' | ')}` : ''}`;
       console.info(replayInfo);
       const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
       const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
@@ -6035,6 +6058,13 @@ function renderRanking() {
         if (s.modelMode === 'manual') return `Manuell: ${s.primaryModel || '–'} (Fallback ${s.fallbackModel || '–'})${per.length ? ' · eigene je Art: ' + per.join(', ') : ''}`;
         let auto = []; try { auto = MB.LlmBlog.pickAutoModels(await MB.LlmBlog.fetchModels(), s) || []; } catch (e) { /* egal */ }
         return `Automatisch: ${auto.slice(0, 2).map(m => m.id || m).join(' → ') || 'Modellliste nicht ladbar'}${per.length ? ' · eigene je Art: ' + per.join(', ') : ''}`;
+      });
+      await check('Spielerstimmen (Interviews)', async () => {
+        const names = (state.players || []).map(p => p.name);
+        if (!names.length) return 'kein laufendes Turnier – wird beim Turnierstart verteilt';
+        const r = await autoAssignGuestVoices(names);
+        if (r.reason) throw new Error(r.reason + ' – Antworten kommen dann mit der Moderationsstimme');
+        return (r.assigned ? `${r.assigned} neu verteilt · ` : '') + Object.entries(r.names).filter(([n]) => names.includes(n)).map(([n, v]) => `${n}: ${v}`).join(', ');
       });
       await check('TV-Studio', async () => { if (!MB.Announcer.studioConnected()) throw new Error('nicht verbunden – Studio-Fenster öffnen und einmal hineinklicken'); return 'verbunden · Ton: ' + (MB.Announcer.studioAudioMode() === 'studio' ? 'im Studio' : 'auf diesem Laptop'); });
       await check('Push (Testnachrichten an Tim)', async () => {
