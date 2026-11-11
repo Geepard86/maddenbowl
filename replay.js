@@ -83,6 +83,11 @@
     // Playoff-Paarungen sind im gespeicherten Endstand komplett belegt. Live stünden sie erst fest, wenn die
     // jeweils vorherigen Spiele der beiden Beteiligten gespielt sind (Gruppenphase bei Erstrunden-Spielen) —
     // deshalb erst dann einsetzen (sonst würden z.B. "Finale steht fest"-Momente zu früh auslösen).
+    // Ältere Turniere: Playoff-IDs fehlen/abweichend -> nach fester Bracket-Reihenfolge vergeben
+    {
+      const ORDER = ["ub1", "ub2", "ub3", "ub4", "lb1", "lb2", "us1", "us2", "lb3", "lb4", "uf", "ls", "lf", "tb", "gf"];
+      if (!work.playoffMatches.some((m) => ORDER.includes(m.id)) && work.playoffMatches.length === ORDER.length) work.playoffMatches.forEach((m, i) => { m.id = ORDER[i]; });
+    }
     const finalPO = work.playoffMatches.map((m) => ({ p1: m.p1, p2: m.p2 }));
     work.playoffMatches.forEach((m) => { m.p1 = null; m.p2 = null; });
     const replayedPO = new Set();

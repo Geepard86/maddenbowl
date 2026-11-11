@@ -627,8 +627,16 @@
     return (state.matches || []).length > 0 && state.matches.every((m) => m.s1 !== null && m.s2 !== null);
   }
 
+  // Ältere Turniere im Datenstand haben teils keine bzw. andere Playoff-IDs. Dann über die
+  // feste Reihenfolge des Brackets zuordnen (gleiche Struktur: 15 Spiele, ub1 … gf).
+  const PLAYOFF_ORDER = PLAYOFF_STRUCTURE.flatMap((x) => x.ids);
   function getPlayoffMatch(state, id) {
-    return (state.playoffMatches || []).find((x) => x.id === id) || null;
+    const list = state.playoffMatches || [];
+    const hit = list.find((x) => x.id === id);
+    if (hit) return hit;
+    const known = list.some((x) => PLAYOFF_ORDER.includes(x.id));
+    if (!known && list.length === PLAYOFF_ORDER.length) return list[PLAYOFF_ORDER.indexOf(id)] || null;
+    return null;
   }
 
   function winnerOf(match) {

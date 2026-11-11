@@ -5884,7 +5884,8 @@ function renderRanking() {
       const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind] && kindsOn.has(a.kind));
       const perKind = {}; res.articles.forEach(a => { perKind[a.kind] = (perKind[a.kind] || 0) + 1; });
       const poAll = (lt.state.playoffMatches || []).length, poDone = (lt.state.playoffMatches || []).filter(m => m.s1 != null && m.s2 != null && m.s1 !== '' && m.s2 !== '').length;
-      const replayInfo = `Spiele nachgespielt: ${res.stats.matches} (Playoffs mit Ergebnis im Datenstand: ${poDone}/${poAll}) · Beiträge: ${Object.entries(perKind).map(([k, n]) => `${(MB.LlmBlog.KINDS[k] || { label: k }).label} ${n}`).join(', ')}${(res.warnings || []).length ? ` · Probleme beim Nachspielen: ${res.warnings.slice(0, 3).join(' | ')}` : ''}`;
+      const poIds = (lt.state.playoffMatches || []).map(m => m.id || '–').join(',');
+      const replayInfo = `Spiele nachgespielt: ${res.stats.matches} (Playoffs mit Ergebnis im Datenstand: ${poDone}/${poAll}; IDs: ${poIds}) · Beiträge: ${Object.entries(perKind).map(([k, n]) => `${(MB.LlmBlog.KINDS[k] || { label: k }).label} ${n}`).join(', ')}${(res.warnings || []).length ? ` · Probleme beim Nachspielen: ${res.warnings.slice(0, 3).join(' | ')}` : ''}`;
       console.info(replayInfo);
       const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
       const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
