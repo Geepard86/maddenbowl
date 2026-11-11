@@ -128,7 +128,22 @@
     let body = String(out.body || "");
     if (d.spurious && d.spurious.a && !/Statistik-Ecke/i.test(body)) {
       const teaser = (String(article.body || "").split(/\n{2,}/).find((p) => /Statistik-Ecke/.test(p)) || "").trim();
-      if (teaser) body = body.includes("[[tabelle]]") ? body.replace("[[tabelle]]", teaser + "\n\n[[tabelle]]") : body + "\n\n" + teaser;
+      if (teaser) body = body + "\n\n" + teaser;
+    }
+    if (article.kind === "progress") {
+      // Tabelle direkt nach dem ersten Textabsatz
+      let ps = body.replace(/\[\[tabelle\]\]/g, "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+      const first = ps.findIndex((p) => !/^\[\[bild:\d+\]\]$/.test(p));
+      if (/\[\[tabelle\]\]/.test(String(article.body || "")) || /\[\[tabelle\]\]/.test(String(out.body || ""))) ps.splice(first + 1, 0, "[[tabelle]]");
+      // Statistik-Ecke (und ihr Diagramm) ans Ende
+      const si = ps.findIndex((p) => /Statistik-Ecke/i.test(p));
+      if (si >= 0) {
+        const spMk = ((d.imageInfo || []).find((x) => /Statistik-Ecke/.test(x)) || "").match(/\[\[bild:\d+\]\]/);
+        const chunk = [ps[si]]; ps.splice(si, 1);
+        if (spMk) { const mi = ps.indexOf(spMk[0]); if (mi >= 0) ps.splice(mi, 1); chunk.push(spMk[0]); }
+        ps = ps.concat(chunk);
+      }
+      body = ps.join("\n\n");
     }
     (d.imageInfo || []).forEach((info) => {
       const mk = (info.match(/\[\[bild:\d+\]\]/) || [])[0]; if (!mk || body.includes(mk)) return;
@@ -139,8 +154,18 @@
       if (idx < 0) idx = Math.max(0, paras.findIndex((p) => p.includes("[[tabelle]]")) - 1);
       paras.splice(idx + 1, 0, mk); body = paras.join("\n\n");
     });
+    // zwischen zwei Bildern mindestens zwei Textabsätze (sonst geht der Text optisch unter)
+    {
+      const ps = body.split(/\n{2,}/); const isImg = (p) => /^\s*\[\[bild:\d+\]\]\s*$/.test(p);
+      for (let i = 0; i < ps.length; i++) {
+        if (!isImg(ps[i])) continue;
+        let j = i + 1, txt = 0; while (j < ps.length && !isImg(ps[j])) { if (!/\[\[tabelle\]\]/.test(ps[j])) txt++; j++; }
+        if (j < ps.length && txt < 2 && !/Statistik-Ecke/i.test(ps[j - 1] || "")) { const [img] = ps.splice(j, 1); const k = Math.min(ps.length, j + (2 - txt)); ps.splice(k, 0, img); }
+      }
+      body = ps.join("\n\n");
+    }
     out.body = body;
-    const st = STRUCTURE[article.kind];
+    const st = structureFor(article);
     if (st) {
       const n = body.split(/\n{2,}/).filter((p) => p.trim() && !/^\s*\[\[(bild:\d+|tabelle)\]\]\s*$/.test(p)).length;
       if (n < st[0] - 1 || n > st[1] + 2) (out.problems = out.problems || []).push(`Aufbau: ${n} Absätze statt ${st[0]}–${st[1]}`);
@@ -172,8 +197,24 @@
     })[m] || "ein neuer Song zum Turnier ist da – nenne Interpret und Anlass so, wie sie in den Fakten stehen";
     return `Der Beitrag stellt einen SONG vor. Absatz 1: Einleitung – ${who}. Absatz 2: knappe Zusammenfassung des Anlasses aus den Fakten. Schluss: ein Satz, der zum Reinhören einlädt.`;
   }
+  function structureFor(article) {
+    const d = article.data || {}, n = (d.players || []).length;
+    if (article.kind === "portrait" && n > 1) {
+      const why = d.group === "contender" ? "warum sie als Contender gelten" : d.group === "field" ? "warum sie zum Rest des Feldes zählen" : "warum sie hier porträtiert werden";
+      return [n + 2, n + 2, `Absatz 1: kurze Einleitung – wer porträtiert wird und ${why}. Danach GENAU EIN Absatz pro Spieler (${d.players.join(", ")}), in dieser Reihenfolge. Letzter Absatz: frei – direkte Vergleiche, Ausblick, eine Pointe.`];
+    }
+    if (article.kind === "portrait") return [3, 4, "Absatz 1: kurze Einleitung – wer porträtiert wird und warum (Titelverteidiger/Herausforderer). Danach 2 Absätze zum Spieler: seine Geschichte und seine Ausgangslage. Optional ein kurzer Schlussabsatz."];
+    if (article.kind === "progress") return [5, 8, "Schreibe wie eine Kolumne mit Meinung und Haltung. Absatz 1: die Lage nach diesem Spieltag; DIREKT DANACH kommt die Tabelle als eigene Zeile [[tabelle]]. Danach 3–5 Absätze zu den spannendsten Spielern, Duellen und Entwicklungen. Dann ein Ausblick. Ganz am Ende (falls vorhanden) die Statistik-Ecke."];
+    return STRUCTURE[article.kind];
+  }
+  function wordsFor(article, meta) {
+    const d = article.data || {}, n = (d.players || []).length;
+    if (article.kind === "portrait") return n > 1 ? `${80 + n * 60} bis ${120 + n * 90}` : "200 bis 300";
+    if (article.kind === "progress") return "280 bis 450";
+    return meta.words;
+  }
   function structureText(article) {
-    const st = STRUCTURE[article.kind]; if (!st) return PUNCH;
+    const st = structureFor(article); if (!st) return PUNCH;
     const body = article.kind === "song" ? songStructure(article) : st[2];
     return `AUFBAU (${st[0]}–${st[1]} Absätze, je 2–5 Sätze, keine Ein-Satz-Absätze): ${body} ${PUNCH}`;
   }
@@ -236,10 +277,16 @@
     return out;
   }
   let cache = null, loadedFromDb = false;
+  // Standard-Varianten je Beitragsart (aus dem Vergleichstest): Turnierstart & Rekorde P1, sonst P2 kreativ
+  const DEFAULT_VARIANT = { kickoff: ["base", false], record: ["base", false] };
+  function withVariantDefaults(s) {
+    Object.keys(KINDS).forEach((k) => { const kk = (s.kinds || {})[k]; if (!kk || kk.promptMode) return; const dv = DEFAULT_VARIANT[k] || ["data", true]; kk.promptMode = dv[0]; if (kk.creative === undefined) kk.creative = dv[1]; });
+    return s;
+  }
   function getSettings() {
-    if (cache) return mergeSettings(cache);
+    if (cache) return withVariantDefaults(mergeSettings(cache));
     try { const raw = global.localStorage && global.localStorage.getItem(SETTINGS_KEY); cache = raw ? JSON.parse(raw) : null; } catch (e) { cache = null; }
-    return mergeSettings(cache);
+    return withVariantDefaults(mergeSettings(cache));
   }
   async function loadSettings(force) {
     if (loadedFromDb && !force) return getSettings();
@@ -536,12 +583,12 @@
     if (isDataMode(article, s0)) {
       const d = article.data || {};
       const subjects = article.kind === "portrait" && (d.players || []).length ? `PORTRÄTIERT WERDEN NUR: ${d.players.join(", ")}. Schreibe ausschließlich über ${d.players.length === 1 ? "diesen Spieler" : "diese Spieler"}; andere Namen nur, wenn sie Teil eines Fakts sind (z. B. der Gegner bei einem Sieg).` : "";
-      const imgs = Array.isArray(d.imageInfo) && d.imageInfo.length ? `BILDER (jeweils als eigene Zeile direkt NACH dem Absatz einsetzen, der das Thema behandelt):\n${d.imageInfo.join("\n")}` : "";
-      const spur = d.spurious && d.spurious.a ? `STATISTIK-ECKE (Pflicht, eigener Absatz direkt vor [[tabelle]]): beginne mit „Aus der Statistik-Ecke:“, leite in einem Satz ein, dass etwas Merkwürdiges auffällt („${d.spurious.a}“ und „${d.spurious.b}“ entwickeln sich verdächtig ähnlich), und denke dir dann kurz und augenzwinkernd eine mögliche Erklärung aus. Keine Kennzahlen.` : "";
+      const imgs = Array.isArray(d.imageInfo) && d.imageInfo.length ? `BILDER (jeweils als eigene Zeile direkt NACH dem Absatz einsetzen, der das Thema behandelt; zwischen zwei Bildern immer mindestens zwei Absätze Text):\n${d.imageInfo.join("\n")}` : "";
+      const spur = d.spurious && d.spurious.a ? `STATISTIK-ECKE (Pflicht, eigener letzter Absatz ganz am Ende): beginne mit „Aus der Statistik-Ecke:“, leite in einem Satz ein, dass etwas Merkwürdiges auffällt („${d.spurious.a}“ und „${d.spurious.b}“ entwickeln sich verdächtig ähnlich), und denke dir dann kurz und augenzwinkernd eine mögliche Erklärung aus. Keine Kennzahlen.` : "";
       const kw = portraitKeyword(article);
       const titleRule = "TITEL: sachlich-griffig, höchstens 60 Zeichen, nennt Thema oder Spieler, höchstens ein Wortspiel." + (kw ? ` Das Wort „${kw}“ muss im Titel vorkommen; „Spielerporträt“ NICHT verwenden (das ist schon die Kategorie).` : "");
       const user = [
-        `BEITRAGSART: ${meta.label}`, `LÄNGE: etwa ${meta.words} Wörter`, structureText(article), subjects, titleRule, "",
+        `BEITRAGSART: ${meta.label}`, `LÄNGE: etwa ${wordsFor(article, meta)} Wörter`, structureText(article), subjects, titleRule, "",
         s0.dataPrompt || DEFAULT_DATA_PROMPT, "", imgs, spur,
         "FAKTEN (nur diese darfst du verwenden):", facts || "(keine weiteren Fakten)",
         richFacts(article, ctx || article._ctx), article._extraFacts ? "\nZUSÄTZLICHE FAKTEN:\n" + article._extraFacts : "",

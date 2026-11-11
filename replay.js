@@ -48,7 +48,7 @@
     };
     const heading = (title) => { out.push(""); out.push("=".repeat(72)); out.push(title); out.push("=".repeat(72)); };
     const note = (text) => out.push(`   (${text})`);
-    const articlesList = [];
+    const warnings = [], articlesList = [];
     // Wer im Song auftritt (gleiche Logik wie admin.html getSongStageInfo): daraus
     // entsteht die Mikrofon-Ansage ("Am Mikrofon: …").
     const songPerformers = (ms, st) => {
@@ -253,7 +253,7 @@
           A.getSongAnnounceSegments(ms, performers).forEach((s) => say(s.role, s.text));
           note("Song wird hier abgespielt (Musikvideo auf der Song-Bühne)");
           article(B.buildSongArticle(ms, "https://example.invalid/song.mp3", { state: work, history }), `nach Spiel ${n} (${label})`);
-        } catch (e) { console.warn("Replay Song:", e); }
+        } catch (e) { console.warn("Replay Song:", e); warnings.push(`Song ${ms}: ${e.message}`); }
       });
       if (pendingPreview) { try { pendingPreview(); } catch (e) { /* egal */ } pendingPreview = null; }
 
@@ -284,13 +284,13 @@
           }
           else portraitsDone = true;
         }
-      } catch (e) { console.warn("Replay Blog:", e); blog.push(`(Blog-Teil bei Spiel ${n} abgebrochen: ${e.message})`); }
+      } catch (e) { console.warn("Replay Blog:", e); blog.push(`(Blog-Teil bei Spiel ${n} abgebrochen: ${e.message})`); warnings.push(`Spiel ${n}: ${e.message}`); }
     });
 
     out.push("");
     out.push(`— Ende. ${stats.announcements} Sprechzeilen für ${stats.matches} Spiele. —`);
     blog.push("", `— Ende. ${stats.articles} Beiträge für ${stats.matches} Spiele. —`);
-    return { announcer: out.join("\n"), blog: blog.join("\n"), stats, articles: articlesList };
+    return { announcer: out.join("\n"), blog: blog.join("\n"), stats, articles: articlesList, warnings };
   }
 
   global.MB.Replay = { run, cloneState };

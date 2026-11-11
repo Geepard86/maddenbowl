@@ -393,6 +393,7 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
             <div style="font-weight:700; margin-bottom:6px;">🧪 KI-Vergleichstest (schreibt in den Blog des laufenden Turniers)</div>
             <div class="hint" style="font-size:.8em; opacity:.75; margin-bottom:6px;">Spielt das letzte Turnier nach (Original-Zeitplan) und schreibt je Beitragsart einen Beitrag in 4 Varianten: Prompt 1, Prompt 1 kreativ, Prompt 2, Prompt 2 kreativ – mit Imgflip-Memes zu den Rekorden, Memes + Statistik-Ecke samt Grafik im Power Ranking und simulierten Unique-Karten im Turnierstart. Dauert einige Minuten (ca. 4 KI-Aufrufe pro Beitragsart).</div>
             <div style="display:flex; gap:12px; flex-wrap:wrap; margin:4px 0 8px; font-size:.88em;"><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P1" checked style="width:auto;"> P1</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P1 kreativ" checked style="width:auto;"> P1 kreativ</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P2" checked style="width:auto;"> P2</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P2 kreativ" checked style="width:auto;"> P2 kreativ</label></div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin:0 0 8px; font-size:.85em; opacity:.9;"><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="kickoff" checked style="width:auto;"> Turnierstart</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="portrait" checked style="width:auto;"> Spielerporträts</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="progress" checked style="width:auto;"> Power Rankings</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="record" checked style="width:auto;"> Rekorde</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="song" checked style="width:auto;"> Songs</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="finals" checked style="width:auto;"> Finale</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="champion" checked style="width:auto;"> Champion</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="wrapup" checked style="width:auto;"> Abschluss</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="toiletbowl" checked style="width:auto;"> Toilet Bowl</label></div>
             <button class="btn-secondary" style="width:auto;" onclick="runLlmCompareTest()">▶ Vergleichstest starten</button>
             <div id="llmCompareState" class="hint" style="margin-top:6px; font-size:.85em;"></div>
           </div>
@@ -5857,11 +5858,15 @@ function renderRanking() {
       const lt = await loadLastTournament(true); if (!lt || !lt.state) { say('Kein abgeschlossenes Turnier gefunden.'); return; }
       const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
       // kompletter Durchlauf: alle Beiträge des nachgespielten Turniers in zeitlicher Reihenfolge
-      const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind]);
+      const kindsOn = new Set([...document.querySelectorAll('.cmpKind:checked')].map(c => c.value));
+      const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind] && kindsOn.has(a.kind));
+      const perKind = {}; res.articles.forEach(a => { perKind[a.kind] = (perKind[a.kind] || 0) + 1; });
+      const replayInfo = `Nachgespielt: ${Object.entries(perKind).map(([k, n]) => `${(MB.LlmBlog.KINDS[k] || { label: k }).label} ${n}`).join(', ')}${(res.warnings || []).length ? ` · Probleme beim Nachspielen: ${res.warnings.slice(0, 3).join(' | ')}` : ''}`;
+      console.info(replayInfo);
       const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
       const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
       if (!variants.length) { say('Bitte mindestens eine Variante auswählen.'); return; }
-      if (!confirm(`Der Vergleichstest schreibt ${pickList.length} Beiträge in je ${variants.length} Variante(n) = ${pickList.length * variants.length} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
+      if (!confirm(`${replayInfo}\n\nDer Vergleichstest schreibt ${pickList.length} Beiträge in je ${variants.length} Variante(n) = ${pickList.length * variants.length} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
       // simulierte Unique-Karten eines ersten Turniers (für den Turnierstart)
       const ps = (lt.state.players || []).map(p => p.name);
       const simUnique = `Simulation – vor dem Turnierstart vergebene Unique-Karten: „Frühstarter“ (${ps[0]}), „Pionier“ (${ps[1]}, allererster Tipp), „Chefscout“ (${ps[2]}, als Erster alle 32 Kader angesehen), „Erster Entwurf“ (${ps[3]}, erste eigene Spielerfigur).`;
@@ -5928,7 +5933,7 @@ function renderRanking() {
           } catch (e) { fail++; console.warn('KI-Test', e); say(`Fehler bei ${a.kind} (${label}): ${e.message} – mache weiter …`); }
         }
       }
-      say(`Fertig: ${done} Test-Beiträge im Blog${fail ? `, ${fail} fehlgeschlagen` : ''}. Titel beginnen mit „Test P1 ·“, „Test P2 kreativ ·“ usw., die erste Zeile nennt Prompt, Kreativität und Modell.`);
+      say(`${replayInfo} — Fertig: ${done} Test-Beiträge im Blog${fail ? `, ${fail} fehlgeschlagen` : ''}. Titel beginnen mit „Test P1 ·“, „Test P2 kreativ ·“ usw., die erste Zeile nennt Prompt, Kreativität und Modell.`);
     }
 
     // ---------- Turnier-Rückblick per KI ----------
