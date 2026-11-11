@@ -266,6 +266,7 @@
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'duel'})">⚔️ Nächstes Duell</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'rivalry'})">🔥 Rivalitäts-Barometer</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="testInterviewOffer()">🎙️ Test: Interview-Anfrage an Tim</button>
+            <button class="btn-secondary" style="width:auto; margin:0;" onclick="window.open('trailer.html', 'mbTrailer', 'width=1280,height=760')">🎬 Trailer aufnehmen</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'defence'})">🚧 D-Fence</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'wave'})">🌊 La Ola</button>
             <button class="btn-secondary" style="width:auto; margin:0;" onclick="MB.Announcer.studioPost({type:'gag', which:'tailgate'})">🍺 Tailgating</button>
@@ -311,6 +312,19 @@
           </div>
           <div id="songMomentsPanel"></div>
           <div style="margin-top:14px; padding-top:12px; border-top:1px solid #22304366;">
+            <div style="font-weight:700; margin-bottom:6px;">📤 Eigenen Song hochladen</div>
+            <div class="hint" style="font-size:.8em; opacity:.75; margin-bottom:6px;">Z. B. direkt auf elevenlabs.io erzeugt. Die App baut das Musikvideo selbst; der Songtext (optional) wird als Untertitel gleichmäßig über den Song verteilt.</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <select id="upSongMs" style="width:auto;">
+                <option value="regularSeason">Gruppenphase beendet</option><option value="firstElimination">Erstes Ausscheiden</option><option value="toiletBowl">Toilet Bowl</option>
+                <option value="finals">Finale</option><option value="champion">Champion</option><option value="trailer">Trailer</option>
+              </select>
+              <input type="file" id="upSongFile" accept="audio/*" style="width:auto;">
+            </div>
+            <textarea id="upSongLyrics" rows="4" style="width:100%; margin-top:6px; font-size:.85em;" placeholder="Songtext (optional) – eine Zeile pro Liedzeile"></textarea>
+            <label style="display:flex; gap:8px; align-items:center; font-size:.88em; margin:4px 0;"><input type="checkbox" id="upSongBlog" style="width:auto;"> zusätzlich als Song-Beitrag im Blog veröffentlichen</label>
+            <button class="btn-secondary" style="width:auto;" onclick="uploadOwnSong()">⬆ Hochladen &amp; als Musikvideo abspielen</button> <span id="upSongState" class="hint"></span>
+            <div style="height:14px;"></div>
             <div style="font-weight:700; margin-bottom:6px;">🧪 Song-Engine testen</div>
             <div id="songTestPanel"></div>
           </div>
@@ -2207,7 +2221,7 @@ document.querySelectorAll('.draft-row').forEach(row => {
 
     async function startTournament() {
       // Spielerstimmen für die Interviews verteilen (läuft im Hintergrund)
-      setTimeout(() => { try { autoAssignGuestVoices((state.players || []).map(p => p.name)).catch(() => {}); } catch (e) { /* optional */ } }, 4000);
+      setTimeout(() => { try { autoAssignGuestVoices((state.players || []).map(p => p.name), { overwrite: true }).catch(() => {}); } catch (e) { /* optional */ } }, 4000);
       const count = parseInt(document.getElementById('playerCount').value);
 
       state.config = {
@@ -3721,6 +3735,34 @@ function renderRanking() {
         } catch (e) { console.warn('Test-Besetzung aus letztem Turnier fehlgeschlagen:', e); }
       }
       return { info: TEST_SONG_INFO[milestone] || { performers: [], target: null }, players: TEST_SONG_PLAYERS };
+    }
+    // Eigener Song (z. B. auf elevenlabs.io erzeugt): hochladen, Untertitel-Timing aus dem Text schätzen, Musikvideo abspielen
+    async function uploadOwnSong() {
+      const st = document.getElementById('upSongState'); const say = (t) => { st.textContent = t; };
+      const f = document.getElementById('upSongFile').files[0]; if (!f) { say('Bitte eine Audiodatei wählen.'); return; }
+      const ms = document.getElementById('upSongMs').value, lyrics = document.getElementById('upSongLyrics').value.trim();
+      say('Lese Datei …');
+      const url0 = URL.createObjectURL(f);
+      const dur = await new Promise(r => { const a = new Audio(); a.preload = 'metadata'; a.onloadedmetadata = () => r(isFinite(a.duration) ? a.duration : 0); a.onerror = () => r(0); a.src = url0; });
+      const blob = new Blob([await f.arrayBuffer()], { type: f.type || 'audio/mpeg' });
+      if (lyrics && dur > 10) {
+        const lines = lyrics.split(/\n+/).map(l => l.trim()).filter(Boolean), words = [];
+        const total = lines.reduce((n, l) => n + l.split(/\s+/).length, 0) + lines.length * 1.5;
+        const start = Math.min(8, dur * 0.08), end = dur - Math.min(6, dur * 0.06), step = (end - start) / Math.max(1, total);
+        let t = start; lines.forEach(l => { l.split(/\s+/).forEach(w => { words.push({ w, s: t, e: t + step * 0.8 }); t += step; }); t += step * 1.5; });
+        blob.__timing = { v: 1, words, approx: true, duration: dur };
+      }
+      try {
+        say('Lade hoch …');
+        const tid = MB.getCurrentTournamentId() || 'eigene-songs';
+        const url = await MB.Music.uploadSongToStorage(blob, tid, ms);
+        if (document.getElementById('upSongBlog').checked && ms !== 'trailer' && MB.getCurrentTournamentId()) {
+          await MB.Blog.pushArticle(tid, MB.Blog.buildSongArticle(ms, url, { state, history }));
+        }
+        if (ms === 'trailer') { try { await MB.setAppConfig('trailer_song', url); } catch (e) { /* egal */ } }
+        say('Hochgeladen – Musikvideo startet …');
+        runSongShow(ms === 'trailer' ? 'champion' : ms, url, { test: !MB.getCurrentTournamentId() });
+      } catch (e) { say('Fehler: ' + (e.message || e)); }
     }
     function runSongShow(milestone, url, opts) {
       opts = opts || {};
@@ -5769,19 +5811,29 @@ function renderRanking() {
     }
     // Spielerstimmen automatisch: offizielle (vorinstallierte) bzw. deutsche/mehrsprachige Stimmen
     // auf alle Spieler ohne Stimme verteilen – ohne die drei Sprecher-Stimmen. Fallback bleibt die Moderationsstimme.
-    async function autoAssignGuestVoices(names) {
+    // Geschlecht aus dem Vornamen schätzen (Runde ist überwiegend männlich -> Standard "male")
+    const FEMALE_NAMES = new Set(['anna','anne','alina','sarah','sara','lisa','laura','julia','lena','lea','leonie','marie','maria','sophie','sofia','hannah','hanna','katharina','kathrin','katrin','christina','christine','nina','jana','jessica','jenny','jennifer','melanie','stefanie','steffi','sabine','sandra','claudia','andrea','nicole','petra','tanja','vanessa','michelle','carina','kim','eva','ina','ines','emma','mia','clara','klara','charlotte','amelie','franziska','svenja','miriam','sina','tina','verena','vera','bianca','daniela','alexandra','isabel','isabell','luisa','louisa']);
+    function genderOf(name) { const first = String(name || '').trim().split(/[\s.]+/)[0].toLowerCase(); return FEMALE_NAMES.has(first) ? 'female' : 'male'; }
+    async function autoAssignGuestVoices(names, opts) {
+      opts = opts || {};
       const t = MB.Announcer.getTtsSettings(); if (!t.apiKey) return { assigned: 0, reason: 'kein ElevenLabs-Key' };
       const voices = await MB.Announcer.fetchElevenLabsVoices(t.apiKey);
       const used = new Set([t.voiceIdResult, t.voiceIdPreview, t.voiceIdAnnouncer].filter(Boolean));
       const score = (v) => { const l = v.labels || {}; const lang = String(l.language || v.language || '').toLowerCase();
         return (v.category === 'premade' ? 3 : 0) + (/de|german|deutsch/.test(lang) ? 3 : /multi/.test(lang) || !lang ? 1 : 0) + (/^MaddenBowl_/i.test(v.name) ? -10 : 0); };
-      const pool = voices.filter(v => !used.has(v.voice_id) && score(v) > 0).sort((a, b) => score(b) - score(a));
+      const shuffle = (a) => a.map(v => [Math.random(), v]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+      const pool = shuffle(voices.filter(v => !used.has(v.voice_id) && score(v) > 0)).sort((a, b) => score(b) - score(a));
       if (!pool.length) return { assigned: 0, reason: 'keine passenden Stimmen im Konto' };
+      const vg = (v) => String((v.labels || {}).gender || '').toLowerCase();
       let map = {}; try { map = JSON.parse((await MB.getAppConfig('guest_voice_map')) || '{}'); } catch (e) { map = {}; }
-      const taken = new Set(Object.values(map)); let k = 0, assigned = 0;
+      if (opts.overwrite) map = {}; // je Turnier neu verteilen
+      const taken = new Set(Object.values(map)); let assigned = 0;
       (names || []).forEach(n => {
-        if (map[n] && voices.some(v => v.voice_id === map[n])) return;
-        let v = pool.find(x => !taken.has(x.voice_id)) || pool[k++ % pool.length];
+        const g = genderOf(n);
+        if (map[n] && voices.some(v => v.voice_id === map[n] && (!vg(v) || vg(v) === g))) return;
+        const fits = pool.filter(x => !vg(x) || vg(x) === g);
+        const v = fits.find(x => !taken.has(x.voice_id)) || fits[assigned % Math.max(1, fits.length)] || null;
+        if (!v) return; // keine passende Stimme -> Moderationsstimme als Fallback
         map[n] = v.voice_id; taken.add(v.voice_id); assigned++;
       });
       if (assigned) await MB.setAppConfig('guest_voice_map', JSON.stringify(map));
@@ -5939,7 +5991,7 @@ function renderRanking() {
           }
           try {
             const gen = MB.LlmBlog.generateWithFallback({ article: art, ctx: art._ctx, settings: { ...s0, kinds: { ...s0.kinds, [a.kind]: { ...(s0.kinds[a.kind] || {}), enabled: true } } } });
-            const res = await Promise.race([gen, new Promise(r => setTimeout(() => r({ out: null, timeout: true }), 180000))]);
+            const res = await Promise.race([gen, new Promise(r => setTimeout(() => r({ out: null, timeout: true }), 600000))]); // bis zu 4 Modelle nacheinander
             let out = res && res.out;
             let why = '';
             if (!out) {

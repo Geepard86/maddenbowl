@@ -1908,6 +1908,6 @@
     setNicknames, getNickname,
     onSpeak,
     prepareRingIntro,
-    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview, workerTicker, stopAll, playClip: (url) => playAudioUrl(url), speakDirect: (segs, opts) => speakSequence(segs, opts),
+    studioConnected, studioAudioMode, setStudioAudioMode, studioPost, emitSpeakLocal, announceInterview, workerTicker, stopAll, ttsUrl: (text, voiceId) => { const t = getTtsSettings(); return fetchTtsLimited(text, { apiKey: t.apiKey, voiceId: voiceId || t.voiceIdAnnouncer || t.voiceIdResult, modelId: t.modelId }); }, playClip: (url) => playAudioUrl(url), speakDirect: (segs, opts) => speakSequence(segs, opts),
   };
 })(window);
