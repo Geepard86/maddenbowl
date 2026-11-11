@@ -5846,6 +5846,10 @@ function renderRanking() {
 
     // ---------- KI-Vergleichstest ----------
     async function runLlmCompareTest() {
+      try { await runLlmCompareTestInner(); }
+      catch (e) { console.error(e); const st = document.getElementById('llmCompareState'); if (st) st.textContent = 'Test abgebrochen: ' + (e.message || e); }
+    }
+    async function runLlmCompareTestInner() {
       const st = document.getElementById('llmCompareState'); const say = (t) => { st.textContent = t; };
       const tid = MB.getCurrentTournamentId(); if (!tid) { say('Kein laufendes Turnier – bitte erst ein (Test-)Turnier starten.'); return; }
       if (!MB.LlmBlog.getKey()) { say('Kein OpenRouter-Key.'); return; }
@@ -5854,13 +5858,13 @@ function renderRanking() {
       const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
       // kompletter Durchlauf: alle Beiträge des nachgespielten Turniers in zeitlicher Reihenfolge
       const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind]);
+      const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
+      const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
+      if (!variants.length) { say('Bitte mindestens eine Variante auswählen.'); return; }
       if (!confirm(`Der Vergleichstest schreibt ${pickList.length} Beiträge in je ${variants.length} Variante(n) = ${pickList.length * variants.length} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
       // simulierte Unique-Karten eines ersten Turniers (für den Turnierstart)
       const ps = (lt.state.players || []).map(p => p.name);
       const simUnique = `Simulation – vor dem Turnierstart vergebene Unique-Karten: „Frühstarter“ (${ps[0]}), „Pionier“ (${ps[1]}, allererster Tipp), „Chefscout“ (${ps[2]}, als Erster alle 32 Kader angesehen), „Erster Entwurf“ (${ps[3]}, erste eigene Spielerfigur).`;
-      const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
-      const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
-      if (!variants.length) { say('Bitte mindestens eine Variante auswählen.'); return; }
       const s0 = MB.LlmBlog.getSettings(); let done = 0, fail = 0;
       // Memes wie im echten Ablauf: je Rekord-Beitrag ein Imgflip-Meme (für alle 4 Varianten dasselbe);
       // das Power Ranking bekommt die Memes der Rekorde davor + die Statistik-Ecke mit Grafik
