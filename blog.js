@@ -759,6 +759,7 @@
 
       media_url: songUrl,
       media_type: "audio",
+      data: { milestone },
     };
   }
 

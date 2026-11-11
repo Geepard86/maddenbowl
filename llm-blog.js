@@ -98,22 +98,93 @@
     "Du bekommst KEINEN Ausgangstext, sondern nur Daten. Schreibe den Beitrag selbst – lebendig, pointiert, mit eigenen Ideen, aber ausschließlich auf Basis der Daten.",
     "Wähle die spannendsten Fakten aus, du musst nicht alles verwenden. Keine Aufzählungen, kein Tabellen-Nachbeten.",
   ].join("\n");
+  // Welche Variante gilt? Test-Vorgabe > Einstellung je Beitragsart > globale Einstellung
+  function isDataMode(article, s) {
+    if (article._promptMode) return article._promptMode === "data";
+    const k = (s.kinds || {})[article.kind] || {};
+    return (k.promptMode || s.promptMode) === "data";
+  }
+  function tempFor(article, s) {
+    if (article._temperature != null) return article._temperature;
+    const k = (s.kinds || {})[article.kind] || {};
+    return k.creative ? 1.1 : s.temperature;
+  }
+  // Nachbearbeitung im Daten-Modus: Titel bei Porträts fest, Statistik-Ecke sicherstellen,
+  // fehlende Bilder hinter den passenden Absatz setzen, Absatzzahl (großzügig) prüfen
+  function portraitKeyword(article) {
+    if (article.kind !== "portrait") return "";
+    const d = article.data || {};
+    return d.challenger ? "Herausforderer" : ({ champion: "Titelverteidiger", contender: "Contender", field: "Feld" })[d.group] || "";
+  }
+  function fixDataOutput(out, article) {
+    const d = article.data || {};
+    const kw = portraitKeyword(article);
+    if (kw) {
+      let t = String(out.title || "").replace(/^\s*Spielerporträts?\s*[:–-]\s*/i, "").trim();
+      if (!t) t = String(article.title || "").replace(/^[^\wÄÖÜäöü]+/, "").replace(/^\s*Spielerporträts?\s*[:–-]\s*/i, "");
+      if (!new RegExp(kw, "i").test(t)) t = `${kw}: ${t}`;
+      out.title = t;
+    }
+    let body = String(out.body || "");
+    if (d.spurious && d.spurious.a && !/Statistik-Ecke/i.test(body)) {
+      const teaser = (String(article.body || "").split(/\n{2,}/).find((p) => /Statistik-Ecke/.test(p)) || "").trim();
+      if (teaser) body = body.includes("[[tabelle]]") ? body.replace("[[tabelle]]", teaser + "\n\n[[tabelle]]") : body + "\n\n" + teaser;
+    }
+    (d.imageInfo || []).forEach((info) => {
+      const mk = (info.match(/\[\[bild:\d+\]\]/) || [])[0]; if (!mk || body.includes(mk)) return;
+      const paras = body.split(/\n{2,}/);
+      let idx = -1;
+      if (/Statistik-Ecke/.test(info)) idx = paras.findIndex((p) => /Statistik-Ecke/i.test(p));
+      else { const names = (info.match(/– ([^ ]+)|gegen ([^ ]+)/g) || []).map((x) => x.replace(/^– |^gegen /, "")); idx = paras.findIndex((p) => names.some((n) => n && p.includes(n))); }
+      if (idx < 0) idx = Math.max(0, paras.findIndex((p) => p.includes("[[tabelle]]")) - 1);
+      paras.splice(idx + 1, 0, mk); body = paras.join("\n\n");
+    });
+    out.body = body;
+    const st = STRUCTURE[article.kind];
+    if (st) {
+      const n = body.split(/\n{2,}/).filter((p) => p.trim() && !/^\s*\[\[(bild:\d+|tabelle)\]\]\s*$/.test(p)).length;
+      if (n < st[0] - 1 || n > st[1] + 2) (out.problems = out.problems || []).push(`Aufbau: ${n} Absätze statt ${st[0]}–${st[1]}`);
+    }
+    return out;
+  }
+  // Bauform je Beitragsart (nur Prompt 2). [min, max] = Absätze (die Prüfung ist großzügig).
+  const PUNCH = "Der erste Satz ist eine Punchline: kurz, frech, macht neugierig.";
   const STRUCTURE = {
-    portrait: "Aufbau: 1 kurzer Einleitungsabsatz, dann genau 1 Absatz pro vorgestelltem Spieler (2–4 Sätze), zum Schluss 1 kurzer Ausblick-Absatz.",
-    progress: "Aufbau: 1 Einleitungsabsatz zur Lage, 2–3 Absätze zu den spannendsten Spielern/Duellen, 1 kurzer Ausblick. Platzhalter wie [[tabelle]] unverändert ans Ende.",
-    kickoff: "Aufbau: 1 Einleitung, 1 Absatz zum Teilnehmerfeld und Favoriten, 1 kurzer Schlussabsatz.",
-    record: "Aufbau: 2–3 kurze Absätze: was passiert ist, warum es besonders ist, eine Pointe zum Schluss.",
-    finals: "Aufbau: 1 Einleitung, je 1 Absatz zu beiden Finalisten, 1 Ausblick.",
-    champion: "Aufbau: 1 Einleitung mit dem Ergebnis, 1–2 Absätze zum Weg des Champions, 1 Schlussabsatz.",
-    wrapup: "Aufbau: 1 Einleitung, 2–3 Absätze zu den Geschichten des Turniers, 1 Schlussabsatz.",
-    retrospective: "Aufbau: 1 Einleitung, 3–5 Absätze zur Saison (Verlauf, Playoffs, Champion, Rekorde), 1 Schlussabsatz.",
+    portrait: [2, 3, "2–3 Absätze insgesamt. Bei mehreren Spielern nicht für jeden einen eigenen Mini-Absatz, sondern sinnvoll bündeln (z. B. Favoriten zusammen, Außenseiter zusammen)."],
+    progress: [3, 5, "Absatz 1: die Lage nach diesem Spieltag. Danach 1–3 Absätze zu den spannendsten Spielern/Duellen. Zum Schluss ein kurzer Ausblick."],
+    kickoff: [2, 3, "Absatz 1: Vorfreude aufs Turnier. Absatz 2: das Teilnehmerfeld, Favoriten, alte Rechnungen. Optional ein kurzer Schlusssatz-Absatz. Das Turnier hat noch NICHT begonnen: keine Aussagen über Ergebnisse, Punkte oder Bilanzen dieses Turniers."],
+    record: [2, 3, "Was passiert ist, warum es besonders ist, eine Pointe zum Schluss."],
+    finals: [3, 4, "Einleitung, je ein Absatz zu beiden Finalisten (oder beide gemeinsam), Ausblick."],
+    champion: [3, 4, "Einleitung mit dem Ergebnis, der Weg des Champions, Schlussabsatz."],
+    wrapup: [3, 5, "Einleitung, die Geschichten des Turniers, Schlussabsatz."],
+    retrospective: [4, 7, "Einleitung, Verlauf der Saison, Playoffs, Champion, Rekorde, Schluss."],
+    song: [2, 3, ""],
   };
+  // Songbeitrag: Einleitung hängt vom Song-Format ab
+  function songStructure(article) {
+    const d = article.data || {}, m = String(d.milestone || d.kind || "");
+    const who = ({
+      regularSeason: "MC Altima hat die komplette Gruppenphase in einem Song verarbeitet",
+      firstElimination: "zum ersten Ausscheiden gibt es einen Abschiedssong – stelle Interpret und Anlass so vor, wie sie in den Fakten stehen",
+      toiletBowl: "der Toilet Bowl bekommt seine eigene (wenig schmeichelhafte) Hymne",
+      finals: "vor dem Finale treten die beiden Finalisten im Song gegeneinander an – Battle-Stimmung",
+      champion: "der Champion bekommt seinen Song – nenne Interpret und Stil so, wie sie in den Fakten stehen",
+    })[m] || "ein neuer Song zum Turnier ist da – nenne Interpret und Anlass so, wie sie in den Fakten stehen";
+    return `Der Beitrag stellt einen SONG vor. Absatz 1: Einleitung – ${who}. Absatz 2: knappe Zusammenfassung des Anlasses aus den Fakten. Schluss: ein Satz, der zum Reinhören einlädt.`;
+  }
+  function structureText(article) {
+    const st = STRUCTURE[article.kind]; if (!st) return PUNCH;
+    const body = article.kind === "song" ? songStructure(article) : st[2];
+    return `AUFBAU (${st[0]}–${st[1]} Absätze, je 2–5 Sätze, keine Ein-Satz-Absätze): ${body} ${PUNCH}`;
+  }
   // Alle relevanten Daten zu den beteiligten Spielern (komplette Historie + laufendes Turnier)
   function richFacts(article, ctx) {
     try {
       const st = (ctx && ctx.state) || {}, H = (ctx && ctx.history) || {};
       const d = article.data || {};
-      let names = [].concat(d.players || [], (d.standings || []).map((x) => x.name), d.player || [], d.opponent || [], article._names || []).filter(Boolean);
+      let names = article.kind === "portrait" && (d.players || []).length ? [].concat(d.players)
+        : [].concat(d.players || [], (d.standings || []).map((x) => x.name), d.player || [], d.opponent || [], article._names || []).filter(Boolean);
+      const noCurrent = article.kind === "kickoff" || !((st.matches || []).some((m) => m.s1 != null) || (st.playoffMatches || []).some((m) => m.s1 != null));
       if (!names.length) names = (st.players || []).map((p) => p.name);
       names = [...new Set(names)].slice(0, 12);
       const M = (H.matches || []).filter((m) => m.homeScore != null);
@@ -131,7 +202,7 @@
           (best ? `; höchster Sieg ${best.own}:${best.other} gegen ${best.opp} (${best.season})` : "") +
           (worst && worst.own < worst.other ? `; bitterste Niederlage ${worst.own}:${worst.other} gegen ${worst.opp} (${worst.season})` : "") +
           (high ? `; meiste Punkte ${high.own} gegen ${high.opp} (${high.season})` : "") +
-          (cur ? `; aktuelles Turnier: Team ${cur.team || "?"}, ${cur.wins || 0}-${Math.max(0, (cur.played || 0) - (cur.wins || 0))}, Differenz ${cur.diff || 0}` : ""));
+          (cur ? (noCurrent ? `; spielt diesmal mit ${cur.team || "?"}` : `; aktuelles Turnier: Team ${cur.team || "?"}, ${cur.wins || 0}-${Math.max(0, (cur.played || 0) - (cur.wins || 0))}, Differenz ${cur.diff || 0}`) : ""));
       });
       // direkter Vergleich unter den beteiligten Spielern
       const pairs = [];
@@ -462,10 +533,16 @@
     const meta = KINDS[article.kind] || { label: article.kind, words: "100 bis 200" };
     const facts = article.facts || factsFor(article, ctx);
     const s0 = settings || getSettings();
-    if (article._promptMode === "data" || (!article._promptMode && s0.promptMode === "data")) {
+    if (isDataMode(article, s0)) {
+      const d = article.data || {};
+      const subjects = article.kind === "portrait" && (d.players || []).length ? `PORTRÄTIERT WERDEN NUR: ${d.players.join(", ")}. Schreibe ausschließlich über ${d.players.length === 1 ? "diesen Spieler" : "diese Spieler"}; andere Namen nur, wenn sie Teil eines Fakts sind (z. B. der Gegner bei einem Sieg).` : "";
+      const imgs = Array.isArray(d.imageInfo) && d.imageInfo.length ? `BILDER (jeweils als eigene Zeile direkt NACH dem Absatz einsetzen, der das Thema behandelt):\n${d.imageInfo.join("\n")}` : "";
+      const spur = d.spurious && d.spurious.a ? `STATISTIK-ECKE (Pflicht, eigener Absatz direkt vor [[tabelle]]): beginne mit „Aus der Statistik-Ecke:“, leite in einem Satz ein, dass etwas Merkwürdiges auffällt („${d.spurious.a}“ und „${d.spurious.b}“ entwickeln sich verdächtig ähnlich), und denke dir dann kurz und augenzwinkernd eine mögliche Erklärung aus. Keine Kennzahlen.` : "";
+      const kw = portraitKeyword(article);
+      const titleRule = "TITEL: sachlich-griffig, höchstens 60 Zeichen, nennt Thema oder Spieler, höchstens ein Wortspiel." + (kw ? ` Das Wort „${kw}“ muss im Titel vorkommen; „Spielerporträt“ NICHT verwenden (das ist schon die Kategorie).` : "");
       const user = [
-        `BEITRAGSART: ${meta.label}`, `LÄNGE: etwa ${meta.words} Wörter`, STRUCTURE[article.kind] || "", "",
-        s0.dataPrompt || DEFAULT_DATA_PROMPT, "",
+        `BEITRAGSART: ${meta.label}`, `LÄNGE: etwa ${meta.words} Wörter`, structureText(article), subjects, titleRule, "",
+        s0.dataPrompt || DEFAULT_DATA_PROMPT, "", imgs, spur,
         "FAKTEN (nur diese darfst du verwenden):", facts || "(keine weiteren Fakten)",
         richFacts(article, ctx || article._ctx), article._extraFacts ? "\nZUSÄTZLICHE FAKTEN:\n" + article._extraFacts : "",
         "", "Format wie gewohnt: erste Zeile „TITEL: …“, dann der Text.",
@@ -602,7 +679,8 @@
       for (let tryNo = 0; tryNo < 2; tryNo++) {
         const t0 = Date.now();
         try {
-          const out = await generate({ key, model, article, ctx, temperature: article._temperature != null ? article._temperature : s.temperature, timeoutSec: s.timeoutSec, settings: s });
+          let out = await generate({ key, model, article, ctx, temperature: tempFor(article, s), timeoutSec: s.timeoutSec, settings: s });
+          if (isDataMode(article, s)) out = fixDataOutput(out, article);
           const a = { model: out.model, seconds: (Date.now() - t0) / 1000, problems: out.problems, usage: out.usage };
           attempts.push(a); if (onAttempt) onAttempt(a, out);
           if (!out.problems.length) return { out, attempts, chain };
@@ -662,7 +740,7 @@
 
   global.MB.LlmBlog = {
     KINDS, SYSTEM_PROMPT, defaultPrompt, getPrompt,
-    getSettings, loadSettings, saveSettings, defaultSettings, richFacts, DEFAULT_DATA_PROMPT,
+    getSettings, loadSettings, saveSettings, defaultSettings, richFacts, DEFAULT_DATA_PROMPT, isDataMode,
     getKey, setKey, getLog, clearLog,
     fetchModels, pickAutoModels, resolveModels, costCents, fmtCost, scoreModel, EST_IN_TOKENS, EST_OUT_TOKENS,
     factsFor, buildMessages, buildPolishMessages, generate, generateWithFallback, maybeRewrite, validate, cleanOutput,

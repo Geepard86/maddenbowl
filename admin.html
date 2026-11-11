@@ -392,6 +392,7 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
           <div style="padding:10px; border-radius:8px; background:rgba(0,0,0,.18); margin-bottom:12px;">
             <div style="font-weight:700; margin-bottom:6px;">🧪 KI-Vergleichstest (schreibt in den Blog des laufenden Turniers)</div>
             <div class="hint" style="font-size:.8em; opacity:.75; margin-bottom:6px;">Spielt das letzte Turnier nach (Original-Zeitplan) und schreibt je Beitragsart einen Beitrag in 4 Varianten: Prompt 1, Prompt 1 kreativ, Prompt 2, Prompt 2 kreativ – mit Imgflip-Memes zu den Rekorden, Memes + Statistik-Ecke samt Grafik im Power Ranking und simulierten Unique-Karten im Turnierstart. Dauert einige Minuten (ca. 4 KI-Aufrufe pro Beitragsart).</div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin:4px 0 8px; font-size:.88em;"><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P1" checked style="width:auto;"> P1</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P1 kreativ" checked style="width:auto;"> P1 kreativ</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P2" checked style="width:auto;"> P2</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P2 kreativ" checked style="width:auto;"> P2 kreativ</label></div>
             <button class="btn-secondary" style="width:auto;" onclick="runLlmCompareTest()">▶ Vergleichstest starten</button>
             <div id="llmCompareState" class="hint" style="margin-top:6px; font-size:.85em;"></div>
           </div>
@@ -4670,6 +4671,7 @@ function renderRanking() {
         const images = queued.map((q) => q.url);
         // [[bild:N]] markiert, wo im Text das N-te Bild erscheint (blog.html platziert es dort)
         const mark = (i) => `\n\n[[bild:${i}]]`;
+        const imgInfo = []; // Beschreibung je Bild für die KI (Prompt 2: Bild hinter den passenden Absatz)
         if (queued.length) {
           article.body += '\n\n🎭 Aus den letzten Spielen: ' + queued.map((q) => q.label).join(', ') + '.' + queued.map((_, i) => mark(i)).join('');
         }
@@ -4682,6 +4684,7 @@ function renderRanking() {
           if (dem) {
             images.push(await MB.Records.uploadMemeToStorage(MB.Records.renderDemBoyzCanvas(dem), tid, 'demboyz'));
             article.body += mark(images.length - 1);
+            imgInfo.push(`[[bild:${images.length - 1}]] = „Dem Boyz“-Grafik zur aktuellen Tabelle (gehört zum Absatz über die Lage/Tabelle)`);
             demBoyzUsed = true;
           }
         } catch (e) { console.warn('Dem-Boyz-Grafik fehlgeschlagen:', e); }
@@ -4696,6 +4699,7 @@ function renderRanking() {
                 const result = await MB.Records.generateImgflipMeme(record, { ...MB.Records.getImgflipSettings(), templateId: pool[n].id });
                 images.push(result.url);
                 article.body += mark(images.length - 1);
+                imgInfo.push(`[[bild:${images.length - 1}]] = Meme zu: ${(MB.Records.RECORD_TYPES[record.type] || {}).label || 'Saison-Moment'}${record.player ? ' – ' + record.player : ''}${record.opponent ? ' gegen ' + record.opponent : ''}`);
               } catch (e) { console.warn('Saison-Meme fehlgeschlagen:', e); adminAlert('Meme fehlgeschlagen', e.message); }
             }
           }
@@ -4733,6 +4737,7 @@ function renderRanking() {
               const teaser = `📊 Aus der Statistik-Ecke: ` + (storyText.length > 160 ? storyText : (storyText ? storyText + ' ' : '') + derivation);
               const canvas = MB.Spurious.renderChartCanvas(candidate);
               images.push(await MB.Records.uploadMemeToStorage(canvas, tid, 'spurious'));
+              imgInfo.push(`[[bild:${images.length - 1}]] = Diagramm der Statistik-Ecke (direkt nach dem Statistik-Ecke-Absatz)`);
               article.body += '\n\n' + teaser + mark(images.length - 1);
               article.data = { ...(article.data || {}), pairKey: candidate.pairKey, spurious: { a: candidate.mbLabel, b: candidate.germanName } };
             }
@@ -4744,6 +4749,7 @@ function renderRanking() {
           article.media_type = 'image';
           if (images.length > 1) article.data = { ...(article.data || {}), extra_media: images.slice(1) };
         }
+        if (imgInfo.length) article.data = { ...(article.data || {}), imageInfo: imgInfo };
         const savedRanking = await MB.Blog.pushArticle(tid, article);
         try { if (savedRanking && ivNames.length && MB.Interview) await MB.Interview.markUsed(tid, ivNames); } catch (e) { /* egal */ }
         try { if (savedRanking && legPend.length) await MB.setAppConfig('legendary_pending', '[]'); } catch (e) { /* egal */ }
@@ -5517,6 +5523,7 @@ function renderRanking() {
       if (g('llmPrimary')) s.primaryModel = g('llmPrimary').value; else s.primaryModel = llmForm.primaryModel;
       if (g('llmFallback')) s.fallbackModel = g('llmFallback').value; else s.fallbackModel = llmForm.fallbackModel;
       document.querySelectorAll('.llmKindOn').forEach(c => { s.kinds[c.dataset.kind].enabled = c.checked; });
+      document.querySelectorAll('.llmKindVar').forEach(c => { const v = c.value; s.kinds[c.dataset.kind].promptMode = v.replace('+', '') || undefined; s.kinds[c.dataset.kind].creative = v.endsWith('+'); });
       document.querySelectorAll('.llmKindModel').forEach(c => { s.kinds[c.dataset.kind].model = c.value; });
       s.prompts = { ...(s.prompts || {}) };
       document.querySelectorAll('.llmPrompt').forEach(t => { s.prompts[t.dataset.kind] = t.value; });
@@ -5567,14 +5574,15 @@ function renderRanking() {
     function drawLlmKindTable() {
       const s = llmForm || MB.LlmBlog.getSettings();
       document.getElementById('llmKindTable').innerHTML =
-        `<table style="border-collapse:collapse; width:100%;"><tr style="opacity:.7; text-align:left;"><th>Prod</th><th>Beitragsart</th><th>Modell</th><th>Prompt</th></tr>` +
+        `<table style="border-collapse:collapse; width:100%;"><tr style="opacity:.7; text-align:left;"><th>Prod</th><th>Beitragsart</th><th>Variante</th><th>Modell</th><th>Prompt</th></tr>` +
         Object.entries(MB.LlmBlog.KINDS).map(([kind, meta]) => {
           const custom = !!(s.prompts && s.prompts[kind] && s.prompts[kind].trim() !== MB.LlmBlog.defaultPrompt(kind).trim());
           return `<tr style="border-top:1px solid #22304355;"><td style="padding:4px 6px;"><input type="checkbox" class="llmKindOn" data-kind="${kind}" ${s.kinds[kind].enabled ? 'checked' : ''}></td>` +
             `<td style="padding:4px 6px;">${orEsc(meta.label)}</td>` +
+            `<td style="padding:4px 6px;"><select class="llmKindVar" data-kind="${kind}" style="width:auto;">${[['', 'wie oben'], ['base', 'P1'], ['base+', 'P1 kreativ'], ['data', 'P2'], ['data+', 'P2 kreativ']].map(([v, l]) => { const cur = (s.kinds[kind].promptMode || '') + (s.kinds[kind].creative ? '+' : ''); return `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`; }).join('')}</select></td>` +
             `<td style="padding:4px 6px;">${llmModelSelect('llmKM_' + kind, s.kinds[kind].model || '', { cls: 'llmKindModel', kind, empty: '— wie oben —', width: '240px' })}</td>` +
             `<td style="padding:4px 6px;"><button class="btn-secondary" style="width:auto; margin:0; padding:3px 10px;" onclick="toggleLlmPrompt('${kind}')">✏️ ${custom ? 'angepasst' : 'Standard'}</button></td></tr>` +
-            `<tr id="llmPromptRow_${kind}" style="display:none;"><td colspan="4" style="padding:4px 6px 10px;">
+            `<tr id="llmPromptRow_${kind}" style="display:none;"><td colspan="5" style="padding:4px 6px 10px;">
               <textarea class="llmPrompt" data-kind="${kind}" rows="14" style="width:100%; font-size:0.8em; font-family:monospace;">${orEsc(MB.LlmBlog.getPrompt(kind, s))}</textarea>
               <button class="btn-secondary" style="width:auto; margin-top:4px;" onclick="resetLlmPrompt('${kind}')">↺ Standard-Prompt wiederherstellen</button>
               <span class="hint" style="font-size:0.8em; opacity:.7;"> Format-Vorgabe „TITEL: …“ in der ersten Zeile bitte drinlassen.</span></td></tr>`;
@@ -5846,23 +5854,25 @@ function renderRanking() {
       const res = MB.Replay.run({ state: lt.state, history: lt.history, year: lt.year });
       // kompletter Durchlauf: alle Beiträge des nachgespielten Turniers in zeitlicher Reihenfolge
       const pickList = res.articles.filter(a => MB.LlmBlog.KINDS[a.kind]);
-      if (!confirm(`Der Vergleichstest schreibt ${pickList.length} Beiträge in je 4 Varianten = ${pickList.length * 4} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
+      if (!confirm(`Der Vergleichstest schreibt ${pickList.length} Beiträge in je ${variants.length} Variante(n) = ${pickList.length * variants.length} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
       // simulierte Unique-Karten eines ersten Turniers (für den Turnierstart)
       const ps = (lt.state.players || []).map(p => p.name);
       const simUnique = `Simulation – vor dem Turnierstart vergebene Unique-Karten: „Frühstarter“ (${ps[0]}), „Pionier“ (${ps[1]}, allererster Tipp), „Chefscout“ (${ps[2]}, als Erster alle 32 Kader angesehen), „Erster Entwurf“ (${ps[3]}, erste eigene Spielerfigur).`;
-      const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]];
+      const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
+      const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
+      if (!variants.length) { say('Bitte mindestens eine Variante auswählen.'); return; }
       const s0 = MB.LlmBlog.getSettings(); let done = 0, fail = 0;
       // Memes wie im echten Ablauf: je Rekord-Beitrag ein Imgflip-Meme (für alle 4 Varianten dasselbe);
       // das Power Ranking bekommt die Memes der Rekorde davor + die Statistik-Ecke mit Grafik
-      const memeOf = new Map(); let memesSoFar = []; const usedPairs = new Set();
+      const memeOf = new Map(); let memesSoFar = [], memeLabels = []; const usedPairs = new Set();
       const imgOk = MB.Records.hasImgflipSettings && MB.Records.hasImgflipSettings();
       for (const a of pickList) {
         if (a.kind === 'record' && a._record && imgOk) {
           say(`Erzeuge Meme für „${a.title}“ …`);
-          try { const r = await MB.Records.generateImgflipMeme(a._record, MB.Records.getImgflipSettings()); if (r && r.url) { memeOf.set(a, r.url); memesSoFar.push(r.url); } } catch (e) { console.warn('Test-Meme', e); }
+          try { const r = await MB.Records.generateImgflipMeme(a._record, MB.Records.getImgflipSettings()); if (r && r.url) { memeOf.set(a, r.url); memesSoFar.push(r.url); memeLabels.push(`${(MB.Records.RECORD_TYPES[a._record.type] || {}).label || 'Rekord'}${a._record.player ? ' – ' + a._record.player : ''}${a._record.opponent ? ' gegen ' + a._record.opponent : ''}`); } } catch (e) { console.warn('Test-Meme', e); }
         }
         if (a.kind === 'progress') {
-          a._memes = memesSoFar.slice(-2); memesSoFar = [];
+          a._memes = memesSoFar.slice(-2); a._memeLabels = memeLabels.slice(-2); memesSoFar = []; memeLabels = [];
           try {
             say('Suche eine Schein-Korrelation für das Power Ranking …');
             const cands = await MB.Spurious.findAllOverallCandidates(lt.state, usedPairs, { limit: 1 });
@@ -5891,6 +5901,7 @@ function renderRanking() {
             const extra = [];
             (a._memes || []).forEach((u, k) => extra.push(`[[bild:${k}]]`));
             if (a._spurious) { extra.push(a._spurious.teaser); if (a._spurious.url) extra.push(`[[bild:${(a._memes || []).length}]]`); art.data = { ...(art.data || {}), spurious: { a: a._spurious.c.mbLabel, b: a._spurious.c.germanName } }; }
+            art.data = { ...(art.data || {}), imageInfo: [...(a._memes || []).map((u, k) => `[[bild:${k}]] = Meme zu: ${(a._memeLabels || [])[k] || 'einem Rekord der letzten Spiele'}`), ...(a._spurious && a._spurious.url ? [`[[bild:${(a._memes || []).length}]] = Diagramm der Statistik-Ecke (direkt nach dem Statistik-Ecke-Absatz)`] : [])] };
             art.body = String(a.body || '').replace('[[tabelle]]', extra.join('\n\n') + '\n\n[[tabelle]]');
           }
           try {
