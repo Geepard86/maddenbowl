@@ -176,6 +176,7 @@
   // Admin-Status: bleibt per localStorage bestehen; gültig, solange der gespeicherte
   // Hash mit dem in Supabase übereinstimmt (wird beim Seitenaufruf im Hintergrund geprüft).
   function isAdminUnlocked() {
+    if (/[?&]viewer=1\b/.test(location.search)) return false; // z. B. Trailer: Seiten wie ein normaler Besucher zeigen
     if (sessionStorage.getItem(ADMIN_SESSION_KEY) === "1") return true;
     return !!localStorage.getItem(ADMIN_SESSION_KEY);
   }

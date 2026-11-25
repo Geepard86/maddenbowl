@@ -564,8 +564,11 @@
     const a = fresh[0]; if (!a) return;
     const img = a.media_type === 'image' && a.media_url ? a.media_url : (a.data && Array.isArray(a.data.extra_media) && a.data.extra_media[0]) || '';
     const text = String(a.body || '').replace(/\[\[[^\]]+\]\]/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    $('vBreaking').innerHTML = `<div class="st-break ${img ? '' : 'noimg'}"><div><div class="bn">${a.kind === 'song' ? '🎵 NEUER SONG' : 'BREAKING NEWS'}</div><div class="bt">${esc(String(a.title || '').replace(/<[^>]+>/g, ''))}</div><div class="bx">${esc(text)}</div></div>${img ? `<img src="${esc(img)}" alt="">` : ''}</div>`;
-    showOverlay('breaking', 16000);
+    $('vBreaking').innerHTML = `<div class="st-break ${img ? '' : 'noimg'}"><div><div class="bn">${a.kind === 'song' ? '🎵 NEUER SONG' : 'BREAKING NEWS'}</div><div class="bt">${esc(String(a.title || '').replace(/<[^>]+>/g, ''))}</div><div class="bx">${esc(text)}</div></div>${img ? `<img id="stBrImg" src="${esc(img)}" alt="">` : ''}</div>`;
+    const imgs = [a.media_type === 'image' ? a.media_url : null, ...((a.data && a.data.extra_media) || [])].filter(Boolean);
+    const dur = Math.min(40000, 16000 + Math.max(0, imgs.length - 1) * 7000);
+    showOverlay('breaking', dur);
+    imgs.slice(1).forEach((u, i) => setTimeout(() => { const el = document.getElementById('stBrImg'); if (el) el.src = u; }, 8000 + i * 7000));
   }
 
   // ---------------------------------------------------------- Pausenfüller

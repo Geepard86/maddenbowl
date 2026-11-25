@@ -29,8 +29,10 @@
   @keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes spark { 0% { opacity: 0; transform: translateY(0) scale(.6); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-260px) scale(1.2); } }
   @keyframes pop { 0% { transform: scale(.2) rotate(-12deg); opacity: 0; } 70% { transform: scale(1.08) rotate(2deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(60px); } to { opacity: 1; transform: none; } }
+  @keyframes sweep { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
   @keyframes holo { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
-  .spot { position: absolute; top: -200px; width: 600px; height: 1400px; background: linear-gradient(180deg, rgba(255,230,150,.35), transparent 70%); clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); }
+  .spot { transform-origin: 50% 0; position: absolute; top: -200px; width: 600px; height: 1400px; background: linear-gradient(180deg, rgba(255,230,150,.35), transparent 70%); clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); }
   .fig { position: absolute; bottom: 120px; width: 190px; height: 320px; animation: walkIn 1s cubic-bezier(.2,.8,.2,1) both; }
   .fig svg { width: 100%; height: 100%; }
   .fig .nm { position: absolute; left: 50%; bottom: -60px; transform: translateX(-50%); font: 900 34px/1 Impact, sans-serif; letter-spacing: 2px; color: #ffd23f; white-space: nowrap; animation: rise .6s .6s both; }
@@ -55,7 +57,9 @@
 </style>
 </head>
 <body>
-<div id="hud"><button onclick="startTrailer(true)">⏺ Aufnehmen &amp; abspielen</button><button onclick="startTrailer(false)">▶ Nur abspielen</button><span id="hudInfo" style="align-self:center; font-size:14px; opacity:.8;"></span></div>
+<div id="hud"><input id="tTitle" style="width:220px; padding:8px; border-radius:8px; border:0; font-weight:800;" title="Titel im Trailer">
+  <button onclick="startTrailer(true)">⏺ Trailer aufnehmen</button><button onclick="startTrailer(false)">▶ Trailer abspielen</button>
+  <button onclick="startTrailer(true, true)">⏺ Teaser aufnehmen</button><button onclick="startTrailer(false, true)">▶ Teaser abspielen</button><span id="hudInfo" style="align-self:center; font-size:14px; opacity:.8;"></span></div>
 <div id="stage"><div id="scenes"></div><div class="cap" id="cap"><b>ENZO</b><span></span></div></div>
 <audio id="bgm" preload="auto"></audio>
 <script>
@@ -77,7 +81,9 @@ async function loadData() {
   if (!players.length) players = ['Tim', 'Alex', 'Markus', 'Lasse', 'Tobi F.', 'Tobi W.', 'Micha', 'Raffa'].map(n => ({ name: n, team: null }));
   players = players.slice(0, 8);
   const roman = (n) => ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][n] || String(n);
-  title = `ALTIMA BOWL ${roman((seasons.length || 0) + ((st && (st.players || []).length) ? 0 : 1))}`.trim();
+  const running = !!(st && (st.players || []).length), CURRENT = 6; // „Altima Bowl VI“ = aktuelle Ausgabe laut App-Kopfzeile
+  const auto = `ALTIMA BOWL ${roman(Math.max(CURRENT + (running ? 0 : 1), (seasons.length || 0) + (running ? 0 : 1)))}`;
+  title = ($('tTitle').value || '').trim().toUpperCase() || auto; $('tTitle').value = title;
   try { songUrl = await MB.getAppConfig('trailer_song'); } catch (e) { songUrl = null; }
 }
 
@@ -88,6 +94,7 @@ const LINES = [
   'Interviews. Emotionen. Und jede Menge Drama.', 'Und ihr seid mittendrin – direkt auf eurem Handy.',
   'Tippt auf jedes Spiel. Holt euch die Krone im Wettbüro.', 'Sammelt Karten. Baut eure eigene Figur. Schaltet legendäre Outfits frei.',
   'Power Rankings. Rekorde. Memes. Alles live.', 'Seid ihr bereit? Dann …', '… let’s get ready to rumbleee! ALTIMA BOWL!',
+  'Save the date!',
 ];
 const voice = {};
 async function prepareVoice(info) {
@@ -112,109 +119,216 @@ const logo = (team) => team ? MB.getLogoHtml(team).replace('<img ', '<img style=
 const bigTitle = (t, extra) => `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column;"><div class="big" style="animation: slam .7s cubic-bezier(.2,.8,.2,1) both;">${t}</div>${extra || ''}</div>`;
 const sparks = (n) => Array.from({ length: n }, (_, i) => `<i style="position:absolute; left:${(i * 97) % 100}%; bottom:${(i * 37) % 30}%; width:8px; height:8px; border-radius:50%; background:#ffd23f; box-shadow:0 0 12px #ffd23f; animation: spark ${2 + (i % 3)}s ${(i % 7) * 0.3}s infinite;"></i>`).join('');
 
-// ---------- Ablauf (ca. 80 s)
+// ---------- Bausteine
+const WCSS = `
+  /* Gleiche Klassennamen/Logik wie zuvor — nur die CSS-Regeln sind ans
+     neue v2-Design (dunkles Navy statt Rot als Grundfarbe, Gold als Akzent
+     statt Cyan) angeglichen, damit sich am JS nichts ändern musste. */
+  select, input[type=number], input[type=password], input[type=text] {
+    background: var(--v2-bg); color: #eee; border: 1px solid #2a3a4d; border-radius: 6px;
+    padding: 8px 10px; font-size: 1em; width: 100%; box-sizing: border-box;
+  }
+  label { font-size: 0.8em; opacity: 0.75; display: block; margin-bottom: 4px; margin-top: 10px; }
+  button {
+    background: var(--v2-red); color: white; border: none; border-radius: 6px;
+    padding: 10px 16px; font-weight: bold; cursor: pointer; margin-top: 12px; width: 100%;
+  }
+  button.secondary { background: #263449; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .match-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--v2-surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .match-teams { font-weight: bold; font-size: 0.95em; }
+  .pick-result { font-size: 0.8em; }
+  .pick-correct { color: #22C55E; }
+  .pick-wrong { color: var(--v2-red); }
+  .pick-pending { opacity: 0.6; }
+  .ou-choice { display: flex; gap: 10px; margin-top: 6px; }
+  .ou-choice label { display: flex; align-items: center; gap: 6px; font-size: 0.9em; opacity: 1; margin: 0; flex: 1; background: var(--v2-surface-2); padding: 8px; border-radius: 6px; }
+  .leaderboard-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #22304333; }
+  .leaderboard-row:last-child { border-bottom: none; }
+  .leaderboard-row.me { color: var(--v2-gold); font-weight: bold; }
+  .hint { font-size: 0.75em; opacity: 0.6; margin-top: 6px; }
+  .error { color: var(--v2-red); font-size: 0.85em; margin-top: 8px; }
+  .points-badge { background: var(--v2-gold); color: #241c00; font-weight: 800; border-radius: 10px; padding: 1px 8px; font-size: 0.75em; }
+
+  .tile-vs { display: flex; align-items: stretch; gap: 8px; margin-bottom: 4px; }
+  .team-tile {
+    flex: 1; background: var(--v2-surface-2); border: 2px solid #2a3a4d; border-radius: 8px;
+    padding: 8px 6px; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .team-tile.selected { border-color: var(--v2-gold); background: rgba(201,151,0,0.12); }
+  .team-tile.locked { cursor: default; opacity: 0.85; }
+  .team-tile .tile-logo img { width: 24px; height: 24px; object-fit: contain; }
+  .team-tile .tile-name { font-weight: bold; font-size: 0.9em; margin-top: 2px; }
+  .team-tile .tile-record { font-size: 0.72em; opacity: 0.7; margin-top: 2px; }
+  .team-tile .tile-odds { font-size: 0.78em; color: var(--v2-gold); margin-top: 2px; }
+  .tile-at { align-self: center; font-size: 0.8em; opacity: 0.6; }
+  .match-tile-row { background: var(--v2-surface-2); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+  .subtle-save-btn {
+    background: none; border: 1px solid #2a3a4d; color: #9db3c8; width: auto;
+    padding: 3px 10px; font-size: 0.75em; font-weight: normal; margin-top: 4px;
+  }
+  .subtle-save-btn.dirty { border-color: var(--v2-gold); color: var(--v2-gold); }
+  .spieltag-badge { font-size: 0.7em; padding: 1px 8px; border-radius: 8px; margin-left: 8px; }
+  .spieltag-badge.done { background: #263449; opacity: 0.8; }
+  .spieltag-badge.active { background: var(--v2-gold); color: #241c00; font-weight: bold; }
+  .bulk-save-bar {
+    position: sticky; bottom: 0; background: var(--v2-bg); border-top: 1px solid #22304366;
+    padding: 10px 0; margin-top: 10px; z-index: 5;
+  }
+  .bulk-save-bar button { margin-top: 0; }
+
+  /* Neu: User-Übersicht + Sperr-Hinweis wie im Mockup */
+  .user-overview { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .user-overview .who { font-weight: 900; font-size: 1.05em; }
+  .user-overview .rank { font-size: 0.72em; color: var(--v2-silver); }
+  .user-stat { text-align: center; }
+  .user-stat .val { font-weight: 900; font-size: 1.1em; }
+  .user-stat .lbl { font-size: 0.62em; color: var(--v2-silver); text-transform: uppercase; }
+  .allget-badge { margin-left: auto; background: rgba(34,197,94,0.15); color: #22C55E; border: 1px solid #22C55E; border-radius: 10px; padding: 4px 10px; font-size: 0.7em; font-weight: 800; }
+  .allget-badge.pending { background: rgba(201,151,0,0.12); color: var(--v2-gold); border-color: var(--v2-gold); }
+`;
+// Handy-Bildschirm im echten App-Design (styles.css + Wettbüro-Stile), Seiten als Besucher (?viewer=1)
+function phoneDoc(body) { return `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="styles.css"><style>${WCSS} body{margin:0;padding:64px 12px 12px;} .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#22a447;color:#fff;padding:12px 20px;border-radius:12px;font-weight:800;}</style></head><body class="v2">${body}</body></html>`; }
+const noMic = (svg) => { const i = svg.indexOf('<g><rect x="132" y="150"'); return i >= 0 ? svg.slice(0, i) + '</svg>' : svg; };
+const enzoFig = (mic) => { const f = MB.DraftStage.charSVG('announcer'); return mic ? f : noMic(f); };
+function shake() { const sc = $('scenes'); sc.style.animation = 'none'; void sc.offsetWidth; sc.style.animation = 'shake .4s 2'; }
+const titleHtml = () => title.replace(/ ([IVXL]+)$/, '<br><span style="font-size:.6em">$1</span>');
+function draftRing(list, fast) {
+  const w = 1500 / list.length;
+  return `<div style="position:absolute; left:110px; right:110px; top:70px; height:150px; background:linear-gradient(180deg,#0b1328,#13203a); border:4px solid #c99700; border-radius:14px; display:flex; align-items:center; justify-content:center; font:900 96px/1 Impact; letter-spacing:12px; color:#ffd23f; text-shadow:0 0 30px rgba(255,210,63,.6);">DRAFT NIGHT</div>
+    <div style="position:absolute; left:0; right:0; bottom:0; height:300px; background:linear-gradient(180deg,#1b2a4a,#070b14);"></div>
+    ${[0, 1, 2].map(i => `<div style="position:absolute; left:120px; right:120px; bottom:${230 + i * 70}px; height:8px; background:#d50a0a; box-shadow:0 0 12px rgba(213,10,10,.6);"></div>`).join('')}
+    <div style="position:absolute; left:110px; bottom:180px; width:26px; height:260px; background:#c99700;"></div><div style="position:absolute; right:110px; bottom:180px; width:26px; height:260px; background:#c99700;"></div>
+    <div class="spot" style="left:300px; animation: sweep 4s ease-in-out infinite alternate;"></div><div class="spot" style="left:1000px; animation: sweep 4s 1s ease-in-out infinite alternate-reverse;"></div>
+    ${list.map((p, i) => `<div class="fig" style="left:${210 + w * i + w / 2 - 95}px; --from:${i % 2 ? 1500 : -1500}px; animation-delay:${i * (fast ? 0.12 : 0.35)}s;">${figSvg(p.name)}<div class="nm" style="animation-delay:${i * (fast ? 0.12 : 0.35) + 0.6}s;">${p.name.toUpperCase()}</div></div>`).join('')}`;
+}
+
+// ---------- Trailer (ca. 80 s)
 async function run() {
   let s;
-  // 1) Intro
-  s = scene(`<div class="spot" style="left:660px;"></div>${sparks(30)}<div style="position:absolute; left:50%; top:46%; transform:translate(-50%,-50%); font:900 120px/1 Impact; color:#c99700; opacity:.9; animation: rise 2.5s both;">🏆</div>`);
-  await enzo(0); await sleep(500);
+  // 1) Enzo wird langsam im Scheinwerfer eingeblendet
+  s = scene(`<div class="spot" style="left:660px;"></div>${sparks(24)}<div style="position:absolute; left:50%; bottom:0; width:640px; height:900px; margin-left:-320px; opacity:0; animation: fadeUp 3.5s ease-out .3s forwards;">${enzoFig(true)}</div>`);
+  await sleep(1200); await enzo(0); await sleep(400);
   // 2) Titel
-  clear(s); s = scene(bigTitle(title.replace(/ ([IVX]+)$/, '<br><span style="font-size:.6em">$1</span>'), '') + sparks(40));
-  $('stage').style.animation = 'shake .4s 2'; setTimeout(() => $('stage').style.animation = '', 900);
+  clear(s); s = scene(bigTitle(titleHtml(), '') + sparks(40)); shake();
   await enzo(1); await sleep(800);
-  // 3) Ring-Einlauf
-  clear(s);
-  const w = 1920 / (players.length + 1);
-  s = scene(`<div class="spot" style="left:200px;"></div><div class="spot" style="left:1120px;"></div>` + players.map((p, i) => `<div class="fig" style="left:${w * (i + 1) - 95}px; --from:${i < players.length / 2 ? -1400 : 1400}px; animation-delay:${i * 0.25}s;">${figSvg(p.name)}<div class="nm">${p.name.toUpperCase()}</div></div>`).join(''));
-  await enzo(2); await sleep(900);
+  // 3) Draft-Bühne mit Einlauf
+  clear(s); s = scene(draftRing(players));
+  await enzo(2); await sleep(1500);
   // 4) Slot-Ziehung + Pick
   clear(s); const pk = players[Math.floor(Math.random() * players.length)];
-  s = scene(`<div style="position:absolute; left:50%; top:30%; transform:translateX(-50%); text-align:center;"><div style="font:900 40px/1 Impact; letter-spacing:6px; color:#ffd23f;">DER SLOT WIRD GEZOGEN</div><div id="tSlot" style="font:900 260px/1 Impact; color:#fff; text-shadow:8px 8px 0 #d50a0a;">P1</div></div>`);
+  s = scene(`<div style="position:absolute; left:50%; top:22%; transform:translateX(-50%); text-align:center;"><div style="font:900 40px/1 Impact; letter-spacing:6px; color:#ffd23f;">DER SLOT WIRD GEZOGEN</div><div id="tSlot" style="font:900 260px/1 Impact; color:#fff; text-shadow:8px 8px 0 #d50a0a;">P1</div></div>`);
   for (let i = 0; i < 18; i++) { $('tSlot').textContent = 'P' + (1 + Math.floor(Math.random() * 8)); await sleep(60 + i * 12); }
   $('tSlot').textContent = 'P3';
-  const enz3 = enzo(3);
-  await sleep(1200);
-  s.insertAdjacentHTML('beforeend', `<div style="position:absolute; left:50%; top:62%; transform:translateX(-50%); display:flex; align-items:center; gap:30px; animation: pop .6s both; background:#0b1328; border:4px solid #c99700; border-radius:20px; padding:18px 40px;">${logo(pk.team)}<div><div style="font:900 28px/1 Impact; letter-spacing:4px; color:#ffd23f;">PICK IS IN</div><div style="font:900 70px/1 Impact;">${pk.name.toUpperCase()}</div></div></div>`);
+  const enz3 = enzo(3); await sleep(1200);
+  s.insertAdjacentHTML('beforeend', `<div style="position:absolute; left:0; right:0; top:62%; display:flex; justify-content:center;"><div style="display:flex; align-items:center; gap:30px; animation: pop .6s both; background:#0b1328; border:4px solid #c99700; border-radius:20px; padding:18px 40px;">${logo(pk.team)}<div><div style="font:900 28px/1 Impact; letter-spacing:4px; color:#ffd23f;">PICK IS IN</div><div style="font:900 70px/1 Impact;">${pk.name.toUpperCase()}</div></div></div></div>`);
   await enz3; await sleep(600);
   // 5) TV-Studio
   clear(s); const a = players[0], b = players[1] || players[0];
-  s = scene(`<div style="position:absolute; left:40px; top:30px; background:#d50a0a; font:900 34px/1 Impact; letter-spacing:4px; padding:10px 18px;">● LIVE</div>
-    <div style="position:absolute; left:50%; top:110px; transform:translateX(-50%); display:flex; align-items:center; gap:40px; background:#0b1328; border:4px solid #c99700; border-radius:24px; padding:30px 60px; animation: pop .6s both;">
-      ${logo(a.team)}<div style="font:900 110px/1 Impact;">${a.name.toUpperCase()} 28 : 21 ${b.name.toUpperCase()}</div>${logo(b.team)}</div>
-    <div style="position:absolute; left:50%; top:430px; transform:translateX(-50%); font:900 170px/1 Impact; color:#ffd23f; text-shadow:8px 8px 0 #d50a0a; animation: slam .6s .5s both;">TOUCHDOWN!</div>${sparks(40)}
-    <div class="booth" style="left:120px;">${MB.DraftStage.charSVG('commentator')}</div><div class="booth" style="left:480px;">${MB.DraftStage.charSVG('moderator')}</div>`);
-  await enzo(4); await sleep(300);
+  s = scene(studioScene(a, b)); await enzo(4); await sleep(300);
   // 6) Kiss Cam + Mixed Zone
   clear(s); const c = players[2] || a, d = players[3] || b;
-  s = scene(`<div style="position:absolute; left:120px; top:120px; width:820px; height:760px; border:10px solid #ff4fa3; border-radius:30px; overflow:hidden; background:#2a0f22; animation: pop .6s both;">
-      <div style="position:absolute; left:20px; top:16px; font:900 50px/1 Impact; color:#ff4fa3;">💋 KISS CAM</div>
-      <div style="position:absolute; left:80px; bottom:0; width:300px; height:520px;">${figSvg(c.name)}</div><div style="position:absolute; right:80px; bottom:0; width:300px; height:520px;">${figSvg(d.name)}</div>
-      <div style="position:absolute; left:50%; top:40%; transform:translateX(-50%); font-size:110px; animation: pop .8s 1s both;">❤️</div></div>
-    <div style="position:absolute; right:120px; top:120px; width:820px; height:760px; border:10px solid #c99700; border-radius:30px; overflow:hidden; background:radial-gradient(circle at 50% 30%,#2b3c66,#0b1328); animation: pop .6s .5s both;">
-      <div style="position:absolute; left:0; right:0; top:120px; display:grid; grid-template-columns:repeat(4,1fr); font:900 22px/56px Impact; text-align:center;">${'<span style="background:#0b1328;border:2px solid #c99700;">ALTIMA BOWL</span><span style="background:#c99700;color:#0b1328;">MIXED ZONE</span>'.repeat(4)}</div>
-      <div style="position:absolute; left:20px; top:16px; background:#d50a0a; font:900 36px/1 Impact; padding:8px 14px;">● MIXED ZONE</div>
-      <div style="position:absolute; left:20px; bottom:0; width:380px; height:440px;">${MB.DraftStage.charSVG('commentator')}</div><div style="position:absolute; right:40px; bottom:0; width:300px; height:500px;">${figSvg(c.name)}</div></div>`);
-  await enzo(5); await sleep(400);
-  // 7) Enzo mit iPhone
+  s = scene(kissMixed(c, d)); await enzo(5); await sleep(400);
+  // 7) Enzo mit iPhone (ohne Mikrofon)
   clear(s);
-  s = scene(`<div style="position:absolute; left:220px; bottom:0; width:640px; height:900px;">${MB.DraftStage.charSVG('announcer')}</div>
-    <div id="phoneWrap"><div class="hand"></div><div class="phone"><div class="scr"><div class="notch"></div><iframe id="ph" src="index.html"></iframe><div id="mock"></div></div></div></div>`);
+  s = scene(`<div style="position:absolute; left:220px; bottom:0; width:640px; height:900px;">${enzoFig(false)}</div>
+    <div id="phoneWrap"><div class="hand"></div><div class="phone"><div class="scr"><div class="notch"></div><iframe id="ph" src="index.html?viewer=1"></iframe></div></div></div>`);
   const ph = $('ph');
   const scrollPhone = async (ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { ph.contentWindow.scrollBy(0, 3); } catch (e) { /* egal */ } await sleep(30); } };
   await Promise.all([enzo(6), scrollPhone(3500)]);
-  // 8) Zoom ins Handy: Tippspiel
+  // 8) Zoom ins Handy: Tippspiel im echten Design
   $('phoneWrap').style.transform = 'translate(105px, -60px) rotate(0deg) scale(1.15)'; $('phoneWrap').querySelector('.hand').style.opacity = '0';
-  const mock = $('mock');
-  mock.innerHTML = `<div class="mock"><div style="font:900 28px/1 Impact; color:#ffd23f; margin-bottom:16px;">🎯 TIPPSPIEL</div>
-    ${[[a, b], [c, d]].map(([x, y], i) => `<div class="row">${x.name} vs. ${y.name}<div style="margin-top:12px;"><span class="btnp ${i === 0 ? 'tp' : ''}">${x.name}</span><span class="btnp">${y.name}</span></div></div>`).join('')}
-    <div class="row" id="lb"><b>🏆 Wettbüro</b><div style="margin-top:8px; opacity:.85;">1. ${b.name} – 14 P<br>2. ${a.name} – 12 P<br>3. ${c.name} – 11 P</div></div></div>`;
+  const tileRow = (x, y, id) => `<div class="match-tile-row"><div class="tile-vs">
+      <div class="team-tile" id="${id}a"><div class="tile-logo">${x.team ? MB.getLogoHtml(x.team) : ''}</div><div class="tile-name">${x.name}</div><div class="tile-record">3-1</div><div class="tile-odds">@ 1.8</div></div>
+      <div class="tile-at">@</div>
+      <div class="team-tile" id="${id}b"><div class="tile-logo">${y.team ? MB.getLogoHtml(y.team) : ''}</div><div class="tile-name">${y.name}</div><div class="tile-record">2-2</div><div class="tile-odds">@ 2.1</div></div></div>
+      <div style="display:flex; justify-content:flex-end;"><button class="subtle-save-btn" id="${id}s" disabled>Tipp speichern</button></div></div>`;
+  ph.srcdoc = phoneDoc(`<div class="v2-card"><div class="v2-card-title">🎯 Spieltag 3</div>${tileRow(a, b, 'm1')}${tileRow(c, d, 'm2')}</div>
+    <div class="v2-card"><div class="v2-card-title">🏆 Wettbüro</div><div id="lb" style="line-height:1.9;">1. ${b.name} · 14 P<br>2. ${a.name} · 12 P<br>3. ${c.name} · 11 P</div></div>`);
   const enz7 = enzo(7);
-  await sleep(1200); const tp = mock.querySelector('.tp'); if (tp) tp.classList.add('on');
-  await sleep(700); mock.querySelector('.mock').insertAdjacentHTML('beforeend', `<div style="position:absolute; left:50%; bottom:40px; transform:translateX(-50%); background:#22a447; padding:12px 22px; border-radius:12px; font-weight:800; animation: pop .4s both;">✓ Tipp gespeichert</div>`);
-  await sleep(900); $('lb').querySelector('div').innerHTML = `1. ${a.name} – 15 P ⬆<br>2. ${b.name} – 14 P<br>3. ${c.name} – 11 P`;
+  await sleep(1300); const D = ph.contentDocument;
+  try { D.getElementById('m1a').classList.add('selected'); const sb = D.getElementById('m1s'); sb.disabled = false; sb.classList.add('dirty'); } catch (e) { /* egal */ }
+  await sleep(800); try { D.body.insertAdjacentHTML('beforeend', '<div class="toast">✓ Tipp gespeichert</div>'); } catch (e) { /* egal */ }
+  await sleep(900); try { D.getElementById('lb').innerHTML = `1. ${a.name} · 15 P ⬆<br>2. ${b.name} · 14 P<br>3. ${c.name} · 11 P`; } catch (e) { /* egal */ }
   await enz7;
   // 9) Karte + Figur
-  const me = a.name, cfgV = { ...MB.Avatar.get(me) };
-  mock.innerHTML = `<div class="mock" style="display:flex; flex-direction:column; align-items:center;"><div style="font:900 26px/1 Impact; color:#ffd23f; margin-bottom:10px;">★ NEUE KARTE ★</div>
-    <div class="card3"><div style="font:900 16px/1 Impact; letter-spacing:3px; color:#b388ff;">EPIC</div><div style="font-size:120px; margin:40px 0 20px;">🔥</div><div style="font:900 30px/1 Impact;">ON FIRE</div><div style="opacity:.8; margin-top:10px;">Fünf Siege in Folge.</div></div></div>`;
-  const enz8 = enzo(8);
-  await sleep(2200);
-  mock.innerHTML = `<div class="mock" style="text-align:center;"><div style="font:900 26px/1 Impact; color:#ffd23f;">🎨 EIGENE FIGUR</div><div id="mfig" style="width:300px; height:470px; margin:18px auto 0;">${MB.Avatar.svg(cfgV)}</div><div id="mlab" style="font-weight:800;"></div></div>`;
+  const cfgV = { ...MB.Avatar.get(a.name) };
+  ph.srcdoc = phoneDoc(`<div style="display:flex; flex-direction:column; align-items:center; padding-top:20px;"><div style="font:900 26px/1 Impact; color:#ffd23f; margin-bottom:12px;">★ NEUE KARTE ★</div>
+    <div style="width:300px; height:420px; border-radius:18px; padding:18px; box-sizing:border-box; background:linear-gradient(120deg,#2b1f55,#13203a 40%,#4b2a7a 60%,#13203a); border:4px solid #b388ff; box-shadow:0 0 40px rgba(179,136,255,.6); text-align:center; color:#fff;"><div style="font:900 16px/1 Impact; letter-spacing:3px; color:#b388ff;">EPIC</div><div style="font-size:120px; margin:40px 0 20px;">🔥</div><div style="font:900 30px/1 Impact;">ON FIRE</div><div style="opacity:.8; margin-top:10px;">Fünf Siege in Folge.</div></div></div>`);
+  const enz8 = enzo(8); await sleep(2200);
+  ph.srcdoc = phoneDoc(`<div class="v2-card" style="text-align:center;"><div class="v2-card-title">🎨 Eigene Figur</div><div id="mfig" style="width:280px; height:440px; margin:10px auto 0;">${MB.Avatar.svg(cfgV)}</div><div id="mlab" style="font-weight:800; color:#ffd23f;"></div></div>`);
   await sleep(1300);
-  $('mfig').innerHTML = MB.Avatar.svg({ ...cfgV, hat: 'viking', back: 'cape', aura: 'aura' }); $('mfig').style.animation = 'pop .5s both';
-  $('mlab').textContent = '🔓 Wikinger-Helm freigeschaltet!';
+  try { const D2 = ph.contentDocument; D2.getElementById('mfig').innerHTML = MB.Avatar.svg({ ...cfgV, hat: 'viking', back: 'cape', aura: 'aura' }); D2.getElementById('mlab').textContent = '🔓 Wikinger-Helm freigeschaltet!'; } catch (e) { /* egal */ }
   await enz8;
-  // 10) Blog
-  mock.innerHTML = ''; ph.src = 'blog.html';
+  // 10) Blog (als Besucher)
+  ph.removeAttribute('srcdoc'); ph.src = 'blog.html?viewer=1';
   $('phoneWrap').style.transform = 'rotate(-8deg) scale(.92)'; $('phoneWrap').querySelector('.hand').style.opacity = '1';
-  await sleep(600);
+  await sleep(700);
   await Promise.all([enzo(9), scrollPhone(3200)]);
   // 11) Musikvideo-Ausschnitt mit dem hochgeladenen Song
-  clear(s); $('bgm').pause();
-  if (songUrl) {
-    const perf = [{ name: a.name, team: a.team, id: a.team }, { name: b.name, team: b.team, id: b.team }];
-    const p = MB.SongStage.play({ url: songUrl, milestone: 'finals', mode: 'hype', performers: perf, players: players.map(x => ({ name: x.name, id: x.team, team: x.team })), speakIntro: () => Promise.resolve() });
-    await sleep(10000);
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    await Promise.race([p, sleep(2500)]);
-  } else {
-    s = scene(bigTitle('♪', '<div style="font:800 40px/1.2 Segoe UI; margin-top:20px; opacity:.8;">(Musikvideo – Trailer-Song hochladen, dann läuft hier das Video)</div>'));
-    await sleep(4000); clear(s);
-  }
-  if (songUrl) { $('bgm').currentTime = Math.max(0, $('bgm').currentTime); $('bgm').play().catch(() => {}); }
+  clear(s); await musicClip(a, b, 10000);
   // 12) Outro
-  s = scene(`<div style="position:absolute; left:220px; bottom:0; width:640px; height:900px;">${MB.DraftStage.charSVG('announcer')}</div>`);
-  await enzo(10);
-  clear(s);
-  const when = cfg.nextTournamentAt ? new Date(cfg.nextTournamentAt).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
-  s = scene(bigTitle(title.replace(/ ([IVX]+)$/, '<br><span style="font-size:.6em">$1</span>'), `<div style="font:800 46px/1.2 Segoe UI; margin-top:30px;">${when}</div>
-    <div style="display:flex; align-items:center; gap:26px; margin-top:34px; background:rgba(0,0,0,.45); border:3px solid #c99700; border-radius:18px; padding:16px 26px;"><div style="width:180px; height:180px; background:#fff; border-radius:10px; overflow:hidden;">${QR}</div><div style="font:900 34px/1.2 Impact; color:#ffd23f;">geepard86.github.io/maddenbowl</div></div>`) + sparks(40));
-  $('stage').style.animation = 'shake .4s 2';
+  s = scene(`<div style="position:absolute; left:50%; bottom:0; width:640px; height:900px; margin-left:-320px;">${enzoFig(true)}</div>`);
+  await enzo(10); clear(s);
+  s = scene(outro()); shake();
   await enzo(11); await sleep(3500);
 }
 
+// ---------- Teaser (ca. 25 s)
+async function runTeaser() {
+  let s;
+  s = scene(`<div class="spot" style="left:660px;"></div>${sparks(24)}<div style="position:absolute; left:50%; bottom:0; width:640px; height:900px; margin-left:-320px; opacity:0; animation: fadeUp 2.5s ease-out .2s forwards;">${enzoFig(true)}</div>`);
+  await sleep(900); await enzo(0);
+  clear(s); s = scene(bigTitle(titleHtml(), '') + sparks(40)); shake(); await enzo(1);
+  clear(s); s = scene(draftRing(players, true)); await sleep(3000);
+  clear(s); s = scene(studioScene(players[0], players[1] || players[0])); await sleep(2600);
+  clear(s); s = scene(kissMixed(players[2] || players[0], players[3] || players[1] || players[0])); await sleep(2400);
+  clear(s); s = scene(outro()); shake(); await enzo(12); await sleep(3500);
+}
+
+// ---------- Szenen-Bausteine
+function studioScene(a, b) {
+  return `<div style="position:absolute; left:40px; top:30px; background:#d50a0a; font:900 34px/1 Impact; letter-spacing:4px; padding:10px 18px;">● LIVE</div>
+    <div style="position:absolute; left:0; right:0; top:110px; display:flex; justify-content:center;"><div style="display:flex; align-items:center; gap:40px; background:#0b1328; border:4px solid #c99700; border-radius:24px; padding:30px 60px; animation: pop .6s both; white-space:nowrap;">
+      ${logo(a.team)}<div style="font:900 100px/1 Impact;">${a.name.toUpperCase()} 28 : 21 ${b.name.toUpperCase()}</div>${logo(b.team)}</div></div>
+    <div style="position:absolute; left:0; right:0; top:430px; display:flex; justify-content:center;"><div style="font:900 170px/1 Impact; color:#ffd23f; text-shadow:8px 8px 0 #d50a0a; animation: slam .6s .5s both;">TOUCHDOWN!</div></div>${sparks(40)}
+    <div class="booth" style="left:120px;">${MB.DraftStage.charSVG('commentator')}</div><div class="booth" style="left:480px;">${MB.DraftStage.charSVG('moderator')}</div>`;
+}
+function kissMixed(c, d) {
+  return `<div style="position:absolute; left:120px; top:120px; width:820px; height:760px; border:10px solid #ff4fa3; border-radius:30px; overflow:hidden; background:#2a0f22; animation: pop .6s both;">
+      <div style="position:absolute; left:20px; top:16px; font:900 50px/1 Impact; color:#ff4fa3;">💋 KISS CAM</div>
+      <div style="position:absolute; left:80px; bottom:0; width:300px; height:520px;">${figSvg(c.name)}</div><div style="position:absolute; right:80px; bottom:0; width:300px; height:520px;">${figSvg(d.name)}</div>
+      <div style="position:absolute; left:0; right:0; top:40%; display:flex; justify-content:center;"><div style="font-size:110px; animation: pop .8s 1s both;">❤️</div></div></div>
+    <div style="position:absolute; right:120px; top:120px; width:820px; height:760px; border:10px solid #c99700; border-radius:30px; overflow:hidden; background:radial-gradient(circle at 50% 30%,#2b3c66,#0b1328); animation: pop .6s .5s both;">
+      <div style="position:absolute; left:0; right:0; top:120px; display:grid; grid-template-columns:repeat(4,1fr); font:900 22px/56px Impact; text-align:center;">${'<span style="background:#0b1328;border:2px solid #c99700;">ALTIMA BOWL</span><span style="background:#c99700;color:#0b1328;">MIXED ZONE</span>'.repeat(4)}</div>
+      <div style="position:absolute; left:20px; top:16px; background:#d50a0a; font:900 36px/1 Impact; padding:8px 14px;">● MIXED ZONE</div>
+      <div style="position:absolute; left:20px; bottom:0; width:380px; height:440px;">${MB.DraftStage.charSVG('commentator')}</div><div style="position:absolute; right:40px; bottom:0; width:300px; height:500px;">${figSvg(c.name)}</div></div>`;
+}
+function outro() {
+  const when = cfg.nextTournamentAt ? new Date(cfg.nextTournamentAt).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  return bigTitle(titleHtml(), `<div style="font:800 46px/1.2 Segoe UI; margin-top:30px;">${when}</div>
+    <div style="display:flex; align-items:center; gap:26px; margin-top:34px; background:rgba(0,0,0,.45); border:3px solid #c99700; border-radius:18px; padding:16px 26px;"><div style="width:180px; height:180px; background:#fff; border-radius:10px; overflow:hidden;">${QR}</div><div style="font:900 34px/1.2 Impact; color:#ffd23f;">geepard86.github.io/maddenbowl</div></div>`) + sparks(40);
+}
+async function musicClip(a, b, ms) {
+  $('bgm').pause();
+  if (songUrl) {
+    const perf = [{ name: a.name, team: a.team, id: a.team }, { name: b.name, team: b.team, id: b.team }];
+    const p = MB.SongStage.play({ url: songUrl, milestone: 'finals', mode: 'hype', performers: perf, players: players.map(x => ({ name: x.name, id: x.team, team: x.team })), speakIntro: () => Promise.resolve() });
+    await sleep(ms);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await Promise.race([p, sleep(2500)]);
+    $('bgm').play().catch(() => {});
+  } else {
+    const s = scene(bigTitle('♪', '<div style="font:800 40px/1.2 Segoe UI; margin-top:20px; opacity:.8;">(Musikvideo – Trailer-Song hochladen, dann läuft hier das Video)</div>'));
+    await sleep(4000); clear(s);
+  }
+}
+
 // ---------- Aufnahme
-async function startTrailer(record) {
+async function startTrailer(record, teaser) {
   const info = (t) => { $('hudInfo').textContent = t; };
   info('Lade Daten …'); await loadData();
   if (songUrl) { $('bgm').src = songUrl; $('bgm').volume = 0.45; }
@@ -227,14 +341,14 @@ async function startTrailer(record) {
       rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8000000 } : {});
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
       rec.onstop = () => { stream.getTracks().forEach(t => t.stop()); const ext = (rec.mimeType || '').includes('mp4') ? 'mp4' : 'webm';
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType || 'video/webm' })); a.download = `altima-bowl-trailer.${ext}`; a.click(); };
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType || 'video/webm' })); a.download = `altima-bowl-${teaser ? 'teaser' : 'trailer'}.${ext}`; a.click(); };
       rec.start(500);
     } catch (e) { alert('Aufnahme nicht gestartet: ' + e.message + '\nTipp: diesen Tab auswählen und „Tab-Audio teilen“ aktivieren.'); return; }
   }
   document.body.classList.add('rec');
   if (songUrl) $('bgm').play().catch(() => {});
   await sleep(700);
-  try { await run(); } catch (e) { console.error(e); }
+  try { await (teaser ? runTeaser() : run()); } catch (e) { console.error(e); }
   $('bgm').pause();
   if (rec) rec.stop();
   document.body.classList.remove('rec'); info('Fertig.' + (rec ? ' Das Video wird heruntergeladen.' : ''));

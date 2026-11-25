@@ -174,6 +174,7 @@
   }
   // Bauform je Beitragsart (nur Prompt 2). [min, max] = Absätze (die Prüfung ist großzügig).
   const PUNCH = "Der erste Satz ist eine Punchline: kurz, frech, macht neugierig.";
+  const PUNCH_CALM = "Der Einstieg darf atmosphärisch sein, muss aber keine Punchline sein.";
   const STRUCTURE = {
     portrait: [2, 3, "2–3 Absätze insgesamt. Bei mehreren Spielern nicht für jeden einen eigenen Mini-Absatz, sondern sinnvoll bündeln (z. B. Favoriten zusammen, Außenseiter zusammen)."],
     progress: [3, 5, "Absatz 1: die Lage nach diesem Spieltag. Danach 1–3 Absätze zu den spannendsten Spielern/Duellen. Zum Schluss ein kurzer Ausblick."],
@@ -182,7 +183,7 @@
     finals: [3, 4, "Einleitung, je ein Absatz zu beiden Finalisten (oder beide gemeinsam), Ausblick."],
     champion: [3, 4, "Einleitung mit dem Ergebnis, der Weg des Champions, Schlussabsatz."],
     wrapup: [3, 5, "Einleitung, die Geschichten des Turniers, Schlussabsatz."],
-    retrospective: [4, 7, "Einleitung, Verlauf der Saison, Playoffs, Champion, Rekorde, Schluss."],
+    retrospective: [6, 10, "Ein ausführlicher Artikel zum Nachlesen: Einleitung mit Ausgangslage, dann chronologisch Gruppenphase, Playoffs (gern Runde für Runde), Finale und Champion, Rekorde, abschließende Einordnung. Erzählender, ruhiger Ton in vollständigen Sätzen – keine Stakkato-Sätze, keine Aufzählung von Ergebnissen."],
     song: [2, 3, ""],
   };
   // Songbeitrag: Einleitung hängt vom Song-Format ab
@@ -211,11 +212,13 @@
     const d = article.data || {}, n = (d.players || []).length;
     if (article.kind === "portrait") return n > 1 ? `${80 + n * 60} bis ${120 + n * 90}` : "200 bis 300";
     if (article.kind === "progress") return "280 bis 450";
+    if (article.kind === "retrospective") return "550 bis 850";
     return meta.words;
   }
   function structureText(article) {
     const st = structureFor(article); if (!st) return PUNCH;
     const body = article.kind === "song" ? songStructure(article) : st[2];
+    if (article.kind === "retrospective") return `AUFBAU (${st[0]}–${st[1]} Absätze, je 3–6 Sätze): ${body} ${PUNCH_CALM}`;
     return `AUFBAU (${st[0]}–${st[1]} Absätze, je 2–5 Sätze, keine Ein-Satz-Absätze): ${body} ${PUNCH}`;
   }
   // Alle relevanten Daten zu den beteiligten Spielern (komplette Historie + laufendes Turnier)
@@ -373,10 +376,10 @@
   }
   // Auto-Auswahl: die zwei geeignetsten zulässigen Modelle.
   function pickAutoModels(list, s) {
-    const ok = (list || []).filter((m) => m.free || (s.allowPaid && m.cents <= (Number(s.maxCentPerArticle) || 0)));
-    const out = ok.slice(0, 3).map((m) => m.id);
-    out.push("openrouter/free");
-    return out;
+    // Erst kostenlose Modelle (+ openrouter/free), Bezahlmodelle nur als Fallback dahinter
+    const free = (list || []).filter((m) => m.free).slice(0, 3).map((m) => m.id);
+    const paid = s.allowPaid ? (list || []).filter((m) => !m.free && m.cents <= (Number(s.maxCentPerArticle) || 0)).slice(0, 2).map((m) => m.id) : [];
+    return [...free, "openrouter/free", ...paid];
   }
   // Welche Modelle (in Reihenfolge) für eine Beitragsart probiert werden.
   async function resolveModels(kind, s) {

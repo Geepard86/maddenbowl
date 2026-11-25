@@ -405,9 +405,8 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
           </div>
           <div style="padding:10px; border-radius:8px; background:rgba(0,0,0,.18); margin-bottom:12px;">
             <div style="font-weight:700; margin-bottom:6px;">🧪 KI-Vergleichstest (schreibt in den Blog des laufenden Turniers)</div>
-            <div class="hint" style="font-size:.8em; opacity:.75; margin-bottom:6px;">Spielt das letzte Turnier nach (Original-Zeitplan) und schreibt je Beitragsart einen Beitrag in 4 Varianten: Prompt 1, Prompt 1 kreativ, Prompt 2, Prompt 2 kreativ – mit Imgflip-Memes zu den Rekorden, Memes + Statistik-Ecke samt Grafik im Power Ranking und simulierten Unique-Karten im Turnierstart. Dauert einige Minuten (ca. 4 KI-Aufrufe pro Beitragsart).</div>
-            <div style="display:flex; gap:12px; flex-wrap:wrap; margin:4px 0 8px; font-size:.88em;"><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P1" checked style="width:auto;"> P1</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P1 kreativ" checked style="width:auto;"> P1 kreativ</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P2" checked style="width:auto;"> P2</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpVar" value="P2 kreativ" checked style="width:auto;"> P2 kreativ</label></div>
-            <div style="display:flex; gap:12px; flex-wrap:wrap; margin:0 0 8px; font-size:.85em; opacity:.9;"><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="kickoff" checked style="width:auto;"> Turnierstart</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="portrait" checked style="width:auto;"> Spielerporträts</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="progress" checked style="width:auto;"> Power Rankings</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="record" checked style="width:auto;"> Rekorde</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="song" checked style="width:auto;"> Songs</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="finals" checked style="width:auto;"> Finale</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="champion" checked style="width:auto;"> Champion</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="wrapup" checked style="width:auto;"> Abschluss</label><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="toiletbowl" checked style="width:auto;"> Toilet Bowl</label></div>
+            <div class="hint" style="font-size:.8em; opacity:.75; margin-bottom:6px;">Spielt das letzte Turnier nach (Original-Zeitplan) und schreibt jeden Beitrag mit der produktiven Einstellung seiner Beitragsart, optional zusätzlich mit einer zweiten Variante – mit Imgflip-Memes zu den Rekorden, Memes + Statistik-Ecke samt Grafik im Power Ranking und simulierten Unique-Karten im Turnierstart. Dauert einige Minuten (ca. 4 KI-Aufrufe pro Beitragsart).</div>
+            <table style="width:100%; font-size:.85em; margin:4px 0 8px;"><tr style="opacity:.7; text-align:left;"><th>Beitragsart</th><th>Produktiv (aus den Einstellungen)</th><th>Zusätzlich vergleichen mit</th></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="kickoff" checked style="width:auto;"> Turnierstart</label></td><td class="cmpProd" data-kind="kickoff" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="kickoff" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="portrait" checked style="width:auto;"> Spielerporträts</label></td><td class="cmpProd" data-kind="portrait" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="portrait" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="progress" checked style="width:auto;"> Power Rankings</label></td><td class="cmpProd" data-kind="progress" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="progress" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="record" checked style="width:auto;"> Rekorde</label></td><td class="cmpProd" data-kind="record" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="record" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="song" checked style="width:auto;"> Songs</label></td><td class="cmpProd" data-kind="song" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="song" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="finals" checked style="width:auto;"> Finale</label></td><td class="cmpProd" data-kind="finals" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="finals" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="champion" checked style="width:auto;"> Champion</label></td><td class="cmpProd" data-kind="champion" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="champion" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="wrapup" checked style="width:auto;"> Abschluss</label></td><td class="cmpProd" data-kind="wrapup" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="wrapup" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr><tr><td><label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" class="cmpKind" value="toiletbowl" checked style="width:auto;"> Toilet Bowl</label></td><td class="cmpProd" data-kind="toiletbowl" style="opacity:.8;">…</td><td><select class="cmpSecond" data-kind="toiletbowl" style="width:auto;"><option value="">– keine –</option><option value="P1">P1</option><option value="P1 kreativ">P1 kreativ</option><option value="P2">P2</option><option value="P2 kreativ">P2 kreativ</option></select></td></tr></table>
             <button class="btn-secondary" style="width:auto;" onclick="runLlmCompareTest()">▶ Vergleichstest starten</button>
             <div id="llmCompareState" class="hint" style="margin-top:6px; font-size:.85em;"></div>
           </div>
@@ -416,7 +415,7 @@ grant execute on function public.mb_revoke_achievement(text, text, text) to anon
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;"><select id="retroSeason" style="width:auto;"></select>
               <button class="btn-secondary" style="width:auto; margin:0;" onclick="buildRetroFacts()">Daten laden</button></div>
             <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Auftrag (bearbeitbar):</div>
-            <textarea id="retroPrompt" rows="3" style="width:100%; font-size:.85em;">Schreibe einen unterhaltsamen Rückblick auf diese Saison des Altima Bowl: Verlauf, Überraschungen, Playoffs und Champion. Erwähne Rekorde, die bis heute gelten.</textarea>
+            <textarea id="retroPrompt" rows="3" style="width:100%; font-size:.85em;">Schreibe einen ausführlichen, gut lesbaren Rückblick auf diese Saison des Altima Bowl – zum Nachlesen in ein paar Jahren: Ausgangslage und Teilnehmer, Verlauf der Gruppenphase, die Playoffs Schritt für Schritt, das Finale und der Champion, dazu Rekorde, die bis heute gelten. Ruhiger, erzählender Ton mit vollständigen Sätzen statt Stakkato; Humor gern, aber dosiert.</textarea>
             <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Ergänzende Fakten (optional, z. B. Anekdoten vom Abend):</div>
             <textarea id="retroExtra" rows="2" style="width:100%; font-size:.85em;"></textarea>
             <div class="hint" style="font-size:.78em; opacity:.7; margin:6px 0 4px;">Daten, die die KI bekommt:</div>
@@ -5610,7 +5609,7 @@ function renderRanking() {
       } else {
         const chain = MB.LlmBlog.pickAutoModels(llmModels, s);
         const info = (id) => { const m = llmModels.find(x => x.id === id); return m ? `${orEsc(id)} <span style="opacity:.6;">(${MB.LlmBlog.fmtCost(m.cents)})</span>` : orEsc(id); };
-        box.innerHTML = `<label><input type="checkbox" id="llmAllowPaid" ${s.allowPaid ? 'checked' : ''} onchange="drawLlmModelBox()"> auch Bezahlmodelle zulassen, bis geschätzt
+        box.innerHTML = `<label><input type="checkbox" id="llmAllowPaid" ${s.allowPaid ? 'checked' : ''} onchange="drawLlmModelBox()"> Bezahlmodelle als Fallback nutzen (nur wenn alle kostenlosen scheitern), bis geschätzt
             <input type="number" id="llmMaxCent" min="0" step="0.5" value="${s.maxCentPerArticle}" style="width:70px; display:inline-block;" onchange="drawLlmModelBox()"> ct pro Beitrag</label>
           <div style="margin-top:6px;">Aktuell gewählt: <b>${info(chain[0])}</b> → Fallback: ${info(chain[1] || '—')}</div>
           <div class="hint" style="font-size:0.85em; opacity:.7;">Wird bei jedem Beitrag neu aus der (6 h gecachten) Modellliste bestimmt — fällt ein Free-Modell weg, rückt das nächste nach.</div>`;
@@ -5909,6 +5908,11 @@ function renderRanking() {
     }
 
     // ---------- KI: Prompt-Variante ----------
+    function fillCmpProd() {
+      if (!MB.LlmBlog) return; const st = MB.LlmBlog.getSettings();
+      document.querySelectorAll('.cmpProd').forEach(td => { const kk = (st.kinds || {})[td.dataset.kind] || {}; td.textContent = (kk.promptMode === 'data' ? 'P2' : 'P1') + (kk.creative ? ' kreativ' : ''); });
+    }
+    setTimeout(fillCmpProd, 2000); document.addEventListener('change', (e) => { if (e.target && e.target.classList && e.target.classList.contains('llmKindVar')) setTimeout(fillCmpProd, 300); });
     async function setLlmPromptMode(v) { const s = { ...MB.LlmBlog.getSettings(), promptMode: v }; await MB.LlmBlog.saveSettings(s); }
     async function saveLlmDataPrompt() { const s = { ...MB.LlmBlog.getSettings(), dataPrompt: document.getElementById('llmDataPrompt').value }; await MB.LlmBlog.saveSettings(s); alert('Prompt 2 gespeichert.'); }
     setTimeout(async () => {
@@ -5939,10 +5943,17 @@ function renderRanking() {
       const poIds = (lt.state.playoffMatches || []).map(m => m.id || '–').join(',');
       const replayInfo = `Spiele nachgespielt: ${res.stats.matches} (Playoffs mit Ergebnis im Datenstand: ${poDone}/${poAll}; IDs: ${poIds}) · Beiträge: ${Object.entries(perKind).map(([k, n]) => `${(MB.LlmBlog.KINDS[k] || { label: k }).label} ${n}`).join(', ')}${(res.warnings || []).length ? ` · Probleme beim Nachspielen: ${res.warnings.slice(0, 3).join(' | ')}` : ''}`;
       console.info(replayInfo);
-      const chosen = [...document.querySelectorAll('.cmpVar:checked')].map(c => c.value);
-      const variants = [['P1', 'base', 0.7], ['P1 kreativ', 'base', 1.1], ['P2', 'data', 0.7], ['P2 kreativ', 'data', 1.1]].filter(v => chosen.includes(v[0]));
-      if (!variants.length) { say('Bitte mindestens eine Variante auswählen.'); return; }
-      if (!confirm(`${replayInfo}\n\nDer Vergleichstest schreibt ${pickList.length} Beiträge in je ${variants.length} Variante(n) = ${pickList.length * variants.length} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
+      const VAR = { 'P1': ['base', 0.7], 'P1 kreativ': ['base', 1.1], 'P2': ['data', 0.7], 'P2 kreativ': ['data', 1.1] };
+      const sProd = MB.LlmBlog.getSettings();
+      const prodLabel = (k) => { const kk = (sProd.kinds || {})[k] || {}; return (kk.promptMode === 'data' ? 'P2' : 'P1') + (kk.creative ? ' kreativ' : ''); };
+      const variantsFor = (k) => {
+        const pl = prodLabel(k), out = [['Produktiv ' + pl, VAR[pl][0], VAR[pl][1] === 1.1 ? 1.1 : (Number(sProd.temperature) || 0.7)]];
+        const sec = (document.querySelector(`.cmpSecond[data-kind="${k}"]`) || {}).value;
+        if (sec && sec !== pl) out.push(['Vergleich ' + sec, VAR[sec][0], VAR[sec][1]]);
+        return out;
+      };
+      const calls = pickList.reduce((n, a) => n + variantsFor(a.kind).length, 0);
+      if (!confirm(`${replayInfo}\n\nDer Vergleichstest schreibt ${pickList.length} Beiträge = ${calls} KI-Aufrufe (dazu Memes für die Rekorde). Das kann eine Weile dauern und kostet entsprechend Guthaben. Starten?`)) { say('Abgebrochen.'); return; }
       // simulierte Unique-Karten eines ersten Turniers (für den Turnierstart)
       const ps = (lt.state.players || []).map(p => p.name);
       const simUnique = `Simulation – vor dem Turnierstart vergebene Unique-Karten: „Frühstarter“ (${ps[0]}), „Pionier“ (${ps[1]}, allererster Tipp), „Chefscout“ (${ps[2]}, als Erster alle 32 Kader angesehen), „Erster Entwurf“ (${ps[3]}, erste eigene Spielerfigur).`;
@@ -5974,9 +5985,9 @@ function renderRanking() {
           } catch (e) { console.warn('Test-Spurious', e); }
         }
       }
-      let step = 0; const total = pickList.length * variants.length;
+      let step = 0; const total = calls;
       for (const a of pickList) {
-        for (const [label, mode, temp] of variants) {
+        for (const [label, mode, temp] of variantsFor(a.kind)) {
           step++;
           say(`Schreibe ${MB.LlmBlog.KINDS[a.kind].label} (${label}) … ${step}/${total}${fail ? ` · bisher ${fail}× ohne KI-Text` : ''}`);
           const art = { ...a, _promptMode: mode, _temperature: temp, _ctx: { state: lt.state, history: lt.history }, _extraFacts: a.kind === 'kickoff' ? simUnique : '' };
@@ -6049,7 +6060,7 @@ function renderRanking() {
       const out = document.getElementById('retroOut'); out.textContent = 'KI schreibt …';
       if (!document.getElementById('retroFacts').value) await buildRetroFacts();
       const i = Number(document.getElementById('retroSeason').value); const se = retroSeasons[i];
-      const art = { kind: 'retrospective', title: `Rückblick: Altima Bowl ${se ? se.season : ''}`, body: '', _promptMode: 'data',
+      const art = { kind: 'retrospective', title: `Rückblick: Altima Bowl ${se ? se.season : ''}`, body: '', _promptMode: 'data', _temperature: 0.8,
         facts: document.getElementById('retroFacts').value, _extraFacts: [document.getElementById('retroPrompt').value, document.getElementById('retroExtra').value].filter(Boolean).join('\n'),
         data: { season: se && se.season } };
       try {
